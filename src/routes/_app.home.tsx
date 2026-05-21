@@ -3,7 +3,7 @@ import { useState } from "react";
 import { MapBackground } from "@/components/MapBackground";
 import { BottomSheet } from "@/components/BottomSheet";
 
-export const Route = createFileRoute("/home")({
+export const Route = createFileRoute("/_app/home")({
   component: HomeScreen,
 });
 
@@ -27,7 +27,7 @@ function HomeScreen() {
   const [query, setQuery] = useState("");
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-background">
+    <section className="relative h-full w-full overflow-hidden">
       <MapBackground />
 
       {/* top status bar */}
@@ -47,19 +47,14 @@ function HomeScreen() {
               12 doctors nearby
             </span>
           </div>
-          <button className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-elevated shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.6"/>
-              <path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            </svg>
-          </button>
+          <span className="h-10 w-10" />
         </div>
       </header>
 
       {/* recenter FAB */}
       <button
         className="absolute right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface-elevated shadow-[0_4px_14px_rgba(0,0,0,0.12)] active:scale-95 transition-transform"
-        style={{ bottom: expanded ? "calc(60vh + 16px)" : "200px" }}
+        style={{ bottom: expanded ? "calc(60% + 16px)" : "200px" }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6"/>
@@ -69,7 +64,6 @@ function HomeScreen() {
 
       <BottomSheet expanded={expanded} onExpandedChange={setExpanded}>
         <div className="flex h-full flex-col px-5">
-          {/* Search field */}
           <button
             onClick={() => setExpanded(true)}
             className={`flex items-center gap-3 rounded-2xl bg-secondary px-4 transition-all ${expanded ? "h-14" : "h-13 py-3.5"}`}
@@ -144,7 +138,7 @@ function HomeScreen() {
           )}
         </div>
       </BottomSheet>
-    </main>
+    </section>
   );
 }
 
