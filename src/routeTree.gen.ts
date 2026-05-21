@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
+import { Route as AppAccountRouteImport } from './routes/_app.account'
 
 const RoleRoute = RoleRouteImport.update({
   id: '/role',
@@ -45,10 +46,16 @@ const AppCoverageRoute = AppCoverageRouteImport.update({
   path: '/coverage',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAccountRoute = AppAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/role': typeof RoleRoute
+  '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
@@ -56,6 +63,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/role': typeof RoleRoute
+  '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
@@ -65,20 +73,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/role': typeof RoleRoute
+  '/_app/account': typeof AppAccountRoute
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/role' | '/coverage' | '/home' | '/auth/$role'
+  fullPaths: '/' | '/role' | '/account' | '/coverage' | '/home' | '/auth/$role'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/role' | '/coverage' | '/home' | '/auth/$role'
+  to: '/' | '/role' | '/account' | '/coverage' | '/home' | '/auth/$role'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/role'
+    | '/_app/account'
     | '/_app/coverage'
     | '/_app/home'
     | '/auth/$role'
@@ -135,15 +145,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCoverageRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/account': {
+      id: '/_app/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AppAccountRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppAccountRoute: typeof AppAccountRoute
   AppCoverageRoute: typeof AppCoverageRoute
   AppHomeRoute: typeof AppHomeRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAccountRoute: AppAccountRoute,
   AppCoverageRoute: AppCoverageRoute,
   AppHomeRoute: AppHomeRoute,
 }
