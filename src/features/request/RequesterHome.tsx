@@ -1,11 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { MapBackground } from "@/components/MapBackground";
 
-export const Route = createFileRoute("/_app/home/request")({
-  component: HomeScreen,
-});
+export function RequesterHome() {
+  return <HomeScreen />;
+}
+
 
 type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match";

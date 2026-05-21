@@ -13,6 +13,7 @@ import { Route as RoleRouteImport } from './routes/role'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
+import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
 
@@ -35,6 +36,11 @@ const AuthRoleRoute = AuthRoleRouteImport.update({
   path: '/auth/$role',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppHomeRoute = AppHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCoverageRoute = AppCoverageRouteImport.update({
   id: '/coverage',
   path: '/coverage',
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/role': typeof RoleRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
+  '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRoutesByTo {
@@ -58,6 +65,7 @@ export interface FileRoutesByTo {
   '/role': typeof RoleRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
+  '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRoutesById {
@@ -67,13 +75,14 @@ export interface FileRoutesById {
   '/role': typeof RoleRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/coverage': typeof AppCoverageRoute
+  '/_app/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/role' | '/account' | '/coverage' | '/auth/$role'
+  fullPaths: '/' | '/role' | '/account' | '/coverage' | '/home' | '/auth/$role'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/role' | '/account' | '/coverage' | '/auth/$role'
+  to: '/' | '/role' | '/account' | '/coverage' | '/home' | '/auth/$role'
   id:
     | '__root__'
     | '/'
@@ -81,6 +90,7 @@ export interface FileRouteTypes {
     | '/role'
     | '/_app/account'
     | '/_app/coverage'
+    | '/_app/home'
     | '/auth/$role'
   fileRoutesById: FileRoutesById
 }
@@ -121,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRoleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/home': {
+      id: '/_app/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof AppHomeRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/coverage': {
       id: '/_app/coverage'
       path: '/coverage'
@@ -141,11 +158,13 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
   AppCoverageRoute: typeof AppCoverageRoute
+  AppHomeRoute: typeof AppHomeRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
   AppCoverageRoute: AppCoverageRoute,
+  AppHomeRoute: AppHomeRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
