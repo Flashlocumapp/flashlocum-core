@@ -10,7 +10,7 @@ import {
 import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
-import { initSystemTheme } from "@/lib/theme";
+import { initLightMode } from "@/lib/theme";
 
 function NotFoundComponent() {
   return (
@@ -75,7 +75,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  useEffect(() => { initSystemTheme(); }, []);
+  useEffect(() => { initLightMode(); }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />

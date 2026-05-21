@@ -1,4 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { clearRole, getRole, setRole, type Role } from "@/lib/role";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -25,6 +27,19 @@ const SECTIONS: { label: string; rows: { id: string; title: string; meta?: strin
 
 function AccountScreen() {
   const navigate = useNavigate();
+  const [role, setLocalRole] = useState<Role>("request");
+  useEffect(() => setLocalRole(getRole()), []);
+
+  const roleLabel = role === "cover" ? "Cover & Earn" : "Request Coverage";
+  const otherLabel = role === "cover" ? "Request Coverage" : "Cover & Earn";
+
+  const switchRole = () => {
+    const next: Role = role === "cover" ? "request" : "cover";
+    setRole(next);
+    setLocalRole(next);
+    navigate({ to: "/home" });
+  };
+
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
       <header className="safe-top px-5 pt-4">
@@ -49,7 +64,9 @@ function AccountScreen() {
           </span>
           <div className="flex-1 min-w-0">
             <div className="text-[15px] font-medium">Dr. Adaobi Okeke</div>
-            <div className="text-[12.5px] text-muted-foreground">General Practice · Lagos</div>
+            <div className="text-[12.5px] text-muted-foreground">
+              {roleLabel} · Lagos
+            </div>
           </div>
           <span
             className="rounded-full px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.12em]"
@@ -61,6 +78,22 @@ function AccountScreen() {
             Online
           </span>
         </div>
+
+        <button
+          onClick={switchRole}
+          className="mt-3 flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left active:bg-accent"
+          style={{ background: "var(--color-surface-elevated)" }}
+        >
+          <span className="flex flex-col">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Switch to
+            </span>
+            <span className="text-[14.5px] font-medium">{otherLabel}</span>
+          </span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+            <path d="M7 7h10v10M17 7L7 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
 
         {SECTIONS.map((s) => (
           <div key={s.label} className="mt-6">
@@ -97,7 +130,10 @@ function AccountScreen() {
         ))}
 
         <button
-          onClick={() => navigate({ to: "/role" })}
+          onClick={() => {
+            clearRole();
+            navigate({ to: "/role" });
+          }}
           className="mt-8 w-full rounded-2xl py-3.5 text-[14px] font-medium text-muted-foreground active:bg-accent"
           style={{ background: "var(--color-secondary)" }}
         >
