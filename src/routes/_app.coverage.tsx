@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getRole, type Role } from "@/lib/role";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
@@ -14,12 +15,19 @@ type CoverageItem = {
   status: "active" | "upcoming" | "completed";
 };
 
-const ITEMS: CoverageItem[] = [
+const DOCTOR_ITEMS: CoverageItem[] = [
   { id: "c1", facility: "Evercare Hospital", area: "Lekki Phase 1", role: "General Practice", when: "Live · 02:14 in", status: "active" },
   { id: "c2", facility: "Lagoon Hospital", area: "Apapa", role: "Paediatrics", when: "Tomorrow · 08:00", status: "upcoming" },
   { id: "c3", facility: "Reddington", area: "Victoria Island", role: "Weekend Call", when: "Sat 22 · 18:00", status: "upcoming" },
   { id: "c4", facility: "St. Nicholas", area: "Lagos Island", role: "24-Hour", when: "Tue 18 · 9h", status: "completed" },
   { id: "c5", facility: "First Cardiology", area: "Ikoyi", role: "Standard", when: "Mon 17 · 6h", status: "completed" },
+];
+
+const REQUESTER_ITEMS: CoverageItem[] = [
+  { id: "q1", facility: "Dr. Adaobi Okeke", area: "En route · 12 min", role: "Standard · 10 hrs", when: "Live · today", status: "active" },
+  { id: "q2", facility: "Dr. Tunde Bello", area: "Confirmed", role: "Weekend Call · 48 hrs", when: "Sat · 08:00", status: "upcoming" },
+  { id: "q3", facility: "Searching for doctor", area: "Avg match ~20 min", role: "24-Hour · 1 day", when: "Tomorrow · 08:00", status: "upcoming" },
+  { id: "q4", facility: "Dr. Ifeoma Nweze", area: "Settled", role: "Home Care · 6 hrs", when: "Mon 17", status: "completed" },
 ];
 
 const TABS = [
@@ -31,18 +39,23 @@ type TabId = typeof TABS[number]["id"];
 
 function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
-  const filtered = ITEMS.filter((i) =>
+  const [role, setLocalRole] = useState<Role>("request");
+  useEffect(() => setLocalRole(getRole()), []);
+
+  const source = role === "cover" ? DOCTOR_ITEMS : REQUESTER_ITEMS;
+  const filtered = source.filter((i) =>
     tab === "completed" ? i.status === "completed" : i.status === tab,
   );
+
+  const subtitle =
+    role === "cover" ? "Your dispatch timeline" : "Your open coverage requests";
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
       <header className="safe-top px-5 pt-4">
         <div className="mx-auto max-w-md">
           <h1 className="text-[26px] font-semibold tracking-tight">Coverage</h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            Your operational timeline
-          </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">{subtitle}</p>
 
           <div
             className="mt-4 flex gap-1 rounded-full p-1"
@@ -73,7 +86,7 @@ function CoverageScreen() {
 
       <div className="mx-auto mt-4 max-w-md overflow-y-auto px-5 pb-6" style={{ height: "calc(100% - 140px)" }}>
         {filtered.length === 0 ? (
-          <EmptyState tab={tab} />
+          <EmptyState tab={tab} role={role} />
         ) : (
           <ul className="space-y-2">
             {filtered.map((item) => (
@@ -147,12 +160,20 @@ function CoverageRow({ item }: { item: CoverageItem }) {
   );
 }
 
-function EmptyState({ tab }: { tab: TabId }) {
-  const copy = {
-    active: "No live coverage right now.",
-    upcoming: "Nothing scheduled.",
-    completed: "Your history will appear here.",
-  }[tab];
+function EmptyState({ tab, role }: { tab: TabId; role: Role }) {
+  const copy = (
+    role === "cover"
+      ? {
+          active: "No live coverage right now.",
+          upcoming: "Nothing scheduled.",
+          completed: "Your history will appear here.",
+        }
+      : {
+          active: "No active coverage requests.",
+          upcoming: "No upcoming requests.",
+          completed: "Your past requests will appear here.",
+        }
+  )[tab];
   return (
     <div className="flex h-64 flex-col items-center justify-center text-center">
       <div
