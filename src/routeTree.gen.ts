@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoleRouteImport } from './routes/role'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
+import { Route as AppHomeRouteImport } from './routes/_app.home'
 
 const RoleRoute = RoleRouteImport.update({
   id: '/role',
   path: '/role',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -28,33 +34,43 @@ const AuthRoleRoute = AuthRoleRouteImport.update({
   path: '/auth/$role',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppHomeRoute = AppHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/role': typeof RoleRoute
+  '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/role': typeof RoleRoute
+  '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
   '/role': typeof RoleRoute
+  '/_app/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/role' | '/auth/$role'
+  fullPaths: '/' | '/role' | '/home' | '/auth/$role'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/role' | '/auth/$role'
-  id: '__root__' | '/' | '/role' | '/auth/$role'
+  to: '/' | '/role' | '/home' | '/auth/$role'
+  id: '__root__' | '/' | '/_app' | '/role' | '/_app/home' | '/auth/$role'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
   RoleRoute: typeof RoleRoute
   AuthRoleRoute: typeof AuthRoleRoute
 }
@@ -66,6 +82,13 @@ declare module '@tanstack/react-router' {
       path: '/role'
       fullPath: '/role'
       preLoaderRoute: typeof RoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -82,14 +105,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRoleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/home': {
+      id: '/_app/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof AppHomeRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppHomeRoute: typeof AppHomeRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppHomeRoute: AppHomeRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
   RoleRoute: RoleRoute,
   AuthRoleRoute: AuthRoleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
