@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { MapBackground } from "@/components/MapBackground";
 
-export const Route = createFileRoute("/_app/home")({
+export const Route = createFileRoute("/_app/home/request")({
   component: HomeScreen,
 });
 

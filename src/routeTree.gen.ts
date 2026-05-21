@@ -13,9 +13,9 @@ import { Route as RoleRouteImport } from './routes/role'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
-import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
+import { Route as AppHomeRequestRouteImport } from './routes/_app.home.request'
 
 const RoleRoute = RoleRouteImport.update({
   id: '/role',
@@ -36,11 +36,6 @@ const AuthRoleRoute = AuthRoleRouteImport.update({
   path: '/auth/$role',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppHomeRoute = AppHomeRouteImport.update({
-  id: '/home',
-  path: '/home',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppCoverageRoute = AppCoverageRouteImport.update({
   id: '/coverage',
   path: '/coverage',
@@ -51,22 +46,27 @@ const AppAccountRoute = AppAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppRoute,
 } as any)
+const AppHomeRequestRoute = AppHomeRequestRouteImport.update({
+  id: '/home/request',
+  path: '/home/request',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/role': typeof RoleRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
-  '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
+  '/home/request': typeof AppHomeRequestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/role': typeof RoleRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
-  '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
+  '/home/request': typeof AppHomeRequestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -75,14 +75,20 @@ export interface FileRoutesById {
   '/role': typeof RoleRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/coverage': typeof AppCoverageRoute
-  '/_app/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
+  '/_app/home/request': typeof AppHomeRequestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/role' | '/account' | '/coverage' | '/home' | '/auth/$role'
+  fullPaths:
+    | '/'
+    | '/role'
+    | '/account'
+    | '/coverage'
+    | '/auth/$role'
+    | '/home/request'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/role' | '/account' | '/coverage' | '/home' | '/auth/$role'
+  to: '/' | '/role' | '/account' | '/coverage' | '/auth/$role' | '/home/request'
   id:
     | '__root__'
     | '/'
@@ -90,8 +96,8 @@ export interface FileRouteTypes {
     | '/role'
     | '/_app/account'
     | '/_app/coverage'
-    | '/_app/home'
     | '/auth/$role'
+    | '/_app/home/request'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -131,13 +137,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRoleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/home': {
-      id: '/_app/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof AppHomeRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/coverage': {
       id: '/_app/coverage'
       path: '/coverage'
@@ -152,19 +151,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAccountRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/home/request': {
+      id: '/_app/home/request'
+      path: '/home/request'
+      fullPath: '/home/request'
+      preLoaderRoute: typeof AppHomeRequestRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
   AppCoverageRoute: typeof AppCoverageRoute
-  AppHomeRoute: typeof AppHomeRoute
+  AppHomeRequestRoute: typeof AppHomeRequestRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
   AppCoverageRoute: AppCoverageRoute,
-  AppHomeRoute: AppHomeRoute,
+  AppHomeRequestRoute: AppHomeRequestRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -178,3 +184,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
