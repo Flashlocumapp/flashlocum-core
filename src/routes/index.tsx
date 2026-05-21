@@ -1,26 +1,26 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { AnimatePresence } from "framer-motion";
+import { useState } from "react";
+import { SplashScreen } from "@/components/SplashScreen";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: Entry,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function Entry() {
+  const navigate = useNavigate();
+  const [done, setDone] = useState(false);
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <AnimatePresence mode="wait">
+      {!done ? (
+        <SplashScreen
+          key="splash"
+          onDone={() => {
+            setDone(true);
+            navigate({ to: "/role" });
+          }}
+        />
+      ) : null}
+    </AnimatePresence>
   );
-}
-
-function Index() {
-  return <PlaceholderIndex />;
 }
