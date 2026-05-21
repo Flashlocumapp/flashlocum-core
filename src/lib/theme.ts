@@ -1,10 +1,7 @@
-// Sync system dark/light to the <html> class once on app boot.
-export function initSystemTheme() {
-  if (typeof window === "undefined") return;
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  const apply = (dark: boolean) => {
-    document.documentElement.classList.toggle("dark", dark);
-  };
-  apply(mql.matches);
-  mql.addEventListener("change", (e) => apply(e.matches));
+// FlashLocum app is light-mode only.
+// (The splash screen renders dark via its own --splash token.)
+export function initLightMode() {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.remove("dark");
+  document.documentElement.style.colorScheme = "light";
 }

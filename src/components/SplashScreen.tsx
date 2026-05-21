@@ -6,13 +6,14 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "var(--color-splash)" }}
+      style={{ backgroundColor: "var(--color-splash)", colorScheme: "dark" }}
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       onAnimationComplete={() => {
-        window.setTimeout(onDone, 900);
+        // Hold splash ~3s before transitioning into the app.
+        window.setTimeout(onDone, 3000);
       }}
     >
       <div className="relative flex items-center justify-center gap-1">

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { setRole, type Role } from "@/lib/role";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
@@ -11,12 +12,17 @@ function AuthScreen() {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [showPw, setShowPw] = useState(false);
 
-  const roleLabel = role === "cover" ? "Cover & Earn" : "Request Coverage";
+  const normalizedRole: Role = role === "cover" ? "cover" : "request";
+  const roleLabel = normalizedRole === "cover" ? "Cover & Earn" : "Request Coverage";
+
+  const enter = () => {
+    setRole(normalizedRole);
+    navigate({ to: "/home" });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Dev-mode bypass — go straight in.
-    navigate({ to: "/home" });
+    enter();
   };
 
   return (
@@ -83,7 +89,7 @@ function AuthScreen() {
 
         <button
           type="button"
-          onClick={() => navigate({ to: "/home" })}
+          onClick={enter}
           className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl bg-card text-[14px] font-medium hairline-t hairline-b active:bg-accent"
           style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
         >
