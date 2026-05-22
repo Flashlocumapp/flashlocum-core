@@ -75,9 +75,14 @@ function HomeScreen() {
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
 
+  // Immersive flow — hide bottom tabs once the requester engages the sheet.
+  useEffect(() => {
+    setImmersive(stage !== "collapsed");
+    return () => setImmersive(false);
+  }, [stage]);
+
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
-    // Operational defaults per coverage type
     if (c === "24h") setDays(1);
     else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
   };
@@ -93,6 +98,7 @@ function HomeScreen() {
     setQuery(r.name);
     setStage("configure");
   };
+
 
   return (
     <section className="relative h-full w-full overflow-hidden">
