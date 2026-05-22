@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
+import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
