@@ -609,8 +609,10 @@ function fmtRange(a: string, b: string) {
 
 function SettlementSheet({
   pricing,
+  onConfirm,
 }: {
   pricing: { amount: number; explanation: string };
+  onConfirm: () => void;
 }) {
   return (
     <motion.section
@@ -638,10 +640,348 @@ function SettlementSheet({
           {pricing.explanation}
         </p>
 
-        <button className="mt-6 h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90">
+        <button
+          onClick={onConfirm}
+          className="mt-6 h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
+        >
           Request Coverage
         </button>
       </div>
     </motion.section>
+  );
+}
+
+/* ---------------------- Dispatch overlay (post-request) ---------------------- */
+
+const COVERAGE_LABEL: Record<CoverageId, string> = {
+  standard: "Standard Coverage",
+  "24h": "24-Hour Coverage",
+  weekend: "Weekend Call",
+  home: "Home Care",
+};
+
+const CANCEL_REASONS = [
+  "Coverage no longer needed",
+  "Timing changed",
+  "Doctor sourced elsewhere",
+  "Duplicate request",
+  "Emergency resolved",
+  "Other",
+];
+
+function DispatchOverlay({
+  stage,
+  setStage,
+  coverage,
+  days,
+  location,
+}: {
+  stage: "dispatch" | "accepted";
+  setStage: (s: Stage) => void;
+  coverage: CoverageId;
+  days: number;
+  location: Recent | null;
+}) {
+  const navigate = useNavigate();
+  const [ambient, setAmbient] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
+
+  // Simulated dispatch acceptance (varied 6–11s).
+  const acceptedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (stage !== "dispatch") return;
+    const t1 = window.setTimeout(() => setAmbient(true), 2800);
+    const delay = 6000 + Math.floor(Math.random() * 5000);
+    acceptedAtRef.current = window.setTimeout(() => {
+      setStage("accepted");
+    }, delay) as unknown as number;
+    return () => {
+      window.clearTimeout(t1);
+      if (acceptedAtRef.current) window.clearTimeout(acceptedAtRef.current);
+    };
+  }, [stage, setStage]);
+
+  const pricing = computePricing({ coverage, days });
+
+  return (
+    <motion.section
+      initial={{ y: "100%" }}
+      animate={{ y: 0 }}
+      exit={{ y: "100%" }}
+      transition={{ type: "spring", stiffness: 280, damping: 34 }}
+      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.18)]"
+      style={{ background: "var(--color-surface-elevated)" }}
+    >
+      <div className="flex w-full shrink-0 justify-center pt-3 pb-2">
+        <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
+      </div>
+
+      <div className="flex flex-col px-6 pb-7 pt-2">
+        <AnimatePresence mode="wait">
+          {stage === "dispatch" ? (
+            <motion.div
+              key="searching"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.25 }}
+            >
+              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {location?.name ?? "Coverage"}
+              </div>
+              <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">
+                Medical Officer Found
+              </h2>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                Connecting to available doctors nearby
+              </p>
+
+              <ConnectionPulse className="mt-6" />
+
+              <AnimatePresence>
+                {ambient && (
+                  <motion.div
+                    key="ambient"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="mt-5 text-center text-[12px] text-muted-foreground"
+                  >
+                    Checking nearby availability…
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="accepted"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Doctor accepted
+              </div>
+
+              <div className="mt-3 flex items-center gap-3 rounded-2xl bg-secondary/50 px-3.5 py-3">
+                <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary text-[13px] font-semibold">
+                  EA
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
+                    style={{
+                      background: "var(--color-presence)",
+                      boxShadow: "0 0 0 2px var(--color-surface-elevated)",
+                    }}
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-medium">Dr. Emmanuel Adeleke</div>
+                  <div className="text-[12px] text-muted-foreground">MDCN-12245</div>
+                  <div className="mt-0.5 truncate text-[12.5px] text-foreground/70">
+                    {COVERAGE_LABEL[coverage]} · Tuesday · 8:00 AM · {formatNaira(pricing.amount)}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate({ to: "/coverage" })}
+                className="mt-5 h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                Start Shift
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="mt-5 flex items-center gap-2.5">
+          <button
+            onClick={() => setStage("configure")}
+            className="flex-1 rounded-full bg-secondary/70 py-3 text-[13px] font-medium text-foreground/80 active:opacity-90"
+          >
+            Edit Request
+          </button>
+          <button
+            onClick={() => (stage === "accepted" ? setReasonOpen(true) : setConfirmCancel(true))}
+            className="flex-1 rounded-full bg-secondary/40 py-3 text-[13px] font-medium text-foreground/70 active:opacity-90"
+          >
+            Cancel Request
+          </button>
+        </div>
+      </div>
+
+      {/* Hesitation modal — pre-acceptance */}
+      <AnimatePresence>
+        {confirmCancel && (
+          <CalmModal
+            title="Are you sure?"
+            body="We’re still connecting to available doctors nearby."
+            primaryLabel="Wait for Doctor"
+            secondaryLabel="Cancel Request"
+            onPrimary={() => setConfirmCancel(false)}
+            onSecondary={() => {
+              setConfirmCancel(false);
+              setStage("configure");
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Reason picker — post-acceptance */}
+      <AnimatePresence>
+        {reasonOpen && (
+          <ReasonModal
+            onClose={() => setReasonOpen(false)}
+            onConfirm={() => {
+              setReasonOpen(false);
+              setStage("configure");
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </motion.section>
+  );
+}
+
+function ConnectionPulse({ className }: { className?: string }) {
+  return (
+    <div className={`relative h-10 w-full ${className ?? ""}`}>
+      <div className="absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-foreground/15" />
+      <span
+        className="absolute left-2 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full"
+        style={{ background: "var(--color-foreground)" }}
+      />
+      <span
+        className="absolute right-2 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full"
+        style={{ background: "var(--color-presence)" }}
+      />
+      <motion.span
+        className="absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full"
+        style={{
+          background: "var(--color-presence)",
+          boxShadow: "0 0 12px color-mix(in oklab, var(--color-presence) 60%, transparent)",
+        }}
+        initial={{ left: "8px", opacity: 0 }}
+        animate={{ left: "calc(100% - 16px)", opacity: [0, 1, 1, 0] }}
+        transition={{ duration: 2.4, ease: "easeInOut", repeat: Infinity }}
+      />
+    </div>
+  );
+}
+
+function CalmModal({
+  title,
+  body,
+  primaryLabel,
+  secondaryLabel,
+  onPrimary,
+  onSecondary,
+}: {
+  title: string;
+  body: string;
+  primaryLabel: string;
+  secondaryLabel: string;
+  onPrimary: () => void;
+  onSecondary: () => void;
+}) {
+  return (
+    <motion.div
+      className="absolute inset-0 z-40 flex items-end"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="absolute inset-0 bg-foreground/30" onClick={onPrimary} />
+      <motion.div
+        initial={{ y: 24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 24, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 32 }}
+        className="relative z-10 w-full rounded-t-3xl bg-surface-elevated px-6 pb-7 pt-6"
+        style={{ background: "var(--color-surface-elevated)" }}
+      >
+        <h3 className="text-[17px] font-semibold tracking-tight">{title}</h3>
+        <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
+        <div className="mt-5 flex flex-col gap-2">
+          <button
+            onClick={onPrimary}
+            className="h-12 w-full rounded-full bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
+          >
+            {primaryLabel}
+          </button>
+          <button
+            onClick={onSecondary}
+            className="h-12 w-full rounded-full bg-secondary/70 text-[14px] font-medium text-foreground/80 active:opacity-90"
+          >
+            {secondaryLabel}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function ReasonModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const [reason, setReason] = useState<string | null>(null);
+  return (
+    <motion.div
+      className="absolute inset-0 z-40 flex items-end"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="absolute inset-0 bg-foreground/30" onClick={onClose} />
+      <motion.div
+        initial={{ y: 24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 24, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 32 }}
+        className="relative z-10 w-full rounded-t-3xl px-6 pb-7 pt-6"
+        style={{ background: "var(--color-surface-elevated)" }}
+      >
+        <h3 className="text-[17px] font-semibold tracking-tight">Reason for cancellation</h3>
+        <ul className="mt-4 space-y-1.5">
+          {CANCEL_REASONS.map((r) => {
+            const active = r === reason;
+            return (
+              <li key={r}>
+                <button
+                  onClick={() => setReason(r)}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left text-[13.5px] transition-colors"
+                  style={{
+                    background: active ? "var(--color-secondary)" : "transparent",
+                    color: active
+                      ? "var(--color-foreground)"
+                      : "color-mix(in oklab, var(--color-foreground) 75%, transparent)",
+                  }}
+                >
+                  <span>{r}</span>
+                  {active && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: "var(--color-presence)" }}
+                    />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          onClick={onConfirm}
+          disabled={!reason}
+          className="mt-5 h-12 w-full rounded-full bg-primary text-[14px] font-semibold text-primary-foreground disabled:opacity-40 active:opacity-90"
+        >
+          Confirm Cancellation
+        </button>
+      </motion.div>
+    </motion.div>
   );
 }
