@@ -913,7 +913,7 @@ function DispatchOverlay({
 }
 
 
-function ConnectionPulse({ className }: { className?: string }) {
+function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
   return (
     <div className={`relative h-10 w-full ${className ?? ""}`}>
       <div className="absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-foreground/15" />
@@ -932,12 +932,21 @@ function ConnectionPulse({ className }: { className?: string }) {
           boxShadow: "0 0 12px color-mix(in oklab, var(--color-presence) 60%, transparent)",
         }}
         initial={{ left: "8px", opacity: 0 }}
-        animate={{ left: "calc(100% - 16px)", opacity: [0, 1, 1, 0] }}
-        transition={{ duration: 2.4, ease: "easeInOut", repeat: Infinity }}
+        animate={
+          paused
+            ? { left: "50%", opacity: 0.5 }
+            : { left: "calc(100% - 16px)", opacity: [0, 1, 1, 0] }
+        }
+        transition={
+          paused
+            ? { duration: 0.3 }
+            : { duration: 2.4, ease: "easeInOut", repeat: Infinity }
+        }
       />
     </div>
   );
 }
+
 
 function CalmModal({
   title,
