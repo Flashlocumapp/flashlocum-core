@@ -173,8 +173,6 @@ function DispatchSheet({
   location,
   coverage,
   setCoverage,
-  hours,
-  setHours,
   days,
   setDays,
   onAdvance,
@@ -188,13 +186,10 @@ function DispatchSheet({
   location: Recent | null;
   coverage: CoverageId;
   setCoverage: (c: CoverageId) => void;
-  hours: number;
-  setHours: (n: number) => void;
   days: number;
   setDays: (n: number) => void;
   onAdvance: () => void;
 }) {
-  // Use viewport-unit heights so they interpolate cleanly across stages.
   const heights: Record<Exclude<Stage, "match">, string> = {
     collapsed: "132px",
     search: "72vh",
@@ -289,8 +284,6 @@ function DispatchSheet({
               location={location}
               coverage={coverage}
               setCoverage={setCoverage}
-              hours={hours}
-              setHours={setHours}
               days={days}
               setDays={setDays}
               onAdvance={onAdvance}
