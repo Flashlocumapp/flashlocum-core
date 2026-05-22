@@ -116,31 +116,39 @@ function HomeScreen() {
         </div>
       </header>
 
-      {/* Match-stage: compressed context bar */}
+      {/* Match-stage: compressed shift summary with subtle reopen affordance */}
       <AnimatePresence>
         {stage === "match" && location && (
-          <motion.button
+          <motion.div
             key="context-bar"
             initial={{ y: -16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -16, opacity: 0 }}
             transition={{ type: "spring", stiffness: 280, damping: 32 }}
-            onClick={() => setStage("configure")}
-            className="absolute left-3 right-3 z-30 mt-16 flex min-h-12 items-center gap-3 rounded-2xl bg-surface-elevated px-4 py-3 text-left shadow-[0_4px_18px_rgba(0,0,0,0.10)] safe-top"
+            className="absolute left-3 right-3 z-30 mt-16 flex min-h-12 items-center gap-2 rounded-2xl bg-surface-elevated pl-2 pr-4 py-2 text-left shadow-[0_4px_18px_rgba(0,0,0,0.10)] safe-top"
           >
-            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-presence)]" />
-            <span className="flex-1 truncate text-[13px] font-medium leading-none">
-              {location.name}
-            </span>
-            <span className="shrink-0 text-[11px] uppercase tracking-[0.12em] leading-none text-muted-foreground">
-              {COVERAGE.find((c) => c.id === coverage)?.label}
-            </span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0 text-muted-foreground">
-              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </motion.button>
+            <button
+              onClick={() => setStage("configure")}
+              aria-label="Refine request"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors active:bg-secondary"
+              style={{ color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setStage("configure")}
+              className="flex flex-1 items-center gap-2 truncate text-left"
+            >
+              <span className="truncate text-[13px] font-medium leading-none tabular-nums">
+                {compressedSummary(coverage, days)}
+              </span>
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
+
 
       {/* The layered sheet */}
       <AnimatePresence mode="wait">
