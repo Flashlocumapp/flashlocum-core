@@ -68,9 +68,15 @@ function HomeScreen() {
   const [stage, setStage] = useState<Stage>("collapsed");
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState<Recent | null>(null);
-  const [coverage, setCoverage] = useState<CoverageId>("standard");
-  const [hours, setHours] = useState(10);
+  const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
+
+  const setCoverage = (c: CoverageId) => {
+    setCoverageRaw(c);
+    // Operational defaults per coverage type
+    if (c === "24h") setDays(1);
+    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
+  };
 
   const recents = useMemo(
     () =>
@@ -131,7 +137,7 @@ function HomeScreen() {
         {stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, hours, days })}
+            pricing={computePricing({ coverage, days })}
           />
         ) : (
           <DispatchSheet
@@ -145,8 +151,6 @@ function HomeScreen() {
             location={location}
             coverage={coverage}
             setCoverage={setCoverage}
-            hours={hours}
-            setHours={setHours}
             days={days}
             setDays={setDays}
             onAdvance={() => setStage("match")}
