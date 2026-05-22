@@ -93,12 +93,20 @@ function CoverageScreen() {
           <ul className="space-y-2">
             {filtered.map((item) => (
               <li key={item.id}>
-                <CoverageRow item={item} />
+                <CoverageRow
+                  item={item}
+                  onClick={
+                    role === "request" && item.status === "active"
+                      ? () => setShiftOpen(true)
+                      : undefined
+                  }
+                />
               </li>
             ))}
           </ul>
         )}
       </div>
+      <ShiftSettlement open={shiftOpen} onClose={() => setShiftOpen(false)} />
     </section>
   );
 }
