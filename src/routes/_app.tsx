@@ -2,6 +2,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "@tanstack/react-router";
+import { useImmersive } from "@/lib/immersion";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -9,10 +10,11 @@ export const Route = createFileRoute("/_app")({
 
 function AppShell() {
   const { pathname } = useLocation();
+  const immersive = useImmersive();
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-background"
-      style={{ ["--tab-bar-h" as string]: `${TAB_BAR_HEIGHT}px` }}
+      style={{ ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px` }}
     >
       <div
         className="absolute inset-x-0 top-0"
@@ -31,7 +33,20 @@ function AppShell() {
           </motion.div>
         </AnimatePresence>
       </div>
-      <BottomTabs />
+      <AnimatePresence>
+        {!immersive && (
+          <motion.div
+            key="tabs"
+            initial={{ y: 64, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 64, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            className="absolute inset-x-0 bottom-0"
+          >
+            <BottomTabs />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

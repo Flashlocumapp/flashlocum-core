@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
+import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
@@ -40,6 +41,8 @@ type RequestItem = {
   amount: number;
   status: ReqStatus;
 };
+
+const DEFAULT_DOCTOR_PHONE = "+2348012345678";
 
 const INITIAL_REQUESTS: RequestItem[] = [
   {
@@ -92,10 +95,6 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-function fmtNaira(n: number) {
-  if (n >= 1000) return "₦" + Math.round(n / 1000) + "K";
-  return "₦" + n.toLocaleString("en-NG");
-}
 
 function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
@@ -182,6 +181,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                     item={item}
                     onStart={() => moveToActive(item.id)}
                     onEnd={() => beginEndShift(item.id)}
+                    onCancel={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+                    onEdit={() => {
+                      /* Edit Shift: notify doctor of operational updates */
+                    }}
                   />
                 </motion.li>
               ))}
@@ -214,83 +217,132 @@ function RequestCard({
   item,
   onStart,
   onEnd,
+  onCancel,
+  onEdit,
 }: {
   item: RequestItem;
   onStart: () => void;
   onEnd: () => void;
+  onCancel: () => void;
+  onEdit: () => void;
 }) {
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
 
   const meta = isHistory
-    ? `${item.coverage} · ${item.completedOn} · ${fmtNaira(item.amount)}`
+    ? `${item.coverage} · ${shortWeekdays(item.completedOn ?? "")} · ${fmtNairaK(item.amount)}`
     : isActive
-      ? `${item.coverage} Coverage · Active · ${fmtNaira(item.amount)}`
-      : `${item.coverage} Coverage · ${item.schedule} · ${fmtNaira(item.amount)}`;
+      ? `${item.coverage} · Active · ${fmtNairaK(item.amount)}`
+      : fmtShiftMeta(item.coverage, item.schedule, item.amount);
 
   return (
     <div
-      className="flex items-center gap-3 rounded-2xl px-3.5 py-3"
+      className="rounded-2xl px-3.5 py-3"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
           : "var(--color-surface-elevated)",
       }}
     >
-      <Avatar initials={item.initials} dim={isHistory} live={isActive} />
+      <div className="flex items-center gap-3">
+        <Avatar initials={item.initials} dim={isHistory} live={isActive} />
 
-      <div className="min-w-0 flex-1">
-        <div
-          className="truncate text-[15px] font-medium"
-          style={{
-            color: isHistory
-              ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
-              : "var(--color-foreground)",
-          }}
-        >
-          {item.doctor}
+        <div className="min-w-0 flex-1">
+          <div
+            className="truncate text-[15px] font-medium"
+            style={{
+              color: isHistory
+                ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
+                : "var(--color-foreground)",
+            }}
+          >
+            {item.doctor}
+          </div>
+          <div className="truncate text-[12px] text-muted-foreground">{item.mdcn}</div>
+          <div
+            className="mt-0.5 truncate text-[12.5px]"
+            style={{
+              color: isHistory
+                ? "color-mix(in oklab, var(--color-foreground) 55%, transparent)"
+                : "color-mix(in oklab, var(--color-foreground) 70%, transparent)",
+            }}
+          >
+            {meta}
+          </div>
         </div>
-        <div className="truncate text-[12px] text-muted-foreground">{item.mdcn}</div>
-        <div
-          className="mt-0.5 truncate text-[12.5px]"
-          style={{
-            color: isHistory
-              ? "color-mix(in oklab, var(--color-foreground) 55%, transparent)"
-              : "color-mix(in oklab, var(--color-foreground) 70%, transparent)",
-          }}
-        >
-          {meta}
-        </div>
+
+        {isUpcoming && (
+          <button
+            onClick={onStart}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            style={{
+              background: "var(--color-foreground)",
+              color: "var(--color-background)",
+            }}
+          >
+            Start Shift
+          </button>
+        )}
+        {isActive && (
+          <button
+            onClick={onEnd}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            style={{
+              background: "var(--color-foreground)",
+              color: "var(--color-background)",
+            }}
+          >
+            End Shift
+          </button>
+        )}
       </div>
 
       {isUpcoming && (
-        <button
-          onClick={onStart}
-          className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
-          style={{
-            background: "var(--color-foreground)",
-            color: "var(--color-background)",
-          }}
-        >
-          Start Shift
-        </button>
-      )}
-      {isActive && (
-        <button
-          onClick={onEnd}
-          className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
-          style={{
-            background: "var(--color-foreground)",
-            color: "var(--color-background)",
-          }}
-        >
-          End Shift
-        </button>
+        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
+          <SecondaryAction onClick={onEdit} label="Edit" />
+          <SecondaryAction onClick={onCancel} label="Cancel" />
+          <a
+            href={`tel:${DEFAULT_DOCTOR_PHONE}`}
+            className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
+            style={{
+              background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+              color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Call
+          </a>
+        </div>
       )}
     </div>
   );
 }
+
+function SecondaryAction({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="h-7 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
+      style={{
+        background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+        color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+
 
 function Avatar({
   initials,
