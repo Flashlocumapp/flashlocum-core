@@ -703,6 +703,8 @@ const CANCEL_REASONS = [
   "Other",
 ];
 
+const DOCTOR_PHONE = "+2348012345678";
+
 function DispatchOverlay({
   stage,
   setStage,
@@ -716,27 +718,27 @@ function DispatchOverlay({
   days: number;
   location: Recent | null;
 }) {
-  const navigate = useNavigate();
   const [ambient, setAmbient] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
 
-  // Simulated dispatch acceptance (varied 6–11s).
-  const acceptedAtRef = useRef<number | null>(null);
+  // Pause the realtime search whenever the hesitation modal is open.
+  const paused = confirmCancel;
+
+  // Simulated dispatch acceptance (6–11s). Pauses when modal is open.
   useEffect(() => {
-    if (stage !== "dispatch") return;
+    if (stage !== "dispatch" || paused) return;
     const t1 = window.setTimeout(() => setAmbient(true), 2800);
     const delay = 6000 + Math.floor(Math.random() * 5000);
-    acceptedAtRef.current = window.setTimeout(() => {
-      setStage("accepted");
-    }, delay) as unknown as number;
+    const t2 = window.setTimeout(() => setStage("accepted"), delay);
     return () => {
       window.clearTimeout(t1);
-      if (acceptedAtRef.current) window.clearTimeout(acceptedAtRef.current);
+      window.clearTimeout(t2);
     };
-  }, [stage, setStage]);
+  }, [stage, paused, setStage]);
 
   const pricing = computePricing({ coverage, days });
+  const acceptedMeta = compressedSummary(coverage, days);
 
   return (
     <motion.section
@@ -765,16 +767,18 @@ function DispatchOverlay({
                 {location?.name ?? "Coverage"}
               </div>
               <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">
-                Medical Officer Found
+                {paused ? "Search paused" : "Medical Officer Found"}
               </h2>
               <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-                Connecting to available doctors nearby
+                {paused
+                  ? "We'll resume connecting in a moment"
+                  : "Connecting to available doctors nearby"}
               </p>
 
-              <ConnectionPulse className="mt-6" />
+              <ConnectionPulse className="mt-6" paused={paused} />
 
               <AnimatePresence>
-                {ambient && (
+                {ambient && !paused && (
                   <motion.div
                     key="ambient"
                     initial={{ opacity: 0 }}
@@ -787,6 +791,21 @@ function DispatchOverlay({
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              <div className="mt-6 flex items-center gap-2.5">
+                <button
+                  onClick={() => setStage("configure")}
+                  className="flex-1 rounded-full bg-secondary/70 py-3 text-[13px] font-medium text-foreground/80 active:opacity-90"
+                >
+                  Edit Request
+                </button>
+                <button
+                  onClick={() => setConfirmCancel(true)}
+                  className="flex-1 rounded-full bg-secondary/40 py-3 text-[13px] font-medium text-foreground/70 active:opacity-90"
+                >
+                  Cancel Request
+                </button>
+              </div>
             </motion.div>
           ) : (
             <motion.div
@@ -813,50 +832,65 @@ function DispatchOverlay({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[15px] font-medium">Dr. Emmanuel Adeleke</div>
                   <div className="text-[12px] text-muted-foreground">MDCN-12245</div>
-                  <div className="mt-0.5 truncate text-[12.5px] text-foreground/70">
-                    {COVERAGE_LABEL[coverage]} · Tuesday · 8:00 AM · {formatNaira(pricing.amount)}
+                  <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
+                    {acceptedMeta}
                   </div>
                 </div>
               </div>
 
-              <button
-                onClick={() => navigate({ to: "/coverage" })}
-                className="mt-5 h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
-              >
-                Start Shift
-              </button>
+              {/* Subtle operational helper — reminds requester where to start the shift */}
+              <p className="mt-3.5 text-[12px] leading-relaxed text-muted-foreground">
+                Remember to start shift under Upcoming Coverage once the doctor arrives.
+              </p>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setStage("configure")}
+                  className="rounded-full bg-secondary/70 py-3 text-[12.5px] font-medium text-foreground/85 active:opacity-90"
+                >
+                  Edit Shift
+                </button>
+                <button
+                  onClick={() => setReasonOpen(true)}
+                  className="rounded-full bg-secondary/40 py-3 text-[12.5px] font-medium text-foreground/75 active:opacity-90"
+                >
+                  Cancel Shift
+                </button>
+                <a
+                  href={`tel:${DOCTOR_PHONE}`}
+                  className="flex items-center justify-center gap-1.5 rounded-full bg-foreground py-3 text-[12.5px] font-semibold text-background active:opacity-90"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Call
+                </a>
+              </div>
+              {/* Hidden: pricing reference avoids unused-var warning while keeping context for future expansion */}
+              <span className="sr-only">{formatNaira(pricing.amount)}</span>
             </motion.div>
           )}
         </AnimatePresence>
-
-        <div className="mt-5 flex items-center gap-2.5">
-          <button
-            onClick={() => setStage("configure")}
-            className="flex-1 rounded-full bg-secondary/70 py-3 text-[13px] font-medium text-foreground/80 active:opacity-90"
-          >
-            Edit Request
-          </button>
-          <button
-            onClick={() => (stage === "accepted" ? setReasonOpen(true) : setConfirmCancel(true))}
-            className="flex-1 rounded-full bg-secondary/40 py-3 text-[13px] font-medium text-foreground/70 active:opacity-90"
-          >
-            Cancel Request
-          </button>
-        </div>
       </div>
 
-      {/* Hesitation modal — pre-acceptance */}
+      {/* Hesitation modal — pre-acceptance. Tapping outside / swipe dismiss = continue searching */}
       <AnimatePresence>
         {confirmCancel && (
           <CalmModal
             title="Are you sure?"
-            body="We’re still connecting to available doctors nearby."
+            body="We're still connecting to available doctors nearby."
             primaryLabel="Wait for Doctor"
             secondaryLabel="Cancel Request"
             onPrimary={() => setConfirmCancel(false)}
             onSecondary={() => {
               setConfirmCancel(false);
-              setStage("configure");
+              setStage("collapsed");
             }}
           />
         )}
@@ -869,7 +903,7 @@ function DispatchOverlay({
             onClose={() => setReasonOpen(false)}
             onConfirm={() => {
               setReasonOpen(false);
-              setStage("configure");
+              setStage("collapsed");
             }}
           />
         )}
@@ -877,6 +911,7 @@ function DispatchOverlay({
     </motion.section>
   );
 }
+
 
 function ConnectionPulse({ className }: { className?: string }) {
   return (
