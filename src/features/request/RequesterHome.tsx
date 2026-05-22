@@ -687,12 +687,8 @@ function SettlementSheet({
 
 /* ---------------------- Dispatch overlay (post-request) ---------------------- */
 
-const COVERAGE_LABEL: Record<CoverageId, string> = {
-  standard: "Standard Coverage",
-  "24h": "24-Hour Coverage",
-  weekend: "Weekend Call",
-  home: "Home Care",
-};
+// (Long coverage labels live in COVERAGE_SHORT; legacy COVERAGE_LABEL removed.)
+
 
 const CANCEL_REASONS = [
   "Coverage no longer needed",
