@@ -111,10 +111,11 @@ function CoverageScreen() {
   );
 }
 
-function CoverageRow({ item }: { item: CoverageItem }) {
+function CoverageRow({ item, onClick }: { item: CoverageItem; onClick?: () => void }) {
   const isLive = item.status === "active";
   return (
     <button
+      onClick={onClick}
       className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-accent"
       style={{ background: "var(--color-surface-elevated)" }}
     >
