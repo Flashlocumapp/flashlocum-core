@@ -201,12 +201,15 @@ function DispatchSheet({
   setDays: (n: number) => void;
   onAdvance: () => void;
 }) {
-  const heights: Record<Exclude<Stage, "match">, string> = {
+  const heights: Record<"collapsed" | "search" | "configure", string> = {
     collapsed: "132px",
     search: "72vh",
     configure: "86vh",
   };
-  const height = heights[stage === "match" ? "configure" : stage];
+  const key = (stage === "collapsed" || stage === "search" || stage === "configure")
+    ? stage
+    : "configure";
+  const height = heights[key];
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     if (info.velocity.y < -300 || info.offset.y < -60) {
