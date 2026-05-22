@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { useNavigate } from "@tanstack/react-router";
 import { MapBackground } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
-import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
+import { fmtNairaK } from "@/lib/format";
+
 
 export function RequesterHome() {
   return <HomeScreen />;
