@@ -36,12 +36,16 @@ export function ShiftSettlement({
   open,
   onClose,
   shift = SAMPLE,
+  initialPhase = "active",
+  onConfirmed,
 }: {
   open: boolean;
   onClose: () => void;
   shift?: ShiftMeta;
+  initialPhase?: Phase;
+  onConfirmed?: () => void;
 }) {
-  const [phase, setPhase] = useState<Phase>("active");
+  const [phase, setPhase] = useState<Phase>(initialPhase);
   const [elapsed, setElapsed] = useState(0); // seconds since End Shift
   const [overtimeSec, setOvertimeSec] = useState(0);
   const autoConfirmAt = useRef<number | null>(null);
@@ -49,12 +53,16 @@ export function ShiftSettlement({
   // Reset whenever opened fresh
   useEffect(() => {
     if (open) {
-      setPhase("active");
+      setPhase(initialPhase);
       setElapsed(0);
       setOvertimeSec(0);
       autoConfirmAt.current = null;
     }
-  }, [open]);
+  }, [open, initialPhase]);
+
+  useEffect(() => {
+    if (phase === "confirmed") onConfirmed?.();
+  }, [phase, onConfirmed]);
 
   // Master tick after End Shift
   useEffect(() => {
