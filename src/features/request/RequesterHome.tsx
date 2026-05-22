@@ -135,10 +135,20 @@ function HomeScreen() {
 
       {/* The layered sheet */}
       <AnimatePresence mode="wait">
-        {stage === "match" ? (
+        {stage === "dispatch" || stage === "accepted" ? (
+          <DispatchOverlay
+            key="dispatch-overlay"
+            stage={stage}
+            setStage={setStage}
+            coverage={coverage}
+            days={days}
+            location={location}
+          />
+        ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
             pricing={computePricing({ coverage, days })}
+            onConfirm={() => setStage("dispatch")}
           />
         ) : (
           <DispatchSheet
