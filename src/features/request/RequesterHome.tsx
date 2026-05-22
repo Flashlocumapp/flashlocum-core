@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { useNavigate } from "@tanstack/react-router";
 import { MapBackground } from "@/components/MapBackground";
+import { setImmersive } from "@/lib/immersion";
+import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
 
 export function RequesterHome() {
   return <HomeScreen />;
 }
+
 
 
 type CoverageId = "standard" | "24h" | "weekend" | "home";
