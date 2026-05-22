@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import { useNavigate } from "@tanstack/react-router";
 import { MapBackground } from "@/components/MapBackground";
 
 export function RequesterHome() {
@@ -8,7 +9,7 @@ export function RequesterHome() {
 
 
 type CoverageId = "standard" | "24h" | "weekend" | "home";
-type Stage = "collapsed" | "search" | "configure" | "match";
+type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
 type Recent = { name: string; area: string };
 
