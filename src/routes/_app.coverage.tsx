@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getRole, type Role } from "@/lib/role";
+import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
@@ -40,6 +41,7 @@ type TabId = typeof TABS[number]["id"];
 function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
   const [role, setLocalRole] = useState<Role>("request");
+  const [shiftOpen, setShiftOpen] = useState(false);
   useEffect(() => setLocalRole(getRole()), []);
 
   const source = role === "cover" ? DOCTOR_ITEMS : REQUESTER_ITEMS;
@@ -91,20 +93,29 @@ function CoverageScreen() {
           <ul className="space-y-2">
             {filtered.map((item) => (
               <li key={item.id}>
-                <CoverageRow item={item} />
+                <CoverageRow
+                  item={item}
+                  onClick={
+                    role === "request" && item.status === "active"
+                      ? () => setShiftOpen(true)
+                      : undefined
+                  }
+                />
               </li>
             ))}
           </ul>
         )}
       </div>
+      <ShiftSettlement open={shiftOpen} onClose={() => setShiftOpen(false)} />
     </section>
   );
 }
 
-function CoverageRow({ item }: { item: CoverageItem }) {
+function CoverageRow({ item, onClick }: { item: CoverageItem; onClick?: () => void }) {
   const isLive = item.status === "active";
   return (
     <button
+      onClick={onClick}
       className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-accent"
       style={{ background: "var(--color-surface-elevated)" }}
     >
