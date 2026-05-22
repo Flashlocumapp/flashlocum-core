@@ -29,30 +29,30 @@ const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tu
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; hours: number; days: number };
+type PricingContext = { coverage: CoverageId; days: number };
 
-function computePricing({ coverage, hours, days }: PricingContext) {
+function computePricing({ coverage, days }: PricingContext) {
+  const d = Math.max(1, days);
   let amount = 0;
   let explanation = "";
 
   if (coverage === "24h") {
-    amount = Math.max(1, days) * 80000;
+    amount = d * 80000;
     explanation = "24-hour coverage includes extended operational continuity.";
   } else if (coverage === "weekend") {
     amount = 80000;
     explanation = "Weekend coverage includes extended operational hours.";
   } else if (coverage === "home") {
-    amount = Math.max(1, hours) * 4500;
+    amount = d * 45000;
     explanation = "Home care coverage includes personalized operational coordination.";
   } else {
-    amount = Math.max(1, hours) * 3600;
-    if (hours <= 4) {
-      explanation = "Short coverage requests have slightly higher hourly pricing.";
-    } else if (hours <= 7) {
-      explanation = "Mid-length coverage includes adjusted operational pricing.";
-    } else {
-      explanation = "Standard operational coverage rate.";
-    }
+    amount = d * 36000;
+    explanation =
+      d <= 1
+        ? "Short coverage includes adjusted operational pricing."
+        : d <= 3
+          ? "Mid-length coverage includes adjusted operational pricing."
+          : "Standard operational coverage rate.";
   }
 
   return { amount, explanation };
@@ -68,9 +68,15 @@ function HomeScreen() {
   const [stage, setStage] = useState<Stage>("collapsed");
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState<Recent | null>(null);
-  const [coverage, setCoverage] = useState<CoverageId>("standard");
-  const [hours, setHours] = useState(10);
+  const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
+
+  const setCoverage = (c: CoverageId) => {
+    setCoverageRaw(c);
+    // Operational defaults per coverage type
+    if (c === "24h") setDays(1);
+    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
+  };
 
   const recents = useMemo(
     () =>
@@ -131,7 +137,7 @@ function HomeScreen() {
         {stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, hours, days })}
+            pricing={computePricing({ coverage, days })}
           />
         ) : (
           <DispatchSheet
@@ -145,8 +151,6 @@ function HomeScreen() {
             location={location}
             coverage={coverage}
             setCoverage={setCoverage}
-            hours={hours}
-            setHours={setHours}
             days={days}
             setDays={setDays}
             onAdvance={() => setStage("match")}
@@ -169,8 +173,6 @@ function DispatchSheet({
   location,
   coverage,
   setCoverage,
-  hours,
-  setHours,
   days,
   setDays,
   onAdvance,
@@ -184,13 +186,10 @@ function DispatchSheet({
   location: Recent | null;
   coverage: CoverageId;
   setCoverage: (c: CoverageId) => void;
-  hours: number;
-  setHours: (n: number) => void;
   days: number;
   setDays: (n: number) => void;
   onAdvance: () => void;
 }) {
-  // Use viewport-unit heights so they interpolate cleanly across stages.
   const heights: Record<Exclude<Stage, "match">, string> = {
     collapsed: "132px",
     search: "72vh",
@@ -285,8 +284,6 @@ function DispatchSheet({
               location={location}
               coverage={coverage}
               setCoverage={setCoverage}
-              hours={hours}
-              setHours={setHours}
               days={days}
               setDays={setDays}
               onAdvance={onAdvance}
@@ -304,8 +301,6 @@ function ConfigureBody({
   location,
   coverage,
   setCoverage,
-  hours,
-  setHours,
   days,
   setDays,
   onAdvance,
@@ -313,8 +308,6 @@ function ConfigureBody({
   location: Recent;
   coverage: CoverageId;
   setCoverage: (c: CoverageId) => void;
-  hours: number;
-  setHours: (n: number) => void;
   days: number;
   setDays: (n: number) => void;
   onAdvance: () => void;
@@ -332,7 +325,7 @@ function ConfigureBody({
         </div>
       </div>
 
-      {/* Coverage type pills */}
+      {/* Coverage type pills — Uber-style ride-category selectors */}
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {COVERAGE.map((c) => {
           const active = c.id === coverage;
@@ -340,10 +333,10 @@ function ConfigureBody({
             <button
               key={c.id}
               onClick={() => setCoverage(c.id)}
-              className={`shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-colors ${
+              className={`shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-all ${
                 active
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-foreground/75"
+                  ? "bg-foreground text-background"
+                  : "bg-secondary/70 text-foreground/70 hover:bg-secondary"
               }`}
             >
               {c.label}
@@ -352,7 +345,7 @@ function ConfigureBody({
         })}
       </div>
 
-      {/* Dynamic fields */}
+      {/* Dynamic fields — switch fluidly per coverage type */}
       <AnimatePresence mode="wait">
         <motion.div
           key={coverage}
@@ -361,13 +354,7 @@ function ConfigureBody({
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
         >
-          <CoverageFields
-            coverage={coverage}
-            hours={hours}
-            setHours={setHours}
-            days={days}
-            setDays={setDays}
-          />
+          <CoverageFields coverage={coverage} days={days} setDays={setDays} />
         </motion.div>
       </AnimatePresence>
 
@@ -389,16 +376,20 @@ function ConfigureBody({
 
 /* ---------------------- Coverage-specific fields ---------------------- */
 
+function addHoursToTime(time: string, hoursToAdd: number) {
+  const [h, m] = time.split(":").map(Number);
+  const total = (h * 60 + m + hoursToAdd * 60) % (24 * 60);
+  const nh = Math.floor(total / 60);
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
 function CoverageFields({
   coverage,
-  hours,
-  setHours,
   days,
   setDays,
 }: {
   coverage: CoverageId;
-  hours: number;
-  setHours: (n: number) => void;
   days: number;
   setDays: (n: number) => void;
 }) {
@@ -409,55 +400,54 @@ function CoverageFields({
     d.setDate(d.getDate() + diff);
     return d.toISOString().slice(0, 10);
   }, []);
-  const nextMonday = useMemo(() => {
+  const nextSunday = useMemo(() => {
     const d = new Date(nextSaturday);
-    d.setDate(d.getDate() + 2);
+    d.setDate(d.getDate() + 1);
     return d.toISOString().slice(0, 10);
   }, [nextSaturday]);
 
-  if (coverage === "standard") {
-    return (
-      <Fields>
-        <Row>
-          <Field label="Start date" type="date" defaultValue={today} />
-          <HoursStepper value={hours} setValue={setHours} />
-        </Row>
-        <NoteField />
-      </Fields>
-    );
-  }
-  if (coverage === "24h") {
-    return (
-      <Fields>
-        <Row>
-          <Field label="Start date" type="date" defaultValue={today} />
-          <Field label="Start time" type="time" defaultValue="08:00" />
-        </Row>
-        <DaysStepper value={days} setValue={setDays} />
-        <NoteField />
-      </Fields>
-    );
-  }
+  // Weekend Call — auto Sat→Mon, +48h, no Duration field
   if (coverage === "weekend") {
+    const [startTime, setStartTime] = useState("08:00");
     return (
       <Fields>
-        <div className="rounded-xl bg-secondary/50 px-3 py-2 text-[12px] text-muted-foreground">
-          {fmtRange(nextSaturday, nextMonday)} · 48 hours
+        <div className="rounded-xl bg-secondary/50 px-3 py-2.5 text-[12px] text-muted-foreground">
+          {fmtRange(nextSaturday, nextSunday)} · 48 hours
         </div>
         <Row>
-          <Field label="Start time" type="time" defaultValue="08:00" />
-          <Field label="End time" type="time" defaultValue="08:00" readOnly />
+          <TimeField label="Start time" value={startTime} onChange={setStartTime} />
+          <TimeField label="End time" value={addHoursToTime(startTime, 48)} readOnly />
         </Row>
         <NoteField />
       </Fields>
     );
   }
+
+  // Standard / Home Care — Start Date, Start Time, End Time, Duration (1–7d), Note
+  if (coverage === "standard" || coverage === "home") {
+    return (
+      <Fields>
+        <Row>
+          <Field label="Start date" type="date" defaultValue={today} />
+          <Field label="Start time" type="time" defaultValue="08:00" />
+        </Row>
+        <Row>
+          <Field label="End time" type="time" defaultValue="17:00" />
+          <DaysStepper value={days} setValue={setDays} />
+        </Row>
+        <NoteField />
+      </Fields>
+    );
+  }
+
+  // 24-Hour — Start Date, Start Time, Duration (prefilled 1d, up to 7), Note
   return (
     <Fields>
       <Row>
         <Field label="Start date" type="date" defaultValue={today} />
-        <HoursStepper value={hours} setValue={setHours} />
+        <Field label="Start time" type="time" defaultValue="08:00" />
       </Row>
+      <DaysStepper value={days} setValue={setDays} />
       <NoteField />
     </Fields>
   );
@@ -541,16 +531,30 @@ function Stepper({
   );
 }
 
-function HoursStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
+function TimeField({
+  label,
+  value,
+  onChange,
+  readOnly,
+}: {
+  label: string;
+  value: string;
+  onChange?: (v: string) => void;
+  readOnly?: boolean;
+}) {
   return (
-    <Stepper
-      label="Hours"
-      value={value}
-      setValue={setValue}
-      min={1}
-      max={12}
-      unit={(n) => (n === 1 ? "hr" : "hrs")}
-    />
+    <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
+      <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </span>
+      <input
+        type="time"
+        value={value}
+        readOnly={readOnly}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="bg-transparent text-[14px] font-medium outline-none"
+      />
+    </label>
   );
 }
 function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
