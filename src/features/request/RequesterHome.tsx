@@ -531,16 +531,30 @@ function Stepper({
   );
 }
 
-function HoursStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
+function TimeField({
+  label,
+  value,
+  onChange,
+  readOnly,
+}: {
+  label: string;
+  value: string;
+  onChange?: (v: string) => void;
+  readOnly?: boolean;
+}) {
   return (
-    <Stepper
-      label="Hours"
-      value={value}
-      setValue={setValue}
-      min={1}
-      max={12}
-      unit={(n) => (n === 1 ? "hr" : "hrs")}
-    />
+    <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
+      <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </span>
+      <input
+        type="time"
+        value={value}
+        readOnly={readOnly}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="bg-transparent text-[14px] font-medium outline-none"
+      />
+    </label>
   );
 }
 function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
