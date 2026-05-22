@@ -181,6 +181,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                     item={item}
                     onStart={() => moveToActive(item.id)}
                     onEnd={() => beginEndShift(item.id)}
+                    onCancel={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+                    onEdit={() => {
+                      /* Edit Shift: notify doctor of operational updates */
+                    }}
                   />
                 </motion.li>
               ))}
