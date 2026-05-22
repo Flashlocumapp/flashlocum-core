@@ -29,30 +29,30 @@ const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tu
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; hours: number; days: number };
+type PricingContext = { coverage: CoverageId; days: number };
 
-function computePricing({ coverage, hours, days }: PricingContext) {
+function computePricing({ coverage, days }: PricingContext) {
+  const d = Math.max(1, days);
   let amount = 0;
   let explanation = "";
 
   if (coverage === "24h") {
-    amount = Math.max(1, days) * 80000;
+    amount = d * 80000;
     explanation = "24-hour coverage includes extended operational continuity.";
   } else if (coverage === "weekend") {
     amount = 80000;
     explanation = "Weekend coverage includes extended operational hours.";
   } else if (coverage === "home") {
-    amount = Math.max(1, hours) * 4500;
+    amount = d * 45000;
     explanation = "Home care coverage includes personalized operational coordination.";
   } else {
-    amount = Math.max(1, hours) * 3600;
-    if (hours <= 4) {
-      explanation = "Short coverage requests have slightly higher hourly pricing.";
-    } else if (hours <= 7) {
-      explanation = "Mid-length coverage includes adjusted operational pricing.";
-    } else {
-      explanation = "Standard operational coverage rate.";
-    }
+    amount = d * 36000;
+    explanation =
+      d <= 1
+        ? "Short coverage includes adjusted operational pricing."
+        : d <= 3
+          ? "Mid-length coverage includes adjusted operational pricing."
+          : "Standard operational coverage rate.";
   }
 
   return { amount, explanation };
