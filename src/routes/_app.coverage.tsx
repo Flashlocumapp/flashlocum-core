@@ -42,6 +42,8 @@ type RequestItem = {
   status: ReqStatus;
 };
 
+const DEFAULT_DOCTOR_PHONE = "+2348012345678";
+
 const INITIAL_REQUESTS: RequestItem[] = [
   {
     id: "r-active-1",
@@ -93,10 +95,6 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-function fmtNaira(n: number) {
-  if (n >= 1000) return "₦" + Math.round(n / 1000) + "K";
-  return "₦" + n.toLocaleString("en-NG");
-}
 
 function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
