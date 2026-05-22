@@ -66,7 +66,24 @@ function formatNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
 }
 
+const COVERAGE_SHORT: Record<CoverageId, string> = {
+  standard: "Standard",
+  "24h": "24-Hour",
+  weekend: "Weekend Call",
+  home: "Home Care",
+};
+
+// Compressed operational summary: e.g. "Standard · Tue · 8:00 AM · ₦36K"
+function compressedSummary(coverage: CoverageId, days: number): string {
+  const amount = computePricing({ coverage, days }).amount;
+  if (coverage === "weekend") {
+    return `${COVERAGE_SHORT[coverage]} · Sat & Sun · 9:00 AM · ${fmtNairaK(amount)}`;
+  }
+  return `${COVERAGE_SHORT[coverage]} · Tue · 8:00 AM · ${fmtNairaK(amount)}`;
+}
+
 /* ---------------------- Home ---------------------- */
+
 
 function HomeScreen() {
   const [stage, setStage] = useState<Stage>("collapsed");
