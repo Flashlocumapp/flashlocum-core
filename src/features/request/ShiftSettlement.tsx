@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { RatingOverlay } from "@/components/RatingOverlay";
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
 
