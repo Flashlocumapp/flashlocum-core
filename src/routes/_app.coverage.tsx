@@ -432,7 +432,7 @@ function RequestCard({
           </a>
         </div>
       )}
-    </div>
+    </Wrapper>
   );
 }
 
