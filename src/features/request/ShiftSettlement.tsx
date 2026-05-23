@@ -156,6 +156,10 @@ export function ShiftSettlement({
             shift={shift}
             overtimeSec={overtimeSec}
             onClose={onClose}
+            onRebook={() => {
+              if (onRebook) onRebook();
+              else onClose();
+            }}
           />
         )}
       </AnimatePresence>
