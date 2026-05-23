@@ -320,12 +320,14 @@ function RequestCard({
   onEnd,
   onCancel,
   onEdit,
+  onOpenHistory,
 }: {
   item: RequestItem;
   onStart: () => void;
   onEnd: () => void;
   onCancel: () => void;
   onEdit: () => void;
+  onOpenHistory: () => void;
 }) {
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
@@ -337,9 +339,15 @@ function RequestCard({
       ? `${item.coverage} · Active · ${fmtNairaK(item.amount)}`
       : fmtShiftMeta(item.coverage, item.schedule, item.amount);
 
+  const Wrapper: React.ElementType = isHistory ? "button" : "div";
+  const wrapperProps = isHistory
+    ? { onClick: onOpenHistory, type: "button" as const }
+    : {};
+
   return (
-    <div
-      className="rounded-2xl px-3.5 py-3"
+    <Wrapper
+      {...wrapperProps}
+      className={`block w-full rounded-2xl px-3.5 py-3 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
