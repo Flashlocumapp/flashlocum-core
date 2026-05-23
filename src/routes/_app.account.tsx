@@ -115,7 +115,7 @@ function AccountScreen() {
           </svg>
         </button>
 
-        {SECTIONS.map((s) => (
+        {(role === "cover" ? COVER_SECTIONS : REQUESTER_SECTIONS).map((s) => (
           <div key={s.label} className="mt-6">
             <div className="px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {s.label}
