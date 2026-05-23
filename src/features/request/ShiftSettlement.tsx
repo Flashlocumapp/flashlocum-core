@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { RatingOverlay } from "@/components/RatingOverlay";
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
 
@@ -38,12 +39,14 @@ export function ShiftSettlement({
   shift = SAMPLE,
   initialPhase = "active",
   onConfirmed,
+  onRebook,
 }: {
   open: boolean;
   onClose: () => void;
   shift?: ShiftMeta;
   initialPhase?: Phase;
   onConfirmed?: () => void;
+  onRebook?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [elapsed, setElapsed] = useState(0); // seconds since End Shift
@@ -153,6 +156,10 @@ export function ShiftSettlement({
             shift={shift}
             overtimeSec={overtimeSec}
             onClose={onClose}
+            onRebook={() => {
+              if (onRebook) onRebook();
+              else onClose();
+            }}
           />
         )}
       </AnimatePresence>
@@ -400,13 +407,18 @@ function ConfirmedPane({
   shift,
   overtimeSec,
   onClose,
+  onRebook,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
   onClose: () => void;
+  onRebook: () => void;
 }) {
   const extra = Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
+  const [ratingOpen, setRatingOpen] = useState(true);
+  const [rated, setRated] = useState(false);
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -436,12 +448,16 @@ function ConfirmedPane({
           Settlement will be processed to the doctor by 10:00 PM.
         </p>
 
+        {rated && (
+          <p className="mt-2 text-[12px] text-muted-foreground">Thanks for the feedback.</p>
+        )}
+
         <div className="mt-auto space-y-2 pb-8">
           <button
-            onClick={onClose}
+            onClick={onRebook}
             className="h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
           >
-            Request again
+            Request Doctor
           </button>
           <button
             onClick={onClose}
@@ -451,6 +467,16 @@ function ConfirmedPane({
           </button>
         </div>
       </div>
+
+      <RatingOverlay
+        open={ratingOpen}
+        doctor={shift.doctor}
+        onDismiss={() => setRatingOpen(false)}
+        onSubmit={() => {
+          setRated(true);
+          setRatingOpen(false);
+        }}
+      />
     </motion.section>
   );
 }

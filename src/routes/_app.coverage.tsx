@@ -4,6 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
+import { CancelFlow } from "@/components/CancelFlow";
+import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
+import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
@@ -112,7 +115,15 @@ function CoverageScreen() {
 
 function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const [items, setItems] = useState<RequestItem[]>(INITIAL_REQUESTS);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+  const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  const [editInitial, setEditInitial] = useState<EditableShift>({
+    timing: "08:00", duration: 1, accommodation: false, note: "",
+  });
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = useMemo(
     () => items.filter((i) => i.status === tab),
@@ -120,6 +131,19 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   );
 
   const settling = items.find((i) => i.id === settlingId) ?? null;
+  const historyItem = items.find((i) => i.id === historyId) ?? null;
+  const historyDetail: HistoryDetail | null = historyItem
+    ? {
+        id: historyItem.id,
+        doctor: historyItem.doctor,
+        mdcn: historyItem.mdcn,
+        initials: historyItem.initials,
+        coverage: historyItem.coverage,
+        completedOn: historyItem.completedOn,
+        amount: historyItem.amount,
+        rating: ratings[historyItem.id],
+      }
+    : null;
 
   const moveToActive = (id: string) => {
     setItems((prev) =>
@@ -132,9 +156,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const beginEndShift = (id: string) => {
-    setSettlingId(id);
-  };
+  const beginEndShift = (id: string) => setSettlingId(id);
 
   const confirmEnd = () => {
     if (!settlingId) return;
@@ -145,14 +167,32 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
               ...i,
               status: "completed",
               completedOn: new Date().toLocaleDateString("en-NG", {
-                weekday: "short",
-                day: "2-digit",
-                month: "short",
+                weekday: "short", day: "2-digit", month: "short",
               }),
             }
           : i,
       ),
     );
+  };
+
+  const openEdit = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    setEditInitial({ timing: "08:00", duration: 1, accommodation: false, note: "" });
+    setEditTargetId(id);
+  };
+
+  const handleEditSave = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
+    setEditTargetId(null);
+    const label: Record<keyof EditableShift | "multiple", string> = {
+      timing: "Coverage timing updated",
+      duration: "Coverage duration updated",
+      accommodation: "Accommodation updated",
+      note: "Coverage notes updated",
+      multiple: "Coverage details updated",
+    };
+    setNotice(`${label[changed]} · Doctor notified`);
+    window.setTimeout(() => setNotice(null), 2600);
   };
 
   return (
@@ -181,10 +221,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                     item={item}
                     onStart={() => moveToActive(item.id)}
                     onEnd={() => beginEndShift(item.id)}
-                    onCancel={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                    onEdit={() => {
-                      /* Edit Shift: notify doctor of operational updates */
-                    }}
+                    onCancel={() => setCancelTargetId(item.id)}
+                    onEdit={() => openEdit(item.id)}
+                    onOpenHistory={() => setHistoryId(item.id)}
                   />
                 </motion.li>
               ))}
@@ -193,11 +232,38 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         )}
       </div>
 
+      <AnimatePresence>
+        {notice && (
+          <motion.div
+            key={notice}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none absolute inset-x-0 bottom-24 z-30 mx-auto flex max-w-md justify-center px-5"
+          >
+            <span
+              className="flex items-center gap-2 rounded-full px-3.5 py-2 text-[12px] font-medium shadow-[0_4px_18px_rgba(0,0,0,0.10)]"
+              style={{
+                background: "var(--color-surface-elevated)",
+                color: "var(--color-foreground)",
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: "var(--color-presence)" }}
+              />
+              {notice}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <ShiftSettlement
         open={!!settling}
         onClose={() => setSettlingId(null)}
         initialPhase="settlement"
         onConfirmed={confirmEnd}
+        onRebook={() => setSettlingId(null)}
         shift={
           settling
             ? {
@@ -209,6 +275,41 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
             : undefined
         }
       />
+
+      <CancelFlow
+        open={!!cancelTargetId}
+        onDismiss={() => setCancelTargetId(null)}
+        confirmTitle="Cancel this shift?"
+        confirmBody="The assigned doctor will be notified. Keeping it preserves continuity."
+        primaryLabel="Keep Shift"
+        secondaryLabel="Cancel Shift"
+        onCancelled={() => {
+          const id = cancelTargetId;
+          setCancelTargetId(null);
+          if (id) setItems((prev) => prev.filter((i) => i.id !== id));
+        }}
+      />
+
+      <EditShiftSheet
+        open={!!editTargetId}
+        initial={editInitial}
+        onDismiss={() => setEditTargetId(null)}
+        onSave={handleEditSave}
+      />
+
+      <HistoryDetailSheet
+        open={!!historyDetail}
+        item={historyDetail}
+        onDismiss={() => setHistoryId(null)}
+        onRate={(id, rating) => {
+          setRatings((prev) => ({ ...prev, [id]: rating }));
+          setHistoryId(null);
+        }}
+        onRebook={() => {
+          setHistoryId(null);
+          window.location.assign("/home");
+        }}
+      />
     </section>
   );
 }
@@ -219,12 +320,14 @@ function RequestCard({
   onEnd,
   onCancel,
   onEdit,
+  onOpenHistory,
 }: {
   item: RequestItem;
   onStart: () => void;
   onEnd: () => void;
   onCancel: () => void;
   onEdit: () => void;
+  onOpenHistory: () => void;
 }) {
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
@@ -236,9 +339,15 @@ function RequestCard({
       ? `${item.coverage} · Active · ${fmtNairaK(item.amount)}`
       : fmtShiftMeta(item.coverage, item.schedule, item.amount);
 
+  const Wrapper: React.ElementType = isHistory ? "button" : "div";
+  const wrapperProps = isHistory
+    ? { onClick: onOpenHistory, type: "button" as const }
+    : {};
+
   return (
-    <div
-      className="rounded-2xl px-3.5 py-3"
+    <Wrapper
+      {...wrapperProps}
+      className={`block w-full rounded-2xl px-3.5 py-3 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
@@ -323,7 +432,7 @@ function RequestCard({
           </a>
         </div>
       )}
-    </div>
+    </Wrapper>
   );
 }
 

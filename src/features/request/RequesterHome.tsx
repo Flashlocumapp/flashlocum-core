@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { MapBackground } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtNairaK } from "@/lib/format";
+import { CancelFlow } from "@/components/CancelFlow";
+import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 
 
 export function RequesterHome() {
@@ -690,15 +692,6 @@ function SettlementSheet({
 // (Long coverage labels live in COVERAGE_SHORT; legacy COVERAGE_LABEL removed.)
 
 
-const CANCEL_REASONS = [
-  "Coverage no longer needed",
-  "Timing changed",
-  "Doctor sourced elsewhere",
-  "Duplicate request",
-  "Emergency resolved",
-  "Other",
-];
-
 const DOCTOR_PHONE = "+2348012345678";
 
 function DispatchOverlay({
@@ -715,11 +708,13 @@ function DispatchOverlay({
   location: Recent | null;
 }) {
   const [ambient, setAmbient] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const [reasonOpen, setReasonOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [notified, setNotified] = useState<string | null>(null);
+  const notifiedRef = useRef<number | null>(null);
 
-  // Pause the realtime search whenever the hesitation modal is open.
-  const paused = confirmCancel;
+  // Pause realtime search whenever the cancel sheet is open.
+  const paused = cancelOpen;
 
   // Simulated dispatch acceptance (6–11s). Pauses when modal is open.
   useEffect(() => {
@@ -736,80 +731,148 @@ function DispatchOverlay({
   const pricing = computePricing({ coverage, days });
   const acceptedMeta = compressedSummary(coverage, days);
 
+  // Swipe-down on accepted card returns user to Home.
+  const handleAcceptedDrag = (_: unknown, info: PanInfo) => {
+    if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
+  };
+
+  const [editInitial, setEditInitial] = useState<EditableShift>({
+    timing: "08:00",
+    duration: days,
+    accommodation: false,
+    note: "",
+  });
+
+  const openEdit = () => {
+    setEditInitial({
+      timing: "08:00",
+      duration: days,
+      accommodation: false,
+      note: "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
+    setEditOpen(false);
+    const label: Record<keyof EditableShift | "multiple", string> = {
+      timing: "Coverage timing updated",
+      duration: "Coverage duration updated",
+      accommodation: "Accommodation updated",
+      note: "Coverage notes updated",
+      multiple: "Coverage details updated",
+    };
+    if (notifiedRef.current) window.clearTimeout(notifiedRef.current);
+    setNotified(`${label[changed]} · Dr. notified`);
+    notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
+    // Persist note for downstream display (lightweight)
+    if (next.note) window.sessionStorage.setItem("fl_last_note", next.note);
+  };
+
   return (
-    <motion.section
-      initial={{ y: "100%" }}
-      animate={{ y: 0 }}
-      exit={{ y: "100%" }}
-      transition={{ type: "spring", stiffness: 280, damping: 34 }}
-      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.18)]"
-      style={{ background: "var(--color-surface-elevated)" }}
-    >
-      <div className="flex w-full shrink-0 justify-center pt-3 pb-2">
-        <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
-      </div>
+    <>
+      {stage === "dispatch" ? (
+        <motion.section
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", stiffness: 280, damping: 34 }}
+          className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.18)]"
+          style={{ background: "var(--color-surface-elevated)" }}
+        >
+          <div className="flex w-full shrink-0 justify-center pt-3 pb-2">
+            <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
+          </div>
 
-      <div className="flex flex-col px-6 pb-7 pt-2">
-        <AnimatePresence mode="wait">
-          {stage === "dispatch" ? (
-            <motion.div
-              key="searching"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.25 }}
-            >
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                {location?.name ?? "Coverage"}
-              </div>
-              <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">
-                {paused ? "Search paused" : "Medical Officer Found"}
-              </h2>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-                {paused
-                  ? "We'll resume connecting in a moment"
-                  : "Connecting to available doctors nearby"}
-              </p>
+          <div className="flex flex-col px-6 pb-7 pt-2">
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              {location?.name ?? "Coverage"}
+            </div>
+            <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight">
+              {paused ? "Search paused" : "Medical Officer Found"}
+            </h2>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+              {paused
+                ? "We'll resume connecting in a moment"
+                : "Connecting to available doctors nearby"}
+            </p>
 
-              <ConnectionPulse className="mt-6" paused={paused} />
+            <ConnectionPulse className="mt-6" paused={paused} />
 
-              <AnimatePresence>
-                {ambient && !paused && (
-                  <motion.div
-                    key="ambient"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.4 }}
-                    className="mt-5 text-center text-[12px] text-muted-foreground"
-                  >
-                    Checking nearby availability…
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="mt-6 flex items-center gap-2.5">
-                <button
-                  onClick={() => setStage("configure")}
-                  className="flex-1 rounded-full bg-secondary/70 py-3 text-[13px] font-medium text-foreground/80 active:opacity-90"
+            <AnimatePresence>
+              {ambient && !paused && (
+                <motion.div
+                  key="ambient"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="mt-5 text-center text-[12px] text-muted-foreground"
                 >
-                  Edit Request
-                </button>
-                <button
-                  onClick={() => setConfirmCancel(true)}
-                  className="flex-1 rounded-full bg-secondary/40 py-3 text-[13px] font-medium text-foreground/70 active:opacity-90"
-                >
-                  Cancel Request
-                </button>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="accepted"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            >
+                  Checking nearby availability…
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="mt-6 flex items-center gap-2.5">
+              <button
+                onClick={() => setStage("configure")}
+                className="flex-1 rounded-full bg-secondary/70 py-3 text-[13px] font-medium text-foreground/80 active:opacity-90"
+              >
+                Edit Request
+              </button>
+              <button
+                onClick={() => setCancelOpen(true)}
+                className="flex-1 rounded-full bg-secondary/40 py-3 text-[13px] font-medium text-foreground/70 active:opacity-90"
+              >
+                Cancel Request
+              </button>
+            </div>
+            <span className="sr-only">{formatNaira(pricing.amount)}</span>
+          </div>
+
+          {/* Pre-acceptance: hesitation + optional reason; dismiss = continue search */}
+          <CancelFlow
+            open={cancelOpen}
+            onDismiss={() => setCancelOpen(false)}
+            onCancelled={() => {
+              setCancelOpen(false);
+              setStage("collapsed");
+            }}
+          />
+        </motion.section>
+      ) : (
+        // Accepted state — dismissible (tap outside / swipe down → Home)
+        <motion.div
+          key="accepted-wrap"
+          className="absolute inset-0 z-20 flex items-end"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div
+            className="absolute inset-0 bg-foreground/15"
+            onClick={() => setStage("collapsed")}
+            aria-hidden
+          />
+          <motion.section
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 280, damping: 34 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.35 }}
+            dragMomentum={false}
+            onDragEnd={handleAcceptedDrag}
+            className="relative z-10 w-full rounded-t-3xl shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.18)]"
+            style={{ background: "var(--color-surface-elevated)" }}
+          >
+            <div className="flex w-full shrink-0 justify-center pt-3 pb-2">
+              <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
+            </div>
+
+            <div className="flex flex-col px-6 pb-7 pt-2">
               <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 Doctor accepted
               </div>
@@ -834,20 +897,37 @@ function DispatchOverlay({
                 </div>
               </div>
 
-              {/* Subtle operational helper — reminds requester where to start the shift */}
+              <AnimatePresence>
+                {notified && (
+                  <motion.div
+                    key={notified}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="mt-3 flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2 text-[12px] text-foreground/75"
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: "var(--color-presence)" }}
+                    />
+                    {notified}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <p className="mt-3.5 text-[12px] leading-relaxed text-muted-foreground">
                 Remember to start shift under Upcoming Coverage once the doctor arrives.
               </p>
 
               <div className="mt-4 grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => setStage("configure")}
+                  onClick={openEdit}
                   className="rounded-full bg-secondary/70 py-3 text-[12.5px] font-medium text-foreground/85 active:opacity-90"
                 >
                   Edit Shift
                 </button>
                 <button
-                  onClick={() => setReasonOpen(true)}
+                  onClick={() => setCancelOpen(true)}
                   className="rounded-full bg-secondary/40 py-3 text-[12.5px] font-medium text-foreground/75 active:opacity-90"
                 >
                   Cancel Shift
@@ -868,45 +948,34 @@ function DispatchOverlay({
                   Call
                 </a>
               </div>
-              {/* Hidden: pricing reference avoids unused-var warning while keeping context for future expansion */}
-              <span className="sr-only">{formatNaira(pricing.amount)}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+            </div>
 
-      {/* Hesitation modal — pre-acceptance. Tapping outside / swipe dismiss = continue searching */}
-      <AnimatePresence>
-        {confirmCancel && (
-          <CalmModal
-            title="Are you sure?"
-            body="We're still connecting to available doctors nearby."
-            primaryLabel="Wait for Doctor"
-            secondaryLabel="Cancel Request"
-            onPrimary={() => setConfirmCancel(false)}
-            onSecondary={() => {
-              setConfirmCancel(false);
-              setStage("collapsed");
-            }}
-          />
-        )}
-      </AnimatePresence>
+            <CancelFlow
+              open={cancelOpen}
+              onDismiss={() => setCancelOpen(false)}
+              confirmTitle="Cancel this shift?"
+              confirmBody="Dr. Emmanuel Adeleke is already assigned. Keeping it preserves continuity."
+              primaryLabel="Keep Shift"
+              secondaryLabel="Cancel Shift"
+              onCancelled={() => {
+                setCancelOpen(false);
+                setStage("collapsed");
+              }}
+            />
 
-      {/* Reason picker — post-acceptance */}
-      <AnimatePresence>
-        {reasonOpen && (
-          <ReasonModal
-            onClose={() => setReasonOpen(false)}
-            onConfirm={() => {
-              setReasonOpen(false);
-              setStage("collapsed");
-            }}
-          />
-        )}
-      </AnimatePresence>
-    </motion.section>
+            <EditShiftSheet
+              open={editOpen}
+              initial={editInitial}
+              onDismiss={() => setEditOpen(false)}
+              onSave={handleSaveEdit}
+            />
+          </motion.section>
+        </motion.div>
+      )}
+    </>
   );
 }
+
 
 
 function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
@@ -943,119 +1012,3 @@ function ConnectionPulse({ className, paused }: { className?: string; paused?: b
   );
 }
 
-
-function CalmModal({
-  title,
-  body,
-  primaryLabel,
-  secondaryLabel,
-  onPrimary,
-  onSecondary,
-}: {
-  title: string;
-  body: string;
-  primaryLabel: string;
-  secondaryLabel: string;
-  onPrimary: () => void;
-  onSecondary: () => void;
-}) {
-  return (
-    <motion.div
-      className="absolute inset-0 z-40 flex items-end"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div className="absolute inset-0 bg-foreground/30" onClick={onPrimary} />
-      <motion.div
-        initial={{ y: 24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 24, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 32 }}
-        className="relative z-10 w-full rounded-t-3xl bg-surface-elevated px-6 pb-7 pt-6"
-        style={{ background: "var(--color-surface-elevated)" }}
-      >
-        <h3 className="text-[17px] font-semibold tracking-tight">{title}</h3>
-        <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
-        <div className="mt-5 flex flex-col gap-2">
-          <button
-            onClick={onPrimary}
-            className="h-12 w-full rounded-full bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
-          >
-            {primaryLabel}
-          </button>
-          <button
-            onClick={onSecondary}
-            className="h-12 w-full rounded-full bg-secondary/70 text-[14px] font-medium text-foreground/80 active:opacity-90"
-          >
-            {secondaryLabel}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function ReasonModal({
-  onClose,
-  onConfirm,
-}: {
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const [reason, setReason] = useState<string | null>(null);
-  return (
-    <motion.div
-      className="absolute inset-0 z-40 flex items-end"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div className="absolute inset-0 bg-foreground/30" onClick={onClose} />
-      <motion.div
-        initial={{ y: 24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 24, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 32 }}
-        className="relative z-10 w-full rounded-t-3xl px-6 pb-7 pt-6"
-        style={{ background: "var(--color-surface-elevated)" }}
-      >
-        <h3 className="text-[17px] font-semibold tracking-tight">Reason for cancellation</h3>
-        <ul className="mt-4 space-y-1.5">
-          {CANCEL_REASONS.map((r) => {
-            const active = r === reason;
-            return (
-              <li key={r}>
-                <button
-                  onClick={() => setReason(r)}
-                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left text-[13.5px] transition-colors"
-                  style={{
-                    background: active ? "var(--color-secondary)" : "transparent",
-                    color: active
-                      ? "var(--color-foreground)"
-                      : "color-mix(in oklab, var(--color-foreground) 75%, transparent)",
-                  }}
-                >
-                  <span>{r}</span>
-                  {active && (
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ background: "var(--color-presence)" }}
-                    />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <button
-          onClick={onConfirm}
-          disabled={!reason}
-          className="mt-5 h-12 w-full rounded-full bg-primary text-[14px] font-semibold text-primary-foreground disabled:opacity-40 active:opacity-90"
-        >
-          Confirm Cancellation
-        </button>
-      </motion.div>
-    </motion.div>
-  );
-}
