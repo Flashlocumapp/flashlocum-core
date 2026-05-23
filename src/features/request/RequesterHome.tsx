@@ -75,13 +75,12 @@ const COVERAGE_SHORT: Record<CoverageId, string> = {
   home: "Home Care",
 };
 
-// Compressed operational summary: e.g. "Standard · Tue · 8:00 AM · ₦36K"
-function compressedSummary(coverage: CoverageId, days: number): string {
-  const amount = computePricing({ coverage, days }).amount;
-  if (coverage === "weekend") {
-    return `${COVERAGE_SHORT[coverage]} · Sat & Sun · 9:00 AM · ${fmtNairaK(amount)}`;
-  }
-  return `${COVERAGE_SHORT[coverage]} · Tue · 8:00 AM · ${fmtNairaK(amount)}`;
+// Compressed operational summary: Coverage · Day · Time (no pricing).
+function compressedSummary(coverage: CoverageId, _days: number): string {
+  if (coverage === "weekend") return `${COVERAGE_SHORT[coverage]} · Sat & Sun · 9:00 AM`;
+  if (coverage === "home") return `${COVERAGE_SHORT[coverage]} · Weds · 10:00 PM`;
+  if (coverage === "24h") return `${COVERAGE_SHORT[coverage]} · Tue · 8:00 AM`;
+  return `${COVERAGE_SHORT[coverage]} · Tue · 8:00 AM`;
 }
 
 /* ---------------------- Home ---------------------- */
