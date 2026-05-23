@@ -444,9 +444,6 @@ function ConfirmedPane({
           <Row label="Settled" value={fmtNaira(total)} strong />
         </div>
 
-        <p className="mt-4 text-[12.5px] text-muted-foreground">
-          Settlement will be processed to the doctor by 10:00 PM.
-        </p>
 
         {rated && (
           <p className="mt-2 text-[12px] text-muted-foreground">Thanks for the feedback.</p>
