@@ -39,12 +39,14 @@ export function ShiftSettlement({
   shift = SAMPLE,
   initialPhase = "active",
   onConfirmed,
+  onRebook,
 }: {
   open: boolean;
   onClose: () => void;
   shift?: ShiftMeta;
   initialPhase?: Phase;
   onConfirmed?: () => void;
+  onRebook?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [elapsed, setElapsed] = useState(0); // seconds since End Shift
