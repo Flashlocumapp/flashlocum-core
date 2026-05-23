@@ -6,13 +6,33 @@ export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
 });
 
-const SECTIONS: { label: string; rows: { id: string; title: string; meta?: string }[] }[] = [
+type Section = { label: string; rows: { id: string; title: string; meta?: string }[] };
+
+const REQUESTER_SECTIONS: Section[] = [
   {
     label: "Identity",
     rows: [
       { id: "profile", title: "Profile" },
       { id: "verification", title: "Verification", meta: "Verified" },
       { id: "facility", title: "Facility profile" },
+    ],
+  },
+  {
+    label: "Operations",
+    rows: [
+      { id: "payouts", title: "Payouts" },
+      { id: "support", title: "Support" },
+      { id: "settings", title: "Settings" },
+    ],
+  },
+];
+
+const COVER_SECTIONS: Section[] = [
+  {
+    label: "Identity",
+    rows: [
+      { id: "profile", title: "Profile" },
+      { id: "verification", title: "Verification", meta: "Verified" },
     ],
   },
   {
@@ -95,7 +115,7 @@ function AccountScreen() {
           </svg>
         </button>
 
-        {SECTIONS.map((s) => (
+        {(role === "cover" ? COVER_SECTIONS : REQUESTER_SECTIONS).map((s) => (
           <div key={s.label} className="mt-6">
             <div className="px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {s.label}
