@@ -263,47 +263,32 @@ export function completeUpcoming(id: string) {
 
 /* ---------- helpers reading network module ---------- */
 
-import { useNetwork as _useNet } from "@/lib/network";
-// We need raw current-state access for actions. Re-import non-hook helpers.
-import * as net from "@/lib/network";
+type RawState = {
+  doctors: Record<string, { declined?: string[] } | undefined>;
+  requests: Record<string, NetRequest>;
+};
 
-function pendingIncomingId(): string | null {
-  // Get latest state via a hidden read; the simplest path is to use the
-  // exported selectors that take a snapshot. We read directly from localStorage.
+function readState(): RawState {
   try {
     const raw = window.localStorage.getItem("flashlocum.net.v1");
-    if (!raw) return null;
-    const s = JSON.parse(raw) as ReturnType<typeof getState>;
-    const sid = net.getSessionId();
-    const me = s.doctors?.[sid];
-    const declined = new Set(me?.declined ?? []);
-    const reqs = Object.values(s.requests ?? {}) as NetRequest[];
-    const first = reqs
-      .filter((r) => r.status === "broadcasting" && !declined.has(r.id))
-      .sort((a, b) => a.createdAt - b.createdAt)[0];
-    return first?.id ?? null;
+    if (!raw) return { doctors: {}, requests: {} };
+    return JSON.parse(raw) as RawState;
   } catch {
-    return null;
+    return { doctors: {}, requests: {} };
   }
+}
+
+function pendingIncomingId(): string | null {
+  const s = readState();
+  const sid = getSessionId();
+  const me = s.doctors?.[sid];
+  const declined = new Set<string>(me?.declined ?? []);
+  const first = Object.values(s.requests ?? {})
+    .filter((r) => r.status === "broadcasting" && !declined.has(r.id))
+    .sort((a, b) => a.createdAt - b.createdAt)[0];
+  return first?.id ?? null;
 }
 
 function currentRequest(id: string): NetRequest | null {
-  try {
-    const raw = window.localStorage.getItem("flashlocum.net.v1");
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    return (s.requests?.[id] as NetRequest) ?? null;
-  } catch {
-    return null;
-  }
+  return readState().requests?.[id] ?? null;
 }
-
-function getState() {
-  return {
-    doctors: {} as Record<string, net.DoctorPresence>,
-    requests: {} as Record<string, NetRequest>,
-  };
-}
-
-// silence unused import warning while keeping types in scope
-void _useNet;
