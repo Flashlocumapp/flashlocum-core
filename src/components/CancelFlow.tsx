@@ -27,6 +27,8 @@ export function CancelFlow({
   confirmBody = "We're still connecting to available doctors nearby.",
   primaryLabel = "Wait for Doctor",
   secondaryLabel = "Cancel Request",
+  reasons = DEFAULT_REASONS,
+  reasonTitle = "Reason for cancellation",
 }: {
   open: boolean;
   onDismiss: () => void;
@@ -35,6 +37,8 @@ export function CancelFlow({
   confirmBody?: string;
   primaryLabel?: string;
   secondaryLabel?: string;
+  reasons?: string[];
+  reasonTitle?: string;
 }) {
   const [step, setStep] = useState<Step>("confirm");
   const [reason, setReason] = useState<string | null>(null);
