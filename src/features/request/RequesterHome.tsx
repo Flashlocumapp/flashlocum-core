@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { MapBackground } from "@/components/MapBackground";
+import { MapBackground, type Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtNairaK } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
+import {
+  cancelRequest as netCancel,
+  onlineDoctors,
+  publishRequest,
+  updateRequest,
+  useNetwork,
+} from "@/lib/network";
 
 
 export function RequesterHome() {
@@ -118,9 +125,20 @@ function HomeScreen() {
   };
 
 
+  const net = useNetwork();
+  const markers: Marker[] = useMemo(
+    () =>
+      onlineDoctors(net).map((d) => ({
+        top: d.top,
+        left: d.left,
+        key: d.sessionId,
+      })),
+    [net],
+  );
+
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <MapBackground />
+      <MapBackground markers={markers} />
 
       {/* top chrome */}
       <header className="absolute inset-x-0 top-0 z-30 safe-top pointer-events-none">
@@ -693,6 +711,18 @@ function SettlementSheet({
 
 const DOCTOR_PHONE = "+2348012345678";
 
+function dayOf(c: CoverageId): string {
+  if (c === "weekend") return "Sat & Sun";
+  if (c === "home") return "Weds";
+  return "Tue";
+}
+function endOf(c: CoverageId): string {
+  if (c === "24h") return "8:00AM";
+  if (c === "weekend") return "8:00AM";
+  if (c === "home") return "6:00AM";
+  return "6:00PM";
+}
+
 function DispatchOverlay({
   stage,
   setStage,
@@ -711,24 +741,43 @@ function DispatchOverlay({
   const [editOpen, setEditOpen] = useState(false);
   const [notified, setNotified] = useState<string | null>(null);
   const notifiedRef = useRef<number | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const net = useNetwork();
 
   // Pause realtime search whenever the cancel sheet is open.
   const paused = cancelOpen;
 
-  // Simulated dispatch acceptance (6–11s). Pauses when modal is open.
-  useEffect(() => {
-    if (stage !== "dispatch" || paused) return;
-    const t1 = window.setTimeout(() => setAmbient(true), 2800);
-    const delay = 6000 + Math.floor(Math.random() * 5000);
-    const t2 = window.setTimeout(() => setStage("accepted"), delay);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [stage, paused, setStage]);
-
   const pricing = computePricing({ coverage, days });
   const acceptedMeta = compressedSummary(coverage, days);
+
+  // Publish into the shared network when entering dispatch.
+  useEffect(() => {
+    if (stage !== "dispatch" || requestId) return;
+    const req = publishRequest({
+      hospital: location?.name ?? "Coverage",
+      area: location?.area ?? "",
+      coverage: COVERAGE_SHORT[coverage],
+      day: dayOf(coverage),
+      start: "8:00AM",
+      end: endOf(coverage),
+      durationHrs: coverage === "24h" ? 24 * days : coverage === "weekend" ? 48 : 10 * days,
+      amount: pricing.amount,
+      feePct: 10,
+      phone: DOCTOR_PHONE,
+      note: window.sessionStorage.getItem("fl_last_note") ?? undefined,
+    });
+    setRequestId(req.id);
+    const t = window.setTimeout(() => setAmbient(true), 2800);
+    return () => window.clearTimeout(t);
+  }, [stage, requestId, coverage, days, location, pricing.amount]);
+
+  // React to acceptance from any doctor session.
+  useEffect(() => {
+    if (!requestId || stage !== "dispatch") return;
+    const r = net.requests[requestId];
+    if (r?.status === "accepted") setStage("accepted");
+  }, [net, requestId, stage, setStage]);
+
 
   // Swipe-down on accepted card returns user to Home.
   const handleAcceptedDrag = (_: unknown, info: PanInfo) => {
@@ -766,6 +815,18 @@ function DispatchOverlay({
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
     // Persist note for downstream display (lightweight)
     if (next.note) window.sessionStorage.setItem("fl_last_note", next.note);
+    if (requestId) {
+      updateRequest(requestId, {
+        note: next.note || undefined,
+        durationHrs: next.duration * 10,
+      });
+    }
+  };
+
+  const handleCancelRequest = () => {
+    if (requestId) netCancel(requestId);
+    setCancelOpen(false);
+    setStage("collapsed");
   };
 
   return (
@@ -834,10 +895,7 @@ function DispatchOverlay({
           <CancelFlow
             open={cancelOpen}
             onDismiss={() => setCancelOpen(false)}
-            onCancelled={() => {
-              setCancelOpen(false);
-              setStage("collapsed");
-            }}
+            onCancelled={handleCancelRequest}
           />
         </motion.section>
       ) : (
@@ -956,10 +1014,7 @@ function DispatchOverlay({
               confirmBody="Dr. Emmanuel Adeleke is already assigned. Keeping it preserves continuity."
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
-              onCancelled={() => {
-                setCancelOpen(false);
-                setStage("collapsed");
-              }}
+              onCancelled={handleCancelRequest}
             />
 
             <EditShiftSheet

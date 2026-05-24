@@ -1,9 +1,12 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "@tanstack/react-router";
 import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
+import { ensureDoctorSession } from "@/features/cover/dispatch";
+import { getRole } from "@/lib/role";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -12,6 +15,9 @@ export const Route = createFileRoute("/_app")({
 function AppShell() {
   const { pathname } = useLocation();
   const immersive = useImmersive();
+  useEffect(() => {
+    if (getRole() === "cover") ensureDoctorSession(true);
+  }, []);
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-background"
