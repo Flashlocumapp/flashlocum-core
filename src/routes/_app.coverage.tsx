@@ -492,83 +492,296 @@ function Avatar({
 
 // ============ DOCTOR (unchanged behavior) ============
 
+// ============ DOCTOR (Cover & Earn) ============
+
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
-  const filtered = DOCTOR_ITEMS.filter((i) =>
-    tab === "completed" ? i.status === "completed" : i.status === tab,
-  );
+  const { upcoming, history } = useDispatch();
+
+  // Active = first upcoming flagged active. Chronological order preserved.
+  const active = upcoming.find((c) => c.active) ?? null;
+  const upcomingOnly = upcoming.filter((c) => !c.active);
+
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const detail = history.find((h) => h.id === detailId) ?? null;
+
+  const list =
+    tab === "active"
+      ? (active ? [active] : [])
+      : tab === "upcoming"
+        ? upcomingOnly
+        : history;
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
-      <CoverageHeader subtitle="Your dispatch timeline" tab={tab} setTab={setTab} />
+      <CoverageHeader subtitle="Your operational coverage" tab={tab} setTab={setTab} />
       <div
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
         style={{ height: "calc(100% - 140px)" }}
       >
-        {filtered.length === 0 ? (
+        {list.length === 0 ? (
           <EmptyState tab={tab} role="cover" />
         ) : (
-          <ul className="space-y-2">
-            {filtered.map((item) => (
-              <li key={item.id}>
-                <DoctorRow item={item} />
-              </li>
-            ))}
+          <ul className="space-y-2.5">
+            {tab === "active" &&
+              (active ? (
+                <li key={active.id}>
+                  <CoverCard
+                    item={active}
+                    variant="active"
+                    onCancel={() => setCancelId(active.id)}
+                  />
+                </li>
+              ) : null)}
+            {tab === "upcoming" &&
+              upcomingOnly.map((c) => (
+                <li key={c.id}>
+                  <CoverCard
+                    item={c}
+                    variant="upcoming"
+                    onCancel={() => setCancelId(c.id)}
+                  />
+                </li>
+              ))}
+            {tab === "completed" &&
+              history.map((h) => (
+                <li key={h.id}>
+                  <CoverCard
+                    item={h}
+                    variant="history"
+                    onOpenDetail={() => setDetailId(h.id)}
+                  />
+                </li>
+              ))}
           </ul>
         )}
       </div>
+
+      <CancelFlow
+        open={!!cancelId}
+        onDismiss={() => setCancelId(null)}
+        confirmTitle="Cancel this coverage?"
+        confirmBody="Frequent cancellations affect your reliability score. The requester will be notified immediately."
+        primaryLabel="Keep Coverage"
+        secondaryLabel="Cancel Coverage"
+        reasonTitle="Reason for cancellation"
+        reasons={["Emergency", "Illness", "Transport issue", "Schedule conflict", "Other"]}
+        onCancelled={(reason) => {
+          const id = cancelId;
+          setCancelId(null);
+          if (id) cancelUpcoming(id, reason);
+        }}
+      />
+
+      <DoctorHistoryDetail
+        item={detail}
+        onDismiss={() => setDetailId(null)}
+      />
     </section>
   );
 }
 
-function DoctorRow({ item }: { item: DoctorItem }) {
-  const isLive = item.status === "active";
-  return (
-    <div
-      className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left"
-      style={{ background: "var(--color-surface-elevated)" }}
-    >
+function CoverCard({
+  item,
+  variant,
+  onCancel,
+  onOpenDetail,
+}: {
+  item: Coverage | HistoryItem;
+  variant: "active" | "upcoming" | "history";
+  onCancel?: () => void;
+  onOpenDetail?: () => void;
+}) {
+  const isHistory = variant === "history";
+  const isActive = variant === "active";
+  const isUpcoming = variant === "upcoming";
+
+  const meta = `${item.coverage} · ${item.day} · ${item.start} · ${item.durationHrs}hr · ${nairaK(item.amount)}`;
+
+  const Wrapper: React.ElementType = isHistory ? "button" : "div";
+  const wrapperProps = isHistory ? { onClick: onOpenDetail, type: "button" as const } : {};
+
+  const outcomeChip =
+    isHistory && (item as HistoryItem).outcome === "cancelled" ? (
       <span
-        className="relative flex h-10 w-10 items-center justify-center rounded-full"
+        className="ml-2 inline-flex h-5 items-center rounded-full px-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
         style={{
-          background: isLive
-            ? "color-mix(in oklab, var(--color-presence) 18%, transparent)"
-            : "var(--color-secondary)",
+          background: "color-mix(in oklab, var(--color-foreground) 7%, transparent)",
+          color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)",
         }}
       >
-        {isLive ? (
-          <>
+        Cancelled
+      </span>
+    ) : null;
+
+  return (
+    <Wrapper
+      {...wrapperProps}
+      className={`block w-full rounded-2xl px-4 py-3.5 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
+      style={{
+        background: isHistory
+          ? "color-mix(in oklab, var(--color-surface-elevated) 65%, transparent)"
+          : "var(--color-surface-elevated)",
+        boxShadow: isHistory ? "none" : "0 4px 16px -10px rgba(0,0,0,0.12)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center">
             <span
-              className="absolute inset-0 rounded-full"
+              className="truncate text-[15.5px] font-semibold tracking-tight"
               style={{
-                background: "var(--color-presence)",
-                opacity: 0.3,
-                animation: "presence-pulse 1.8s ease-out infinite",
+                color: isHistory
+                  ? "color-mix(in oklab, var(--color-foreground) 80%, transparent)"
+                  : "var(--color-foreground)",
               }}
-            />
-            <span
-              className="relative h-2.5 w-2.5 rounded-full"
-              style={{ background: "var(--color-presence)" }}
-            />
-          </>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-            <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-            <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-medium">{item.facility}</div>
-        <div className="text-[12.5px] text-muted-foreground">
-          {item.role} · {item.area}
+            >
+              {item.hospital}
+            </span>
+            {outcomeChip}
+          </div>
+          <div className="text-[12.5px] text-muted-foreground">{item.area}</div>
         </div>
-      </span>
-      <span
-        className="shrink-0 text-[12px] font-medium"
-        style={{ color: isLive ? "var(--color-presence)" : "var(--color-foreground)" }}
+        {isActive && (
+          <span
+            className="flex shrink-0 items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.14em]"
+            style={{ color: "var(--color-presence)" }}
+          >
+            <span
+              className="relative h-1.5 w-1.5 rounded-full"
+              style={{ background: "var(--color-presence)" }}
+            >
+              <span
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "var(--color-presence)",
+                  opacity: 0.5,
+                  animation: "presence-pulse 1.6s ease-out infinite",
+                }}
+              />
+            </span>
+            Live
+          </span>
+        )}
+      </div>
+
+      <div
+        className="mt-1.5 text-[12.5px] leading-snug"
+        style={{
+          color: isHistory
+            ? "color-mix(in oklab, var(--color-foreground) 60%, transparent)"
+            : "color-mix(in oklab, var(--color-foreground) 75%, transparent)",
+        }}
       >
-        {item.when}
-      </span>
+        {meta}
+      </div>
+
+      {item.note && (
+        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">
+          {item.note}
+        </div>
+      )}
+
+      {isActive && (
+        <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
+          Ensure requester ends the shift before leaving the building.
+        </p>
+      )}
+
+      {(isActive || isUpcoming) && (
+        <div className="mt-3 flex items-center gap-2">
+          {isUpcoming && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel?.();
+              }}
+              className="h-8 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
+              style={{
+                background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+                color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
+              }}
+            >
+              Cancel Coverage
+            </button>
+          )}
+          <a
+            href={`tel:${item.phone}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
+            style={{
+              background: isActive ? "var(--color-foreground)" : "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+              color: isActive ? "var(--color-background)" : "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Call
+          </a>
+        </div>
+      )}
+    </Wrapper>
+  );
+}
+
+function DoctorHistoryDetail({
+  item,
+  onDismiss,
+}: {
+  item: HistoryItem | null;
+  onDismiss: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {item && (
+        <DismissSheet open onDismiss={onDismiss}>
+          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            {item.outcome === "cancelled" ? "Cancelled coverage" : "Completed coverage"}
+          </div>
+          <div className="mt-2 text-[20px] font-semibold tracking-tight">
+            {item.hospital}
+          </div>
+          <div className="text-[13px] text-muted-foreground">{item.area}</div>
+
+          <div className="mt-4 text-[13px] leading-relaxed text-foreground/80">
+            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr
+          </div>
+
+          <div className="mt-4 space-y-2 rounded-2xl bg-secondary/60 px-4 py-3">
+            <DetailRow label="Amount" value={nairaK(item.amount)} />
+            <DetailRow label="Settlement" value={item.settlementStatus} />
+            <DetailRow label="Completed" value={item.completedOn} />
+            {item.rating !== undefined && (
+              <DetailRow
+                label="Rating"
+                value={"★".repeat(item.rating) + "☆".repeat(5 - item.rating)}
+              />
+            )}
+          </div>
+
+          {item.note && (
+            <p className="mt-3 text-[12.5px] text-muted-foreground">
+              Note · {item.note}
+            </p>
+          )}
+        </DismissSheet>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className="text-[12px] text-muted-foreground">{label}</span>
+      <span className="text-[13.5px] font-medium tabular-nums">{value}</span>
     </div>
   );
 }
