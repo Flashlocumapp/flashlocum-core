@@ -7,6 +7,14 @@ import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
+import { DismissSheet } from "@/components/DismissSheet";
+import {
+  cancelUpcoming,
+  nairaK,
+  useDispatch,
+  type Coverage as CoverItem,
+  type HistoryItem,
+} from "@/features/cover/dispatch";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
