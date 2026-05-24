@@ -1,20 +1,36 @@
-// Cover-side dispatch store: shared between Home tile + global request overlay.
+// Doctor-side dispatch store, now backed by the shared FlashLocum network.
+// Public API kept stable for CoverHome, CoverDispatchPortal, and coverage tab.
+
 import { useEffect, useState } from "react";
+import {
+  acceptRequest,
+  broadcastingRequests,
+  cancelRequest,
+  completeRequest,
+  getSessionId,
+  markDeclined,
+  registerDoctor,
+  setDoctorAcceptedCount,
+  setDoctorOnline,
+  startHeartbeat,
+  type NetRequest,
+  useNetwork,
+} from "@/lib/network";
 
 export type Coverage = {
   id: string;
   hospital: string;
   area: string;
-  coverage: string; // e.g. "Weekend Call"
-  day: string; // e.g. "Sat & Sun"
-  start: string; // e.g. "8:00AM"
-  end: string;   // e.g. "8:00PM"
+  coverage: string;
+  day: string;
+  start: string;
+  end: string;
   durationHrs: number;
-  amount: number; // gross
-  feePct: number; // platform fee %
+  amount: number;
+  feePct: number;
   phone: string;
   note?: string;
-  active?: boolean; // currently in-progress
+  active?: boolean;
 };
 
 const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
@@ -28,72 +44,29 @@ export function netOf(c: Pick<Coverage, "amount" | "feePct">) {
   return c.amount - feeOf(c);
 }
 
-// Seed upcoming list
-const seed: Coverage[] = [
-  {
-    id: "c-seed-1",
-    hospital: "Lagoon Hospital",
-    area: "Lekki",
-    coverage: "Weekend Call",
-    day: "Sat & Sun",
-    start: "8:00AM",
-    end: "8:00PM",
-    durationHrs: 12,
-    amount: 72000,
-    feePct: 10,
-    phone: "+2348012345678",
-    note: "Call room available",
-    active: false,
-  },
-];
+function toCoverage(r: NetRequest): Coverage {
+  return {
+    id: r.id,
+    hospital: r.hospital,
+    area: r.area,
+    coverage: r.coverage,
+    day: r.day,
+    start: r.start,
+    end: r.end,
+    durationHrs: r.durationHrs,
+    amount: r.amount,
+    feePct: r.feePct,
+    phone: r.phone,
+    note: r.note,
+    active: r.status === "active",
+  };
+}
 
-const pool: Coverage[] = [
-  {
-    id: "p1",
-    hospital: "Evercare Hospital",
-    area: "Lekki Phase 1",
-    coverage: "Standard",
-    day: "Tue",
-    start: "8:00AM",
-    end: "6:00PM",
-    durationHrs: 10,
-    amount: 36000,
-    feePct: 10,
-    phone: "+2348023456789",
-    note: "Light patient load",
-  },
-  {
-    id: "p2",
-    hospital: "Reddington Hospital",
-    area: "Victoria Island",
-    coverage: "24-Hour",
-    day: "Fri",
-    start: "8:00AM",
-    end: "8:00AM",
-    durationHrs: 24,
-    amount: 80000,
-    feePct: 10,
-    phone: "+2348034567890",
-    note: "Shared accommodation",
-  },
-  {
-    id: "p3",
-    hospital: "St Nicholas Hospital",
-    area: "Lagos Island",
-    coverage: "Home Care",
-    day: "Wed",
-    start: "10:00PM",
-    end: "6:00AM",
-    durationHrs: 8,
-    amount: 28000,
-    feePct: 10,
-    phone: "+2348045678901",
-  },
-];
+/* ---------- History (local, calm seed) ---------- */
 
 export type HistoryItem = Coverage & {
   outcome: "completed" | "cancelled";
-  completedOn: string; // e.g. "Mon 17 Nov"
+  completedOn: string;
   rating?: number;
   settlementStatus: "Remitted" | "Pending" | "Voided";
 };
@@ -134,152 +107,203 @@ const seedHistory: HistoryItem[] = [
     rating: 4,
     settlementStatus: "Remitted",
   },
-  {
-    id: "h3",
-    hospital: "Evercare Hospital",
-    area: "Lekki Phase 1",
-    coverage: "Weekend Call",
-    day: "Sat & Sun",
-    start: "8:00AM",
-    end: "8:00PM",
-    durationHrs: 12,
-    amount: 72000,
-    feePct: 10,
-    phone: "+2348011223344",
-    outcome: "cancelled",
-    completedOn: "Sat 1 Nov",
-    settlementStatus: "Voided",
-  },
 ];
 
-type State = {
+let history: HistoryItem[] = seedHistory;
+let acceptedSheet: Coverage | null = null;
+const localListeners = new Set<() => void>();
+function bump() {
+  localListeners.forEach((l) => l());
+}
+
+/* ---------- Hook ---------- */
+
+type View = {
   online: boolean;
-  upcoming: Coverage[];   // accepted (max 3)
-  incoming: Coverage | null; // current overlay
-  accepted: Coverage | null; // accepted detail sheet open
+  upcoming: Coverage[];
+  incoming: Coverage | null;
+  accepted: Coverage | null;
   history: HistoryItem[];
-  nextPoolIdx: number;
 };
 
-let state: State = {
-  online: true,
-  upcoming: seed,
-  incoming: null,
-  accepted: null,
-  history: seedHistory,
-  nextPoolIdx: 0,
-};
-
-const listeners = new Set<(s: State) => void>();
-function emit() {
-  const snap = state;
-  listeners.forEach((l) => l(snap));
-}
-function set(patch: Partial<State>) {
-  state = { ...state, ...patch };
-  emit();
-}
-
-export function useDispatch() {
-  const [s, setS] = useState<State>(state);
+export function useDispatch(): View {
+  const net = useNetwork();
+  const [, force] = useState(0);
   useEffect(() => {
-    listeners.add(setS);
-    setS(state);
+    const l = () => force((x) => x + 1);
+    localListeners.add(l);
     return () => {
-      listeners.delete(setS);
+      localListeners.delete(l);
     };
   }, []);
-  return s;
+
+  const sid = getSessionId();
+  const me = net.doctors[sid];
+  const online = !!me?.online;
+
+  // Upcoming = requests accepted by me, not yet completed/cancelled.
+  const upcoming: Coverage[] = Object.values(net.requests)
+    .filter(
+      (r) =>
+        r.acceptedBy === sid &&
+        (r.status === "accepted" || r.status === "active"),
+    )
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map(toCoverage);
+
+  // Incoming = first broadcasting request I haven't declined,
+  // if I'm online and have < 3 upcoming and no accepted sheet open.
+  let incoming: Coverage | null = null;
+  if (online && upcoming.length < 3 && !acceptedSheet) {
+    const declined = new Set(me?.declined ?? []);
+    const r = broadcastingRequests(net).find((x) => !declined.has(x.id));
+    if (r) incoming = toCoverage(r);
+  }
+
+  // Reflect my accepted count back to presence map.
+  useEffect(() => {
+    if (me && me.acceptedCount !== upcoming.length) {
+      setDoctorAcceptedCount(upcoming.length);
+    }
+  }, [me, upcoming.length]);
+
+  return { online, upcoming, incoming, accepted: acceptedSheet, history };
 }
 
+/* ---------- Lifecycle ---------- */
+
+let bootstrapped = false;
+export function ensureDoctorSession(initialOnline = true) {
+  if (bootstrapped) return;
+  if (typeof window === "undefined") return;
+  bootstrapped = true;
+  registerDoctor(initialOnline);
+  startHeartbeat();
+}
+
+/* ---------- Actions ---------- */
+
 export function setOnline(v: boolean) {
-  set({ online: v, incoming: v ? state.incoming : null });
+  setDoctorOnline(v);
 }
 
 export function acceptIncoming() {
-  if (!state.incoming) return;
-  if (state.upcoming.length >= 3) {
-    set({ incoming: null });
-    return;
+  // Find current incoming via network snapshot.
+  const sid = getSessionId();
+  // Read latest from network module via window.
+  // We re-evaluate inside acceptRequest atomically (status check).
+  // Get any broadcasting request not declined by me.
+  // We must rely on the hook view callers — use a stored ref.
+  const idToAccept = pendingIncomingId();
+  if (!idToAccept) return;
+  const ok = acceptRequest(idToAccept);
+  if (!ok) return;
+  // Open accepted sheet for the doctor.
+  // Pull the now-accepted request from network.
+  const req = currentRequest(idToAccept);
+  if (req && req.acceptedBy === sid) {
+    acceptedSheet = toCoverage(req);
+    bump();
   }
-  const next = state.incoming;
-  set({
-    incoming: null,
-    accepted: next,
-    upcoming: [...state.upcoming, next],
-  });
 }
 
 export function declineIncoming() {
-  set({ incoming: null });
+  const id = pendingIncomingId();
+  if (!id) return;
+  markDeclined(id);
 }
 
 export function dismissAccepted() {
-  set({ accepted: null });
+  acceptedSheet = null;
+  bump();
 }
 
 export function cancelUpcoming(id: string, reason?: string) {
-  const target = state.upcoming.find((c) => c.id === id);
-  set({
-    upcoming: state.upcoming.filter((c) => c.id !== id),
-    accepted: state.accepted?.id === id ? null : state.accepted,
-    history: target
-      ? [
-          {
-            ...target,
-            outcome: "cancelled",
-            completedOn: new Date().toLocaleDateString("en-NG", {
-              weekday: "short",
-              day: "2-digit",
-              month: "short",
-            }),
-            settlementStatus: "Voided",
-            note: reason ? `Cancelled · ${reason}` : target.note,
-          },
-          ...state.history,
-        ]
-      : state.history,
-  });
+  const r = currentRequest(id);
+  if (!r) return;
+  cancelRequest(id);
+  history = [
+    {
+      ...toCoverage(r),
+      outcome: "cancelled",
+      completedOn: new Date().toLocaleDateString("en-NG", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      }),
+      settlementStatus: "Voided",
+      note: reason ? `Cancelled · ${reason}` : r.note,
+    },
+    ...history,
+  ];
+  if (acceptedSheet?.id === id) acceptedSheet = null;
+  bump();
 }
 
-// Background loop: when online, no incoming, no accepted sheet, and < 3 upcoming,
-// surface a new request after a delay. Also auto-dismiss after a while
-// (simulating another doctor accepting).
-let timers: number[] = [];
-function clearTimers() {
-  timers.forEach((t) => window.clearTimeout(t));
-  timers = [];
+export function completeUpcoming(id: string) {
+  const r = currentRequest(id);
+  if (!r) return;
+  completeRequest(id);
+  history = [
+    {
+      ...toCoverage(r),
+      outcome: "completed",
+      completedOn: new Date().toLocaleDateString("en-NG", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      }),
+      settlementStatus: "Remitted",
+    },
+    ...history,
+  ];
+  if (acceptedSheet?.id === id) acceptedSheet = null;
+  bump();
 }
 
-function scheduleSurface() {
-  clearTimers();
-  if (typeof window === "undefined") return;
-  if (!state.online) return;
-  if (state.incoming || state.accepted) return;
-  if (state.upcoming.length >= 3) return;
+/* ---------- helpers reading network module ---------- */
 
-  const delay = 8000 + Math.floor(Math.random() * 6000);
-  const t = window.setTimeout(() => {
-    if (!state.online || state.incoming || state.accepted) return;
-    if (state.upcoming.length >= 3) return;
-    const item = { ...pool[state.nextPoolIdx % pool.length] };
-    item.id = item.id + "-" + Date.now();
-    set({
-      incoming: item,
-      nextPoolIdx: state.nextPoolIdx + 1,
-    });
-    // auto-rescind after a while
-    const t2 = window.setTimeout(() => {
-      if (state.incoming?.id === item.id) set({ incoming: null });
-    }, 18000);
-    timers.push(t2);
-  }, delay);
-  timers.push(t);
+import { useNetwork as _useNet } from "@/lib/network";
+// We need raw current-state access for actions. Re-import non-hook helpers.
+import * as net from "@/lib/network";
+
+function pendingIncomingId(): string | null {
+  // Get latest state via a hidden read; the simplest path is to use the
+  // exported selectors that take a snapshot. We read directly from localStorage.
+  try {
+    const raw = window.localStorage.getItem("flashlocum.net.v1");
+    if (!raw) return null;
+    const s = JSON.parse(raw) as ReturnType<typeof getState>;
+    const sid = net.getSessionId();
+    const me = s.doctors?.[sid];
+    const declined = new Set(me?.declined ?? []);
+    const reqs = Object.values(s.requests ?? {}) as NetRequest[];
+    const first = reqs
+      .filter((r) => r.status === "broadcasting" && !declined.has(r.id))
+      .sort((a, b) => a.createdAt - b.createdAt)[0];
+    return first?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
-listeners.add(() => scheduleSurface());
-
-if (typeof window !== "undefined") {
-  // kick off once on module load
-  scheduleSurface();
+function currentRequest(id: string): NetRequest | null {
+  try {
+    const raw = window.localStorage.getItem("flashlocum.net.v1");
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return (s.requests?.[id] as NetRequest) ?? null;
+  } catch {
+    return null;
+  }
 }
+
+function getState() {
+  return {
+    doctors: {} as Record<string, net.DoctorPresence>,
+    requests: {} as Record<string, NetRequest>,
+  };
+}
+
+// silence unused import warning while keeping types in scope
+void _useNet;
