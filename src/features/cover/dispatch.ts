@@ -218,10 +218,27 @@ export function dismissAccepted() {
   set({ accepted: null });
 }
 
-export function cancelUpcoming(id: string) {
+export function cancelUpcoming(id: string, reason?: string) {
+  const target = state.upcoming.find((c) => c.id === id);
   set({
     upcoming: state.upcoming.filter((c) => c.id !== id),
     accepted: state.accepted?.id === id ? null : state.accepted,
+    history: target
+      ? [
+          {
+            ...target,
+            outcome: "cancelled",
+            completedOn: new Date().toLocaleDateString("en-NG", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+            }),
+            settlementStatus: "Voided",
+            note: reason ? `Cancelled · ${reason}` : target.note,
+          },
+          ...state.history,
+        ]
+      : state.history,
   });
 }
 
