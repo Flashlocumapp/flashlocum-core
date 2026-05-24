@@ -595,7 +595,7 @@ function CoverCard({
   onCancel,
   onOpenDetail,
 }: {
-  item: Coverage | HistoryItem;
+  item: CoverItem | HistoryItem;
   variant: "active" | "upcoming" | "history";
   onCancel?: () => void;
   onOpenDetail?: () => void;
