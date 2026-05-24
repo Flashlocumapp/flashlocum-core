@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DismissSheet } from "@/components/DismissSheet";
 
-const CANCEL_REASONS = [
+const DEFAULT_REASONS = [
   "Coverage no longer needed",
   "Timing changed",
   "Doctor sourced elsewhere",
