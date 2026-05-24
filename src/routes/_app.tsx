@@ -48,6 +48,7 @@ function AppShell() {
           </motion.div>
         )}
       </AnimatePresence>
+      <CoverDispatchPortal />
     </div>
   );
 }
