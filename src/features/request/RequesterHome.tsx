@@ -711,6 +711,18 @@ function SettlementSheet({
 
 const DOCTOR_PHONE = "+2348012345678";
 
+function dayOf(c: CoverageId): string {
+  if (c === "weekend") return "Sat & Sun";
+  if (c === "home") return "Weds";
+  return "Tue";
+}
+function endOf(c: CoverageId): string {
+  if (c === "24h") return "8:00AM";
+  if (c === "weekend") return "8:00AM";
+  if (c === "home") return "6:00AM";
+  return "6:00PM";
+}
+
 function DispatchOverlay({
   stage,
   setStage,
