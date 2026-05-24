@@ -93,7 +93,7 @@ export function CancelFlow({
                   Reason for cancellation
                 </h3>
                 <ul className="mt-4 space-y-1.5">
-                  {CANCEL_REASONS.map((r) => {
+                  {reasons.map((r: string) => {
                     const active = r === reason;
                     return (
                       <li key={r}>
