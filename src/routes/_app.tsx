@@ -3,6 +3,7 @@ import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "@tanstack/react-router";
 import { useImmersive } from "@/lib/immersion";
+import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
