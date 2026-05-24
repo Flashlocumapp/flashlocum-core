@@ -90,7 +90,7 @@ export function CancelFlow({
                 transition={{ duration: 0.18 }}
               >
                 <h3 className="text-[17px] font-semibold tracking-tight">
-                  Reason for cancellation
+                  {reasonTitle}
                 </h3>
                 <ul className="mt-4 space-y-1.5">
                   {reasons.map((r: string) => {
