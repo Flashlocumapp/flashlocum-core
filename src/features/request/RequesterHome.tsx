@@ -815,6 +815,18 @@ function DispatchOverlay({
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
     // Persist note for downstream display (lightweight)
     if (next.note) window.sessionStorage.setItem("fl_last_note", next.note);
+    if (requestId) {
+      updateRequest(requestId, {
+        note: next.note || undefined,
+        durationHrs: next.duration * 10,
+      });
+    }
+  };
+
+  const handleCancelRequest = () => {
+    if (requestId) netCancel(requestId);
+    setCancelOpen(false);
+    setStage("collapsed");
   };
 
   return (
