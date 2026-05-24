@@ -895,10 +895,7 @@ function DispatchOverlay({
           <CancelFlow
             open={cancelOpen}
             onDismiss={() => setCancelOpen(false)}
-            onCancelled={() => {
-              setCancelOpen(false);
-              setStage("collapsed");
-            }}
+            onCancelled={handleCancelRequest}
           />
         </motion.section>
       ) : (
@@ -1017,10 +1014,7 @@ function DispatchOverlay({
               confirmBody="Dr. Emmanuel Adeleke is already assigned. Keeping it preserves continuity."
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
-              onCancelled={() => {
-                setCancelOpen(false);
-                setStage("collapsed");
-              }}
+              onCancelled={handleCancelRequest}
             />
 
             <EditShiftSheet
