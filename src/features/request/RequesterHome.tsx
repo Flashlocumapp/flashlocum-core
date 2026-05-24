@@ -125,9 +125,20 @@ function HomeScreen() {
   };
 
 
+  const net = useNetwork();
+  const markers: Marker[] = useMemo(
+    () =>
+      onlineDoctors(net).map((d) => ({
+        top: d.top,
+        left: d.left,
+        key: d.sessionId,
+      })),
+    [net],
+  );
+
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <MapBackground />
+      <MapBackground markers={markers} />
 
       {/* top chrome */}
       <header className="absolute inset-x-0 top-0 z-30 safe-top pointer-events-none">
