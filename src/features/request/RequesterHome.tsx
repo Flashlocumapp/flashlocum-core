@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { MapBackground } from "@/components/MapBackground";
+import { MapBackground, type Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtNairaK } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
+import {
+  cancelRequest as netCancel,
+  onlineDoctors,
+  publishRequest,
+  updateRequest,
+  useNetwork,
+} from "@/lib/network";
 
 
 export function RequesterHome() {
