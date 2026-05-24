@@ -25,9 +25,10 @@ export function CoverDispatchPortal() {
   const { incoming, accepted } = useDispatch();
 
   if (role !== "cover") return null;
+  if (!incoming && !accepted) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-50">
+    <div className="absolute inset-0 z-50">
       <AnimatePresence>
         {incoming && (
           <DismissSheet
@@ -36,9 +37,7 @@ export function CoverDispatchPortal() {
             onDismiss={declineIncoming}
             zIndex={60}
           >
-            <div className="pointer-events-auto">
-              <IncomingBody item={incoming} />
-            </div>
+            <IncomingBody item={incoming} />
           </DismissSheet>
         )}
         {!incoming && accepted && (
@@ -48,9 +47,7 @@ export function CoverDispatchPortal() {
             onDismiss={dismissAccepted}
             zIndex={55}
           >
-            <div className="pointer-events-auto">
-              <AcceptedBody item={accepted} />
-            </div>
+            <AcceptedBody item={accepted} />
           </DismissSheet>
         )}
       </AnimatePresence>
