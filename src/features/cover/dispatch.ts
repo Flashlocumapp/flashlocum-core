@@ -91,11 +91,73 @@ const pool: Coverage[] = [
   },
 ];
 
+export type HistoryItem = Coverage & {
+  outcome: "completed" | "cancelled";
+  completedOn: string; // e.g. "Mon 17 Nov"
+  rating?: number;
+  settlementStatus: "Remitted" | "Pending" | "Voided";
+};
+
+const seedHistory: HistoryItem[] = [
+  {
+    id: "h1",
+    hospital: "St Nicholas Hospital",
+    area: "Lagos Island",
+    coverage: "Standard",
+    day: "Mon",
+    start: "8:00AM",
+    end: "6:00PM",
+    durationHrs: 10,
+    amount: 36000,
+    feePct: 10,
+    phone: "+2348011223344",
+    outcome: "completed",
+    completedOn: "Mon 17 Nov",
+    rating: 5,
+    settlementStatus: "Remitted",
+    note: "Light patient load",
+  },
+  {
+    id: "h2",
+    hospital: "First Cardiology",
+    area: "Ikoyi",
+    coverage: "24-Hour",
+    day: "Fri",
+    start: "8:00AM",
+    end: "8:00AM",
+    durationHrs: 24,
+    amount: 80000,
+    feePct: 10,
+    phone: "+2348011223344",
+    outcome: "completed",
+    completedOn: "Fri 7 Nov",
+    rating: 4,
+    settlementStatus: "Remitted",
+  },
+  {
+    id: "h3",
+    hospital: "Evercare Hospital",
+    area: "Lekki Phase 1",
+    coverage: "Weekend Call",
+    day: "Sat & Sun",
+    start: "8:00AM",
+    end: "8:00PM",
+    durationHrs: 12,
+    amount: 72000,
+    feePct: 10,
+    phone: "+2348011223344",
+    outcome: "cancelled",
+    completedOn: "Sat 1 Nov",
+    settlementStatus: "Voided",
+  },
+];
+
 type State = {
   online: boolean;
   upcoming: Coverage[];   // accepted (max 3)
   incoming: Coverage | null; // current overlay
   accepted: Coverage | null; // accepted detail sheet open
+  history: HistoryItem[];
   nextPoolIdx: number;
 };
 
@@ -104,6 +166,7 @@ let state: State = {
   upcoming: seed,
   incoming: null,
   accepted: null,
+  history: seedHistory,
   nextPoolIdx: 0,
 };
 
@@ -155,10 +218,27 @@ export function dismissAccepted() {
   set({ accepted: null });
 }
 
-export function cancelUpcoming(id: string) {
+export function cancelUpcoming(id: string, reason?: string) {
+  const target = state.upcoming.find((c) => c.id === id);
   set({
     upcoming: state.upcoming.filter((c) => c.id !== id),
     accepted: state.accepted?.id === id ? null : state.accepted,
+    history: target
+      ? [
+          {
+            ...target,
+            outcome: "cancelled",
+            completedOn: new Date().toLocaleDateString("en-NG", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+            }),
+            settlementStatus: "Voided",
+            note: reason ? `Cancelled · ${reason}` : target.note,
+          },
+          ...state.history,
+        ]
+      : state.history,
   });
 }
 

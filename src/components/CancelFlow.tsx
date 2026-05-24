@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DismissSheet } from "@/components/DismissSheet";
 
-const CANCEL_REASONS = [
+const DEFAULT_REASONS = [
   "Coverage no longer needed",
   "Timing changed",
   "Doctor sourced elsewhere",
@@ -27,6 +27,8 @@ export function CancelFlow({
   confirmBody = "We're still connecting to available doctors nearby.",
   primaryLabel = "Wait for Doctor",
   secondaryLabel = "Cancel Request",
+  reasons = DEFAULT_REASONS,
+  reasonTitle = "Reason for cancellation",
 }: {
   open: boolean;
   onDismiss: () => void;
@@ -35,6 +37,8 @@ export function CancelFlow({
   confirmBody?: string;
   primaryLabel?: string;
   secondaryLabel?: string;
+  reasons?: string[];
+  reasonTitle?: string;
 }) {
   const [step, setStep] = useState<Step>("confirm");
   const [reason, setReason] = useState<string | null>(null);
@@ -86,10 +90,10 @@ export function CancelFlow({
                 transition={{ duration: 0.18 }}
               >
                 <h3 className="text-[17px] font-semibold tracking-tight">
-                  Reason for cancellation
+                  {reasonTitle}
                 </h3>
                 <ul className="mt-4 space-y-1.5">
-                  {CANCEL_REASONS.map((r) => {
+                  {reasons.map((r: string) => {
                     const active = r === reason;
                     return (
                       <li key={r}>
