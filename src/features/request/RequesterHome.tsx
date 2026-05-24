@@ -729,24 +729,43 @@ function DispatchOverlay({
   const [editOpen, setEditOpen] = useState(false);
   const [notified, setNotified] = useState<string | null>(null);
   const notifiedRef = useRef<number | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const net = useNetwork();
 
   // Pause realtime search whenever the cancel sheet is open.
   const paused = cancelOpen;
 
-  // Simulated dispatch acceptance (6–11s). Pauses when modal is open.
-  useEffect(() => {
-    if (stage !== "dispatch" || paused) return;
-    const t1 = window.setTimeout(() => setAmbient(true), 2800);
-    const delay = 6000 + Math.floor(Math.random() * 5000);
-    const t2 = window.setTimeout(() => setStage("accepted"), delay);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [stage, paused, setStage]);
-
   const pricing = computePricing({ coverage, days });
   const acceptedMeta = compressedSummary(coverage, days);
+
+  // Publish into the shared network when entering dispatch.
+  useEffect(() => {
+    if (stage !== "dispatch" || requestId) return;
+    const req = publishRequest({
+      hospital: location?.name ?? "Coverage",
+      area: location?.area ?? "",
+      coverage: COVERAGE_SHORT[coverage],
+      day: dayOf(coverage),
+      start: "8:00AM",
+      end: endOf(coverage),
+      durationHrs: coverage === "24h" ? 24 * days : coverage === "weekend" ? 48 : 10 * days,
+      amount: pricing.amount,
+      feePct: 10,
+      phone: DOCTOR_PHONE,
+      note: window.sessionStorage.getItem("fl_last_note") ?? undefined,
+    });
+    setRequestId(req.id);
+    const t = window.setTimeout(() => setAmbient(true), 2800);
+    return () => window.clearTimeout(t);
+  }, [stage, requestId, coverage, days, location, pricing.amount]);
+
+  // React to acceptance from any doctor session.
+  useEffect(() => {
+    if (!requestId || stage !== "dispatch") return;
+    const r = net.requests[requestId];
+    if (r?.status === "accepted") setStage("accepted");
+  }, [net, requestId, stage, setStage]);
+
 
   // Swipe-down on accepted card returns user to Home.
   const handleAcceptedDrag = (_: unknown, info: PanInfo) => {
