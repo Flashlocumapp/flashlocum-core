@@ -29,16 +29,18 @@ export function CancelFlow({
   secondaryLabel = "Cancel Request",
   reasons = DEFAULT_REASONS,
   reasonTitle = "Reason for cancellation",
+  skipReason = false,
 }: {
   open: boolean;
   onDismiss: () => void;
-  onCancelled: (reason: string) => void;
+  onCancelled: (reason?: string) => void;
   confirmTitle?: string;
   confirmBody?: string;
   primaryLabel?: string;
   secondaryLabel?: string;
   reasons?: string[];
   reasonTitle?: string;
+  skipReason?: boolean;
 }) {
   const [step, setStep] = useState<Step>("confirm");
   const [reason, setReason] = useState<string | null>(null);
