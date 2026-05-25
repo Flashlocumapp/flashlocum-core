@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
-import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
+import { fmtNairaK, fmtElapsed, fmtHistoryMeta, shortWeekdays } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
@@ -41,12 +41,18 @@ type RequestItem = {
   mdcn: string;
   initials: string;
   coverage: Coverage;
+  day: string;
+  start: string;
+  end: string;
+  durationHrs: number;
   schedule: string;
   completedOn?: string;
   amount: number;
   status: ReqStatus;
   phone: string;
+  note?: string;
   outcome?: "completed" | "cancelled";
+  startedAt?: number;
 };
 
 function doctorInitials(sessionId?: string): string {
@@ -74,11 +80,15 @@ function toRequestItem(r: NetRequest): RequestItem {
         : undefined;
   return {
     id: r.id,
-    doctor: "Dr. On Call",
+    doctor: "Dr. Emmanuel Adeleke",
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
     coverage: r.coverage as Coverage,
-    schedule: r.status === "active" ? "Today · live" : `${r.day} · ${r.start}`,
+    day: r.day,
+    start: r.start,
+    end: r.end,
+    durationHrs: r.durationHrs,
+    schedule: `${r.day} · ${r.start}`,
     completedOn: outcome
       ? new Date(r.updatedAt).toLocaleDateString("en-NG", {
           weekday: "short",
@@ -89,9 +99,12 @@ function toRequestItem(r: NetRequest): RequestItem {
     amount: r.amount,
     status,
     phone: r.phone,
+    note: r.note,
     outcome,
+    startedAt: r.startedAt,
   };
 }
+
 
 const TABS = [
   { id: "active", label: "Active" },
@@ -174,6 +187,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     timing: "08:00", duration: 1, accommodation: false, note: "",
   });
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = useMemo(
@@ -266,6 +280,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                     onCancel={() => setCancelTargetId(item.id)}
                     onEdit={() => openEdit(item.id)}
                     onOpenHistory={() => setHistoryId(item.id)}
+                    onOpenDetail={() => setDetailId(item.id)}
                   />
                 </motion.li>
               ))}
@@ -352,9 +367,124 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           window.location.assign("/home");
         }}
       />
+
+      <RequesterDetailSheet
+        item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
+        onDismiss={() => setDetailId(null)}
+        onStart={(id) => { setDetailId(null); moveToActive(id); }}
+        onEnd={(id) => { setDetailId(null); beginEndShift(id); }}
+        onEdit={(id) => { setDetailId(null); openEdit(id); }}
+        onCancel={(id) => { setDetailId(null); setCancelTargetId(id); }}
+      />
     </section>
   );
 }
+
+function RequesterDetailSheet({
+  item,
+  onDismiss,
+  onStart,
+  onEnd,
+  onEdit,
+  onCancel,
+}: {
+  item: RequestItem | null;
+  onDismiss: () => void;
+  onStart: (id: string) => void;
+  onEnd: (id: string) => void;
+  onEdit: (id: string) => void;
+  onCancel: (id: string) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {item && (
+        <DismissSheet open onDismiss={onDismiss}>
+          <div className="flex items-center gap-3">
+            <span
+              className="relative flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-semibold"
+              style={{ background: "var(--color-secondary)" }}
+            >
+              {item.initials}
+              {item.status === "active" && (
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
+                  style={{
+                    background: "var(--color-presence)",
+                    boxShadow: "0 0 0 2px var(--color-surface-elevated)",
+                  }}
+                />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[16px] font-medium">{item.doctor}</div>
+              <div className="text-[12px] text-muted-foreground">{item.mdcn} · ★ 4.9</div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
+            {item.coverage} · {shortWeekdays(item.day)} · {item.start} · {item.durationHrs}hr · {fmtNairaK(item.amount)}
+          </div>
+
+          {item.note && (
+            <div className="mt-2 rounded-2xl bg-secondary/40 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Note</div>
+              <div className="mt-1 text-[12.5px] text-foreground/80">{item.note}</div>
+            </div>
+          )}
+
+          {item.status === "active" && item.startedAt && (
+            <div className="mt-3 flex justify-center">
+              <LiveTimer from={item.startedAt} />
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <a
+              href={`tel:${item.phone}`}
+              className="flex h-11 items-center justify-center rounded-full bg-secondary/70 text-[13px] font-medium text-foreground/85 active:opacity-90"
+            >
+              Call
+            </a>
+            {item.status === "upcoming" && (
+              <button
+                onClick={() => onStart(item.id)}
+                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                Start Shift
+              </button>
+            )}
+            {item.status === "active" && (
+              <button
+                onClick={() => onEnd(item.id)}
+                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                End Shift
+              </button>
+            )}
+          </div>
+
+          {item.status === "upcoming" && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onEdit(item.id)}
+                className="h-11 rounded-full bg-secondary/60 text-[13px] font-medium text-foreground/80 active:opacity-90"
+              >
+                Edit Shift
+              </button>
+              <button
+                onClick={() => onCancel(item.id)}
+                className="h-11 rounded-full bg-secondary/40 text-[13px] font-medium text-foreground/75 active:opacity-90"
+              >
+                Cancel Shift
+              </button>
+            </div>
+          )}
+        </DismissSheet>
+      )}
+    </AnimatePresence>
+  );
+}
+
 
 function RequestCard({
   item,
@@ -363,6 +493,7 @@ function RequestCard({
   onCancel,
   onEdit,
   onOpenHistory,
+  onOpenDetail,
 }: {
   item: RequestItem;
   onStart: () => void;
@@ -370,26 +501,31 @@ function RequestCard({
   onCancel: () => void;
   onEdit: () => void;
   onOpenHistory: () => void;
+  onOpenDetail: () => void;
 }) {
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
 
+  const baseMeta = `${item.coverage} · ${shortWeekdays(item.day)} · ${item.start} · ${item.durationHrs}hr · ${fmtNairaK(item.amount)}`;
   const meta = isHistory
-    ? `${item.coverage} · ${shortWeekdays(item.completedOn ?? "")} · ${fmtNairaK(item.amount)}`
-    : isActive
-      ? `${item.coverage} · Active · ${fmtNairaK(item.amount)}`
-      : fmtShiftMeta(item.coverage, item.schedule, item.amount);
+    ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
+    : baseMeta;
 
-  const Wrapper: React.ElementType = isHistory ? "button" : "div";
-  const wrapperProps = isHistory
-    ? { onClick: onOpenHistory, type: "button" as const }
-    : {};
+  const onCardClick = isHistory ? onOpenHistory : onOpenDetail;
+  const wrapperProps = {
+    onClick: onCardClick,
+    role: "button" as const,
+    tabIndex: 0,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") onCardClick?.();
+    },
+  };
 
   return (
-    <Wrapper
+    <div
       {...wrapperProps}
-      className={`block w-full rounded-2xl px-3.5 py-3 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
+      className="block w-full rounded-2xl px-3.5 py-3 text-left transition-colors active:bg-secondary/40"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
@@ -421,11 +557,16 @@ function RequestCard({
           >
             {meta}
           </div>
+          {isActive && item.startedAt && (
+            <div className="mt-0.5">
+              <LiveTimer from={item.startedAt} />
+            </div>
+          )}
         </div>
 
         {isUpcoming && (
           <button
-            onClick={onStart}
+            onClick={(e) => { e.stopPropagation(); onStart(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
             style={{
               background: "var(--color-foreground)",
@@ -437,7 +578,7 @@ function RequestCard({
         )}
         {isActive && (
           <button
-            onClick={onEnd}
+            onClick={(e) => { e.stopPropagation(); onEnd(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
             style={{
               background: "var(--color-foreground)",
@@ -451,10 +592,11 @@ function RequestCard({
 
       {isUpcoming && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
-          <SecondaryAction onClick={onEdit} label="Edit" />
-          <SecondaryAction onClick={onCancel} label="Cancel" />
+          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
+          <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
           <a
             href={`tel:${item.phone}`}
+            onClick={(e) => e.stopPropagation()}
             className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
@@ -474,11 +616,34 @@ function RequestCard({
           </a>
         </div>
       )}
-    </Wrapper>
+    </div>
   );
 }
 
-function SecondaryAction({ onClick, label }: { onClick: () => void; label: string }) {
+function LiveTimer({ from }: { from: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
+      style={{
+        background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
+        color: "var(--color-presence)",
+      }}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: "var(--color-presence)" }}
+      />
+      {fmtElapsed(from, now)}
+    </span>
+  );
+}
+
+function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) => void; label: string }) {
   return (
     <button
       onClick={onClick}
@@ -492,6 +657,7 @@ function SecondaryAction({ onClick, label }: { onClick: () => void; label: strin
     </button>
   );
 }
+
 
 
 
@@ -730,11 +896,12 @@ function CoverCard({
         </div>
       )}
 
-      {isActive && (
-        <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
-          Ensure requester ends the shift before leaving the building.
-        </p>
+      {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
+        <div className="mt-2">
+          <LiveTimer from={(item as CoverItem & { startedAt: number }).startedAt} />
+        </div>
       )}
+
 
       {(isActive || isUpcoming) && (
         <div className="mt-3 flex items-center gap-2">

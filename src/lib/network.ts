@@ -37,6 +37,7 @@ export type DoctorPresence = {
 
 export type NetRequestStatus =
   | "broadcasting"
+  | "paused"
   | "accepted"
   | "active"
   | "completed"
@@ -60,6 +61,7 @@ export type NetRequest = {
   acceptedBy?: string;
   createdAt: number;
   updatedAt: number;
+  startedAt?: number;
 };
 
 export type Actor = "requester" | "doctor" | "system";
@@ -71,6 +73,9 @@ export type NetActionType =
   | "complete"
   | "cancel"
   | "update"
+  | "pause"
+  | "resume"
+  | "remove"
   | "presence";
 
 export type NetEvent = {
@@ -408,10 +413,18 @@ export function cancelRequest(id: string) {
 }
 
 export function startRequest(id: string) {
-  applyPatch(
-    id,
-    { status: "active" },
-    { actor: "requester", actorId: getSessionId(), action: "start" },
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: { ...cur, status: "active", startedAt: Date.now(), updatedAt: Date.now() },
+      },
+    },
+    { actor: "requester", actorId: getSessionId(), action: "start", shiftId: id },
   );
 }
 
@@ -420,6 +433,41 @@ export function completeRequest(id: string) {
     id,
     { status: "completed" },
     { actor: "requester", actorId: getSessionId(), action: "complete" },
+  );
+}
+
+/** Pause broadcasting (hides from doctors) without losing request. */
+export function pauseRequest(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur || cur.status !== "broadcasting") return;
+  applyPatch(
+    id,
+    { status: "paused" },
+    { actor: "requester", actorId: getSessionId(), action: "pause" },
+  );
+}
+
+/** Resume a paused request back to broadcasting. */
+export function resumeRequest(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur || cur.status !== "paused") return;
+  applyPatch(
+    id,
+    { status: "broadcasting" },
+    { actor: "requester", actorId: getSessionId(), action: "resume" },
+  );
+}
+
+/** Hard-remove a request (use for pre-acceptance cancellation). */
+export function removeRequest(id: string) {
+  refreshState();
+  if (!state.requests[id]) return;
+  const { [id]: _gone, ...rest } = state.requests;
+  save(
+    { ...state, requests: rest },
+    { actor: "requester", actorId: getSessionId(), action: "remove", shiftId: id },
   );
 }
 

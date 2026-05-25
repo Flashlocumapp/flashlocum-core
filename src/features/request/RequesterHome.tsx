@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { MapBackground, type Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
-import { fmtNairaK } from "@/lib/format";
+import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import {
-  cancelRequest as netCancel,
   onlineDoctors,
+  pauseRequest,
   publishRequest,
+  removeRequest,
+  resumeRequest,
   updateRequest,
+  cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
 
@@ -39,6 +42,33 @@ const COVERAGE: { id: CoverageId; label: string }[] = [
 ];
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
+
+/* ---------------------- Draft (real timing) ---------------------- */
+
+type Draft = {
+  startDate: string; // yyyy-mm-dd
+  startTime: string; // HH:MM (24h)
+  endTime: string;   // HH:MM (24h)
+  note: string;
+};
+
+function makeInitialDraft(coverage: CoverageId): Draft {
+  const today = new Date().toISOString().slice(0, 10);
+  if (coverage === "weekend") {
+    // Auto Sat→Mon, 48h block; user can still adjust start time.
+    const d = new Date();
+    const diff = (6 - d.getDay() + 7) % 7 || 7;
+    d.setDate(d.getDate() + diff);
+    return { startDate: d.toISOString().slice(0, 10), startTime: "20:00", endTime: "06:00", note: "" };
+  }
+  if (coverage === "home") {
+    return { startDate: today, startTime: "22:00", endTime: "06:00", note: "" };
+  }
+  if (coverage === "24h") {
+    return { startDate: today, startTime: "08:00", endTime: "08:00", note: "" };
+  }
+  return { startDate: today, startTime: "08:00", endTime: "18:00", note: "" };
+}
 
 /* ---------------------- Pricing ---------------------- */
 
@@ -82,12 +112,44 @@ const COVERAGE_SHORT: Record<CoverageId, string> = {
   home: "Home Care",
 };
 
-// Compressed operational summary: Coverage · Day · Time (no pricing).
-function compressedSummary(coverage: CoverageId, _days: number): string {
-  if (coverage === "weekend") return `${COVERAGE_SHORT[coverage]} · Sat & Sun · 9:00 AM`;
-  if (coverage === "home") return `${COVERAGE_SHORT[coverage]} · Weds · 10:00 PM`;
-  if (coverage === "24h") return `${COVERAGE_SHORT[coverage]} · Tue · 8:00 AM`;
-  return `${COVERAGE_SHORT[coverage]} · Tue · 8:00 AM`;
+/* ---------------------- Timing derivation ---------------------- */
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Weds", "Thu", "Fri", "Sat"];
+
+function fmtAmPm(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h)) return hhmm;
+  const period = h >= 12 ? "PM" : "AM";
+  const hr = ((h + 11) % 12) + 1;
+  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+}
+
+function dayLabel(coverage: CoverageId, draft: Draft, days: number): string {
+  if (coverage === "weekend") return "Sat & Sun";
+  if (!draft.startDate) return "";
+  const start = new Date(draft.startDate);
+  const startWd = WEEKDAY_SHORT[start.getDay()] ?? "";
+  if (coverage === "24h" || days <= 1) return startWd;
+  const end = new Date(start);
+  end.setDate(end.getDate() + days - 1);
+  const endWd = WEEKDAY_SHORT[end.getDay()] ?? "";
+  return `${startWd}–${endWd}`;
+}
+
+function durationHrsOf(coverage: CoverageId, draft: Draft, days: number): number {
+  if (coverage === "24h") return 24 * Math.max(1, days);
+  if (coverage === "weekend") return 48;
+  // standard / home — derive from start/end + days
+  const [sh, sm] = draft.startTime.split(":").map(Number);
+  const [eh, em] = draft.endTime.split(":").map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins <= 0) mins += 24 * 60; // overnight
+  const perDay = mins / 60;
+  return Math.round(perDay * Math.max(1, days));
+}
+
+function compressedSummary(coverage: CoverageId, draft: Draft, days: number): string {
+  return `${COVERAGE_SHORT[coverage]} · ${dayLabel(coverage, draft, days)} · ${fmtAmPm(draft.startTime)}`;
 }
 
 /* ---------------------- Home ---------------------- */
@@ -99,6 +161,7 @@ function HomeScreen() {
   const [location, setLocation] = useState<Recent | null>(null);
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
+  const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
 
   // Immersive flow — hide bottom tabs once the requester engages the sheet.
   useEffect(() => {
@@ -108,9 +171,12 @@ function HomeScreen() {
 
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
+    setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
     if (c === "24h") setDays(1);
     else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
   };
+
+  const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
   const recents = useMemo(
     () =>
@@ -178,7 +244,7 @@ function HomeScreen() {
               className="flex flex-1 items-center gap-2 truncate text-left"
             >
               <span className="truncate text-[13px] font-medium leading-none tabular-nums">
-                {compressedSummary(coverage, days)}
+                {compressedSummary(coverage, draft, days)}
               </span>
             </button>
           </motion.div>
@@ -195,6 +261,7 @@ function HomeScreen() {
             setStage={setStage}
             coverage={coverage}
             days={days}
+            draft={draft}
             location={location}
           />
         ) : stage === "match" ? (
@@ -217,6 +284,8 @@ function HomeScreen() {
             setCoverage={setCoverage}
             days={days}
             setDays={setDays}
+            draft={draft}
+            patchDraft={patchDraft}
             onAdvance={() => setStage("match")}
           />
         )}
@@ -239,6 +308,8 @@ function DispatchSheet({
   setCoverage,
   days,
   setDays,
+  draft,
+  patchDraft,
   onAdvance,
 }: {
   stage: Stage;
@@ -252,6 +323,8 @@ function DispatchSheet({
   setCoverage: (c: CoverageId) => void;
   days: number;
   setDays: (n: number) => void;
+  draft: Draft;
+  patchDraft: (p: Partial<Draft>) => void;
   onAdvance: () => void;
 }) {
   const isCollapsed = stage === "collapsed";
@@ -263,7 +336,7 @@ function DispatchSheet({
       if (isCollapsed) setStage("search");
     } else if (info.velocity.y > 300 || info.offset.y > 60) {
       if (isSearch) setStage("collapsed");
-      else if (isConfigure) setStage("search");
+      else if (isConfigure) setStage("collapsed");
     }
   };
 
@@ -276,11 +349,11 @@ function DispatchSheet({
 
   return (
     <>
-      {/* Backdrop — click-outside dismisses expanded search */}
+      {/* Tap-outside backdrop — collapses search OR configure */}
       <AnimatePresence>
-        {isSearch && (
+        {(isSearch || isConfigure) && (
           <motion.div
-            key="search-backdrop"
+            key="sheet-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -369,6 +442,8 @@ function DispatchSheet({
                 setCoverage={setCoverage}
                 days={days}
                 setDays={setDays}
+                draft={draft}
+                patchDraft={patchDraft}
                 onAdvance={onAdvance}
               />
             )}
@@ -387,6 +462,8 @@ function ConfigureBody({
   setCoverage,
   days,
   setDays,
+  draft,
+  patchDraft,
   onAdvance,
 }: {
   location: Recent;
@@ -394,6 +471,8 @@ function ConfigureBody({
   setCoverage: (c: CoverageId) => void;
   days: number;
   setDays: (n: number) => void;
+  draft: Draft;
+  patchDraft: (p: Partial<Draft>) => void;
   onAdvance: () => void;
 }) {
   return (
@@ -438,7 +517,13 @@ function ConfigureBody({
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
         >
-          <CoverageFields coverage={coverage} days={days} setDays={setDays} />
+          <CoverageFields
+            coverage={coverage}
+            days={days}
+            setDays={setDays}
+            draft={draft}
+            patchDraft={patchDraft}
+          />
         </motion.div>
       </AnimatePresence>
 
@@ -460,79 +545,56 @@ function ConfigureBody({
 
 /* ---------------------- Coverage-specific fields ---------------------- */
 
-function addHoursToTime(time: string, hoursToAdd: number) {
-  const [h, m] = time.split(":").map(Number);
-  const total = (h * 60 + m + hoursToAdd * 60) % (24 * 60);
-  const nh = Math.floor(total / 60);
-  const nm = total % 60;
-  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
-}
-
 function CoverageFields({
   coverage,
   days,
   setDays,
+  draft,
+  patchDraft,
 }: {
   coverage: CoverageId;
   days: number;
   setDays: (n: number) => void;
+  draft: Draft;
+  patchDraft: (p: Partial<Draft>) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const nextSaturday = useMemo(() => {
-    const d = new Date();
-    const diff = (6 - d.getDay() + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    return d.toISOString().slice(0, 10);
-  }, []);
-  const nextSunday = useMemo(() => {
-    const d = new Date(nextSaturday);
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  }, [nextSaturday]);
-
-  // Weekend Call — auto Sat→Mon, +48h, no Duration field
   if (coverage === "weekend") {
-    const [startTime, setStartTime] = useState("08:00");
     return (
       <Fields>
-        <div className="rounded-xl bg-secondary/50 px-3 py-2.5 text-[12px] text-muted-foreground">
-          {fmtRange(nextSaturday, nextSunday)} · 48 hours
-        </div>
         <Row>
-          <TimeField label="Start time" value={startTime} onChange={setStartTime} />
-          <TimeField label="End time" value={addHoursToTime(startTime, 48)} readOnly />
+          <CtrlField label="Start date" type="date" value={draft.startDate} onChange={(v) => patchDraft({ startDate: v })} />
+          <CtrlField label="Start time" type="time" value={draft.startTime} onChange={(v) => patchDraft({ startTime: v })} />
         </Row>
-        <NoteField />
+        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
       </Fields>
     );
   }
 
-  // Standard / Home Care — Start Date, Start Time, End Time, Duration (1–7d), Note
   if (coverage === "standard" || coverage === "home") {
     return (
       <Fields>
         <Row>
-          <Field label="Start date" type="date" defaultValue={today} />
-          <Field label="Start time" type="time" defaultValue="08:00" />
+          <CtrlField label="Start date" type="date" value={draft.startDate} onChange={(v) => patchDraft({ startDate: v })} />
+          <CtrlField label="Start time" type="time" value={draft.startTime} onChange={(v) => patchDraft({ startTime: v })} />
         </Row>
         <Row>
-          <Field label="End time" type="time" defaultValue="17:00" />
+          <CtrlField label="End time" type="time" value={draft.endTime} onChange={(v) => patchDraft({ endTime: v })} />
           <DaysStepper value={days} setValue={setDays} />
         </Row>
-        <NoteField />
+        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
       </Fields>
     );
   }
 
-  // 24-Hour — Start Date, Start Time, Duration (prefilled 1d, up to 7), Note
+  // 24-Hour
   return (
     <Fields>
       <Row>
-        <Field label="Start date" type="date" defaultValue={today} />
-        <Field label="Start time" type="time" defaultValue="08:00" />
+        <CtrlField label="Start date" type="date" value={draft.startDate} onChange={(v) => patchDraft({ startDate: v })} />
+        <CtrlField label="Start time" type="time" value={draft.startTime} onChange={(v) => patchDraft({ startTime: v })} />
       </Row>
       <DaysStepper value={days} setValue={setDays} />
-      <NoteField />
+      <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
 }
@@ -544,18 +606,19 @@ function Row({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-2.5">{children}</div>;
 }
 
-function Field({
+function CtrlField({
   label,
   type,
-  defaultValue,
+  value,
+  onChange,
   readOnly,
 }: {
   label: string;
   type: "date" | "time";
-  defaultValue?: string;
+  value: string;
+  onChange?: (v: string) => void;
   readOnly?: boolean;
 }) {
-  const [val, setVal] = useState<string>(defaultValue ?? "");
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
       <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
@@ -563,9 +626,9 @@ function Field({
       </span>
       <input
         type={type}
-        value={val}
+        value={value}
         readOnly={readOnly}
-        onChange={(e) => setVal(e.target.value)}
+        onChange={(e) => onChange?.(e.target.value)}
         className="bg-transparent text-[14px] font-medium outline-none"
       />
     </label>
@@ -615,32 +678,6 @@ function Stepper({
   );
 }
 
-function TimeField({
-  label,
-  value,
-  onChange,
-  readOnly,
-}: {
-  label: string;
-  value: string;
-  onChange?: (v: string) => void;
-  readOnly?: boolean;
-}) {
-  return (
-    <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-        {label}
-      </span>
-      <input
-        type="time"
-        value={value}
-        readOnly={readOnly}
-        onChange={(e) => onChange?.(e.target.value)}
-        className="bg-transparent text-[14px] font-medium outline-none"
-      />
-    </label>
-  );
-}
 function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
   return (
     <Stepper
@@ -654,25 +691,21 @@ function DaysStepper({ value, setValue }: { value: number; setValue: (n: number)
   );
 }
 
-function NoteField() {
+function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
       <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-        Note
+        Note (optional)
       </span>
       <textarea
         rows={2}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={NOTE_PLACEHOLDER}
         className="resize-none bg-transparent text-[13.5px] outline-none placeholder:text-muted-foreground/55"
       />
     </label>
   );
-}
-
-function fmtRange(a: string, b: string) {
-  const fmt = (s: string) =>
-    new Date(s).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  return `${fmt(a)} → ${fmt(b)}`;
 }
 
 /* ---------------------- Settlement sheet ---------------------- */
@@ -699,7 +732,7 @@ function SettlementSheet({
 
       <div className="flex flex-col px-6 pb-7 pt-3">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Standard
+          Coverage
         </div>
 
         <div className="mt-2 text-[34px] font-semibold leading-none tracking-tight tabular-nums">
@@ -723,34 +756,21 @@ function SettlementSheet({
 
 /* ---------------------- Dispatch overlay (post-request) ---------------------- */
 
-// (Long coverage labels live in COVERAGE_SHORT; legacy COVERAGE_LABEL removed.)
-
-
 const DOCTOR_PHONE = "+2348012345678";
-
-function dayOf(c: CoverageId): string {
-  if (c === "weekend") return "Sat & Sun";
-  if (c === "home") return "Weds";
-  return "Tue";
-}
-function endOf(c: CoverageId): string {
-  if (c === "24h") return "8:00AM";
-  if (c === "weekend") return "8:00AM";
-  if (c === "home") return "6:00AM";
-  return "6:00PM";
-}
 
 function DispatchOverlay({
   stage,
   setStage,
   coverage,
   days,
+  draft,
   location,
 }: {
   stage: "dispatch" | "accepted";
   setStage: (s: Stage) => void;
   coverage: CoverageId;
   days: number;
+  draft: Draft;
   location: Recent | null;
 }) {
   const [ambient, setAmbient] = useState(false);
@@ -762,42 +782,50 @@ function DispatchOverlay({
   const publishedRef = useRef(false);
   const net = useNetwork();
 
-  // Pause realtime search whenever the cancel sheet is open.
-  const paused = cancelOpen;
-
+  const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, days });
-  const acceptedMeta = compressedSummary(coverage, days);
+  const acceptedMeta = compressedSummary(coverage, draft, days);
 
   // Publish into the shared network when entering dispatch.
   useEffect(() => {
-    if (stage !== "dispatch") {
-      return;
-    }
+    if (stage !== "dispatch") return;
     if (requestId || publishedRef.current) return;
     publishedRef.current = true;
     const req = publishRequest({
       hospital: location?.name ?? "Coverage",
       area: location?.area ?? "",
       coverage: COVERAGE_SHORT[coverage],
-      day: dayOf(coverage),
-      start: "8:00AM",
-      end: endOf(coverage),
-      durationHrs: coverage === "24h" ? 24 * days : coverage === "weekend" ? 48 : 10 * days,
+      day: dayLabel(coverage, draft, days),
+      start: fmtAmPm(draft.startTime),
+      end: fmtAmPm(draft.endTime),
+      durationHrs: durationHrsOf(coverage, draft, days),
       amount: pricing.amount,
       feePct: 10,
       phone: DOCTOR_PHONE,
-      note: window.sessionStorage.getItem("fl_last_note") ?? undefined,
+      note: draft.note?.trim() || undefined,
     });
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
     return () => window.clearTimeout(t);
-  }, [stage, requestId, coverage, days, location, pricing.amount]);
+  }, [stage, requestId, coverage, days, draft, location, pricing.amount]);
 
-  // React to acceptance from any doctor session.
+  // Pause / resume broadcasting whenever the cancel or edit sheet is open.
   useEffect(() => {
-    if (!requestId || stage !== "dispatch") return;
+    if (!requestId) return;
+    if (paused) pauseRequest(requestId);
+    else resumeRequest(requestId);
+  }, [paused, requestId]);
+
+  // React to acceptance OR doctor-side cancellation.
+  useEffect(() => {
+    if (!requestId) return;
     const r = net.requests[requestId];
-    if (r?.status === "accepted") setStage("accepted");
+    if (!r) return;
+    if (stage === "dispatch" && r.status === "accepted") setStage("accepted");
+    if (stage === "accepted" && r.status === "cancelled") {
+      // Doctor cancelled — close accepted screen immediately.
+      setStage("collapsed");
+    }
   }, [net, requestId, stage, setStage]);
 
 
@@ -806,19 +834,20 @@ function DispatchOverlay({
     if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
   };
 
+  // Build edit initial seeded from current draft (real timing).
   const [editInitial, setEditInitial] = useState<EditableShift>({
-    timing: "08:00",
+    timing: draft.startTime,
     duration: days,
     accommodation: false,
-    note: "",
+    note: draft.note ?? "",
   });
 
   const openEdit = () => {
     setEditInitial({
-      timing: "08:00",
+      timing: draft.startTime,
       duration: days,
       accommodation: false,
-      note: "",
+      note: draft.note ?? "",
     });
     setEditOpen(true);
   };
@@ -835,17 +864,27 @@ function DispatchOverlay({
     if (notifiedRef.current) window.clearTimeout(notifiedRef.current);
     setNotified(`${label[changed]} · Dr. notified`);
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
-    // Persist note for downstream display (lightweight)
-    if (next.note) window.sessionStorage.setItem("fl_last_note", next.note);
+
     if (requestId) {
+      const newDraft = { ...draft, startTime: next.timing };
       updateRequest(requestId, {
-        note: next.note || undefined,
-        durationHrs: next.duration * 10,
+        note: next.note?.trim() || undefined,
+        start: fmtAmPm(next.timing),
+        durationHrs: durationHrsOf(coverage, newDraft, next.duration),
+        day: dayLabel(coverage, newDraft, next.duration),
       });
     }
   };
 
-  const handleCancelRequest = () => {
+  // Pre-acceptance cancel: remove silently (no notification, no history).
+  const handleCancelPreAccept = () => {
+    if (requestId) removeRequest(requestId);
+    setCancelOpen(false);
+    setStage("collapsed");
+  };
+
+  // Post-acceptance cancel: notify doctor + record history.
+  const handleCancelPostAccept = () => {
     if (requestId) netCancel(requestId);
     setCancelOpen(false);
     setStage("collapsed");
@@ -913,11 +952,12 @@ function DispatchOverlay({
             <span className="sr-only">{formatNaira(pricing.amount)}</span>
           </div>
 
-          {/* Pre-acceptance: hesitation + optional reason; dismiss = continue search */}
+          {/* Pre-acceptance: skip reason → silent cancel. */}
           <CancelFlow
             open={cancelOpen}
             onDismiss={() => setCancelOpen(false)}
-            onCancelled={handleCancelRequest}
+            onCancelled={handleCancelPreAccept}
+            skipReason
           />
         </motion.section>
       ) : (
@@ -1036,7 +1076,7 @@ function DispatchOverlay({
               confirmBody="Dr. Emmanuel Adeleke is already assigned. Keeping it preserves continuity."
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
-              onCancelled={handleCancelRequest}
+              onCancelled={handleCancelPostAccept}
             />
 
             <EditShiftSheet
@@ -1055,6 +1095,8 @@ function DispatchOverlay({
 
 
 function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
+  // Keeps fmtElapsed bundled even when nothing renders it directly.
+  void fmtElapsed;
   return (
     <div className={`relative h-10 w-full ${className ?? ""}`}>
       <div className="absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-foreground/15" />
@@ -1087,4 +1129,3 @@ function ConnectionPulse({ className, paused }: { className?: string; paused?: b
     </div>
   );
 }
-

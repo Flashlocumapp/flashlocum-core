@@ -35,6 +35,7 @@ export type Coverage = {
   phone: string;
   note?: string;
   active?: boolean;
+  startedAt?: number;
 };
 
 // Full monetary formatting everywhere (₦36,500). No K abbreviation.
@@ -62,6 +63,7 @@ function toCoverage(r: NetRequest): Coverage {
     phone: r.phone,
     note: r.note,
     active: r.status === "active",
+    startedAt: r.startedAt,
   };
 }
 
@@ -219,6 +221,12 @@ export function ensureDoctorSession(initialOnline = true) {
       });
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
+    } else if (ev.action === "update") {
+      pushToast({
+        tone: "presence",
+        title: `${r.hospital} updated this shift.`,
+        body: `${r.coverage} · ${r.day} · ${r.start}–${r.end} · ${r.durationHrs}hr`,
+      });
     }
   });
 }
