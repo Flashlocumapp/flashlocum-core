@@ -324,7 +324,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         onCancelled={() => {
           const id = cancelTargetId;
           setCancelTargetId(null);
-          if (id) setItems((prev) => prev.filter((i) => i.id !== id));
+          if (id) netCancelRequest(id);
         }}
       />
 
