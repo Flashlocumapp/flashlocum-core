@@ -151,7 +151,7 @@ export function useDispatch(): View {
 /* ---------- Lifecycle ---------- */
 
 let bootstrapped = false;
-let prevStatus: Record<string, NetRequest["status"]> = {};
+
 
 export function ensureDoctorSession(initialOnline = true) {
   if (bootstrapped) return;
