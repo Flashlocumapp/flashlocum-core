@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
