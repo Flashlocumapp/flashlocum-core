@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
@@ -15,14 +15,24 @@ import {
   type Coverage as CoverItem,
   type HistoryItem,
 } from "@/features/cover/dispatch";
+import {
+  cancelRequest as netCancelRequest,
+  completeRequest as netCompleteRequest,
+  getSessionId,
+  startRequest as netStartRequest,
+  subscribeNetwork,
+  updateRequest as netUpdateRequest,
+  useNetwork,
+  type NetRequest,
+  type NetState,
+} from "@/lib/network";
+import { pushToast } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
 });
 
-// (Doctor placeholder items removed — driven by live simulation only.)
-
-// ----- Requester-side dispatch entries -----
+// ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
@@ -31,16 +41,57 @@ type RequestItem = {
   mdcn: string;
   initials: string;
   coverage: Coverage;
-  schedule: string; // e.g. "Tuesday · 8:00 AM" or "Today · 9:24 AM"
-  completedOn?: string; // e.g. "Mon 17 Nov"
+  schedule: string;
+  completedOn?: string;
   amount: number;
   status: ReqStatus;
+  phone: string;
+  outcome?: "completed" | "cancelled";
 };
 
-const DEFAULT_DOCTOR_PHONE = "+2348012345678";
+function doctorInitials(sessionId?: string): string {
+  if (!sessionId) return "DR";
+  const tail = sessionId.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase();
+  return tail.length === 2 ? tail : "DR";
+}
+function mdcnFor(sessionId?: string): string {
+  if (!sessionId) return "MDCN-—";
+  return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
+}
 
-// Placeholder records removed — populated only through live simulation.
-const INITIAL_REQUESTS: RequestItem[] = [];
+function toRequestItem(r: NetRequest): RequestItem {
+  const status: ReqStatus =
+    r.status === "active"
+      ? "active"
+      : r.status === "accepted"
+        ? "upcoming"
+        : "completed";
+  const outcome =
+    r.status === "completed"
+      ? "completed"
+      : r.status === "cancelled"
+        ? "cancelled"
+        : undefined;
+  return {
+    id: r.id,
+    doctor: "Dr. On Call",
+    mdcn: mdcnFor(r.acceptedBy),
+    initials: doctorInitials(r.acceptedBy),
+    coverage: r.coverage as Coverage,
+    schedule: r.status === "active" ? "Today · live" : `${r.day} · ${r.start}`,
+    completedOn: outcome
+      ? new Date(r.updatedAt).toLocaleDateString("en-NG", {
+          weekday: "short",
+          day: "2-digit",
+          month: "short",
+        })
+      : undefined,
+    amount: r.amount,
+    status,
+    phone: r.phone,
+    outcome,
+  };
+}
 
 const TABS = [
   { id: "active", label: "Active" },
@@ -65,7 +116,52 @@ function CoverageScreen() {
 // ============ REQUESTER ============
 
 function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
-  const [items, setItems] = useState<RequestItem[]>(INITIAL_REQUESTS);
+  const net = useNetwork();
+  const sid = getSessionId();
+
+  // Derive my requests from the shared operational network.
+  const items = useMemo<RequestItem[]>(() => {
+    return Object.values(net.requests)
+      .filter(
+        (r) =>
+          r.requesterSessionId === sid &&
+          (r.status === "accepted" ||
+            r.status === "active" ||
+            r.status === "completed" ||
+            r.status === "cancelled"),
+      )
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(toRequestItem);
+  }, [net, sid]);
+
+  // Cross-flow notifications: react to doctor-side transitions.
+  const prevRef = useRef<Record<string, NetRequest["status"]>>({});
+  useEffect(() => {
+    const off = subscribeNetwork((s: NetState) => {
+      const mine = Object.values(s.requests).filter(
+        (r) => r.requesterSessionId === sid,
+      );
+      for (const r of mine) {
+        const prev = prevRef.current[r.id];
+        prevRef.current[r.id] = r.status;
+        if (!prev || prev === r.status) continue;
+        if (prev === "broadcasting" && r.status === "accepted") {
+          pushToast({
+            tone: "presence",
+            title: "Doctor accepted your request.",
+            body: "Open Coverage → Upcoming for details.",
+          });
+        } else if (r.status === "cancelled" && prev !== "cancelled") {
+          pushToast({
+            tone: "warn",
+            title: "Doctor cancelled this shift.",
+          });
+        }
+      }
+    });
+    return off;
+  }, [sid]);
+
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -97,13 +193,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     : null;
 
   const moveToActive = (id: string) => {
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? { ...i, status: "active", schedule: "Today · just now" }
-          : i,
-      ),
-    );
+    netStartRequest(id);
     setTab("active");
   };
 
@@ -111,19 +201,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const confirmEnd = () => {
     if (!settlingId) return;
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === settlingId
-          ? {
-              ...i,
-              status: "completed",
-              completedOn: new Date().toLocaleDateString("en-NG", {
-                weekday: "short", day: "2-digit", month: "short",
-              }),
-            }
-          : i,
-      ),
-    );
+    netCompleteRequest(settlingId);
   };
 
   const openEdit = (id: string) => {
@@ -134,7 +212,14 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   };
 
   const handleEditSave = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
+    const id = editTargetId;
     setEditTargetId(null);
+    if (id) {
+      netUpdateRequest(id, {
+        note: next.note || undefined,
+        durationHrs: next.duration * 10,
+      });
+    }
     const label: Record<keyof EditableShift | "multiple", string> = {
       timing: "Coverage timing updated",
       duration: "Coverage duration updated",
@@ -145,6 +230,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setNotice(`${label[changed]} · Doctor notified`);
     window.setTimeout(() => setNotice(null), 2600);
   };
+
+
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
@@ -237,7 +324,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         onCancelled={() => {
           const id = cancelTargetId;
           setCancelTargetId(null);
-          if (id) setItems((prev) => prev.filter((i) => i.id !== id));
+          if (id) netCancelRequest(id);
         }}
       />
 
@@ -363,7 +450,7 @@ function RequestCard({
           <SecondaryAction onClick={onEdit} label="Edit" />
           <SecondaryAction onClick={onCancel} label="Cancel" />
           <a
-            href={`tel:${DEFAULT_DOCTOR_PHONE}`}
+            href={`tel:${item.phone}`}
             className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
