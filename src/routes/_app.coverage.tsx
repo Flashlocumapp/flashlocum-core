@@ -450,7 +450,7 @@ function RequestCard({
           <SecondaryAction onClick={onEdit} label="Edit" />
           <SecondaryAction onClick={onCancel} label="Cancel" />
           <a
-            href={`tel:${DEFAULT_DOCTOR_PHONE}`}
+            href={`tel:${item.phone}`}
             className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
