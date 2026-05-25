@@ -160,71 +160,69 @@ export function ensureDoctorSession(initialOnline = true) {
   registerDoctor(initialOnline);
   startHeartbeat();
 
-  // Watch network → emit toasts when my accepted requests change phase.
+  // Watch network → react ONLY to events caused by the requester
+  // on shifts assigned to THIS doctor session. No status diff inference.
   subscribeNetwork((s: NetState) => {
     const sid = getSessionId();
-    for (const r of Object.values(s.requests)) {
-      if (r.acceptedBy !== sid) continue;
-      const prev = prevStatus[r.id];
-      if (prev === r.status) continue;
-      prevStatus[r.id] = r.status;
-      if (!prev) continue; // first sighting; skip
+    const ev = s.lastEvent;
+    if (!ev || !ev.shiftId) return;
+    const r = s.requests[ev.shiftId];
+    if (!r || r.acceptedBy !== sid) return;
+    if (ev.actor !== "requester") return;
 
-      if (r.status === "active" && prev === "accepted") {
-        pushToast({
-          tone: "presence",
-          title: `Your shift with ${r.hospital} has started.`,
-          body: "Tap the active card for shift details.",
-        });
-      } else if (r.status === "completed") {
-        pushToast({
-          tone: "presence",
-          title: `Your shift with ${r.hospital} has ended.`,
-          body: "Payment will be remitted to your account by 10PM today.",
-          ttl: 5200,
-        });
-        history = [
-          {
-            ...toCoverage(r),
-            outcome: "completed",
-            completedOn: new Date().toLocaleDateString("en-NG", {
-              weekday: "short",
-              day: "2-digit",
-              month: "short",
-            }),
-            settlementStatus: "Pending",
-          },
-          ...history.filter((h) => h.id !== r.id),
-        ];
-        pendingRating = {
-          hospitalId: hospitalEntityId(r.hospital),
-          hospital: r.hospital,
-        };
-        if (acceptedSheet?.id === r.id) acceptedSheet = null;
-        bump();
-      } else if (r.status === "cancelled" && prev !== "cancelled") {
-        // Requester cancelled — calm operational notice.
-        pushToast({
-          tone: "warn",
-          title: `${r.hospital} cancelled this shift.`,
-        });
-        history = [
-          {
-            ...toCoverage(r),
-            outcome: "cancelled",
-            completedOn: new Date().toLocaleDateString("en-NG", {
-              weekday: "short",
-              day: "2-digit",
-              month: "short",
-            }),
-            settlementStatus: "Voided",
-            note: "Cancelled by requester",
-          },
-          ...history.filter((h) => h.id !== r.id),
-        ];
-        if (acceptedSheet?.id === r.id) acceptedSheet = null;
-        bump();
-      }
+    if (ev.action === "start") {
+      pushToast({
+        tone: "presence",
+        title: `Your shift with ${r.hospital} has started.`,
+        body: "Tap the active card for shift details.",
+      });
+    } else if (ev.action === "complete") {
+      pushToast({
+        tone: "presence",
+        title: `Your shift with ${r.hospital} has ended.`,
+        body: "Payment will be remitted to your account by 10PM today.",
+        ttl: 5200,
+      });
+      history = [
+        {
+          ...toCoverage(r),
+          outcome: "completed",
+          completedOn: new Date().toLocaleDateString("en-NG", {
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+          }),
+          settlementStatus: "Pending",
+        },
+        ...history.filter((h) => h.id !== r.id),
+      ];
+      pendingRating = {
+        hospitalId: hospitalEntityId(r.hospital),
+        hospital: r.hospital,
+      };
+      if (acceptedSheet?.id === r.id) acceptedSheet = null;
+      bump();
+    } else if (ev.action === "cancel") {
+      pushToast({
+        tone: "warn",
+        title: `${r.hospital} cancelled this shift.`,
+      });
+      history = [
+        {
+          ...toCoverage(r),
+          outcome: "cancelled",
+          completedOn: new Date().toLocaleDateString("en-NG", {
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+          }),
+          settlementStatus: "Voided",
+          note: "Cancelled by requester",
+        },
+        ...history.filter((h) => h.id !== r.id),
+      ];
+      if (acceptedSheet?.id === r.id) acceptedSheet = null;
+      bump();
     }
   });
 }
