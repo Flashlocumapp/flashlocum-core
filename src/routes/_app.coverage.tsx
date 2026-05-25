@@ -448,20 +448,17 @@ function Avatar({
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { upcoming, history } = useDispatch();
 
-  // Active = first upcoming flagged active. Chronological order preserved.
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
 
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const detail = history.find((h) => h.id === detailId) ?? null;
 
-  const list =
-    tab === "active"
-      ? (active ? [active] : [])
-      : tab === "upcoming"
-        ? upcomingOnly
-        : history;
+  // Detail can be either a live coverage (active/upcoming) or a history entry.
+  const detail: CoverItem | HistoryItem | null =
+    upcoming.find((c) => c.id === detailId) ??
+    history.find((h) => h.id === detailId) ??
+    null;
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
@@ -470,20 +467,20 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
         style={{ height: "calc(100% - 140px)" }}
       >
-        {list.length === 0 ? (
+        {(tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0 ? (
           <EmptyState tab={tab} role="cover" />
         ) : (
           <ul className="space-y-2.5">
-            {tab === "active" &&
-              (active ? (
-                <li key={active.id}>
-                  <CoverCard
-                    item={active}
-                    variant="active"
-                    onCancel={() => setCancelId(active.id)}
-                  />
-                </li>
-              ) : null)}
+            {tab === "active" && active && (
+              <li key={active.id}>
+                <CoverCard
+                  item={active}
+                  variant="active"
+                  onCancel={() => setCancelId(active.id)}
+                  onOpenDetail={() => setDetailId(active.id)}
+                />
+              </li>
+            )}
             {tab === "upcoming" &&
               upcomingOnly.map((c) => (
                 <li key={c.id}>
@@ -491,6 +488,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
                     item={c}
                     variant="upcoming"
                     onCancel={() => setCancelId(c.id)}
+                    onOpenDetail={() => setDetailId(c.id)}
                   />
                 </li>
               ))}
@@ -511,10 +509,10 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
       <CancelFlow
         open={!!cancelId}
         onDismiss={() => setCancelId(null)}
-        confirmTitle="Cancel this coverage?"
+        confirmTitle="Cancel this shift?"
         confirmBody="Frequent cancellations affect your reliability score. The requester will be notified immediately."
-        primaryLabel="Keep Coverage"
-        secondaryLabel="Cancel Coverage"
+        primaryLabel="Keep Shift"
+        secondaryLabel="Cancel Shift"
         reasonTitle="Reason for cancellation"
         reasons={["Emergency", "Illness", "Transport issue", "Schedule conflict", "Other"]}
         onCancelled={(reason) => {
@@ -524,7 +522,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         }}
       />
 
-      <DoctorHistoryDetail
+      <DoctorCoverageDetail
         item={detail}
         onDismiss={() => setDetailId(null)}
       />
