@@ -681,19 +681,28 @@ function CoverCard({
   );
 }
 
-function DoctorHistoryDetail({
+function DoctorCoverageDetail({
   item,
   onDismiss,
 }: {
-  item: HistoryItem | null;
+  item: CoverItem | HistoryItem | null;
   onDismiss: () => void;
 }) {
+  const isHist = (i: CoverItem | HistoryItem): i is HistoryItem =>
+    "outcome" in i;
+
   return (
     <AnimatePresence>
       {item && (
         <DismissSheet open onDismiss={onDismiss}>
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {item.outcome === "cancelled" ? "Cancelled coverage" : "Completed coverage"}
+            {isHist(item)
+              ? item.outcome === "cancelled"
+                ? "Cancelled shift"
+                : "Completed shift"
+              : item.active
+                ? "Active shift"
+                : "Upcoming shift"}
           </div>
           <div className="mt-2 text-[20px] font-semibold tracking-tight">
             {item.hospital}
@@ -701,14 +710,19 @@ function DoctorHistoryDetail({
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
           <div className="mt-4 text-[13px] leading-relaxed text-foreground/80">
-            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr
+            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr · {nairaK(item.amount)}
           </div>
 
           <div className="mt-4 space-y-2 rounded-2xl bg-secondary/60 px-4 py-3">
             <DetailRow label="Amount" value={nairaK(item.amount)} />
-            <DetailRow label="Settlement" value={item.settlementStatus} />
-            <DetailRow label="Completed" value={item.completedOn} />
-            {item.rating !== undefined && (
+            <DetailRow
+              label="Settlement"
+              value={isHist(item) ? item.settlementStatus : "Pending"}
+            />
+            {isHist(item) && (
+              <DetailRow label="Completed" value={item.completedOn} />
+            )}
+            {isHist(item) && item.rating !== undefined && (
               <DetailRow
                 label="Rating"
                 value={"★".repeat(item.rating) + "☆".repeat(5 - item.rating)}
@@ -717,9 +731,12 @@ function DoctorHistoryDetail({
           </div>
 
           {item.note && (
-            <p className="mt-3 text-[12.5px] text-muted-foreground">
-              Note · {item.note}
-            </p>
+            <div className="mt-3 rounded-2xl bg-secondary/40 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                Notes
+              </div>
+              <div className="mt-1 text-[12.5px] text-foreground/80">{item.note}</div>
+            </div>
           )}
         </DismissSheet>
       )}
