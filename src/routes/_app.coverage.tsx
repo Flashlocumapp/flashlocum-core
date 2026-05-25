@@ -567,7 +567,7 @@ function CoverCard({
   return (
     <Wrapper
       {...wrapperProps}
-      className={`block w-full rounded-2xl px-4 py-3.5 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
+      className="block w-full rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-secondary/30"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 65%, transparent)"
