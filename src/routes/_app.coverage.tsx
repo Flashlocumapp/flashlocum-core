@@ -367,9 +367,124 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           window.location.assign("/home");
         }}
       />
+
+      <RequesterDetailSheet
+        item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
+        onDismiss={() => setDetailId(null)}
+        onStart={(id) => { setDetailId(null); moveToActive(id); }}
+        onEnd={(id) => { setDetailId(null); beginEndShift(id); }}
+        onEdit={(id) => { setDetailId(null); openEdit(id); }}
+        onCancel={(id) => { setDetailId(null); setCancelTargetId(id); }}
+      />
     </section>
   );
 }
+
+function RequesterDetailSheet({
+  item,
+  onDismiss,
+  onStart,
+  onEnd,
+  onEdit,
+  onCancel,
+}: {
+  item: RequestItem | null;
+  onDismiss: () => void;
+  onStart: (id: string) => void;
+  onEnd: (id: string) => void;
+  onEdit: (id: string) => void;
+  onCancel: (id: string) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {item && (
+        <DismissSheet open onDismiss={onDismiss}>
+          <div className="flex items-center gap-3">
+            <span
+              className="relative flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-semibold"
+              style={{ background: "var(--color-secondary)" }}
+            >
+              {item.initials}
+              {item.status === "active" && (
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
+                  style={{
+                    background: "var(--color-presence)",
+                    boxShadow: "0 0 0 2px var(--color-surface-elevated)",
+                  }}
+                />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[16px] font-medium">{item.doctor}</div>
+              <div className="text-[12px] text-muted-foreground">{item.mdcn} · ★ 4.9</div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
+            {item.coverage} · {shortWeekdays(item.day)} · {item.start} · {item.durationHrs}hr · {fmtNairaK(item.amount)}
+          </div>
+
+          {item.note && (
+            <div className="mt-2 rounded-2xl bg-secondary/40 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Note</div>
+              <div className="mt-1 text-[12.5px] text-foreground/80">{item.note}</div>
+            </div>
+          )}
+
+          {item.status === "active" && item.startedAt && (
+            <div className="mt-3 flex justify-center">
+              <LiveTimer from={item.startedAt} />
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <a
+              href={`tel:${item.phone}`}
+              className="flex h-11 items-center justify-center rounded-full bg-secondary/70 text-[13px] font-medium text-foreground/85 active:opacity-90"
+            >
+              Call
+            </a>
+            {item.status === "upcoming" && (
+              <button
+                onClick={() => onStart(item.id)}
+                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                Start Shift
+              </button>
+            )}
+            {item.status === "active" && (
+              <button
+                onClick={() => onEnd(item.id)}
+                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                End Shift
+              </button>
+            )}
+          </div>
+
+          {item.status === "upcoming" && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onEdit(item.id)}
+                className="h-11 rounded-full bg-secondary/60 text-[13px] font-medium text-foreground/80 active:opacity-90"
+              >
+                Edit Shift
+              </button>
+              <button
+                onClick={() => onCancel(item.id)}
+                className="h-11 rounded-full bg-secondary/40 text-[13px] font-medium text-foreground/75 active:opacity-90"
+              >
+                Cancel Shift
+              </button>
+            </div>
+          )}
+        </DismissSheet>
+      )}
+    </AnimatePresence>
+  );
+}
+
 
 function RequestCard({
   item,
