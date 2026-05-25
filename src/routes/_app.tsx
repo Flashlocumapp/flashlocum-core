@@ -6,6 +6,7 @@ import { useLocation } from "@tanstack/react-router";
 import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
+import { ToastHost } from "@/components/ToastHost";
 import { getRole } from "@/lib/role";
 
 export const Route = createFileRoute("/_app")({
