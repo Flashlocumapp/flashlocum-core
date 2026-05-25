@@ -36,15 +36,14 @@ export function CoverHome() {
         </div>
       </header>
 
-      {/* lower floating container — ~30% of map height */}
+      {/* Adaptive bottom sheet — content-fit; Score & Acceptance always visible */}
       <motion.section
         initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 280, damping: 32 }}
         className="absolute inset-x-0 bottom-0 z-20"
-        style={{ height: "32%" }}
       >
-        <div className="mx-auto flex h-full max-w-md flex-col gap-2.5 px-4 pb-4">
+        <div className="mx-auto flex max-w-md flex-col gap-2.5 px-4 pb-4">
           <CoverageTile coverage={focus} active={isActive} />
           <div className="grid grid-cols-2 gap-2.5">
             <ScoreTile score={score} />
