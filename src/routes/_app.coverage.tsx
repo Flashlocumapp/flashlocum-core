@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
@@ -644,7 +644,7 @@ function CoverCard({
     onClick: onOpenDetail,
     role: "button",
     tabIndex: 0,
-    onKeyDown: (e: React.KeyboardEvent) => {
+    onKeyDown: (e: KeyboardEvent) => {
       if (e.key === "Enter" || e.key === " ") onOpenDetail?.();
     },
   };
