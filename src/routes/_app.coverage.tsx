@@ -50,49 +50,8 @@ type RequestItem = {
 
 const DEFAULT_DOCTOR_PHONE = "+2348012345678";
 
-const INITIAL_REQUESTS: RequestItem[] = [
-  {
-    id: "r-active-1",
-    doctor: "Dr. Adaobi Okeke",
-    mdcn: "MDCN-18432",
-    initials: "AO",
-    coverage: "Standard",
-    schedule: "Today · 9:24 AM",
-    amount: 36000,
-    status: "active",
-  },
-  {
-    id: "r-up-1",
-    doctor: "Dr. Emmanuel Adeleke",
-    mdcn: "MDCN-12245",
-    initials: "EA",
-    coverage: "Standard",
-    schedule: "Tuesday · 8:00 AM",
-    amount: 36000,
-    status: "upcoming",
-  },
-  {
-    id: "r-up-2",
-    doctor: "Dr. Tunde Bello",
-    mdcn: "MDCN-20918",
-    initials: "TB",
-    coverage: "Weekend Call",
-    schedule: "Sat · 8:00 AM",
-    amount: 80000,
-    status: "upcoming",
-  },
-  {
-    id: "r-hist-1",
-    doctor: "Dr. Ifeoma Nweze",
-    mdcn: "MDCN-09921",
-    initials: "IN",
-    coverage: "Home Care",
-    schedule: "",
-    completedOn: "Mon 17 Nov",
-    amount: 45000,
-    status: "completed",
-  },
-];
+// Placeholder records removed — populated only through live simulation.
+const INITIAL_REQUESTS: RequestItem[] = [];
 
 const TABS = [
   { id: "active", label: "Active" },
