@@ -63,6 +63,7 @@ function toCoverage(r: NetRequest): Coverage {
     phone: r.phone,
     note: r.note,
     active: r.status === "active",
+    startedAt: r.startedAt,
   };
 }
 
