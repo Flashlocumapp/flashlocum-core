@@ -7,6 +7,7 @@ import {
   broadcastingRequests,
   cancelRequest,
   completeRequest,
+  getNetworkSnapshot,
   getSessionId,
   markDeclined,
   registerDoctor,
@@ -77,6 +78,7 @@ let history: HistoryItem[] = [];
 let acceptedSheet: Coverage | null = null;
 // Hospital pending rating after End Shift (entityId derived from hospital name).
 let pendingRating: { hospitalId: string; hospital: string } | null = null;
+const processedEvents = new Set<string>();
 
 const localListeners = new Set<() => void>();
 function bump() {
@@ -125,6 +127,24 @@ export function useDispatch(): View {
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
 
+  const derivedHistory: HistoryItem[] = Object.values(net.requests)
+    .filter(
+      (r) =>
+        r.acceptedBy === sid &&
+        (r.status === "completed" || r.status === "cancelled"),
+    )
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((r) => ({
+      ...toCoverage(r),
+      outcome: r.status === "completed" ? "completed" : "cancelled",
+      completedOn: new Date(r.updatedAt).toLocaleDateString("en-NG", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      }),
+      settlementStatus: r.status === "completed" ? "Pending" : "Voided",
+    }));
+
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3 && !acceptedSheet) {
     const declined = new Set(me?.declined ?? []);
@@ -143,7 +163,7 @@ export function useDispatch(): View {
     upcoming,
     incoming,
     accepted: acceptedSheet,
-    history,
+    history: derivedHistory,
     pendingRating,
   };
 }
@@ -166,9 +186,12 @@ export function ensureDoctorSession(initialOnline = true) {
     const sid = getSessionId();
     const ev = s.lastEvent;
     if (!ev || !ev.shiftId) return;
+    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
+    if (processedEvents.has(eventKey)) return;
     const r = s.requests[ev.shiftId];
     if (!r || r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
+    processedEvents.add(eventKey);
 
     if (ev.action === "start") {
       pushToast({
@@ -183,19 +206,6 @@ export function ensureDoctorSession(initialOnline = true) {
         body: "Payment will be remitted to your account by 10PM today.",
         ttl: 5200,
       });
-      history = [
-        {
-          ...toCoverage(r),
-          outcome: "completed",
-          completedOn: new Date().toLocaleDateString("en-NG", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-          }),
-          settlementStatus: "Pending",
-        },
-        ...history.filter((h) => h.id !== r.id),
-      ];
       pendingRating = {
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
@@ -207,20 +217,6 @@ export function ensureDoctorSession(initialOnline = true) {
         tone: "warn",
         title: `${r.hospital} cancelled this shift.`,
       });
-      history = [
-        {
-          ...toCoverage(r),
-          outcome: "cancelled",
-          completedOn: new Date().toLocaleDateString("en-NG", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-          }),
-          settlementStatus: "Voided",
-          note: "Cancelled by requester",
-        },
-        ...history.filter((h) => h.id !== r.id),
-      ];
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     }
@@ -298,20 +294,6 @@ export function cancelUpcoming(id: string, reason?: string) {
   const r = currentRequest(id);
   if (!r) return;
   cancelRequest(id);
-  history = [
-    {
-      ...toCoverage(r),
-      outcome: "cancelled",
-      completedOn: new Date().toLocaleDateString("en-NG", {
-        weekday: "short",
-        day: "2-digit",
-        month: "short",
-      }),
-      settlementStatus: "Voided",
-      note: reason ? `Cancelled · ${reason}` : r.note,
-    },
-    ...history.filter((h) => h.id !== r.id),
-  ];
   if (acceptedSheet?.id === id) acceptedSheet = null;
   bump();
 }
@@ -320,20 +302,6 @@ export function completeUpcoming(id: string) {
   const r = currentRequest(id);
   if (!r) return;
   completeRequest(id);
-  // history will also be added by the network watcher; safe (filter dedupes)
-  history = [
-    {
-      ...toCoverage(r),
-      outcome: "completed",
-      completedOn: new Date().toLocaleDateString("en-NG", {
-        weekday: "short",
-        day: "2-digit",
-        month: "short",
-      }),
-      settlementStatus: "Pending",
-    },
-    ...history.filter((h) => h.id !== r.id),
-  ];
   if (acceptedSheet?.id === id) acceptedSheet = null;
   bump();
 }
@@ -351,13 +319,7 @@ type RawState = {
 };
 
 function readState(): RawState {
-  try {
-    const raw = window.localStorage.getItem("flashlocum.net.v1");
-    if (!raw) return { doctors: {}, requests: {} };
-    return JSON.parse(raw) as RawState;
-  } catch {
-    return { doctors: {}, requests: {} };
-  }
+  return getNetworkSnapshot();
 }
 
 function pendingIncomingId(): string | null {

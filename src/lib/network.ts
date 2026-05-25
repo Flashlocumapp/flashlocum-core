@@ -15,11 +15,14 @@ function actorOf(): Actor {
   return getRole() === "cover" ? "doctor" : "requester";
 }
 
-const CHANNEL = "flashlocum.net.v1";
-const STORAGE = "flashlocum.net.v1";
+const SCHEMA_VERSION = 2;
+const CHANNEL = "flashlocum.net.v2";
+const STORAGE = "flashlocum.net.v2";
+const LEGACY_STORAGE = "flashlocum.net.v1";
 const SESSION_KEY = "flashlocum.session";
 const HEARTBEAT_MS = 4000;
 const STALE_MS = 12000;
+const BROADCAST_TTL_MS = 30 * 60 * 1000;
 
 export type DoctorPresence = {
   sessionId: string;
@@ -79,12 +82,13 @@ export type NetEvent = {
 };
 
 export type NetState = {
+  schemaVersion?: number;
   doctors: Record<string, DoctorPresence>;
   requests: Record<string, NetRequest>;
   lastEvent?: NetEvent;
 };
 
-const emptyState = (): NetState => ({ doctors: {}, requests: {} });
+const emptyState = (): NetState => ({ schemaVersion: SCHEMA_VERSION, doctors: {}, requests: {} });
 
 /* ---------------- session id ---------------- */
 
@@ -114,20 +118,34 @@ const listeners = new Set<(s: NetState) => void>();
 function load(): NetState {
   if (typeof window === "undefined") return emptyState();
   try {
+    window.localStorage.removeItem(LEGACY_STORAGE);
     const raw = window.localStorage.getItem(STORAGE);
     if (!raw) return emptyState();
-    return JSON.parse(raw) as NetState;
+    const parsed = JSON.parse(raw) as NetState;
+    if (parsed.schemaVersion !== SCHEMA_VERSION) return emptyState();
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      doctors: parsed.doctors ?? {},
+      requests: parsed.requests ?? {},
+      lastEvent: parsed.lastEvent,
+    };
   } catch {
     return emptyState();
   }
 }
 
+function refreshState(): NetState {
+  state = pruneStale(load());
+  return state;
+}
+
 function save(next: NetState, event?: Omit<NetEvent, "at">) {
   // CORRECT SYNC ORDER:
   //   1) update global state  → 2) persist  → 3) notify  → 4) broadcast
+  const { lastEvent: _previousEvent, ...withoutEvent } = next;
   const stamped: NetState = event
-    ? { ...next, lastEvent: { ...event, at: Date.now() } }
-    : next;
+    ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: Date.now() } }
+    : { ...withoutEvent, schemaVersion: SCHEMA_VERSION };
   state = stamped;
   if (typeof window === "undefined") return;
   try {
@@ -136,7 +154,7 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
     /* noop */
   }
   listeners.forEach((l) => l(state));
-  channel?.postMessage({ type: "sync" });
+  channel?.postMessage({ type: "state", state: stamped });
 }
 
 function pruneStale(s: NetState): NetState {
@@ -145,7 +163,12 @@ function pruneStale(s: NetState): NetState {
   for (const [k, d] of Object.entries(s.doctors)) {
     if (now - d.lastSeen < STALE_MS) doctors[k] = d;
   }
-  return { ...s, doctors };
+  const requests: Record<string, NetRequest> = {};
+  for (const [k, r] of Object.entries(s.requests)) {
+    if (r.status === "broadcasting" && now - r.createdAt > BROADCAST_TTL_MS) continue;
+    requests[k] = r;
+  }
+  return { ...s, schemaVersion: SCHEMA_VERSION, doctors, requests };
 }
 
 function init() {
@@ -154,8 +177,9 @@ function init() {
   state = pruneStale(load());
   try {
     channel = new BroadcastChannel(CHANNEL);
-    channel.onmessage = () => {
-      state = pruneStale(load());
+    channel.onmessage = (message) => {
+      const incoming = message.data?.state as NetState | undefined;
+      state = pruneStale(incoming?.schemaVersion === SCHEMA_VERSION ? incoming : load());
       listeners.forEach((l) => l(state));
     };
   } catch {
@@ -209,6 +233,7 @@ function randomPos(seed: string): { top: number; left: number } {
 }
 
 export function registerDoctor(initialOnline: boolean) {
+  refreshState();
   const sid = getSessionId();
   const current = state.doctors[sid];
   const pos = current ?? randomPos(sid);
@@ -231,6 +256,7 @@ export function registerDoctor(initialOnline: boolean) {
 }
 
 export function unregisterDoctor() {
+  refreshState();
   const sid = getSessionId();
   if (!state.doctors[sid]) return;
   const { [sid]: _gone, ...rest } = state.doctors;
@@ -238,6 +264,7 @@ export function unregisterDoctor() {
 }
 
 export function heartbeat() {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
@@ -248,6 +275,7 @@ export function heartbeat() {
 }
 
 export function setDoctorOnline(online: boolean) {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) {
@@ -264,6 +292,7 @@ export function setDoctorOnline(online: boolean) {
 }
 
 export function setDoctorAcceptedCount(n: number) {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
@@ -277,6 +306,7 @@ export function setDoctorAcceptedCount(n: number) {
 }
 
 export function markDeclined(requestId: string) {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
@@ -308,6 +338,7 @@ export function startHeartbeat() {
 /* ---------------- requests ---------------- */
 
 export function publishRequest(req: Omit<NetRequest, "id" | "requesterSessionId" | "status" | "createdAt" | "updatedAt">): NetRequest {
+  refreshState();
   const sid = getSessionId();
   const now = Date.now();
   const id = "r_" + now.toString(36) + Math.random().toString(36).slice(2, 6);
@@ -331,6 +362,7 @@ function applyPatch(
   patch: Partial<NetRequest>,
   event: Omit<NetEvent, "at" | "shiftId">,
 ) {
+  refreshState();
   const cur = state.requests[id];
   if (!cur) return;
   save(
@@ -355,6 +387,7 @@ export function updateRequest(id: string, patch: Partial<NetRequest>) {
 }
 
 export function acceptRequest(id: string): boolean {
+  refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "broadcasting") return false;
   const sid = getSessionId();
@@ -397,7 +430,12 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
+  const now = Date.now();
   return Object.values(s.requests)
-    .filter((r) => r.status === "broadcasting")
+    .filter((r) => r.status === "broadcasting" && now - r.createdAt <= BROADCAST_TTL_MS)
     .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export function getNetworkSnapshot(): NetState {
+  return refreshState();
 }

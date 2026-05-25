@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
@@ -136,14 +136,18 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   // Cross-flow notifications: react to doctor-side transitions only.
 
+  const processedEventsRef = useRef(new Set<string>());
   useEffect(() => {
     const off = subscribeNetwork((s: NetState) => {
       const ev = s.lastEvent;
       if (!ev || !ev.shiftId) return;
+      const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
+      if (processedEventsRef.current.has(eventKey)) return;
       const r = s.requests[ev.shiftId];
       // Only react to shifts I own AND events caused by the OTHER actor.
       if (!r || r.requesterSessionId !== sid) return;
       if (ev.actor !== "doctor") return;
+      processedEventsRef.current.add(eventKey);
 
       if (ev.action === "accept") {
         pushToast({
@@ -635,8 +639,15 @@ function CoverCard({
   const meta = `${item.coverage} · ${item.day} · ${item.start} · ${item.durationHrs}hr · ${nairaK(item.amount)}`;
 
   // All cards tappable — open detail. Inner buttons stopPropagation.
-  const Wrapper: React.ElementType = "button";
-  const wrapperProps = { onClick: onOpenDetail, type: "button" as const };
+  const Wrapper: React.ElementType = "div";
+  const wrapperProps = {
+    onClick: onOpenDetail,
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") onOpenDetail?.();
+    },
+  };
 
   const outcomeChip =
     isHistory && (item as HistoryItem).outcome === "cancelled" ? (
