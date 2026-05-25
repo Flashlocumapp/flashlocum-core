@@ -70,43 +70,8 @@ export type HistoryItem = Coverage & {
   settlementStatus: "Remitted" | "Pending" | "Voided";
 };
 
-const seedHistory: HistoryItem[] = [
-  {
-    id: "h1",
-    hospital: "St Nicholas Hospital",
-    area: "Lagos Island",
-    coverage: "Standard",
-    day: "Mon",
-    start: "8:00AM",
-    end: "6:00PM",
-    durationHrs: 10,
-    amount: 36000,
-    feePct: 10,
-    phone: "+2348011223344",
-    outcome: "completed",
-    completedOn: "Mon 17 Nov",
-    rating: 5,
-    settlementStatus: "Remitted",
-    note: "Light patient load",
-  },
-  {
-    id: "h2",
-    hospital: "First Cardiology",
-    area: "Ikoyi",
-    coverage: "24-Hour",
-    day: "Fri",
-    start: "8:00AM",
-    end: "8:00AM",
-    durationHrs: 24,
-    amount: 80000,
-    feePct: 10,
-    phone: "+2348011223344",
-    outcome: "completed",
-    completedOn: "Fri 7 Nov",
-    rating: 4,
-    settlementStatus: "Remitted",
-  },
-];
+// History is empty by default — populated only through live simulation.
+const seedHistory: HistoryItem[] = [];
 
 let history: HistoryItem[] = seedHistory;
 let acceptedSheet: Coverage | null = null;
