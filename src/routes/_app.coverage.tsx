@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
@@ -15,14 +15,24 @@ import {
   type Coverage as CoverItem,
   type HistoryItem,
 } from "@/features/cover/dispatch";
+import {
+  cancelRequest as netCancelRequest,
+  completeRequest as netCompleteRequest,
+  getSessionId,
+  startRequest as netStartRequest,
+  subscribeNetwork,
+  updateRequest as netUpdateRequest,
+  useNetwork,
+  type NetRequest,
+  type NetState,
+} from "@/lib/network";
+import { pushToast } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
 });
 
-// (Doctor placeholder items removed — driven by live simulation only.)
-
-// ----- Requester-side dispatch entries -----
+// ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
@@ -31,16 +41,57 @@ type RequestItem = {
   mdcn: string;
   initials: string;
   coverage: Coverage;
-  schedule: string; // e.g. "Tuesday · 8:00 AM" or "Today · 9:24 AM"
-  completedOn?: string; // e.g. "Mon 17 Nov"
+  schedule: string;
+  completedOn?: string;
   amount: number;
   status: ReqStatus;
+  phone: string;
+  outcome?: "completed" | "cancelled";
 };
 
-const DEFAULT_DOCTOR_PHONE = "+2348012345678";
+function doctorInitials(sessionId?: string): string {
+  if (!sessionId) return "DR";
+  const tail = sessionId.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase();
+  return tail.length === 2 ? tail : "DR";
+}
+function mdcnFor(sessionId?: string): string {
+  if (!sessionId) return "MDCN-—";
+  return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
+}
 
-// Placeholder records removed — populated only through live simulation.
-const INITIAL_REQUESTS: RequestItem[] = [];
+function toRequestItem(r: NetRequest): RequestItem {
+  const status: ReqStatus =
+    r.status === "active"
+      ? "active"
+      : r.status === "accepted"
+        ? "upcoming"
+        : "completed";
+  const outcome =
+    r.status === "completed"
+      ? "completed"
+      : r.status === "cancelled"
+        ? "cancelled"
+        : undefined;
+  return {
+    id: r.id,
+    doctor: "Dr. On Call",
+    mdcn: mdcnFor(r.acceptedBy),
+    initials: doctorInitials(r.acceptedBy),
+    coverage: r.coverage as Coverage,
+    schedule: r.status === "active" ? "Today · live" : `${r.day} · ${r.start}`,
+    completedOn: outcome
+      ? new Date(r.updatedAt).toLocaleDateString("en-NG", {
+          weekday: "short",
+          day: "2-digit",
+          month: "short",
+        })
+      : undefined,
+    amount: r.amount,
+    status,
+    phone: r.phone,
+    outcome,
+  };
+}
 
 const TABS = [
   { id: "active", label: "Active" },
