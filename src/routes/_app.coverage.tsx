@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
@@ -134,33 +134,33 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       .map(toRequestItem);
   }, [net, sid]);
 
-  // Cross-flow notifications: react to doctor-side transitions.
-  const prevRef = useRef<Record<string, NetRequest["status"]>>({});
+  // Cross-flow notifications: react to doctor-side transitions only.
+
   useEffect(() => {
     const off = subscribeNetwork((s: NetState) => {
-      const mine = Object.values(s.requests).filter(
-        (r) => r.requesterSessionId === sid,
-      );
-      for (const r of mine) {
-        const prev = prevRef.current[r.id];
-        prevRef.current[r.id] = r.status;
-        if (!prev || prev === r.status) continue;
-        if (prev === "broadcasting" && r.status === "accepted") {
-          pushToast({
-            tone: "presence",
-            title: "Doctor accepted your request.",
-            body: "Open Coverage → Upcoming for details.",
-          });
-        } else if (r.status === "cancelled" && prev !== "cancelled") {
-          pushToast({
-            tone: "warn",
-            title: "Doctor cancelled this shift.",
-          });
-        }
+      const ev = s.lastEvent;
+      if (!ev || !ev.shiftId) return;
+      const r = s.requests[ev.shiftId];
+      // Only react to shifts I own AND events caused by the OTHER actor.
+      if (!r || r.requesterSessionId !== sid) return;
+      if (ev.actor !== "doctor") return;
+
+      if (ev.action === "accept") {
+        pushToast({
+          tone: "presence",
+          title: "Doctor accepted your request.",
+          body: "Open Coverage → Upcoming for details.",
+        });
+      } else if (ev.action === "cancel") {
+        pushToast({
+          tone: "warn",
+          title: "Doctor cancelled this shift.",
+        });
       }
     });
     return off;
   }, [sid]);
+
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);

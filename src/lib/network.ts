@@ -8,6 +8,12 @@
 // This is frontend-only simulation. No backend yet.
 
 import { useEffect, useState } from "react";
+import { getRole } from "./role";
+
+function actorOf(): Actor {
+  if (typeof window === "undefined") return "system";
+  return getRole() === "cover" ? "doctor" : "requester";
+}
 
 const CHANNEL = "flashlocum.net.v1";
 const STORAGE = "flashlocum.net.v1";
@@ -53,9 +59,29 @@ export type NetRequest = {
   updatedAt: number;
 };
 
+export type Actor = "requester" | "doctor" | "system";
+export type NetActionType =
+  | "publish"
+  | "accept"
+  | "decline"
+  | "start"
+  | "complete"
+  | "cancel"
+  | "update"
+  | "presence";
+
+export type NetEvent = {
+  actor: Actor;
+  actorId: string;
+  shiftId?: string;
+  action: NetActionType;
+  at: number;
+};
+
 export type NetState = {
   doctors: Record<string, DoctorPresence>;
   requests: Record<string, NetRequest>;
+  lastEvent?: NetEvent;
 };
 
 const emptyState = (): NetState => ({ doctors: {}, requests: {} });
@@ -96,11 +122,16 @@ function load(): NetState {
   }
 }
 
-function save(next: NetState) {
-  state = next;
+function save(next: NetState, event?: Omit<NetEvent, "at">) {
+  // CORRECT SYNC ORDER:
+  //   1) update global state  → 2) persist  → 3) notify  → 4) broadcast
+  const stamped: NetState = event
+    ? { ...next, lastEvent: { ...event, at: Date.now() } }
+    : next;
+  state = stamped;
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE, JSON.stringify(next));
+    window.localStorage.setItem(STORAGE, JSON.stringify(stamped));
   } catch {
     /* noop */
   }
@@ -288,19 +319,38 @@ export function publishRequest(req: Omit<NetRequest, "id" | "requesterSessionId"
     createdAt: now,
     updatedAt: now,
   };
-  save({ ...state, requests: { ...state.requests, [id]: full } });
+  save(
+    { ...state, requests: { ...state.requests, [id]: full } },
+    { actor: "requester", actorId: sid, shiftId: id, action: "publish" },
+  );
   return full;
 }
 
-export function updateRequest(id: string, patch: Partial<NetRequest>) {
+function applyPatch(
+  id: string,
+  patch: Partial<NetRequest>,
+  event: Omit<NetEvent, "at" | "shiftId">,
+) {
   const cur = state.requests[id];
   if (!cur) return;
-  save({
-    ...state,
-    requests: {
-      ...state.requests,
-      [id]: { ...cur, ...patch, updatedAt: Date.now() },
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: { ...cur, ...patch, updatedAt: Date.now() },
+      },
     },
+    { ...event, shiftId: id },
+  );
+}
+
+/** Generic patch — actor inferred from current session role. */
+export function updateRequest(id: string, patch: Partial<NetRequest>) {
+  applyPatch(id, patch, {
+    actor: actorOf(),
+    actorId: getSessionId(),
+    action: "update",
   });
 }
 
@@ -308,20 +358,36 @@ export function acceptRequest(id: string): boolean {
   const cur = state.requests[id];
   if (!cur || cur.status !== "broadcasting") return false;
   const sid = getSessionId();
-  updateRequest(id, { status: "accepted", acceptedBy: sid });
+  applyPatch(
+    id,
+    { status: "accepted", acceptedBy: sid },
+    { actor: "doctor", actorId: sid, action: "accept" },
+  );
   return true;
 }
 
 export function cancelRequest(id: string) {
-  updateRequest(id, { status: "cancelled" });
+  applyPatch(
+    id,
+    { status: "cancelled" },
+    { actor: actorOf(), actorId: getSessionId(), action: "cancel" },
+  );
 }
 
 export function startRequest(id: string) {
-  updateRequest(id, { status: "active" });
+  applyPatch(
+    id,
+    { status: "active" },
+    { actor: "requester", actorId: getSessionId(), action: "start" },
+  );
 }
 
 export function completeRequest(id: string) {
-  updateRequest(id, { status: "completed" });
+  applyPatch(
+    id,
+    { status: "completed" },
+    { actor: "requester", actorId: getSessionId(), action: "complete" },
+  );
 }
 
 /* ---------------- selectors ---------------- */
