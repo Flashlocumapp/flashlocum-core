@@ -30,13 +30,8 @@ type DoctorItem = {
   status: "active" | "upcoming" | "completed";
 };
 
-const DOCTOR_ITEMS: DoctorItem[] = [
-  { id: "c1", facility: "Evercare Hospital", area: "Lekki Phase 1", role: "General Practice", when: "Live · 02:14 in", status: "active" },
-  { id: "c2", facility: "Lagoon Hospital", area: "Apapa", role: "Paediatrics", when: "Tomorrow · 08:00", status: "upcoming" },
-  { id: "c3", facility: "Reddington", area: "Victoria Island", role: "Weekend Call", when: "Sat 22 · 18:00", status: "upcoming" },
-  { id: "c4", facility: "St. Nicholas", area: "Lagos Island", role: "24-Hour", when: "Tue 18 · 9h", status: "completed" },
-  { id: "c5", facility: "First Cardiology", area: "Ikoyi", role: "Standard", when: "Mon 17 · 6h", status: "completed" },
-];
+// Placeholder records removed — populated only through live simulation.
+const DOCTOR_ITEMS: DoctorItem[] = [];
 
 // ----- Requester-side dispatch entries -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
