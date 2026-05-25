@@ -652,7 +652,7 @@ function CoverCard({
                 color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
               }}
             >
-              Cancel Coverage
+              Cancel Shift
             </button>
           )}
           <a
