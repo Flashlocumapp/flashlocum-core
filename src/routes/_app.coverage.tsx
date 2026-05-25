@@ -388,21 +388,25 @@ function RequestCard({
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
 
+  const baseMeta = `${item.coverage} · ${shortWeekdays(item.day)} · ${item.start} · ${item.durationHrs}hr · ${fmtNairaK(item.amount)}`;
   const meta = isHistory
-    ? `${item.coverage} · ${shortWeekdays(item.completedOn ?? "")} · ${fmtNairaK(item.amount)}`
-    : isActive
-      ? `${item.coverage} · Active · ${fmtNairaK(item.amount)}`
-      : fmtShiftMeta(item.coverage, item.schedule, item.amount);
+    ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
+    : baseMeta;
 
-  const Wrapper: React.ElementType = isHistory ? "button" : "div";
-  const wrapperProps = isHistory
-    ? { onClick: onOpenHistory, type: "button" as const }
-    : {};
+  const onCardClick = isHistory ? onOpenHistory : onOpenDetail;
+  const wrapperProps = {
+    onClick: onCardClick,
+    role: "button" as const,
+    tabIndex: 0,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") onCardClick?.();
+    },
+  };
 
   return (
-    <Wrapper
+    <div
       {...wrapperProps}
-      className={`block w-full rounded-2xl px-3.5 py-3 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
+      className="block w-full rounded-2xl px-3.5 py-3 text-left transition-colors active:bg-secondary/40"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
@@ -434,11 +438,16 @@ function RequestCard({
           >
             {meta}
           </div>
+          {isActive && item.startedAt && (
+            <div className="mt-0.5">
+              <LiveTimer from={item.startedAt} />
+            </div>
+          )}
         </div>
 
         {isUpcoming && (
           <button
-            onClick={onStart}
+            onClick={(e) => { e.stopPropagation(); onStart(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
             style={{
               background: "var(--color-foreground)",
@@ -450,7 +459,7 @@ function RequestCard({
         )}
         {isActive && (
           <button
-            onClick={onEnd}
+            onClick={(e) => { e.stopPropagation(); onEnd(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
             style={{
               background: "var(--color-foreground)",
@@ -464,10 +473,11 @@ function RequestCard({
 
       {isUpcoming && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
-          <SecondaryAction onClick={onEdit} label="Edit" />
-          <SecondaryAction onClick={onCancel} label="Cancel" />
+          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
+          <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
           <a
             href={`tel:${item.phone}`}
+            onClick={(e) => e.stopPropagation()}
             className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
@@ -487,11 +497,34 @@ function RequestCard({
           </a>
         </div>
       )}
-    </Wrapper>
+    </div>
   );
 }
 
-function SecondaryAction({ onClick, label }: { onClick: () => void; label: string }) {
+function LiveTimer({ from }: { from: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
+      style={{
+        background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
+        color: "var(--color-presence)",
+      }}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: "var(--color-presence)" }}
+      />
+      {fmtElapsed(from, now)}
+    </span>
+  );
+}
+
+function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) => void; label: string }) {
   return (
     <button
       onClick={onClick}
@@ -505,6 +538,7 @@ function SecondaryAction({ onClick, label }: { onClick: () => void; label: strin
     </button>
   );
 }
+
 
 
 
