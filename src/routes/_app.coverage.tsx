@@ -134,8 +134,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       .map(toRequestItem);
   }, [net, sid]);
 
-  // Cross-flow notifications: react to doctor-side transitions.
-  const prevRef = useRef<Record<string, NetRequest["status"]>>({});
+  // Cross-flow notifications: react to doctor-side transitions only.
+
   useEffect(() => {
     const off = subscribeNetwork((s: NetState) => {
       const ev = s.lastEvent;
