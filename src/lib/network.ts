@@ -53,9 +53,29 @@ export type NetRequest = {
   updatedAt: number;
 };
 
+export type Actor = "requester" | "doctor" | "system";
+export type NetActionType =
+  | "publish"
+  | "accept"
+  | "decline"
+  | "start"
+  | "complete"
+  | "cancel"
+  | "update"
+  | "presence";
+
+export type NetEvent = {
+  actor: Actor;
+  actorId: string;
+  shiftId?: string;
+  action: NetActionType;
+  at: number;
+};
+
 export type NetState = {
   doctors: Record<string, DoctorPresence>;
   requests: Record<string, NetRequest>;
+  lastEvent?: NetEvent;
 };
 
 const emptyState = (): NetState => ({ doctors: {}, requests: {} });
