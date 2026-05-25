@@ -232,6 +232,7 @@ function randomPos(seed: string): { top: number; left: number } {
 }
 
 export function registerDoctor(initialOnline: boolean) {
+  refreshState();
   const sid = getSessionId();
   const current = state.doctors[sid];
   const pos = current ?? randomPos(sid);
@@ -254,6 +255,7 @@ export function registerDoctor(initialOnline: boolean) {
 }
 
 export function unregisterDoctor() {
+  refreshState();
   const sid = getSessionId();
   if (!state.doctors[sid]) return;
   const { [sid]: _gone, ...rest } = state.doctors;
@@ -261,6 +263,7 @@ export function unregisterDoctor() {
 }
 
 export function heartbeat() {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
@@ -271,6 +274,7 @@ export function heartbeat() {
 }
 
 export function setDoctorOnline(online: boolean) {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) {
@@ -287,6 +291,7 @@ export function setDoctorOnline(online: boolean) {
 }
 
 export function setDoctorAcceptedCount(n: number) {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
@@ -300,6 +305,7 @@ export function setDoctorAcceptedCount(n: number) {
 }
 
 export function markDeclined(requestId: string) {
+  refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
@@ -331,6 +337,7 @@ export function startHeartbeat() {
 /* ---------------- requests ---------------- */
 
 export function publishRequest(req: Omit<NetRequest, "id" | "requesterSessionId" | "status" | "createdAt" | "updatedAt">): NetRequest {
+  refreshState();
   const sid = getSessionId();
   const now = Date.now();
   const id = "r_" + now.toString(36) + Math.random().toString(36).slice(2, 6);
@@ -354,6 +361,7 @@ function applyPatch(
   patch: Partial<NetRequest>,
   event: Omit<NetEvent, "at" | "shiftId">,
 ) {
+  refreshState();
   const cur = state.requests[id];
   if (!cur) return;
   save(
