@@ -154,7 +154,7 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
     /* noop */
   }
   listeners.forEach((l) => l(state));
-  channel?.postMessage({ type: "sync" });
+  channel?.postMessage({ type: "state", state: stamped });
 }
 
 function pruneStale(s: NetState): NetState {
@@ -177,8 +177,9 @@ function init() {
   state = pruneStale(load());
   try {
     channel = new BroadcastChannel(CHANNEL);
-    channel.onmessage = () => {
-      state = pruneStale(load());
+    channel.onmessage = (message) => {
+      const incoming = message.data?.state as NetState | undefined;
+      state = pruneStale(incoming?.schemaVersion === SCHEMA_VERSION ? incoming : load());
       listeners.forEach((l) => l(state));
     };
   } catch {
