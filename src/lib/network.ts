@@ -319,19 +319,38 @@ export function publishRequest(req: Omit<NetRequest, "id" | "requesterSessionId"
     createdAt: now,
     updatedAt: now,
   };
-  save({ ...state, requests: { ...state.requests, [id]: full } });
+  save(
+    { ...state, requests: { ...state.requests, [id]: full } },
+    { actor: "requester", actorId: sid, shiftId: id, action: "publish" },
+  );
   return full;
 }
 
-export function updateRequest(id: string, patch: Partial<NetRequest>) {
+function applyPatch(
+  id: string,
+  patch: Partial<NetRequest>,
+  event: Omit<NetEvent, "at" | "shiftId">,
+) {
   const cur = state.requests[id];
   if (!cur) return;
-  save({
-    ...state,
-    requests: {
-      ...state.requests,
-      [id]: { ...cur, ...patch, updatedAt: Date.now() },
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: { ...cur, ...patch, updatedAt: Date.now() },
+      },
     },
+    { ...event, shiftId: id },
+  );
+}
+
+/** Generic patch — actor inferred from current session role. */
+export function updateRequest(id: string, patch: Partial<NetRequest>) {
+  applyPatch(id, patch, {
+    actor: actorOf(),
+    actorId: getSessionId(),
+    action: "update",
   });
 }
 
@@ -339,20 +358,36 @@ export function acceptRequest(id: string): boolean {
   const cur = state.requests[id];
   if (!cur || cur.status !== "broadcasting") return false;
   const sid = getSessionId();
-  updateRequest(id, { status: "accepted", acceptedBy: sid });
+  applyPatch(
+    id,
+    { status: "accepted", acceptedBy: sid },
+    { actor: "doctor", actorId: sid, action: "accept" },
+  );
   return true;
 }
 
 export function cancelRequest(id: string) {
-  updateRequest(id, { status: "cancelled" });
+  applyPatch(
+    id,
+    { status: "cancelled" },
+    { actor: actorOf(), actorId: getSessionId(), action: "cancel" },
+  );
 }
 
 export function startRequest(id: string) {
-  updateRequest(id, { status: "active" });
+  applyPatch(
+    id,
+    { status: "active" },
+    { actor: "requester", actorId: getSessionId(), action: "start" },
+  );
 }
 
 export function completeRequest(id: string) {
-  updateRequest(id, { status: "completed" });
+  applyPatch(
+    id,
+    { status: "completed" },
+    { actor: "requester", actorId: getSessionId(), action: "complete" },
+  );
 }
 
 /* ---------------- selectors ---------------- */
