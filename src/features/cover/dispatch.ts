@@ -33,9 +33,8 @@ export type Coverage = {
   active?: boolean;
 };
 
-const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
-export const nairaK = (n: number) =>
-  n >= 1000 ? "₦" + Math.round(n / 1000) + "K" : naira(n);
+// Full monetary formatting everywhere (₦36,500). No K abbreviation.
+export const nairaK = (n: number) => "₦" + n.toLocaleString("en-NG");
 
 export function feeOf(c: Pick<Coverage, "amount" | "feePct">) {
   return Math.round((c.amount * c.feePct) / 100);
