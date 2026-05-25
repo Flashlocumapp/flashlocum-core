@@ -1,4 +1,4 @@
-// Doctor-side dispatch store, now backed by the shared FlashLocum network.
+// Doctor-side dispatch store, backed by the shared FlashLocum network.
 // Public API kept stable for CoverHome, CoverDispatchPortal, and coverage tab.
 
 import { useEffect, useState } from "react";
@@ -14,8 +14,11 @@ import {
   setDoctorOnline,
   startHeartbeat,
   type NetRequest,
+  type NetState,
+  subscribeNetwork,
   useNetwork,
 } from "@/lib/network";
+import { pushToast } from "@/lib/notifications";
 
 export type Coverage = {
   id: string;
@@ -61,7 +64,7 @@ function toCoverage(r: NetRequest): Coverage {
   };
 }
 
-/* ---------- History (local, calm seed) ---------- */
+/* ---------- History ---------- */
 
 export type HistoryItem = Coverage & {
   outcome: "completed" | "cancelled";
@@ -70,14 +73,21 @@ export type HistoryItem = Coverage & {
   settlementStatus: "Remitted" | "Pending" | "Voided";
 };
 
-// History is empty by default — populated only through live simulation.
-const seedHistory: HistoryItem[] = [];
-
-let history: HistoryItem[] = seedHistory;
+let history: HistoryItem[] = [];
 let acceptedSheet: Coverage | null = null;
+// Hospital pending rating after End Shift (entityId derived from hospital name).
+let pendingRating: { hospitalId: string; hospital: string } | null = null;
+
 const localListeners = new Set<() => void>();
 function bump() {
   localListeners.forEach((l) => l());
+}
+
+export function hospitalEntityId(hospital: string): string {
+  return "hosp:" + hospital.toLowerCase().replace(/\s+/g, "_");
+}
+export function doctorEntityId(sessionId: string): string {
+  return "doc:" + sessionId;
 }
 
 /* ---------- Hook ---------- */
@@ -88,6 +98,7 @@ type View = {
   incoming: Coverage | null;
   accepted: Coverage | null;
   history: HistoryItem[];
+  pendingRating: { hospitalId: string; hospital: string } | null;
 };
 
 export function useDispatch(): View {
@@ -105,7 +116,6 @@ export function useDispatch(): View {
   const me = net.doctors[sid];
   const online = !!me?.online;
 
-  // Upcoming = requests accepted by me, not yet completed/cancelled.
   const upcoming: Coverage[] = Object.values(net.requests)
     .filter(
       (r) =>
@@ -115,8 +125,6 @@ export function useDispatch(): View {
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
 
-  // Incoming = first broadcasting request I haven't declined,
-  // if I'm online and have < 3 upcoming and no accepted sheet open.
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3 && !acceptedSheet) {
     const declined = new Set(me?.declined ?? []);
@@ -124,25 +132,101 @@ export function useDispatch(): View {
     if (r) incoming = toCoverage(r);
   }
 
-  // Reflect my accepted count back to presence map.
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
       setDoctorAcceptedCount(upcoming.length);
     }
   }, [me, upcoming.length]);
 
-  return { online, upcoming, incoming, accepted: acceptedSheet, history };
+  return {
+    online,
+    upcoming,
+    incoming,
+    accepted: acceptedSheet,
+    history,
+    pendingRating,
+  };
 }
 
 /* ---------- Lifecycle ---------- */
 
 let bootstrapped = false;
+let prevStatus: Record<string, NetRequest["status"]> = {};
+
 export function ensureDoctorSession(initialOnline = true) {
   if (bootstrapped) return;
   if (typeof window === "undefined") return;
   bootstrapped = true;
   registerDoctor(initialOnline);
   startHeartbeat();
+
+  // Watch network → emit toasts when my accepted requests change phase.
+  subscribeNetwork((s: NetState) => {
+    const sid = getSessionId();
+    for (const r of Object.values(s.requests)) {
+      if (r.acceptedBy !== sid) continue;
+      const prev = prevStatus[r.id];
+      if (prev === r.status) continue;
+      prevStatus[r.id] = r.status;
+      if (!prev) continue; // first sighting; skip
+
+      if (r.status === "active" && prev === "accepted") {
+        pushToast({
+          tone: "presence",
+          title: `Your shift with ${r.hospital} has started.`,
+          body: "Tap the active card for shift details.",
+        });
+      } else if (r.status === "completed") {
+        pushToast({
+          tone: "presence",
+          title: `Your shift with ${r.hospital} has ended.`,
+          body: "Payment will be remitted to your account by 10PM today.",
+          ttl: 5200,
+        });
+        history = [
+          {
+            ...toCoverage(r),
+            outcome: "completed",
+            completedOn: new Date().toLocaleDateString("en-NG", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+            }),
+            settlementStatus: "Pending",
+          },
+          ...history.filter((h) => h.id !== r.id),
+        ];
+        pendingRating = {
+          hospitalId: hospitalEntityId(r.hospital),
+          hospital: r.hospital,
+        };
+        if (acceptedSheet?.id === r.id) acceptedSheet = null;
+        bump();
+      } else if (r.status === "cancelled" && prev !== "cancelled") {
+        // Requester cancelled — calm operational notice.
+        pushToast({
+          tone: "warn",
+          title: `${r.hospital} cancelled this shift.`,
+        });
+        history = [
+          {
+            ...toCoverage(r),
+            outcome: "cancelled",
+            completedOn: new Date().toLocaleDateString("en-NG", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+            }),
+            settlementStatus: "Voided",
+            note: "Cancelled by requester",
+          },
+          ...history.filter((h) => h.id !== r.id),
+        ];
+        if (acceptedSheet?.id === r.id) acceptedSheet = null;
+        bump();
+      }
+    }
+  });
 }
 
 /* ---------- Actions ---------- */
@@ -151,22 +235,47 @@ export function setOnline(v: boolean) {
   setDoctorOnline(v);
 }
 
-export function acceptIncoming() {
-  // Find current incoming via network snapshot.
+function currentUpcomingForMe(): NetRequest[] {
+  const s = readState();
   const sid = getSessionId();
-  // Read latest from network module via window.
-  // We re-evaluate inside acceptRequest atomically (status check).
-  // Get any broadcasting request not declined by me.
-  // We must rely on the hook view callers — use a stored ref.
+  return Object.values(s.requests ?? {}).filter(
+    (r) =>
+      r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
+  );
+}
+
+export function acceptIncoming() {
+  const sid = getSessionId();
   const idToAccept = pendingIncomingId();
   if (!idToAccept) return;
+
+  // Conflict / limit guards — soft, calm.
+  const mine = currentUpcomingForMe();
+  if (mine.length >= 3) {
+    pushToast({
+      tone: "warn",
+      title: "You already have 3 upcoming confirmed shifts.",
+    });
+    return;
+  }
+  const incomingReq = currentRequest(idToAccept);
+  if (
+    incomingReq &&
+    mine.some((m) => m.day === incomingReq.day && m.start === incomingReq.start)
+  ) {
+    pushToast({
+      tone: "warn",
+      title: "This request conflicts with an existing confirmed shift.",
+    });
+    return;
+  }
+
   const ok = acceptRequest(idToAccept);
   if (!ok) return;
-  // Open accepted sheet for the doctor.
-  // Pull the now-accepted request from network.
   const req = currentRequest(idToAccept);
   if (req && req.acceptedBy === sid) {
     acceptedSheet = toCoverage(req);
+    prevStatus[req.id] = req.status;
     bump();
   }
 }
@@ -179,6 +288,11 @@ export function declineIncoming() {
 
 export function dismissAccepted() {
   acceptedSheet = null;
+  bump();
+}
+
+export function dismissPendingRating() {
+  pendingRating = null;
   bump();
 }
 
@@ -198,7 +312,7 @@ export function cancelUpcoming(id: string, reason?: string) {
       settlementStatus: "Voided",
       note: reason ? `Cancelled · ${reason}` : r.note,
     },
-    ...history,
+    ...history.filter((h) => h.id !== r.id),
   ];
   if (acceptedSheet?.id === id) acceptedSheet = null;
   bump();
@@ -208,6 +322,7 @@ export function completeUpcoming(id: string) {
   const r = currentRequest(id);
   if (!r) return;
   completeRequest(id);
+  // history will also be added by the network watcher; safe (filter dedupes)
   history = [
     {
       ...toCoverage(r),
@@ -217,11 +332,16 @@ export function completeUpcoming(id: string) {
         day: "2-digit",
         month: "short",
       }),
-      settlementStatus: "Remitted",
+      settlementStatus: "Pending",
     },
-    ...history,
+    ...history.filter((h) => h.id !== r.id),
   ];
   if (acceptedSheet?.id === id) acceptedSheet = null;
+  bump();
+}
+
+export function recordHistoryRating(historyId: string, value: number) {
+  history = history.map((h) => (h.id === historyId ? { ...h, rating: value } : h));
   bump();
 }
 
