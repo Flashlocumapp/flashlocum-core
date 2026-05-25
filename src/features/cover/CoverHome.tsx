@@ -116,7 +116,7 @@ function CoverageTile({
   if (!coverage) {
     return (
       <div
-        className="flex-1 rounded-2xl px-4 py-3.5"
+        className="rounded-2xl px-4 py-3.5"
         style={{
           background: "var(--color-surface-elevated)",
           boxShadow: "0 6px 20px -10px rgba(0,0,0,0.14)",
@@ -141,7 +141,7 @@ function CoverageTile({
 
   return (
     <div
-      className="flex-1 rounded-2xl px-4 py-3.5"
+      className="rounded-2xl px-4 py-3.5"
       style={{
         background: "var(--color-surface-elevated)",
         boxShadow: "0 6px 20px -10px rgba(0,0,0,0.14)",
