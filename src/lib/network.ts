@@ -116,11 +116,16 @@ function load(): NetState {
   }
 }
 
-function save(next: NetState) {
-  state = next;
+function save(next: NetState, event?: Omit<NetEvent, "at">) {
+  // CORRECT SYNC ORDER:
+  //   1) update global state  → 2) persist  → 3) notify  → 4) broadcast
+  const stamped: NetState = event
+    ? { ...next, lastEvent: { ...event, at: Date.now() } }
+    : next;
+  state = stamped;
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE, JSON.stringify(next));
+    window.localStorage.setItem(STORAGE, JSON.stringify(stamped));
   } catch {
     /* noop */
   }
