@@ -1,5 +1,5 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "@tanstack/react-router";
@@ -7,7 +7,7 @@ import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
-import { getRole } from "@/lib/role";
+import { getRole, hasRole } from "@/lib/role";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -16,9 +16,19 @@ export const Route = createFileRoute("/_app")({
 function AppShell() {
   const { pathname } = useLocation();
   const immersive = useImmersive();
+  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
   useEffect(() => {
+    // Per-tab session guard: each browser tab is an independent identity.
+    // If this tab has no authenticated role, send it to the role picker.
+    if (!hasRole()) {
+      navigate({ to: "/role" });
+      return;
+    }
     if (getRole() === "cover") ensureDoctorSession(true);
-  }, []);
+    setReady(true);
+  }, [navigate]);
+  if (!ready) return <div className="h-full w-full bg-background" />;
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-background"
