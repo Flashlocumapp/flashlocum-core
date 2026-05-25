@@ -273,7 +273,7 @@ export function acceptIncoming() {
   const req = currentRequest(idToAccept);
   if (req && req.acceptedBy === sid) {
     acceptedSheet = toCoverage(req);
-    prevStatus[req.id] = req.status;
+    
     bump();
   }
 }
