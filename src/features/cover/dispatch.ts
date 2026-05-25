@@ -219,6 +219,12 @@ export function ensureDoctorSession(initialOnline = true) {
       });
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
+    } else if (ev.action === "update") {
+      pushToast({
+        tone: "presence",
+        title: `${r.hospital} updated this shift.`,
+        body: `${r.coverage} · ${r.day} · ${r.start}–${r.end} · ${r.durationHrs}hr`,
+      });
     }
   });
 }
