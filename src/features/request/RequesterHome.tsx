@@ -254,111 +254,128 @@ function DispatchSheet({
   setDays: (n: number) => void;
   onAdvance: () => void;
 }) {
-  const heights: Record<"collapsed" | "search" | "configure", string> = {
-    collapsed: "132px",
-    search: "72vh",
-    configure: "86vh",
-  };
-  const key = (stage === "collapsed" || stage === "search" || stage === "configure")
-    ? stage
-    : "configure";
-  const height = heights[key];
+  const isCollapsed = stage === "collapsed";
+  const isSearch = stage === "search";
+  const isConfigure = stage === "configure";
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     if (info.velocity.y < -300 || info.offset.y < -60) {
-      if (stage === "collapsed") setStage("search");
+      if (isCollapsed) setStage("search");
     } else if (info.velocity.y > 300 || info.offset.y > 60) {
-      if (stage === "search") setStage("collapsed");
-      else if (stage === "configure") setStage("search");
+      if (isSearch) setStage("collapsed");
+      else if (isConfigure) setStage("search");
     }
   };
 
-  return (
-    <motion.section
-      initial={false}
-      animate={{ height }}
-      transition={{ type: "spring", stiffness: 260, damping: 32, mass: 0.9 }}
-      drag="y"
-      dragConstraints={{ top: 0, bottom: 0 }}
-      dragElastic={0.04}
-      dragMomentum={false}
-      onDragEnd={handleDragEnd}
-      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.18)]"
-      style={{ background: "var(--color-surface-elevated)" }}
-    >
-      <button
-        aria-label="Toggle"
-        onClick={() => setStage(stage === "collapsed" ? "search" : "collapsed")}
-        className="flex w-full shrink-0 justify-center pt-3 pb-2"
-      >
-        <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
-      </button>
+  // Adaptive: collapsed = fixed compact; search = content-fit; configure = tall.
+  const sheetClass = isConfigure
+    ? "h-[86vh]"
+    : isCollapsed
+      ? "h-[132px]"
+      : "max-h-[72vh]";
 
-      <div className="flex flex-1 flex-col overflow-hidden px-5 pb-5 pt-1">
-        {/* Search field */}
+  return (
+    <>
+      {/* Backdrop — click-outside dismisses expanded search */}
+      <AnimatePresence>
+        {isSearch && (
+          <motion.div
+            key="search-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="absolute inset-0 z-10 bg-foreground/10"
+            onClick={() => setStage("collapsed")}
+            aria-hidden
+          />
+        )}
+      </AnimatePresence>
+
+      <motion.section
+        initial={false}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.04}
+        dragMomentum={false}
+        onDragEnd={handleDragEnd}
+        className={`absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.18)] ${sheetClass}`}
+        style={{ background: "var(--color-surface-elevated)" }}
+      >
         <button
-          onClick={() => stage === "collapsed" && setStage("search")}
-          className="flex h-14 shrink-0 items-center gap-3 rounded-2xl bg-secondary px-4 text-left"
+          aria-label="Toggle"
+          onClick={() => setStage(isCollapsed ? "search" : "collapsed")}
+          className="flex w-full shrink-0 justify-center pt-3 pb-2"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-          {stage === "collapsed" ? (
-            <span className="text-[15px] leading-none text-foreground/85">
-              Where is coverage needed?
-            </span>
-          ) : (
-            <input
-              autoFocus={stage === "search"}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => stage === "configure" && setStage("search")}
-              placeholder="Where is coverage needed?"
-              className="h-full flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
-            />
-          )}
+          <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" />
         </button>
 
-        {/* Body */}
-        <div className="mt-4 flex-1 overflow-y-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {stage === "search" && recents.length > 0 && (
-            <ul className="space-y-0.5">
-              {recents.map((r) => (
-                <li key={r.name}>
-                  <button
-                    onClick={() => onPickRecent(r)}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left active:bg-accent"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-                        <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
-                        <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
-                      </svg>
-                    </span>
-                    <span className="flex-1">
-                      <div className="text-[15px] font-medium">{r.name}</div>
-                      <div className="text-[12.5px] text-muted-foreground">{r.area}</div>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="flex flex-1 flex-col overflow-hidden px-5 pb-5 pt-1">
+          {/* Search field */}
+          <button
+            onClick={() => isCollapsed && setStage("search")}
+            className="flex h-14 shrink-0 items-center gap-3 rounded-2xl bg-secondary px-4 text-left"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            {isCollapsed ? (
+              <span className="text-[15px] leading-none text-foreground/85">
+                Where is coverage needed?
+              </span>
+            ) : (
+              <input
+                autoFocus={isSearch}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => isConfigure && setStage("search")}
+                placeholder="Where is coverage needed?"
+                className="h-full flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+              />
+            )}
+          </button>
 
-          {stage === "configure" && location && (
-            <ConfigureBody
-              location={location}
-              coverage={coverage}
-              setCoverage={setCoverage}
-              days={days}
-              setDays={setDays}
-              onAdvance={onAdvance}
-            />
-          )}
+          {/* Body — adaptive; max 3 recents */}
+          <div className="mt-3 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {isSearch && recents.length > 0 && (
+              <ul className="space-y-0.5 pb-1">
+                {recents.slice(0, 3).map((r) => (
+                  <li key={r.name}>
+                    <button
+                      onClick={() => onPickRecent(r)}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+                          <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
+                          <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">
+                        <div className="text-[15px] font-medium">{r.name}</div>
+                        <div className="text-[12.5px] text-muted-foreground">{r.area}</div>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {isConfigure && location && (
+              <ConfigureBody
+                location={location}
+                coverage={coverage}
+                setCoverage={setCoverage}
+                days={days}
+                setDays={setDays}
+                onAdvance={onAdvance}
+              />
+            )}
+          </div>
         </div>
-      </div>
-    </motion.section>
+      </motion.section>
+    </>
   );
 }
 

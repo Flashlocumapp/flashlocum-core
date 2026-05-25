@@ -18,16 +18,19 @@ export function shortWeekdays(s: string): string {
   return out;
 }
 
+// Full monetary formatting globally — no K abbreviation.
 export function fmtNairaK(n: number): string {
-  if (n >= 1000) return "₦" + Math.round(n / 1000) + "K";
   return "₦" + n.toLocaleString("en-NG");
 }
+export const fmtNaira = fmtNairaK;
 
-// Standard · Tue · 8:00 AM · ₦36K
+// Unified operational format:  Type · Day · Time · Duration · Amount
 export function fmtShiftMeta(
   coverage: string,
   schedule: string,
   amount: number,
+  durationHrs?: number,
 ): string {
-  return `${coverage} · ${shortWeekdays(schedule)} · ${fmtNairaK(amount)}`;
+  const dur = durationHrs ? ` · ${durationHrs}hr` : "";
+  return `${coverage} · ${shortWeekdays(schedule)}${dur} · ${fmtNairaK(amount)}`;
 }

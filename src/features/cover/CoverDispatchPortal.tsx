@@ -185,7 +185,7 @@ function AcceptedBody({ item }: { item: Coverage }) {
           onClick={() => cancelUpcoming(item.id)}
           className="h-12 flex-1 rounded-full bg-secondary text-[13.5px] font-medium text-foreground/75 active:opacity-90"
         >
-          Cancel Coverage
+          Cancel Shift
         </button>
         <a
           href={`tel:${item.phone}`}

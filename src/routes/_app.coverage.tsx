@@ -20,23 +20,7 @@ export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
 });
 
-// ----- Doctor-side items (unchanged shape) -----
-type DoctorItem = {
-  id: string;
-  facility: string;
-  area: string;
-  role: string;
-  when: string;
-  status: "active" | "upcoming" | "completed";
-};
-
-const DOCTOR_ITEMS: DoctorItem[] = [
-  { id: "c1", facility: "Evercare Hospital", area: "Lekki Phase 1", role: "General Practice", when: "Live · 02:14 in", status: "active" },
-  { id: "c2", facility: "Lagoon Hospital", area: "Apapa", role: "Paediatrics", when: "Tomorrow · 08:00", status: "upcoming" },
-  { id: "c3", facility: "Reddington", area: "Victoria Island", role: "Weekend Call", when: "Sat 22 · 18:00", status: "upcoming" },
-  { id: "c4", facility: "St. Nicholas", area: "Lagos Island", role: "24-Hour", when: "Tue 18 · 9h", status: "completed" },
-  { id: "c5", facility: "First Cardiology", area: "Ikoyi", role: "Standard", when: "Mon 17 · 6h", status: "completed" },
-];
+// (Doctor placeholder items removed — driven by live simulation only.)
 
 // ----- Requester-side dispatch entries -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
@@ -55,49 +39,8 @@ type RequestItem = {
 
 const DEFAULT_DOCTOR_PHONE = "+2348012345678";
 
-const INITIAL_REQUESTS: RequestItem[] = [
-  {
-    id: "r-active-1",
-    doctor: "Dr. Adaobi Okeke",
-    mdcn: "MDCN-18432",
-    initials: "AO",
-    coverage: "Standard",
-    schedule: "Today · 9:24 AM",
-    amount: 36000,
-    status: "active",
-  },
-  {
-    id: "r-up-1",
-    doctor: "Dr. Emmanuel Adeleke",
-    mdcn: "MDCN-12245",
-    initials: "EA",
-    coverage: "Standard",
-    schedule: "Tuesday · 8:00 AM",
-    amount: 36000,
-    status: "upcoming",
-  },
-  {
-    id: "r-up-2",
-    doctor: "Dr. Tunde Bello",
-    mdcn: "MDCN-20918",
-    initials: "TB",
-    coverage: "Weekend Call",
-    schedule: "Sat · 8:00 AM",
-    amount: 80000,
-    status: "upcoming",
-  },
-  {
-    id: "r-hist-1",
-    doctor: "Dr. Ifeoma Nweze",
-    mdcn: "MDCN-09921",
-    initials: "IN",
-    coverage: "Home Care",
-    schedule: "",
-    completedOn: "Mon 17 Nov",
-    amount: 45000,
-    status: "completed",
-  },
-];
+// Placeholder records removed — populated only through live simulation.
+const INITIAL_REQUESTS: RequestItem[] = [];
 
 const TABS = [
   { id: "active", label: "Active" },
@@ -505,20 +448,17 @@ function Avatar({
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { upcoming, history } = useDispatch();
 
-  // Active = first upcoming flagged active. Chronological order preserved.
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
 
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const detail = history.find((h) => h.id === detailId) ?? null;
 
-  const list =
-    tab === "active"
-      ? (active ? [active] : [])
-      : tab === "upcoming"
-        ? upcomingOnly
-        : history;
+  // Detail can be either a live coverage (active/upcoming) or a history entry.
+  const detail: CoverItem | HistoryItem | null =
+    upcoming.find((c) => c.id === detailId) ??
+    history.find((h) => h.id === detailId) ??
+    null;
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
@@ -527,20 +467,20 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
         style={{ height: "calc(100% - 140px)" }}
       >
-        {list.length === 0 ? (
+        {(tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0 ? (
           <EmptyState tab={tab} role="cover" />
         ) : (
           <ul className="space-y-2.5">
-            {tab === "active" &&
-              (active ? (
-                <li key={active.id}>
-                  <CoverCard
-                    item={active}
-                    variant="active"
-                    onCancel={() => setCancelId(active.id)}
-                  />
-                </li>
-              ) : null)}
+            {tab === "active" && active && (
+              <li key={active.id}>
+                <CoverCard
+                  item={active}
+                  variant="active"
+                  onCancel={() => setCancelId(active.id)}
+                  onOpenDetail={() => setDetailId(active.id)}
+                />
+              </li>
+            )}
             {tab === "upcoming" &&
               upcomingOnly.map((c) => (
                 <li key={c.id}>
@@ -548,6 +488,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
                     item={c}
                     variant="upcoming"
                     onCancel={() => setCancelId(c.id)}
+                    onOpenDetail={() => setDetailId(c.id)}
                   />
                 </li>
               ))}
@@ -568,10 +509,10 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
       <CancelFlow
         open={!!cancelId}
         onDismiss={() => setCancelId(null)}
-        confirmTitle="Cancel this coverage?"
+        confirmTitle="Cancel this shift?"
         confirmBody="Frequent cancellations affect your reliability score. The requester will be notified immediately."
-        primaryLabel="Keep Coverage"
-        secondaryLabel="Cancel Coverage"
+        primaryLabel="Keep Shift"
+        secondaryLabel="Cancel Shift"
         reasonTitle="Reason for cancellation"
         reasons={["Emergency", "Illness", "Transport issue", "Schedule conflict", "Other"]}
         onCancelled={(reason) => {
@@ -581,7 +522,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         }}
       />
 
-      <DoctorHistoryDetail
+      <DoctorCoverageDetail
         item={detail}
         onDismiss={() => setDetailId(null)}
       />
@@ -606,8 +547,9 @@ function CoverCard({
 
   const meta = `${item.coverage} · ${item.day} · ${item.start} · ${item.durationHrs}hr · ${nairaK(item.amount)}`;
 
-  const Wrapper: React.ElementType = isHistory ? "button" : "div";
-  const wrapperProps = isHistory ? { onClick: onOpenDetail, type: "button" as const } : {};
+  // All cards tappable — open detail. Inner buttons stopPropagation.
+  const Wrapper: React.ElementType = "button";
+  const wrapperProps = { onClick: onOpenDetail, type: "button" as const };
 
   const outcomeChip =
     isHistory && (item as HistoryItem).outcome === "cancelled" ? (
@@ -625,7 +567,7 @@ function CoverCard({
   return (
     <Wrapper
       {...wrapperProps}
-      className={`block w-full rounded-2xl px-4 py-3.5 text-left ${isHistory ? "transition-colors active:bg-secondary/40" : ""}`}
+      className="block w-full rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-secondary/30"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 65%, transparent)"
@@ -710,7 +652,7 @@ function CoverCard({
                 color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
               }}
             >
-              Cancel Coverage
+              Cancel Shift
             </button>
           )}
           <a
@@ -739,19 +681,28 @@ function CoverCard({
   );
 }
 
-function DoctorHistoryDetail({
+function DoctorCoverageDetail({
   item,
   onDismiss,
 }: {
-  item: HistoryItem | null;
+  item: CoverItem | HistoryItem | null;
   onDismiss: () => void;
 }) {
+  const isHist = (i: CoverItem | HistoryItem): i is HistoryItem =>
+    "outcome" in i;
+
   return (
     <AnimatePresence>
       {item && (
         <DismissSheet open onDismiss={onDismiss}>
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {item.outcome === "cancelled" ? "Cancelled coverage" : "Completed coverage"}
+            {isHist(item)
+              ? item.outcome === "cancelled"
+                ? "Cancelled shift"
+                : "Completed shift"
+              : item.active
+                ? "Active shift"
+                : "Upcoming shift"}
           </div>
           <div className="mt-2 text-[20px] font-semibold tracking-tight">
             {item.hospital}
@@ -759,14 +710,19 @@ function DoctorHistoryDetail({
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
           <div className="mt-4 text-[13px] leading-relaxed text-foreground/80">
-            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr
+            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr · {nairaK(item.amount)}
           </div>
 
           <div className="mt-4 space-y-2 rounded-2xl bg-secondary/60 px-4 py-3">
             <DetailRow label="Amount" value={nairaK(item.amount)} />
-            <DetailRow label="Settlement" value={item.settlementStatus} />
-            <DetailRow label="Completed" value={item.completedOn} />
-            {item.rating !== undefined && (
+            <DetailRow
+              label="Settlement"
+              value={isHist(item) ? item.settlementStatus : "Pending"}
+            />
+            {isHist(item) && (
+              <DetailRow label="Completed" value={item.completedOn} />
+            )}
+            {isHist(item) && item.rating !== undefined && (
               <DetailRow
                 label="Rating"
                 value={"★".repeat(item.rating) + "☆".repeat(5 - item.rating)}
@@ -775,9 +731,12 @@ function DoctorHistoryDetail({
           </div>
 
           {item.note && (
-            <p className="mt-3 text-[12.5px] text-muted-foreground">
-              Note · {item.note}
-            </p>
+            <div className="mt-3 rounded-2xl bg-secondary/40 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                Notes
+              </div>
+              <div className="mt-1 text-[12.5px] text-foreground/80">{item.note}</div>
+            </div>
           )}
         </DismissSheet>
       )}
