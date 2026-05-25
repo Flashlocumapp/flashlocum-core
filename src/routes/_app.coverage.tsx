@@ -116,7 +116,52 @@ function CoverageScreen() {
 // ============ REQUESTER ============
 
 function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
-  const [items, setItems] = useState<RequestItem[]>(INITIAL_REQUESTS);
+  const net = useNetwork();
+  const sid = getSessionId();
+
+  // Derive my requests from the shared operational network.
+  const items = useMemo<RequestItem[]>(() => {
+    return Object.values(net.requests)
+      .filter(
+        (r) =>
+          r.requesterSessionId === sid &&
+          (r.status === "accepted" ||
+            r.status === "active" ||
+            r.status === "completed" ||
+            r.status === "cancelled"),
+      )
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(toRequestItem);
+  }, [net, sid]);
+
+  // Cross-flow notifications: react to doctor-side transitions.
+  const prevRef = useRef<Record<string, NetRequest["status"]>>({});
+  useEffect(() => {
+    const off = subscribeNetwork((s: NetState) => {
+      const mine = Object.values(s.requests).filter(
+        (r) => r.requesterSessionId === sid,
+      );
+      for (const r of mine) {
+        const prev = prevRef.current[r.id];
+        prevRef.current[r.id] = r.status;
+        if (!prev || prev === r.status) continue;
+        if (prev === "broadcasting" && r.status === "accepted") {
+          pushToast({
+            tone: "presence",
+            title: "Doctor accepted your request.",
+            body: "Open Coverage → Upcoming for details.",
+          });
+        } else if (r.status === "cancelled" && prev !== "cancelled") {
+          pushToast({
+            tone: "warn",
+            title: "Doctor cancelled this shift.",
+          });
+        }
+      }
+    });
+    return off;
+  }, [sid]);
+
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -148,13 +193,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     : null;
 
   const moveToActive = (id: string) => {
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? { ...i, status: "active", schedule: "Today · just now" }
-          : i,
-      ),
-    );
+    netStartRequest(id);
     setTab("active");
   };
 
@@ -162,19 +201,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const confirmEnd = () => {
     if (!settlingId) return;
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === settlingId
-          ? {
-              ...i,
-              status: "completed",
-              completedOn: new Date().toLocaleDateString("en-NG", {
-                weekday: "short", day: "2-digit", month: "short",
-              }),
-            }
-          : i,
-      ),
-    );
+    netCompleteRequest(settlingId);
   };
 
   const openEdit = (id: string) => {
@@ -185,7 +212,14 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   };
 
   const handleEditSave = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
+    const id = editTargetId;
     setEditTargetId(null);
+    if (id) {
+      netUpdateRequest(id, {
+        note: next.note || undefined,
+        durationHrs: next.duration * 10,
+      });
+    }
     const label: Record<keyof EditableShift | "multiple", string> = {
       timing: "Coverage timing updated",
       duration: "Coverage duration updated",
@@ -196,6 +230,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setNotice(`${label[changed]} · Doctor notified`);
     window.setTimeout(() => setNotice(null), 2600);
   };
+
+
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
