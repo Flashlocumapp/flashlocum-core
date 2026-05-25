@@ -376,6 +376,7 @@ function RequestCard({
   onCancel,
   onEdit,
   onOpenHistory,
+  onOpenDetail,
 }: {
   item: RequestItem;
   onStart: () => void;
@@ -383,6 +384,7 @@ function RequestCard({
   onCancel: () => void;
   onEdit: () => void;
   onOpenHistory: () => void;
+  onOpenDetail: () => void;
 }) {
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
