@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
@@ -136,14 +136,18 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   // Cross-flow notifications: react to doctor-side transitions only.
 
+  const processedEventsRef = useRef(new Set<string>());
   useEffect(() => {
     const off = subscribeNetwork((s: NetState) => {
       const ev = s.lastEvent;
       if (!ev || !ev.shiftId) return;
+      const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
+      if (processedEventsRef.current.has(eventKey)) return;
       const r = s.requests[ev.shiftId];
       // Only react to shifts I own AND events caused by the OTHER actor.
       if (!r || r.requesterSessionId !== sid) return;
       if (ev.actor !== "doctor") return;
+      processedEventsRef.current.add(eventKey);
 
       if (ev.action === "accept") {
         pushToast({
