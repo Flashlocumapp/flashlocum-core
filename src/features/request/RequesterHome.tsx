@@ -771,7 +771,6 @@ function DispatchOverlay({
   // Publish into the shared network when entering dispatch.
   useEffect(() => {
     if (stage !== "dispatch") {
-      if (stage === "collapsed") publishedRef.current = false;
       return;
     }
     if (requestId || publishedRef.current) return;
