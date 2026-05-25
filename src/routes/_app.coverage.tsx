@@ -547,8 +547,9 @@ function CoverCard({
 
   const meta = `${item.coverage} · ${item.day} · ${item.start} · ${item.durationHrs}hr · ${nairaK(item.amount)}`;
 
-  const Wrapper: React.ElementType = isHistory ? "button" : "div";
-  const wrapperProps = isHistory ? { onClick: onOpenDetail, type: "button" as const } : {};
+  // All cards tappable — open detail. Inner buttons stopPropagation.
+  const Wrapper: React.ElementType = "button";
+  const wrapperProps = { onClick: onOpenDetail, type: "button" as const };
 
   const outcomeChip =
     isHistory && (item as HistoryItem).outcome === "cancelled" ? (
