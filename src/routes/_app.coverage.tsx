@@ -20,18 +20,7 @@ export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
 });
 
-// ----- Doctor-side items (unchanged shape) -----
-type DoctorItem = {
-  id: string;
-  facility: string;
-  area: string;
-  role: string;
-  when: string;
-  status: "active" | "upcoming" | "completed";
-};
-
-// Placeholder records removed — populated only through live simulation.
-const DOCTOR_ITEMS: DoctorItem[] = [];
+// (Doctor placeholder items removed — driven by live simulation only.)
 
 // ----- Requester-side dispatch entries -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
