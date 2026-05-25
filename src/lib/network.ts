@@ -53,7 +53,7 @@ export type NetRequest = {
   updatedAt: number;
 };
 
-type NetState = {
+export type NetState = {
   doctors: Record<string, DoctorPresence>;
   requests: Record<string, NetRequest>;
 };
