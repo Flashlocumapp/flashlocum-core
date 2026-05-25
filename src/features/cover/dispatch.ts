@@ -206,19 +206,6 @@ export function ensureDoctorSession(initialOnline = true) {
         body: "Payment will be remitted to your account by 10PM today.",
         ttl: 5200,
       });
-      history = [
-        {
-          ...toCoverage(r),
-          outcome: "completed",
-          completedOn: new Date().toLocaleDateString("en-NG", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-          }),
-          settlementStatus: "Pending",
-        },
-        ...history.filter((h) => h.id !== r.id),
-      ];
       pendingRating = {
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
@@ -230,20 +217,6 @@ export function ensureDoctorSession(initialOnline = true) {
         tone: "warn",
         title: `${r.hospital} cancelled this shift.`,
       });
-      history = [
-        {
-          ...toCoverage(r),
-          outcome: "cancelled",
-          completedOn: new Date().toLocaleDateString("en-NG", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-          }),
-          settlementStatus: "Voided",
-          note: "Cancelled by requester",
-        },
-        ...history.filter((h) => h.id !== r.id),
-      ];
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     }
@@ -329,20 +302,6 @@ export function completeUpcoming(id: string) {
   const r = currentRequest(id);
   if (!r) return;
   completeRequest(id);
-  // history will also be added by the network watcher; safe (filter dedupes)
-  history = [
-    {
-      ...toCoverage(r),
-      outcome: "completed",
-      completedOn: new Date().toLocaleDateString("en-NG", {
-        weekday: "short",
-        day: "2-digit",
-        month: "short",
-      }),
-      settlementStatus: "Pending",
-    },
-    ...history.filter((h) => h.id !== r.id),
-  ];
   if (acceptedSheet?.id === id) acceptedSheet = null;
   bump();
 }
