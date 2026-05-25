@@ -896,11 +896,12 @@ function CoverCard({
         </div>
       )}
 
-      {isActive && (
-        <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
-          Ensure requester ends the shift before leaving the building.
-        </p>
+      {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
+        <div className="mt-2">
+          <LiveTimer from={(item as CoverItem & { startedAt: number }).startedAt} />
+        </div>
       )}
+
 
       {(isActive || isUpcoming) && (
         <div className="mt-3 flex items-center gap-2">
