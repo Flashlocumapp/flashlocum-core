@@ -61,6 +61,7 @@ export type NetRequest = {
   acceptedBy?: string;
   createdAt: number;
   updatedAt: number;
+  startedAt?: number;
 };
 
 export type Actor = "requester" | "doctor" | "system";
