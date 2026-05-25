@@ -10,15 +10,11 @@ import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet"
 import { DismissSheet } from "@/components/DismissSheet";
 import {
   cancelUpcoming,
-  hospitalEntityId,
   nairaK,
-  recordHistoryRating,
   useDispatch,
   type Coverage as CoverItem,
   type HistoryItem,
 } from "@/features/cover/dispatch";
-import { startRequest as netStart, completeRequest as netComplete } from "@/lib/network";
-import { recordRating } from "@/lib/ratings";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
