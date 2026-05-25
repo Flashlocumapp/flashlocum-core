@@ -7,6 +7,7 @@ import {
   broadcastingRequests,
   cancelRequest,
   completeRequest,
+  getNetworkSnapshot,
   getSessionId,
   markDeclined,
   registerDoctor,
@@ -77,6 +78,7 @@ let history: HistoryItem[] = [];
 let acceptedSheet: Coverage | null = null;
 // Hospital pending rating after End Shift (entityId derived from hospital name).
 let pendingRating: { hospitalId: string; hospital: string } | null = null;
+const processedEvents = new Set<string>();
 
 const localListeners = new Set<() => void>();
 function bump() {
@@ -125,6 +127,24 @@ export function useDispatch(): View {
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
 
+  const derivedHistory: HistoryItem[] = Object.values(net.requests)
+    .filter(
+      (r) =>
+        r.acceptedBy === sid &&
+        (r.status === "completed" || r.status === "cancelled"),
+    )
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((r) => ({
+      ...toCoverage(r),
+      outcome: r.status === "completed" ? "completed" : "cancelled",
+      completedOn: new Date(r.updatedAt).toLocaleDateString("en-NG", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      }),
+      settlementStatus: r.status === "completed" ? "Pending" : "Voided",
+    }));
+
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3 && !acceptedSheet) {
     const declined = new Set(me?.declined ?? []);
@@ -143,7 +163,7 @@ export function useDispatch(): View {
     upcoming,
     incoming,
     accepted: acceptedSheet,
-    history,
+    history: derivedHistory,
     pendingRating,
   };
 }
