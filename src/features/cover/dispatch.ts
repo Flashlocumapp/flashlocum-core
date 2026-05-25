@@ -186,9 +186,12 @@ export function ensureDoctorSession(initialOnline = true) {
     const sid = getSessionId();
     const ev = s.lastEvent;
     if (!ev || !ev.shiftId) return;
+    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
+    if (processedEvents.has(eventKey)) return;
     const r = s.requests[ev.shiftId];
     if (!r || r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
+    processedEvents.add(eventKey);
 
     if (ev.action === "start") {
       pushToast({
@@ -318,20 +321,6 @@ export function cancelUpcoming(id: string, reason?: string) {
   const r = currentRequest(id);
   if (!r) return;
   cancelRequest(id);
-  history = [
-    {
-      ...toCoverage(r),
-      outcome: "cancelled",
-      completedOn: new Date().toLocaleDateString("en-NG", {
-        weekday: "short",
-        day: "2-digit",
-        month: "short",
-      }),
-      settlementStatus: "Voided",
-      note: reason ? `Cancelled · ${reason}` : r.note,
-    },
-    ...history.filter((h) => h.id !== r.id),
-  ];
   if (acceptedSheet?.id === id) acceptedSheet = null;
   bump();
 }
@@ -371,13 +360,7 @@ type RawState = {
 };
 
 function readState(): RawState {
-  try {
-    const raw = window.localStorage.getItem("flashlocum.net.v1");
-    if (!raw) return { doctors: {}, requests: {} };
-    return JSON.parse(raw) as RawState;
-  } catch {
-    return { doctors: {}, requests: {} };
-  }
+  return getNetworkSnapshot();
 }
 
 function pendingIncomingId(): string | null {
