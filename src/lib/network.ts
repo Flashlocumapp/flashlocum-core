@@ -386,6 +386,7 @@ export function updateRequest(id: string, patch: Partial<NetRequest>) {
 }
 
 export function acceptRequest(id: string): boolean {
+  refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "broadcasting") return false;
   const sid = getSessionId();
@@ -428,7 +429,12 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
+  const now = Date.now();
   return Object.values(s.requests)
-    .filter((r) => r.status === "broadcasting")
+    .filter((r) => r.status === "broadcasting" && now - r.createdAt <= BROADCAST_TTL_MS)
     .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export function getNetworkSnapshot(): NetState {
+  return refreshState();
 }
