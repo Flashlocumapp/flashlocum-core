@@ -8,6 +8,12 @@
 // This is frontend-only simulation. No backend yet.
 
 import { useEffect, useState } from "react";
+import { getRole } from "./role";
+
+function actorOf(): Actor {
+  if (typeof window === "undefined") return "system";
+  return getRole() === "cover" ? "doctor" : "requester";
+}
 
 const CHANNEL = "flashlocum.net.v1";
 const STORAGE = "flashlocum.net.v1";
