@@ -15,11 +15,14 @@ function actorOf(): Actor {
   return getRole() === "cover" ? "doctor" : "requester";
 }
 
-const CHANNEL = "flashlocum.net.v1";
-const STORAGE = "flashlocum.net.v1";
+const SCHEMA_VERSION = 2;
+const CHANNEL = "flashlocum.net.v2";
+const STORAGE = "flashlocum.net.v2";
+const LEGACY_STORAGE = "flashlocum.net.v1";
 const SESSION_KEY = "flashlocum.session";
 const HEARTBEAT_MS = 4000;
 const STALE_MS = 12000;
+const BROADCAST_TTL_MS = 30 * 60 * 1000;
 
 export type DoctorPresence = {
   sessionId: string;
@@ -79,12 +82,13 @@ export type NetEvent = {
 };
 
 export type NetState = {
+  schemaVersion?: number;
   doctors: Record<string, DoctorPresence>;
   requests: Record<string, NetRequest>;
   lastEvent?: NetEvent;
 };
 
-const emptyState = (): NetState => ({ doctors: {}, requests: {} });
+const emptyState = (): NetState => ({ schemaVersion: SCHEMA_VERSION, doctors: {}, requests: {} });
 
 /* ---------------- session id ---------------- */
 
@@ -114,20 +118,34 @@ const listeners = new Set<(s: NetState) => void>();
 function load(): NetState {
   if (typeof window === "undefined") return emptyState();
   try {
+    window.localStorage.removeItem(LEGACY_STORAGE);
     const raw = window.localStorage.getItem(STORAGE);
     if (!raw) return emptyState();
-    return JSON.parse(raw) as NetState;
+    const parsed = JSON.parse(raw) as NetState;
+    if (parsed.schemaVersion !== SCHEMA_VERSION) return emptyState();
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      doctors: parsed.doctors ?? {},
+      requests: parsed.requests ?? {},
+      lastEvent: parsed.lastEvent,
+    };
   } catch {
     return emptyState();
   }
 }
 
+function refreshState(): NetState {
+  state = pruneStale(load());
+  return state;
+}
+
 function save(next: NetState, event?: Omit<NetEvent, "at">) {
   // CORRECT SYNC ORDER:
   //   1) update global state  → 2) persist  → 3) notify  → 4) broadcast
+  const { lastEvent: _previousEvent, ...withoutEvent } = next;
   const stamped: NetState = event
-    ? { ...next, lastEvent: { ...event, at: Date.now() } }
-    : next;
+    ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: Date.now() } }
+    : { ...withoutEvent, schemaVersion: SCHEMA_VERSION };
   state = stamped;
   if (typeof window === "undefined") return;
   try {
@@ -145,7 +163,12 @@ function pruneStale(s: NetState): NetState {
   for (const [k, d] of Object.entries(s.doctors)) {
     if (now - d.lastSeen < STALE_MS) doctors[k] = d;
   }
-  return { ...s, doctors };
+  const requests: Record<string, NetRequest> = {};
+  for (const [k, r] of Object.entries(s.requests)) {
+    if (r.status === "broadcasting" && now - r.createdAt > BROADCAST_TTL_MS) continue;
+    requests[k] = r;
+  }
+  return { ...s, schemaVersion: SCHEMA_VERSION, doctors, requests };
 }
 
 function init() {
