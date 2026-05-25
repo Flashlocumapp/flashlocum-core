@@ -279,6 +279,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                     onCancel={() => setCancelTargetId(item.id)}
                     onEdit={() => openEdit(item.id)}
                     onOpenHistory={() => setHistoryId(item.id)}
+                    onOpenDetail={() => setDetailId(item.id)}
                   />
                 </motion.li>
               ))}
