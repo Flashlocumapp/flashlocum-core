@@ -759,6 +759,7 @@ function DispatchOverlay({
   const [notified, setNotified] = useState<string | null>(null);
   const notifiedRef = useRef<number | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const publishedRef = useRef(false);
   const net = useNetwork();
 
   // Pause realtime search whenever the cancel sheet is open.
@@ -769,7 +770,12 @@ function DispatchOverlay({
 
   // Publish into the shared network when entering dispatch.
   useEffect(() => {
-    if (stage !== "dispatch" || requestId) return;
+    if (stage !== "dispatch") {
+      if (stage === "collapsed") publishedRef.current = false;
+      return;
+    }
+    if (requestId || publishedRef.current) return;
+    publishedRef.current = true;
     const req = publishRequest({
       hospital: location?.name ?? "Coverage",
       area: location?.area ?? "",
