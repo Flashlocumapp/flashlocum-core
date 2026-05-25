@@ -154,6 +154,15 @@ export function useNetwork() {
   return s;
 }
 
+/** Subscribe to network state outside of React. */
+export function subscribeNetwork(fn: (s: NetState) => void): () => void {
+  init();
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
 /* ---------------- doctor presence ---------------- */
 
 function randomPos(seed: string): { top: number; left: number } {
