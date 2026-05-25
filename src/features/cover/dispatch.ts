@@ -35,6 +35,7 @@ export type Coverage = {
   phone: string;
   note?: string;
   active?: boolean;
+  startedAt?: number;
 };
 
 // Full monetary formatting everywhere (₦36,500). No K abbreviation.
