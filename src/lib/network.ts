@@ -37,6 +37,7 @@ export type DoctorPresence = {
 
 export type NetRequestStatus =
   | "broadcasting"
+  | "paused"
   | "accepted"
   | "active"
   | "completed"
