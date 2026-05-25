@@ -56,6 +56,7 @@ function AppShell() {
         )}
       </AnimatePresence>
       <CoverDispatchPortal />
+      <ToastHost />
     </div>
   );
 }
