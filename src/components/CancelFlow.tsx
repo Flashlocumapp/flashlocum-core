@@ -76,7 +76,15 @@ export function CancelFlow({
                     {primaryLabel}
                   </button>
                   <button
-                    onClick={() => setStep("reason")}
+                    onClick={() => {
+                      if (skipReason) {
+                        onCancelled();
+                        setStep("confirm");
+                        setReason(null);
+                      } else {
+                        setStep("reason");
+                      }
+                    }}
                     className="h-12 w-full rounded-full bg-secondary/70 text-[14px] font-medium text-foreground/80 active:opacity-90"
                   >
                     {secondaryLabel}
