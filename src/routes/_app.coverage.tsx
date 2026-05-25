@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
-import { fmtNairaK, fmtShiftMeta, shortWeekdays } from "@/lib/format";
+import { fmtNairaK, fmtElapsed, fmtHistoryMeta, shortWeekdays } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
@@ -41,12 +41,18 @@ type RequestItem = {
   mdcn: string;
   initials: string;
   coverage: Coverage;
+  day: string;
+  start: string;
+  end: string;
+  durationHrs: number;
   schedule: string;
   completedOn?: string;
   amount: number;
   status: ReqStatus;
   phone: string;
+  note?: string;
   outcome?: "completed" | "cancelled";
+  startedAt?: number;
 };
 
 function doctorInitials(sessionId?: string): string {
@@ -74,11 +80,15 @@ function toRequestItem(r: NetRequest): RequestItem {
         : undefined;
   return {
     id: r.id,
-    doctor: "Dr. On Call",
+    doctor: "Dr. Emmanuel Adeleke",
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
     coverage: r.coverage as Coverage,
-    schedule: r.status === "active" ? "Today · live" : `${r.day} · ${r.start}`,
+    day: r.day,
+    start: r.start,
+    end: r.end,
+    durationHrs: r.durationHrs,
+    schedule: `${r.day} · ${r.start}`,
     completedOn: outcome
       ? new Date(r.updatedAt).toLocaleDateString("en-NG", {
           weekday: "short",
@@ -89,9 +99,12 @@ function toRequestItem(r: NetRequest): RequestItem {
     amount: r.amount,
     status,
     phone: r.phone,
+    note: r.note,
     outcome,
+    startedAt: r.startedAt,
   };
 }
+
 
 const TABS = [
   { id: "active", label: "Active" },
