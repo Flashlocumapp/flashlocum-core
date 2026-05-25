@@ -73,6 +73,9 @@ export type NetActionType =
   | "complete"
   | "cancel"
   | "update"
+  | "pause"
+  | "resume"
+  | "remove"
   | "presence";
 
 export type NetEvent = {
