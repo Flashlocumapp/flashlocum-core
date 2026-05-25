@@ -187,6 +187,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     timing: "08:00", duration: 1, accommodation: false, note: "",
   });
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = useMemo(
