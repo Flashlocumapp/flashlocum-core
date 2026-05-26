@@ -149,6 +149,16 @@ function durationHrsOf(coverage: CoverageId, draft: Draft, days: number): number
   return Math.round(perDay * Math.max(1, days));
 }
 
+/** Absolute window for the scheduled shift, derived from date + start + duration. */
+function shiftWindow(coverage: CoverageId, draft: Draft, days: number) {
+  const startTs = new Date(`${draft.startDate}T${draft.startTime}:00`).getTime();
+  const durHrs = durationHrsOf(coverage, draft, days);
+  const endTs = startTs + durHrs * 3_600_000;
+  const end = new Date(endTs);
+  const endHHMM = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+  return { startTs, endTs, durHrs, endHHMM };
+}
+
 function compressedSummary(coverage: CoverageId, draft: Draft, days: number): string {
   return `${COVERAGE_SHORT[coverage]} · ${dayLabel(coverage, draft, days)} · ${fmtAmPm(draft.startTime)}`;
 }
