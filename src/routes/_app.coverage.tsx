@@ -68,6 +68,28 @@ function mdcnFor(sessionId?: string): string {
   return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
 }
 
+/** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
+function ampmTo24h(s: string): string {
+  if (!s) return "08:00";
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return "08:00";
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const ap = m[3]?.toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${min}`;
+}
+
+/** Format "HH:MM" 24h → "8:00AM". */
+function amPmFromHHMM(s: string): string {
+  const [h, m] = s.split(":").map(Number);
+  if (Number.isNaN(h)) return s;
+  const period = h >= 12 ? "PM" : "AM";
+  const hr = ((h + 11) % 12) + 1;
+  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+}
+
 function toRequestItem(r: NetRequest): RequestItem {
   const status: ReqStatus =
     r.status === "active"
@@ -229,7 +251,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     const item = items.find((i) => i.id === id);
     if (!item) return;
     setEditInitial({
-      timing: "08:00",
+      timing: ampmTo24h(item.start),
       duration: item.durationHrs,
       accommodation: false,
       note: item.note ?? "",
@@ -241,9 +263,31 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     const id = editTargetId;
     setEditTargetId(null);
     if (id) {
+      const cur = net.requests[id];
+      const newDur = Math.max(1, next.duration);
+      // Use the existing request's startTs date portion (or today) as the
+      // base so editing only the time of day doesn't shift the calendar day.
+      const baseDate = cur?.startTs
+        ? new Date(cur.startTs)
+        : new Date();
+      const [nh, nm] = next.timing.split(":").map(Number);
+      const newStart = new Date(baseDate);
+      newStart.setHours(nh, nm, 0, 0);
+      const newStartTs = newStart.getTime();
+      const newEndTs = newStartTs + newDur * 3_600_000;
+      const endDate = new Date(newEndTs);
+      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+      const fallbackItem = items.find((i) => i.id === id);
+      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (fallbackItem ? fallbackItem.amount / Math.max(1, fallbackItem.durationHrs) : 0);
+      const newAmount = Math.round(baseHourly * newDur);
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
-        durationHrs: Math.max(1, next.duration),
+        start: amPmFromHHMM(next.timing),
+        end: amPmFromHHMM(endHHMM),
+        durationHrs: newDur,
+        amount: newAmount,
+        startTs: newStartTs,
+        endTs: newEndTs,
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {

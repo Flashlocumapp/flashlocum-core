@@ -149,6 +149,16 @@ function durationHrsOf(coverage: CoverageId, draft: Draft, days: number): number
   return Math.round(perDay * Math.max(1, days));
 }
 
+/** Absolute window for the scheduled shift, derived from date + start + duration. */
+function shiftWindow(coverage: CoverageId, draft: Draft, days: number) {
+  const startTs = new Date(`${draft.startDate}T${draft.startTime}:00`).getTime();
+  const durHrs = durationHrsOf(coverage, draft, days);
+  const endTs = startTs + durHrs * 3_600_000;
+  const end = new Date(endTs);
+  const endHHMM = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+  return { startTs, endTs, durHrs, endHHMM };
+}
+
 function compressedSummary(coverage: CoverageId, draft: Draft, days: number): string {
   return `${COVERAGE_SHORT[coverage]} · ${dayLabel(coverage, draft, days)} · ${fmtAmPm(draft.startTime)}`;
 }
@@ -801,8 +811,14 @@ function DispatchOverlay({
   const pricing = computePricing({ coverage, days });
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
-  const endStr = fmtAmPm(draft.endTime);
-  const durationHrs = durationHrsOf(coverage, draft, days);
+  const win = shiftWindow(coverage, draft, days);
+  // For weekend/24h, end is fully derived from start + fixed duration.
+  // For standard/home, draft.endTime drives it.
+  const endStr =
+    coverage === "weekend" || coverage === "24h"
+      ? fmtAmPm(win.endHHMM)
+      : fmtAmPm(draft.endTime);
+  const durationHrs = win.durHrs;
   const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
   // Publish OR resume into the shared network when entering dispatch.
@@ -821,6 +837,8 @@ function DispatchOverlay({
         durationHrs,
         amount: pricing.amount,
         note: draft.note?.trim() || undefined,
+        startTs: win.startTs,
+        endTs: win.endTs,
       });
       resumeRequest(cur.id);
       return;
@@ -839,6 +857,8 @@ function DispatchOverlay({
       feePct: 10,
       phone: DOCTOR_PHONE,
       note: draft.note?.trim() || undefined,
+      startTs: win.startTs,
+      endTs: win.endTs,
     });
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
@@ -904,17 +924,27 @@ function DispatchOverlay({
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
 
     if (requestId) {
-      // Derive end time from start + new duration.
-      const [sh, sm] = next.timing.split(":").map(Number);
-      const totalMin = sh * 60 + sm + Math.max(1, next.duration) * 60;
-      const eh = Math.floor((totalMin / 60) % 24);
-      const em = totalMin % 60;
-      const endHHMM = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+      const cur = net.requests[requestId];
+      const newDur = Math.max(1, next.duration);
+      // Derive end from start + new duration as absolute timestamps so
+      // operational continuity (day, end time, conflict window) stays
+      // consistent.
+      const baseDateStr = draft.startDate;
+      const newStartTs = new Date(`${baseDateStr}T${next.timing}:00`).getTime();
+      const newEndTs = newStartTs + newDur * 3_600_000;
+      const endDate = new Date(newEndTs);
+      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+      // Recompute amount from the original hourly rate to preserve pricing.
+      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : pricing.amount / Math.max(1, durationHrs);
+      const newAmount = Math.round(baseHourly * newDur);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.timing),
         end: fmtAmPm(endHHMM),
-        durationHrs: Math.max(1, next.duration),
+        durationHrs: newDur,
+        amount: newAmount,
+        startTs: newStartTs,
+        endTs: newEndTs,
       });
     }
   };
