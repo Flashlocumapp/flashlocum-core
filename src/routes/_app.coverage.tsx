@@ -514,7 +514,7 @@ function RequestCard({
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
 
-  const baseMeta = `${item.coverage} · ${shortWeekdays(item.day)} · ${item.start} · ${item.durationHrs}hr · ${fmtNairaK(item.amount)}`;
+  const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
   const meta = isHistory
     ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
     : baseMeta;
