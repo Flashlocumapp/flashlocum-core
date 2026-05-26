@@ -811,8 +811,14 @@ function DispatchOverlay({
   const pricing = computePricing({ coverage, days });
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
-  const endStr = fmtAmPm(draft.endTime);
-  const durationHrs = durationHrsOf(coverage, draft, days);
+  const win = shiftWindow(coverage, draft, days);
+  // For weekend/24h, end is fully derived from start + fixed duration.
+  // For standard/home, draft.endTime drives it.
+  const endStr =
+    coverage === "weekend" || coverage === "24h"
+      ? fmtAmPm(win.endHHMM)
+      : fmtAmPm(draft.endTime);
+  const durationHrs = win.durHrs;
   const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
   // Publish OR resume into the shared network when entering dispatch.
@@ -831,6 +837,8 @@ function DispatchOverlay({
         durationHrs,
         amount: pricing.amount,
         note: draft.note?.trim() || undefined,
+        startTs: win.startTs,
+        endTs: win.endTs,
       });
       resumeRequest(cur.id);
       return;
@@ -849,6 +857,8 @@ function DispatchOverlay({
       feePct: 10,
       phone: DOCTOR_PHONE,
       note: draft.note?.trim() || undefined,
+      startTs: win.startTs,
+      endTs: win.endTs,
     });
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
