@@ -35,6 +35,32 @@ export function fmtShiftMeta(
   return `${coverage} · ${shortWeekdays(schedule)}${dur} · ${fmtNairaK(amount)}`;
 }
 
+/** Global operational meta:  Type · Day · Start - End · {n}hr · ₦Amount */
+export function fmtOpMeta(
+  coverage: string,
+  day: string,
+  start: string,
+  end: string,
+  durationHrs: number,
+  amount: number,
+): string {
+  const timing = end && end !== start ? `${start} - ${end}` : start;
+  return `${coverage} · ${shortWeekdays(day)} · ${timing} · ${durationHrs}hr · ${fmtNairaK(amount)}`;
+}
+
+/** Parse "8:00AM" / "10:30PM" / "08:00" → minutes since midnight. */
+export function parseClock(t: string): number | null {
+  if (!t) return null;
+  const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = m[3]?.toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
+
 // History meta:  Type · Date · Time · Duration · Amount
 export function fmtHistoryMeta(
   coverage: string,
