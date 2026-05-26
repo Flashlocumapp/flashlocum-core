@@ -222,6 +222,10 @@ export function ensureDoctorSession(initialOnline = true) {
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "update") {
+      if (acceptedSheet?.id === r.id) {
+        acceptedSheet = toCoverage(r);
+        bump();
+      }
       pushToast({
         tone: "presence",
         title: `${r.hospital} updated this shift.`,
