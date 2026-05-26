@@ -865,7 +865,11 @@ function CoverCard({
             </span>
             {outcomeChip}
           </div>
-          <div className="text-[12.5px] text-muted-foreground">{item.area}</div>
+          <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+            <span className="truncate">{item.area}</span>
+            <span>·</span>
+            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+          </div>
         </div>
         {isActive && (
           <span
