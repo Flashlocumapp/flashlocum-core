@@ -5,6 +5,7 @@ import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
+import { RatingPill } from "@/components/RatingPill";
 import {
   onlineDoctors,
   pauseRequest,
