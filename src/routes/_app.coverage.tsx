@@ -420,12 +420,16 @@ function RequesterDetailSheet({
             </span>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[16px] font-medium">{item.doctor}</div>
-              <div className="text-[12px] text-muted-foreground">{item.mdcn} · ★ 4.9</div>
+              <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <span>{item.mdcn}</span>
+                <span>·</span>
+                <RatingPill entityId={doctorEntityId(item.id)} role="doctor" inline />
+              </div>
             </div>
           </div>
 
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
-            {item.coverage} · {shortWeekdays(item.day)} · {item.start} · {item.durationHrs}hr · {fmtNairaK(item.amount)}
+            {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
           </div>
 
           {item.note && (
