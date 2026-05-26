@@ -272,7 +272,6 @@ export function acceptIncoming() {
     pushToast({
       tone: "warn",
       title: "You already have the maximum number of confirmed shifts.",
-      body: "FlashLocum keeps a 1-hour buffer between shifts.",
     });
     return;
   }
