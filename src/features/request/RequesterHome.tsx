@@ -1051,9 +1051,15 @@ function DispatchOverlay({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[15px] font-medium">Dr. Emmanuel Adeleke</div>
-                  <div className="text-[12px] text-muted-foreground">MDCN-12245</div>
+                  <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <span>MDCN-12245</span>
+                    <span>·</span>
+                    <RatingPill entityId={requestId ? `doc:${requestId}` : null} role="doctor" inline />
+                  </div>
                   <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
-                    {acceptedMeta}
+                    {requestId && net.requests[requestId]
+                      ? `${net.requests[requestId].coverage} · ${net.requests[requestId].day} · ${net.requests[requestId].start}${net.requests[requestId].end && net.requests[requestId].end !== net.requests[requestId].start ? ` - ${net.requests[requestId].end}` : ""} · ${net.requests[requestId].durationHrs}hr · ${formatNaira(net.requests[requestId].amount)}`
+                      : acceptedMeta}
                   </div>
                 </div>
               </div>
