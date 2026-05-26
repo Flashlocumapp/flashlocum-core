@@ -237,8 +237,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setEditTargetId(null);
     if (id) {
       netUpdateRequest(id, {
-        note: next.note || undefined,
-        durationHrs: next.duration * 10,
+        note: next.note?.trim() || undefined,
+        durationHrs: Math.max(1, next.duration),
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {
