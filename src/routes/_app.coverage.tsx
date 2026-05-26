@@ -229,7 +229,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     const item = items.find((i) => i.id === id);
     if (!item) return;
     setEditInitial({
-      timing: "08:00",
+      timing: ampmTo24h(item.start),
       duration: item.durationHrs,
       accommodation: false,
       note: item.note ?? "",
@@ -241,9 +241,30 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     const id = editTargetId;
     setEditTargetId(null);
     if (id) {
+      const cur = net.requests[id];
+      const newDur = Math.max(1, next.duration);
+      // Use the existing request's startTs date portion (or today) as the
+      // base so editing only the time of day doesn't shift the calendar day.
+      const baseDate = cur?.startTs
+        ? new Date(cur.startTs)
+        : new Date();
+      const [nh, nm] = next.timing.split(":").map(Number);
+      const newStart = new Date(baseDate);
+      newStart.setHours(nh, nm, 0, 0);
+      const newStartTs = newStart.getTime();
+      const newEndTs = newStartTs + newDur * 3_600_000;
+      const endDate = new Date(newEndTs);
+      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (item ? item.amount / Math.max(1, item.durationHrs) : 0);
+      const newAmount = Math.round(baseHourly * newDur);
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
-        durationHrs: Math.max(1, next.duration),
+        start: amPmFromHHMM(next.timing),
+        end: amPmFromHHMM(endHHMM),
+        durationHrs: newDur,
+        amount: newAmount,
+        startTs: newStartTs,
+        endTs: newEndTs,
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {
