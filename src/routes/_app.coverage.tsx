@@ -228,7 +228,12 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const openEdit = (id: string) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-    setEditInitial({ timing: "08:00", duration: 1, accommodation: false, note: "" });
+    setEditInitial({
+      timing: "08:00",
+      duration: item.durationHrs,
+      accommodation: false,
+      note: item.note ?? "",
+    });
     setEditTargetId(id);
   };
 
