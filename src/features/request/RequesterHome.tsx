@@ -5,6 +5,7 @@ import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
+import { RatingPill } from "@/components/RatingPill";
 import {
   onlineDoctors,
   pauseRequest,
@@ -162,6 +163,15 @@ function HomeScreen() {
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
   const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+
+  // Pause the in-flight request whenever requester is editing (configure / match).
+  useEffect(() => {
+    if (!activeRequestId) return;
+    if (stage === "configure" || stage === "match") {
+      pauseRequest(activeRequestId);
+    }
+  }, [stage, activeRequestId]);
 
   // Immersive flow — hide bottom tabs once the requester engages the sheet.
   useEffect(() => {
@@ -263,6 +273,8 @@ function HomeScreen() {
             days={days}
             draft={draft}
             location={location}
+            requestId={activeRequestId}
+            setRequestId={setActiveRequestId}
           />
         ) : stage === "match" ? (
           <SettlementSheet
@@ -765,6 +777,8 @@ function DispatchOverlay({
   days,
   draft,
   location,
+  requestId,
+  setRequestId,
 }: {
   stage: "dispatch" | "accepted";
   setStage: (s: Stage) => void;
@@ -772,33 +786,55 @@ function DispatchOverlay({
   days: number;
   draft: Draft;
   location: Recent | null;
+  requestId: string | null;
+  setRequestId: (id: string | null) => void;
 }) {
   const [ambient, setAmbient] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [notified, setNotified] = useState<string | null>(null);
   const notifiedRef = useRef<number | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
   const publishedRef = useRef(false);
   const net = useNetwork();
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, days });
-  const acceptedMeta = compressedSummary(coverage, draft, days);
+  const dayStr = dayLabel(coverage, draft, days);
+  const startStr = fmtAmPm(draft.startTime);
+  const endStr = fmtAmPm(draft.endTime);
+  const durationHrs = durationHrsOf(coverage, draft, days);
+  const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
-  // Publish into the shared network when entering dispatch.
+  // Publish OR resume into the shared network when entering dispatch.
   useEffect(() => {
     if (stage !== "dispatch") return;
-    if (requestId || publishedRef.current) return;
+    const cur = requestId ? net.requests[requestId] : undefined;
+    if (cur) {
+      // Coming back from configure: sync any edits then resume.
+      updateRequest(cur.id, {
+        hospital: location?.name ?? cur.hospital,
+        area: location?.area ?? cur.area,
+        coverage: COVERAGE_SHORT[coverage],
+        day: dayStr,
+        start: startStr,
+        end: endStr,
+        durationHrs,
+        amount: pricing.amount,
+        note: draft.note?.trim() || undefined,
+      });
+      resumeRequest(cur.id);
+      return;
+    }
+    if (publishedRef.current) return;
     publishedRef.current = true;
     const req = publishRequest({
       hospital: location?.name ?? "Coverage",
       area: location?.area ?? "",
       coverage: COVERAGE_SHORT[coverage],
-      day: dayLabel(coverage, draft, days),
-      start: fmtAmPm(draft.startTime),
-      end: fmtAmPm(draft.endTime),
-      durationHrs: durationHrsOf(coverage, draft, days),
+      day: dayStr,
+      start: startStr,
+      end: endStr,
+      durationHrs,
       amount: pricing.amount,
       feePct: 10,
       phone: DOCTOR_PHONE,
@@ -807,14 +843,15 @@ function DispatchOverlay({
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
     return () => window.clearTimeout(t);
-  }, [stage, requestId, coverage, days, draft, location, pricing.amount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   // Pause / resume broadcasting whenever the cancel or edit sheet is open.
   useEffect(() => {
     if (!requestId) return;
     if (paused) pauseRequest(requestId);
-    else resumeRequest(requestId);
-  }, [paused, requestId]);
+    else if (stage === "dispatch") resumeRequest(requestId);
+  }, [paused, requestId, stage]);
 
   // React to acceptance OR doctor-side cancellation.
   useEffect(() => {
@@ -825,8 +862,9 @@ function DispatchOverlay({
     if (stage === "accepted" && r.status === "cancelled") {
       // Doctor cancelled — close accepted screen immediately.
       setStage("collapsed");
+      setRequestId(null);
     }
-  }, [net, requestId, stage, setStage]);
+  }, [net, requestId, stage, setStage, setRequestId]);
 
 
   // Swipe-down on accepted card returns user to Home.
@@ -834,10 +872,10 @@ function DispatchOverlay({
     if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
   };
 
-  // Build edit initial seeded from current draft (real timing).
+  // Edit sheet uses HOURS for duration.
   const [editInitial, setEditInitial] = useState<EditableShift>({
     timing: draft.startTime,
-    duration: days,
+    duration: durationHrs,
     accommodation: false,
     note: draft.note ?? "",
   });
@@ -845,7 +883,7 @@ function DispatchOverlay({
   const openEdit = () => {
     setEditInitial({
       timing: draft.startTime,
-      duration: days,
+      duration: durationHrs,
       accommodation: false,
       note: draft.note ?? "",
     });
@@ -866,12 +904,17 @@ function DispatchOverlay({
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
 
     if (requestId) {
-      const newDraft = { ...draft, startTime: next.timing };
+      // Derive end time from start + new duration.
+      const [sh, sm] = next.timing.split(":").map(Number);
+      const totalMin = sh * 60 + sm + Math.max(1, next.duration) * 60;
+      const eh = Math.floor((totalMin / 60) % 24);
+      const em = totalMin % 60;
+      const endHHMM = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.timing),
-        durationHrs: durationHrsOf(coverage, newDraft, next.duration),
-        day: dayLabel(coverage, newDraft, next.duration),
+        end: fmtAmPm(endHHMM),
+        durationHrs: Math.max(1, next.duration),
       });
     }
   };
@@ -1009,9 +1052,15 @@ function DispatchOverlay({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[15px] font-medium">Dr. Emmanuel Adeleke</div>
-                  <div className="text-[12px] text-muted-foreground">MDCN-12245</div>
+                  <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <span>MDCN-12245</span>
+                    <span>·</span>
+                    <RatingPill entityId={requestId ? `doc:${requestId}` : null} role="doctor" inline />
+                  </div>
                   <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
-                    {acceptedMeta}
+                    {requestId && net.requests[requestId]
+                      ? `${net.requests[requestId].coverage} · ${net.requests[requestId].day} · ${net.requests[requestId].start}${net.requests[requestId].end && net.requests[requestId].end !== net.requests[requestId].start ? ` - ${net.requests[requestId].end}` : ""} · ${net.requests[requestId].durationHrs}hr · ${formatNaira(net.requests[requestId].amount)}`
+                      : acceptedMeta}
                   </div>
                 </div>
               </div>

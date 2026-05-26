@@ -1,31 +1,32 @@
 import { AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
+import { RatingPill } from "@/components/RatingPill";
+import { RatingOverlay } from "@/components/RatingOverlay";
+import { recordRating } from "@/lib/ratings";
 import { getRole, type Role } from "@/lib/role";
+import { fmtOpMeta } from "@/lib/format";
 import {
   acceptIncoming,
   cancelUpcoming,
   declineIncoming,
   dismissAccepted,
+  dismissPendingRating,
   feeOf,
+  hospitalEntityId,
   nairaK,
   netOf,
   useDispatch,
   type Coverage,
 } from "@/features/cover/dispatch";
 
-/**
- * CoverDispatchPortal — mounted at the app shell.
- * Surfaces incoming-request overlay and the accepted-detail sheet
- * for the doctor (Cover) role, above every tab.
- */
 export function CoverDispatchPortal() {
   const [role, setLocalRole] = useState<Role | null>(null);
   useEffect(() => setLocalRole(getRole()), []);
-  const { incoming, accepted } = useDispatch();
+  const { incoming, accepted, pendingRating } = useDispatch();
 
   if (role !== "cover") return null;
-  if (!incoming && !accepted) return null;
+  if (!incoming && !accepted && !pendingRating) return null;
 
   return (
     <div className="absolute inset-0 z-50">
@@ -51,6 +52,17 @@ export function CoverDispatchPortal() {
           </DismissSheet>
         )}
       </AnimatePresence>
+      <RatingOverlay
+        open={!!pendingRating && !incoming && !accepted}
+        doctor={pendingRating?.hospital ?? ""}
+        onDismiss={dismissPendingRating}
+        onSubmit={(rating) => {
+          if (rating > 0 && pendingRating) {
+            recordRating(pendingRating.hospitalId, rating);
+          }
+          dismissPendingRating();
+        }}
+      />
     </div>
   );
 }
@@ -60,23 +72,26 @@ function IncomingBody({ item }: { item: Coverage }) {
   const net = netOf(item);
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <span
-          className="relative h-2 w-2 rounded-full"
-          style={{ background: "var(--color-presence)" }}
-        >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           <span
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: "var(--color-presence)",
-              opacity: 0.5,
-              animation: "presence-pulse 1.6s ease-out infinite",
-            }}
-          />
-        </span>
-        <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          New request
-        </span>
+            className="relative h-2 w-2 rounded-full"
+            style={{ background: "var(--color-presence)" }}
+          >
+            <span
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: "var(--color-presence)",
+                opacity: 0.5,
+                animation: "presence-pulse 1.6s ease-out infinite",
+              }}
+            />
+          </span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            New request
+          </span>
+        </div>
+        <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
       </div>
 
       <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">
@@ -85,7 +100,7 @@ function IncomingBody({ item }: { item: Coverage }) {
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
       <div className="mt-4 text-[13.5px] leading-relaxed text-foreground/80">
-        {item.coverage} · {item.day} · {item.start}–{item.end} · {item.durationHrs}hr
+        {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
       </div>
 
       <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3">
@@ -159,11 +174,14 @@ function Row({
 function AcceptedBody({ item }: { item: Coverage }) {
   return (
     <div>
-      <div
-        className="text-[11px] font-medium uppercase tracking-[0.16em]"
-        style={{ color: "var(--color-presence)" }}
-      >
-        Coverage confirmed
+      <div className="flex items-center justify-between">
+        <div
+          className="text-[11px] font-medium uppercase tracking-[0.16em]"
+          style={{ color: "var(--color-presence)" }}
+        >
+          Coverage confirmed
+        </div>
+        <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
       </div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight">
         {item.hospital}
@@ -171,7 +189,7 @@ function AcceptedBody({ item }: { item: Coverage }) {
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
       <div className="mt-4 text-[13.5px] leading-relaxed text-foreground/80">
-        {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr · {nairaK(netOf(item))}
+        {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
       </div>
 
       {item.note && (

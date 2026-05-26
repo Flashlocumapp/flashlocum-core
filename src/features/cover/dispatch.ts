@@ -256,18 +256,16 @@ export function acceptIncoming() {
   if (mine.length >= 3) {
     pushToast({
       tone: "warn",
-      title: "You already have 3 upcoming confirmed shifts.",
+      title: "You already have 3 confirmed shifts.",
     });
     return;
   }
   const incomingReq = currentRequest(idToAccept);
-  if (
-    incomingReq &&
-    mine.some((m) => m.day === incomingReq.day && m.start === incomingReq.start)
-  ) {
+  if (incomingReq && hasConflict(mine, incomingReq)) {
     pushToast({
       tone: "warn",
       title: "This request conflicts with an existing confirmed shift.",
+      body: "FlashLocum keeps a 1-hour buffer between shifts.",
     });
     return;
   }
@@ -277,9 +275,47 @@ export function acceptIncoming() {
   const req = currentRequest(idToAccept);
   if (req && req.acceptedBy === sid) {
     acceptedSheet = toCoverage(req);
-    
     bump();
   }
+}
+
+/** Operational overlap + 1-hour buffer rule. */
+const BUFFER_MIN = 60;
+function shiftWindow(r: NetRequest): { s: number; e: number } | null {
+  // Use parsed times; treat day boundary by adding duration if end <= start.
+  // Falls back to durationHrs from start when end missing.
+  // Imported lazily to avoid cycles.
+  const start = parseClockLocal(r.start);
+  if (start == null) return null;
+  let end = parseClockLocal(r.end);
+  if (end == null || end <= start) end = start + r.durationHrs * 60;
+  return { s: start, e: end };
+}
+function parseClockLocal(t: string): number | null {
+  if (!t) return null;
+  const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = m[3]?.toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
+function hasConflict(mine: NetRequest[], incoming: NetRequest): boolean {
+  const inc = shiftWindow(incoming);
+  if (!inc) return false;
+  for (const m of mine) {
+    if (m.day !== incoming.day) continue;
+    const w = shiftWindow(m);
+    if (!w) continue;
+    // overlap?
+    if (inc.s < w.e && w.s < inc.e) return true;
+    // buffer (1 hour)
+    if (Math.abs(inc.s - w.e) < BUFFER_MIN) return true;
+    if (Math.abs(w.s - inc.e) < BUFFER_MIN) return true;
+  }
+  return false;
 }
 
 export function declineIncoming() {

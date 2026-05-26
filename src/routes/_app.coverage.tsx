@@ -3,13 +3,16 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
-import { fmtNairaK, fmtElapsed, fmtHistoryMeta, shortWeekdays } from "@/lib/format";
+import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
+import { RatingPill } from "@/components/RatingPill";
 import {
   cancelUpcoming,
+  doctorEntityId,
+  hospitalEntityId,
   nairaK,
   useDispatch,
   type Coverage as CoverItem,
@@ -225,7 +228,12 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const openEdit = (id: string) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-    setEditInitial({ timing: "08:00", duration: 1, accommodation: false, note: "" });
+    setEditInitial({
+      timing: "08:00",
+      duration: item.durationHrs,
+      accommodation: false,
+      note: item.note ?? "",
+    });
     setEditTargetId(id);
   };
 
@@ -234,8 +242,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setEditTargetId(null);
     if (id) {
       netUpdateRequest(id, {
-        note: next.note || undefined,
-        durationHrs: next.duration * 10,
+        note: next.note?.trim() || undefined,
+        durationHrs: Math.max(1, next.duration),
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {
@@ -417,12 +425,16 @@ function RequesterDetailSheet({
             </span>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[16px] font-medium">{item.doctor}</div>
-              <div className="text-[12px] text-muted-foreground">{item.mdcn} · ★ 4.9</div>
+              <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <span>{item.mdcn}</span>
+                <span>·</span>
+                <RatingPill entityId={doctorEntityId(item.id)} role="doctor" inline />
+              </div>
             </div>
           </div>
 
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
-            {item.coverage} · {shortWeekdays(item.day)} · {item.start} · {item.durationHrs}hr · {fmtNairaK(item.amount)}
+            {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
           </div>
 
           {item.note && (
@@ -507,7 +519,7 @@ function RequestCard({
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
 
-  const baseMeta = `${item.coverage} · ${shortWeekdays(item.day)} · ${item.start} · ${item.durationHrs}hr · ${fmtNairaK(item.amount)}`;
+  const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
   const meta = isHistory
     ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
     : baseMeta;
@@ -546,7 +558,11 @@ function RequestCard({
           >
             {item.doctor}
           </div>
-          <div className="truncate text-[12px] text-muted-foreground">{item.mdcn}</div>
+          <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
+            <span className="truncate">{item.mdcn}</span>
+            <span>·</span>
+            <RatingPill entityId={doctorEntityId(item.id)} role="doctor" inline />
+          </div>
           <div
             className="mt-0.5 truncate text-[12.5px]"
             style={{
@@ -802,7 +818,7 @@ function CoverCard({
   const isActive = variant === "active";
   const isUpcoming = variant === "upcoming";
 
-  const meta = `${item.coverage} · ${item.day} · ${item.start} · ${item.durationHrs}hr · ${nairaK(item.amount)}`;
+  const meta = `${fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}`;
 
   // All cards tappable — open detail. Inner buttons stopPropagation.
   const Wrapper: React.ElementType = "div";
@@ -854,7 +870,11 @@ function CoverCard({
             </span>
             {outcomeChip}
           </div>
-          <div className="text-[12.5px] text-muted-foreground">{item.area}</div>
+          <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+            <span className="truncate">{item.area}</span>
+            <span>·</span>
+            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+          </div>
         </div>
         {isActive && (
           <span
@@ -969,13 +989,14 @@ function DoctorCoverageDetail({
                 ? "Active shift"
                 : "Upcoming shift"}
           </div>
-          <div className="mt-2 text-[20px] font-semibold tracking-tight">
-            {item.hospital}
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="text-[20px] font-semibold tracking-tight">{item.hospital}</div>
+            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
           <div className="mt-4 text-[13px] leading-relaxed text-foreground/80">
-            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr · {nairaK(item.amount)}
+            {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
           </div>
 
           <div className="mt-4 space-y-2 rounded-2xl bg-secondary/60 px-4 py-3">

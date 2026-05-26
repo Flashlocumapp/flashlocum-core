@@ -61,7 +61,7 @@ export function EditShiftSheet({
           />
         </Cell>
 
-        <Cell label="Duration">
+        <Cell label="Duration (hours)">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setDraft({ ...draft, duration: Math.max(1, draft.duration - 1) })}
@@ -70,10 +70,10 @@ export function EditShiftSheet({
               −
             </button>
             <span className="text-[14px] font-medium tabular-nums">
-              {draft.duration} {draft.duration === 1 ? "day" : "days"}
+              {draft.duration} hr
             </span>
             <button
-              onClick={() => setDraft({ ...draft, duration: Math.min(7, draft.duration + 1) })}
+              onClick={() => setDraft({ ...draft, duration: Math.min(72, draft.duration + 1) })}
               className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-elevated text-foreground/70 active:scale-95"
             >
               +

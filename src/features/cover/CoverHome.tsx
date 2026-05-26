@@ -1,7 +1,9 @@
 import { motion } from "framer-motion";
 import { MapBackground } from "@/components/MapBackground";
+import { RatingPill } from "@/components/RatingPill";
+import { fmtOpMeta } from "@/lib/format";
 import {
-  nairaK,
+  hospitalEntityId,
   setOnline,
   useDispatch,
   type Coverage,
@@ -151,7 +153,7 @@ function CoverageTile({
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           {active ? "Active coverage" : "Next coverage"}
         </div>
-        {active && (
+        {active ? (
           <span
             className="flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.14em]"
             style={{ color: "var(--color-presence)" }}
@@ -171,6 +173,8 @@ function CoverageTile({
             </span>
             Live
           </span>
+        ) : (
+          <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
         )}
       </div>
 
@@ -180,7 +184,7 @@ function CoverageTile({
       <div className="text-[12.5px] text-muted-foreground">{coverage.area}</div>
 
       <div className="mt-2 text-[12.5px] leading-snug text-foreground/80">
-        {coverage.coverage} · {coverage.day} · {coverage.start} · {coverage.durationHrs}hr · {nairaK(coverage.amount)}
+        {fmtOpMeta(coverage.coverage, coverage.day, coverage.start, coverage.end, coverage.durationHrs, coverage.amount)}
       </div>
 
       <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
