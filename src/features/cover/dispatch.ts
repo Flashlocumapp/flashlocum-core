@@ -225,7 +225,7 @@ export function ensureDoctorSession(initialOnline = true) {
       pushToast({
         tone: "presence",
         title: `${r.hospital} updated this shift.`,
-        body: `${r.coverage} · ${r.day} · ${r.start}–${r.end} · ${r.durationHrs}hr`,
+        body: `${r.coverage} · ${r.day} · ${r.start} - ${r.end} · ${r.durationHrs}hr · ₦${r.amount.toLocaleString("en-NG")}`,
       });
     }
   });
