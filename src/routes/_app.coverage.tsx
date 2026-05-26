@@ -813,7 +813,7 @@ function CoverCard({
   const isActive = variant === "active";
   const isUpcoming = variant === "upcoming";
 
-  const meta = `${item.coverage} · ${item.day} · ${item.start} · ${item.durationHrs}hr · ${nairaK(item.amount)}`;
+  const meta = `${fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}`;
 
   // All cards tappable — open detail. Inner buttons stopPropagation.
   const Wrapper: React.ElementType = "div";
