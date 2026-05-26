@@ -62,6 +62,10 @@ export type NetRequest = {
   createdAt: number;
   updatedAt: number;
   startedAt?: number;
+  // Absolute timestamps for the scheduled coverage window — single source
+  // of truth for conflict detection across all coverage types.
+  startTs?: number;
+  endTs?: number;
 };
 
 export type Actor = "requester" | "doctor" | "system";
