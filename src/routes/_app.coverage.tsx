@@ -68,6 +68,28 @@ function mdcnFor(sessionId?: string): string {
   return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
 }
 
+/** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
+function ampmTo24h(s: string): string {
+  if (!s) return "08:00";
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return "08:00";
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const ap = m[3]?.toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${min}`;
+}
+
+/** Format "HH:MM" 24h → "8:00AM". */
+function amPmFromHHMM(s: string): string {
+  const [h, m] = s.split(":").map(Number);
+  if (Number.isNaN(h)) return s;
+  const period = h >= 12 ? "PM" : "AM";
+  const hr = ((h + 11) % 12) + 1;
+  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+}
+
 function toRequestItem(r: NetRequest): RequestItem {
   const status: ReqStatus =
     r.status === "active"
