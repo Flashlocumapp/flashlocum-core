@@ -924,17 +924,27 @@ function DispatchOverlay({
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
 
     if (requestId) {
-      // Derive end time from start + new duration.
-      const [sh, sm] = next.timing.split(":").map(Number);
-      const totalMin = sh * 60 + sm + Math.max(1, next.duration) * 60;
-      const eh = Math.floor((totalMin / 60) % 24);
-      const em = totalMin % 60;
-      const endHHMM = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+      const cur = net.requests[requestId];
+      const newDur = Math.max(1, next.duration);
+      // Derive end from start + new duration as absolute timestamps so
+      // operational continuity (day, end time, conflict window) stays
+      // consistent.
+      const baseDateStr = draft.startDate;
+      const newStartTs = new Date(`${baseDateStr}T${next.timing}:00`).getTime();
+      const newEndTs = newStartTs + newDur * 3_600_000;
+      const endDate = new Date(newEndTs);
+      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+      // Recompute amount from the original hourly rate to preserve pricing.
+      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : pricing.amount / Math.max(1, durationHrs);
+      const newAmount = Math.round(baseHourly * newDur);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.timing),
         end: fmtAmPm(endHHMM),
-        durationHrs: Math.max(1, next.duration),
+        durationHrs: newDur,
+        amount: newAmount,
+        startTs: newStartTs,
+        endTs: newEndTs,
       });
     }
   };
