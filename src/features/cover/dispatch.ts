@@ -121,20 +121,12 @@ export function useDispatch(): View {
   const online = !!me?.online;
 
   const upcoming: Coverage[] = Object.values(net.requests)
-    .filter(
-      (r) =>
-        r.acceptedBy === sid &&
-        (r.status === "accepted" || r.status === "active"),
-    )
+    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
 
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
-    .filter(
-      (r) =>
-        r.acceptedBy === sid &&
-        (r.status === "completed" || r.status === "cancelled"),
-    )
+    .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map((r) => ({
       ...toCoverage(r),
@@ -148,7 +140,7 @@ export function useDispatch(): View {
     }));
 
   let incoming: Coverage | null = null;
-  if (online && upcoming.length < 3 && !acceptedSheet) {
+  if (online && upcoming.length < 3) {
     const declined = new Set(me?.declined ?? []);
     const r = broadcastingRequests(net).find((x) => !declined.has(x.id));
     if (r) incoming = toCoverage(r);
@@ -173,7 +165,6 @@ export function useDispatch(): View {
 /* ---------- Lifecycle ---------- */
 
 let bootstrapped = false;
-
 
 export function ensureDoctorSession(initialOnline = true) {
   if (bootstrapped) return;
@@ -222,6 +213,10 @@ export function ensureDoctorSession(initialOnline = true) {
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "update") {
+      if (acceptedSheet?.id === r.id) {
+        acceptedSheet = toCoverage(r);
+        bump();
+      }
       pushToast({
         tone: "presence",
         title: `${r.hospital} updated this shift.`,
@@ -241,8 +236,7 @@ function currentUpcomingForMe(): NetRequest[] {
   const s = readState();
   const sid = getSessionId();
   return Object.values(s.requests ?? {}).filter(
-    (r) =>
-      r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
+    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
   );
 }
 
@@ -260,15 +254,14 @@ export function acceptIncoming() {
   if (mine.length >= 3) {
     pushToast({
       tone: "warn",
-      title: "You already have 3 upcoming confirmed shifts.",
+      title: "You already have the maximum number of confirmed shifts.",
     });
     return;
   }
   if (hasConflict(mine, incomingReq)) {
     pushToast({
       tone: "warn",
-      title: "This request overlaps an existing confirmed shift.",
-      body: "FlashLocum keeps a 1-hour buffer between shifts.",
+      title: "You already have the maximum number of confirmed shifts.",
     });
     return;
   }
@@ -293,10 +286,7 @@ function hasConflict(mine: NetRequest[], incoming: NetRequest): boolean {
   if (!incoming.startTs || !incoming.endTs) return false;
   for (const m of mine) {
     if (!m.startTs || !m.endTs) continue;
-    if (
-      incoming.startTs < m.endTs + BUFFER_MS &&
-      m.startTs < incoming.endTs + BUFFER_MS
-    ) {
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) {
       return true;
     }
   }
