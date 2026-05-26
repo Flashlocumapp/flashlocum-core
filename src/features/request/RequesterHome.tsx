@@ -162,6 +162,15 @@ function HomeScreen() {
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
   const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+
+  // Pause the in-flight request whenever requester is editing (configure / match).
+  useEffect(() => {
+    if (!activeRequestId) return;
+    if (stage === "configure" || stage === "match") {
+      pauseRequest(activeRequestId);
+    }
+  }, [stage, activeRequestId]);
 
   // Immersive flow — hide bottom tabs once the requester engages the sheet.
   useEffect(() => {
