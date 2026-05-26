@@ -272,6 +272,8 @@ function HomeScreen() {
             days={days}
             draft={draft}
             location={location}
+            requestId={activeRequestId}
+            setRequestId={setActiveRequestId}
           />
         ) : stage === "match" ? (
           <SettlementSheet
