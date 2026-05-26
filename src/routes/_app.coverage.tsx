@@ -984,13 +984,14 @@ function DoctorCoverageDetail({
                 ? "Active shift"
                 : "Upcoming shift"}
           </div>
-          <div className="mt-2 text-[20px] font-semibold tracking-tight">
-            {item.hospital}
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="text-[20px] font-semibold tracking-tight">{item.hospital}</div>
+            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
           <div className="mt-4 text-[13px] leading-relaxed text-foreground/80">
-            {item.coverage} · {item.day} · {item.start} · {item.durationHrs}hr · {nairaK(item.amount)}
+            {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
           </div>
 
           <div className="mt-4 space-y-2 rounded-2xl bg-secondary/60 px-4 py-3">
