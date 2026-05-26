@@ -1,7 +1,9 @@
 import { motion } from "framer-motion";
 import { MapBackground } from "@/components/MapBackground";
+import { RatingPill } from "@/components/RatingPill";
+import { fmtOpMeta } from "@/lib/format";
 import {
-  nairaK,
+  hospitalEntityId,
   setOnline,
   useDispatch,
   type Coverage,
