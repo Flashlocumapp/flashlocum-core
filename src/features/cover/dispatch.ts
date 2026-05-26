@@ -121,20 +121,12 @@ export function useDispatch(): View {
   const online = !!me?.online;
 
   const upcoming: Coverage[] = Object.values(net.requests)
-    .filter(
-      (r) =>
-        r.acceptedBy === sid &&
-        (r.status === "accepted" || r.status === "active"),
-    )
+    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
 
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
-    .filter(
-      (r) =>
-        r.acceptedBy === sid &&
-        (r.status === "completed" || r.status === "cancelled"),
-    )
+    .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map((r) => ({
       ...toCoverage(r),
@@ -173,7 +165,6 @@ export function useDispatch(): View {
 /* ---------- Lifecycle ---------- */
 
 let bootstrapped = false;
-
 
 export function ensureDoctorSession(initialOnline = true) {
   if (bootstrapped) return;
@@ -245,8 +236,7 @@ function currentUpcomingForMe(): NetRequest[] {
   const s = readState();
   const sid = getSessionId();
   return Object.values(s.requests ?? {}).filter(
-    (r) =>
-      r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
+    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
   );
 }
 
@@ -296,10 +286,7 @@ function hasConflict(mine: NetRequest[], incoming: NetRequest): boolean {
   if (!incoming.startTs || !incoming.endTs) return false;
   for (const m of mine) {
     if (!m.startTs || !m.endTs) continue;
-    if (
-      incoming.startTs < m.endTs + BUFFER_MS &&
-      m.startTs < incoming.endTs + BUFFER_MS
-    ) {
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) {
       return true;
     }
   }

@@ -106,10 +106,7 @@ export function getSessionId(): string {
   try {
     let s = window.sessionStorage.getItem(SESSION_KEY);
     if (!s) {
-      s =
-        "s_" +
-        Math.random().toString(36).slice(2, 8) +
-        Date.now().toString(36).slice(-4);
+      s = "s_" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
       window.sessionStorage.setItem(SESSION_KEY, s);
     }
     return s;
@@ -346,7 +343,9 @@ export function startHeartbeat() {
 
 /* ---------------- requests ---------------- */
 
-export function publishRequest(req: Omit<NetRequest, "id" | "requesterSessionId" | "status" | "createdAt" | "updatedAt">): NetRequest {
+export function publishRequest(
+  req: Omit<NetRequest, "id" | "requesterSessionId" | "status" | "createdAt" | "updatedAt">,
+): NetRequest {
   refreshState();
   const sid = getSessionId();
   const now = Date.now();

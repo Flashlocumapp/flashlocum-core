@@ -17,12 +17,9 @@ import {
   useNetwork,
 } from "@/lib/network";
 
-
 export function RequesterHome() {
   return <HomeScreen />;
 }
-
-
 
 type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
@@ -49,7 +46,7 @@ const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tu
 type Draft = {
   startDate: string; // yyyy-mm-dd
   startTime: string; // HH:MM (24h)
-  endTime: string;   // HH:MM (24h)
+  endTime: string; // HH:MM (24h)
   note: string;
 };
 
@@ -60,7 +57,12 @@ function makeInitialDraft(coverage: CoverageId): Draft {
     const d = new Date();
     const diff = (6 - d.getDay() + 7) % 7 || 7;
     d.setDate(d.getDate() + diff);
-    return { startDate: d.toISOString().slice(0, 10), startTime: "20:00", endTime: "06:00", note: "" };
+    return {
+      startDate: d.toISOString().slice(0, 10),
+      startTime: "20:00",
+      endTime: "06:00",
+      note: "",
+    };
   }
   if (coverage === "home") {
     return { startDate: today, startTime: "22:00", endTime: "06:00", note: "" };
@@ -143,7 +145,7 @@ function durationHrsOf(coverage: CoverageId, draft: Draft, days: number): number
   // standard / home — derive from start/end + days
   const [sh, sm] = draft.startTime.split(":").map(Number);
   const [eh, em] = draft.endTime.split(":").map(Number);
-  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  let mins = eh * 60 + em - (sh * 60 + sm);
   if (mins <= 0) mins += 24 * 60; // overnight
   const perDay = mins / 60;
   return Math.round(perDay * Math.max(1, days));
@@ -164,7 +166,6 @@ function compressedSummary(coverage: CoverageId, draft: Draft, days: number): st
 }
 
 /* ---------------------- Home ---------------------- */
-
 
 function HomeScreen() {
   const [stage, setStage] = useState<Stage>("collapsed");
@@ -199,8 +200,7 @@ function HomeScreen() {
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
   const recents = useMemo(
-    () =>
-      RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
+    () => RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
     [query],
   );
 
@@ -209,7 +209,6 @@ function HomeScreen() {
     setQuery(r.name);
     setStage("configure");
   };
-
 
   const net = useNetwork();
   const markers: Marker[] = useMemo(
@@ -231,7 +230,12 @@ function HomeScreen() {
         <div className="mx-auto flex max-w-md items-center justify-between px-4 pt-3">
           <button className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-surface-elevated shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path
+                d="M4 6h16M4 12h16M4 18h10"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
             </svg>
           </button>
           <span className="h-10 w-10" />
@@ -256,7 +260,12 @@ function HomeScreen() {
               style={{ color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)" }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
             <button
@@ -270,7 +279,6 @@ function HomeScreen() {
           </motion.div>
         )}
       </AnimatePresence>
-
 
       {/* The layered sheet */}
       <AnimatePresence mode="wait">
@@ -363,11 +371,7 @@ function DispatchSheet({
   };
 
   // Adaptive: collapsed = fixed compact; search = content-fit; configure = tall.
-  const sheetClass = isConfigure
-    ? "h-[86vh]"
-    : isCollapsed
-      ? "h-[132px]"
-      : "max-h-[72vh]";
+  const sheetClass = isConfigure ? "h-[86vh]" : isCollapsed ? "h-[132px]" : "max-h-[72vh]";
 
   return (
     <>
@@ -411,9 +415,20 @@ function DispatchSheet({
             onClick={() => isCollapsed && setStage("search")}
             className="flex h-14 shrink-0 items-center gap-3 rounded-2xl bg-secondary px-4 text-left"
           >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-muted-foreground"
+            >
               <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path
+                d="M20 20l-3.5-3.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
             </svg>
             {isCollapsed ? (
               <span className="text-[15px] leading-none text-foreground/85">
@@ -442,8 +457,18 @@ function DispatchSheet({
                       className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-                          <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="text-muted-foreground"
+                        >
+                          <path
+                            d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          />
                           <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
                         </svg>
                       </span>
@@ -557,7 +582,13 @@ function ConfigureBody({
           className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_18px_rgba(0,0,0,0.18)] active:scale-95 transition-transform"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M5 12h14M13 6l6 6-6 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -584,8 +615,18 @@ function CoverageFields({
     return (
       <Fields>
         <Row>
-          <CtrlField label="Start date" type="date" value={draft.startDate} onChange={(v) => patchDraft({ startDate: v })} />
-          <CtrlField label="Start time" type="time" value={draft.startTime} onChange={(v) => patchDraft({ startTime: v })} />
+          <CtrlField
+            label="Start date"
+            type="date"
+            value={draft.startDate}
+            onChange={(v) => patchDraft({ startDate: v })}
+          />
+          <CtrlField
+            label="Start time"
+            type="time"
+            value={draft.startTime}
+            onChange={(v) => patchDraft({ startTime: v })}
+          />
         </Row>
         <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
       </Fields>
@@ -596,11 +637,26 @@ function CoverageFields({
     return (
       <Fields>
         <Row>
-          <CtrlField label="Start date" type="date" value={draft.startDate} onChange={(v) => patchDraft({ startDate: v })} />
-          <CtrlField label="Start time" type="time" value={draft.startTime} onChange={(v) => patchDraft({ startTime: v })} />
+          <CtrlField
+            label="Start date"
+            type="date"
+            value={draft.startDate}
+            onChange={(v) => patchDraft({ startDate: v })}
+          />
+          <CtrlField
+            label="Start time"
+            type="time"
+            value={draft.startTime}
+            onChange={(v) => patchDraft({ startTime: v })}
+          />
         </Row>
         <Row>
-          <CtrlField label="End time" type="time" value={draft.endTime} onChange={(v) => patchDraft({ endTime: v })} />
+          <CtrlField
+            label="End time"
+            type="time"
+            value={draft.endTime}
+            onChange={(v) => patchDraft({ endTime: v })}
+          />
           <DaysStepper value={days} setValue={setDays} />
         </Row>
         <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
@@ -612,8 +668,18 @@ function CoverageFields({
   return (
     <Fields>
       <Row>
-        <CtrlField label="Start date" type="date" value={draft.startDate} onChange={(v) => patchDraft({ startDate: v })} />
-        <CtrlField label="Start time" type="time" value={draft.startTime} onChange={(v) => patchDraft({ startTime: v })} />
+        <CtrlField
+          label="Start date"
+          type="date"
+          value={draft.startDate}
+          onChange={(v) => patchDraft({ startDate: v })}
+        />
+        <CtrlField
+          label="Start time"
+          type="time"
+          value={draft.startTime}
+          onChange={(v) => patchDraft({ startTime: v })}
+        />
       </Row>
       <DaysStepper value={days} setValue={setDays} />
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
@@ -815,9 +881,7 @@ function DispatchOverlay({
   // For weekend/24h, end is fully derived from start + fixed duration.
   // For standard/home, draft.endTime drives it.
   const endStr =
-    coverage === "weekend" || coverage === "24h"
-      ? fmtAmPm(win.endHHMM)
-      : fmtAmPm(draft.endTime);
+    coverage === "weekend" || coverage === "24h" ? fmtAmPm(win.endHHMM) : fmtAmPm(draft.endTime);
   const durationHrs = win.durHrs;
   const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
@@ -890,7 +954,6 @@ function DispatchOverlay({
     }
   }, [net, requestId, stage, setStage, setRequestId]);
 
-
   // Swipe-down on accepted card returns user to Home.
   const handleAcceptedDrag = (_: unknown, info: PanInfo) => {
     if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
@@ -939,7 +1002,9 @@ function DispatchOverlay({
       const endDate = new Date(newEndTs);
       const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
       // Recompute amount from the original hourly rate to preserve pricing.
-      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : pricing.amount / Math.max(1, durationHrs);
+      const baseHourly = cur
+        ? cur.amount / Math.max(1, cur.durationHrs)
+        : pricing.amount / Math.max(1, durationHrs);
       const newAmount = Math.round(baseHourly * newDur);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
@@ -1089,7 +1154,11 @@ function DispatchOverlay({
                   <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                     <span>MDCN-12245</span>
                     <span>·</span>
-                    <RatingPill entityId={requestId ? `doc:${requestId}` : null} role="doctor" inline />
+                    <RatingPill
+                      entityId={requestId ? `doc:${requestId}` : null}
+                      role="doctor"
+                      inline
+                    />
                   </div>
                   <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
                     {requestId && net.requests[requestId]
@@ -1175,8 +1244,6 @@ function DispatchOverlay({
   );
 }
 
-
-
 function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
   // Keeps fmtElapsed bundled even when nothing renders it directly.
   void fmtElapsed;
@@ -1204,9 +1271,7 @@ function ConnectionPulse({ className, paused }: { className?: string; paused?: b
             : { left: "calc(100% - 16px)", opacity: [0, 1, 1, 0] }
         }
         transition={
-          paused
-            ? { duration: 0.3 }
-            : { duration: 2.4, ease: "easeInOut", repeat: Infinity }
+          paused ? { duration: 0.3 } : { duration: 2.4, ease: "easeInOut", repeat: Infinity }
         }
       />
     </div>
