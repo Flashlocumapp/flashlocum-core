@@ -260,14 +260,14 @@ export function acceptIncoming() {
   if (mine.length >= 3) {
     pushToast({
       tone: "warn",
-      title: "You already have 3 upcoming confirmed shifts.",
+      title: "You already have the maximum number of confirmed shifts.",
     });
     return;
   }
   if (hasConflict(mine, incomingReq)) {
     pushToast({
       tone: "warn",
-      title: "This request overlaps an existing confirmed shift.",
+      title: "You already have the maximum number of confirmed shifts.",
       body: "FlashLocum keeps a 1-hour buffer between shifts.",
     });
     return;
