@@ -825,7 +825,8 @@ function DispatchOverlay({
   useEffect(() => {
     if (stage !== "dispatch") return;
     const cur = requestId ? net.requests[requestId] : undefined;
-    if (cur) {
+    const canReuseRequest = cur?.status === "broadcasting" || cur?.status === "paused";
+    if (cur && canReuseRequest) {
       // Coming back from configure: sync any edits then resume.
       updateRequest(cur.id, {
         hospital: location?.name ?? cur.hospital,
@@ -842,6 +843,9 @@ function DispatchOverlay({
       });
       resumeRequest(cur.id);
       return;
+    }
+    if (cur && !canReuseRequest) {
+      setRequestId(null);
     }
     if (publishedRef.current) return;
     publishedRef.current = true;
