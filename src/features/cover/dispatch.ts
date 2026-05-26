@@ -140,7 +140,7 @@ export function useDispatch(): View {
     }));
 
   let incoming: Coverage | null = null;
-  if (online && upcoming.length < 3 && !acceptedSheet) {
+  if (online && upcoming.length < 3) {
     const declined = new Set(me?.declined ?? []);
     const r = broadcastingRequests(net).find((x) => !declined.has(x.id));
     if (r) incoming = toCoverage(r);
