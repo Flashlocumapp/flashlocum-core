@@ -871,10 +871,10 @@ function DispatchOverlay({
     if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
   };
 
-  // Build edit initial seeded from current draft (real timing).
+  // Edit sheet uses HOURS for duration.
   const [editInitial, setEditInitial] = useState<EditableShift>({
     timing: draft.startTime,
-    duration: days,
+    duration: durationHrs,
     accommodation: false,
     note: draft.note ?? "",
   });
@@ -882,7 +882,7 @@ function DispatchOverlay({
   const openEdit = () => {
     setEditInitial({
       timing: draft.startTime,
-      duration: days,
+      duration: durationHrs,
       accommodation: false,
       note: draft.note ?? "",
     });
@@ -903,12 +903,17 @@ function DispatchOverlay({
     notifiedRef.current = window.setTimeout(() => setNotified(null), 2600);
 
     if (requestId) {
-      const newDraft = { ...draft, startTime: next.timing };
+      // Derive end time from start + new duration.
+      const [sh, sm] = next.timing.split(":").map(Number);
+      const totalMin = sh * 60 + sm + Math.max(1, next.duration) * 60;
+      const eh = Math.floor((totalMin / 60) % 24);
+      const em = totalMin % 60;
+      const endHHMM = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.timing),
-        durationHrs: durationHrsOf(coverage, newDraft, next.duration),
-        day: dayLabel(coverage, newDraft, next.duration),
+        end: fmtAmPm(endHHMM),
+        durationHrs: Math.max(1, next.duration),
       });
     }
   };
