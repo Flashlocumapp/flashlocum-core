@@ -277,7 +277,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       const newEndTs = newStartTs + newDur * 3_600_000;
       const endDate = new Date(newEndTs);
       const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
-      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (item ? item.amount / Math.max(1, item.durationHrs) : 0);
+      const fallbackItem = items.find((i) => i.id === id);
+      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (fallbackItem ? fallbackItem.amount / Math.max(1, fallbackItem.durationHrs) : 0);
       const newAmount = Math.round(baseHourly * newDur);
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
