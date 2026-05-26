@@ -251,20 +251,23 @@ export function acceptIncoming() {
   const idToAccept = pendingIncomingId();
   if (!idToAccept) return;
 
-  // Conflict / limit guards — soft, calm.
+  // Read latest request snapshot before mutating anything.
+  const incomingReq = currentRequest(idToAccept);
+  if (!incomingReq) return;
+
+  // Operational guards — block BEFORE touching any state.
   const mine = currentUpcomingForMe();
   if (mine.length >= 3) {
     pushToast({
       tone: "warn",
-      title: "You already have 3 confirmed shifts.",
+      title: "You already have 3 upcoming confirmed shifts.",
     });
     return;
   }
-  const incomingReq = currentRequest(idToAccept);
-  if (incomingReq && hasConflict(mine, incomingReq)) {
+  if (hasConflict(mine, incomingReq)) {
     pushToast({
       tone: "warn",
-      title: "This request conflicts with an existing confirmed shift.",
+      title: "This request overlaps an existing confirmed shift.",
       body: "FlashLocum keeps a 1-hour buffer between shifts.",
     });
     return;
@@ -279,41 +282,23 @@ export function acceptIncoming() {
   }
 }
 
-/** Operational overlap + 1-hour buffer rule. */
-const BUFFER_MIN = 60;
-function shiftWindow(r: NetRequest): { s: number; e: number } | null {
-  // Use parsed times; treat day boundary by adding duration if end <= start.
-  // Falls back to durationHrs from start when end missing.
-  // Imported lazily to avoid cycles.
-  const start = parseClockLocal(r.start);
-  if (start == null) return null;
-  let end = parseClockLocal(r.end);
-  if (end == null || end <= start) end = start + r.durationHrs * 60;
-  return { s: start, e: end };
-}
-function parseClockLocal(t: string): number | null {
-  if (!t) return null;
-  const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = parseInt(m[2], 10);
-  const ap = m[3]?.toUpperCase();
-  if (ap === "PM" && h < 12) h += 12;
-  if (ap === "AM" && h === 12) h = 0;
-  return h * 60 + min;
-}
+/**
+ * Time-based conflict — coverage TYPE is ignored. Two shifts conflict if
+ * their absolute [startTs, endTs] windows overlap, or sit within the
+ * 1-hour operational buffer. Falls back to no-conflict when timestamps
+ * are missing (legacy requests).
+ */
+const BUFFER_MS = 60 * 60 * 1000;
 function hasConflict(mine: NetRequest[], incoming: NetRequest): boolean {
-  const inc = shiftWindow(incoming);
-  if (!inc) return false;
+  if (!incoming.startTs || !incoming.endTs) return false;
   for (const m of mine) {
-    if (m.day !== incoming.day) continue;
-    const w = shiftWindow(m);
-    if (!w) continue;
-    // overlap?
-    if (inc.s < w.e && w.s < inc.e) return true;
-    // buffer (1 hour)
-    if (Math.abs(inc.s - w.e) < BUFFER_MIN) return true;
-    if (Math.abs(w.s - inc.e) < BUFFER_MIN) return true;
+    if (!m.startTs || !m.endTs) continue;
+    if (
+      incoming.startTs < m.endTs + BUFFER_MS &&
+      m.startTs < incoming.endTs + BUFFER_MS
+    ) {
+      return true;
+    }
   }
   return false;
 }
