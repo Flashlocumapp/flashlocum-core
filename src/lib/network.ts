@@ -398,12 +398,17 @@ export function updateRequest(id: string, patch: Partial<NetRequest>) {
 export function acceptRequest(id: string): boolean {
   refreshState();
   const cur = state.requests[id];
-  if (!cur || cur.status !== "broadcasting") return false;
   const sid = getSessionId();
-  applyPatch(
-    id,
-    { status: "accepted", acceptedBy: sid },
-    { actor: "doctor", actorId: sid, action: "accept" },
+  if (!cur || cur.status !== "broadcasting" || cur.acceptedBy) return false;
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: { ...cur, status: "accepted", acceptedBy: sid, updatedAt: Date.now() },
+      },
+    },
+    { actor: "doctor", actorId: sid, action: "accept", shiftId: id },
   );
   return true;
 }
