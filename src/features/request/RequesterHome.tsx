@@ -776,6 +776,8 @@ function DispatchOverlay({
   days,
   draft,
   location,
+  requestId,
+  setRequestId,
 }: {
   stage: "dispatch" | "accepted";
   setStage: (s: Stage) => void;
@@ -783,33 +785,55 @@ function DispatchOverlay({
   days: number;
   draft: Draft;
   location: Recent | null;
+  requestId: string | null;
+  setRequestId: (id: string | null) => void;
 }) {
   const [ambient, setAmbient] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [notified, setNotified] = useState<string | null>(null);
   const notifiedRef = useRef<number | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
   const publishedRef = useRef(false);
   const net = useNetwork();
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, days });
-  const acceptedMeta = compressedSummary(coverage, draft, days);
+  const dayStr = dayLabel(coverage, draft, days);
+  const startStr = fmtAmPm(draft.startTime);
+  const endStr = fmtAmPm(draft.endTime);
+  const durationHrs = durationHrsOf(coverage, draft, days);
+  const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
-  // Publish into the shared network when entering dispatch.
+  // Publish OR resume into the shared network when entering dispatch.
   useEffect(() => {
     if (stage !== "dispatch") return;
-    if (requestId || publishedRef.current) return;
+    const cur = requestId ? net.requests[requestId] : undefined;
+    if (cur) {
+      // Coming back from configure: sync any edits then resume.
+      updateRequest(cur.id, {
+        hospital: location?.name ?? cur.hospital,
+        area: location?.area ?? cur.area,
+        coverage: COVERAGE_SHORT[coverage],
+        day: dayStr,
+        start: startStr,
+        end: endStr,
+        durationHrs,
+        amount: pricing.amount,
+        note: draft.note?.trim() || undefined,
+      });
+      resumeRequest(cur.id);
+      return;
+    }
+    if (publishedRef.current) return;
     publishedRef.current = true;
     const req = publishRequest({
       hospital: location?.name ?? "Coverage",
       area: location?.area ?? "",
       coverage: COVERAGE_SHORT[coverage],
-      day: dayLabel(coverage, draft, days),
-      start: fmtAmPm(draft.startTime),
-      end: fmtAmPm(draft.endTime),
-      durationHrs: durationHrsOf(coverage, draft, days),
+      day: dayStr,
+      start: startStr,
+      end: endStr,
+      durationHrs,
       amount: pricing.amount,
       feePct: 10,
       phone: DOCTOR_PHONE,
@@ -818,14 +842,15 @@ function DispatchOverlay({
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
     return () => window.clearTimeout(t);
-  }, [stage, requestId, coverage, days, draft, location, pricing.amount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   // Pause / resume broadcasting whenever the cancel or edit sheet is open.
   useEffect(() => {
     if (!requestId) return;
     if (paused) pauseRequest(requestId);
-    else resumeRequest(requestId);
-  }, [paused, requestId]);
+    else if (stage === "dispatch") resumeRequest(requestId);
+  }, [paused, requestId, stage]);
 
   // React to acceptance OR doctor-side cancellation.
   useEffect(() => {
@@ -836,8 +861,9 @@ function DispatchOverlay({
     if (stage === "accepted" && r.status === "cancelled") {
       // Doctor cancelled — close accepted screen immediately.
       setStage("collapsed");
+      setRequestId(null);
     }
-  }, [net, requestId, stage, setStage]);
+  }, [net, requestId, stage, setStage, setRequestId]);
 
 
   // Swipe-down on accepted card returns user to Home.
