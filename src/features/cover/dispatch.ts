@@ -152,7 +152,7 @@ export function useDispatch(): View {
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
-    const r = liveRequests.find((x) => !conflictReason(currentUpcomingForMe(), x));
+    const r = liveRequests[0];
     if (r) incoming = toCoverage(r);
   }
 
