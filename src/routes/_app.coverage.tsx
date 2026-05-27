@@ -41,6 +41,7 @@ type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
   doctor: string;
+  doctorRatingId: string | null;
   mdcn: string;
   initials: string;
   coverage: Coverage;
@@ -106,6 +107,7 @@ function toRequestItem(r: NetRequest): RequestItem {
   return {
     id: r.id,
     doctor: "Dr. Emmanuel Adeleke",
+    doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
     coverage: r.coverage as Coverage,
@@ -472,7 +474,7 @@ function RequesterDetailSheet({
               <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <span>{item.mdcn}</span>
                 <span>·</span>
-                <RatingPill entityId={doctorEntityId(item.mdcn)} role="doctor" inline />
+                <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
               </div>
             </div>
           </div>
@@ -605,7 +607,7 @@ function RequestCard({
           <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
             <span className="truncate">{item.mdcn}</span>
             <span>·</span>
-            <RatingPill entityId={doctorEntityId(item.mdcn)} role="doctor" inline />
+            <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
           </div>
           <div
             className="mt-0.5 truncate text-[12.5px]"
