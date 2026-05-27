@@ -1154,11 +1154,7 @@ function DispatchOverlay({
                   <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                     <span>MDCN-12245</span>
                     <span>·</span>
-                    <RatingPill
-                      entityId={requestId ? `doc:${requestId}` : null}
-                      role="doctor"
-                      inline
-                    />
+                    <RatingPill entityId={requestId ? "doc:MDCN-12245" : null} role="doctor" inline />
                   </div>
                   <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
                     {requestId && net.requests[requestId]
