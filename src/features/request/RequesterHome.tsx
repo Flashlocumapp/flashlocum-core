@@ -211,8 +211,6 @@ function HomeScreen() {
   };
 
   const net = useNetwork();
-  const acceptedRequest = requestId ? net.requests[requestId] : undefined;
-  const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
   const markers: Marker[] = useMemo(
     () =>
       onlineDoctors(net).map((d) => ({
@@ -874,6 +872,8 @@ function DispatchOverlay({
   const notifiedRef = useRef<number | null>(null);
   const publishedRef = useRef(false);
   const net = useNetwork();
+  const acceptedRequest = requestId ? net.requests[requestId] : undefined;
+  const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, days });
