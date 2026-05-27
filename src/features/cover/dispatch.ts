@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import {
   acceptRequest,
+  type AcceptBlockReason,
   broadcastingRequests,
   cancelRequest,
   completeRequest,
@@ -65,6 +66,14 @@ function toCoverage(r: NetRequest): Coverage {
     active: r.status === "active",
     startedAt: r.startedAt,
   };
+}
+
+function conflictMessage(reason: AcceptBlockReason): string {
+  if (reason === "max") return "You already have the maximum number of confirmed shifts.";
+  if (reason === "buffer") return "This request does not provide enough transition time before your next confirmed shift.";
+  if (reason === "overlap") return "This request conflicts with an existing confirmed shift.";
+  if (reason === "claimed") return "This request has already been accepted by another doctor.";
+  return "This request is no longer available.";
 }
 
 /* ---------- History ---------- */
@@ -258,16 +267,20 @@ export function acceptIncoming() {
     });
     return;
   }
-  if (hasConflict(mine, incomingReq)) {
+  const localConflict = conflictReason(mine, incomingReq);
+  if (localConflict) {
     pushToast({
       tone: "warn",
-      title: "You already have the maximum number of confirmed shifts.",
+      title: conflictMessage(localConflict),
     });
     return;
   }
 
-  const ok = acceptRequest(idToAccept);
-  if (!ok) return;
+  const result = acceptRequest(idToAccept);
+  if (!result.ok) {
+    pushToast({ tone: "warn", title: conflictMessage(result.reason) });
+    return;
+  }
   const req = currentRequest(idToAccept);
   if (req && req.acceptedBy === sid) {
     acceptedSheet = toCoverage(req);
@@ -282,15 +295,14 @@ export function acceptIncoming() {
  * are missing (legacy requests).
  */
 const BUFFER_MS = 60 * 60 * 1000;
-function hasConflict(mine: NetRequest[], incoming: NetRequest): boolean {
-  if (!incoming.startTs || !incoming.endTs) return false;
+function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "buffer" | null {
+  if (!incoming.startTs || !incoming.endTs) return null;
   for (const m of mine) {
     if (!m.startTs || !m.endTs) continue;
-    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) {
-      return true;
-    }
+    if (incoming.startTs < m.endTs && m.startTs < incoming.endTs) return "overlap";
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) return "buffer";
   }
-  return false;
+  return null;
 }
 
 export function declineIncoming() {
