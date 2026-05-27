@@ -133,6 +133,8 @@ export function useDispatch(): View {
     .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
+  const declined = new Set(me?.declined ?? []);
+  const liveRequests = broadcastingRequests(net).filter((r) => !declined.has(r.id));
 
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
@@ -150,10 +152,14 @@ export function useDispatch(): View {
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
-    const declined = new Set(me?.declined ?? []);
-    const r = broadcastingRequests(net).find((x) => !declined.has(x.id));
+    const r = liveRequests.find((x) => !conflictReason(currentUpcomingForMe(), x));
     if (r) incoming = toCoverage(r);
   }
+
+  useEffect(() => {
+    if (!online || !me || upcoming.length < 3 || liveRequests.length === 0) return;
+    liveRequests.forEach((r) => markDeclined(r.id));
+  }, [online, me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
@@ -261,6 +267,7 @@ export function acceptIncoming() {
   // Operational guards — block BEFORE touching any state.
   const mine = currentUpcomingForMe();
   if (mine.length >= 3) {
+    markDeclined(idToAccept);
     pushToast({
       tone: "warn",
       title: "You already have the maximum number of confirmed shifts.",
@@ -269,6 +276,7 @@ export function acceptIncoming() {
   }
   const localConflict = conflictReason(mine, incomingReq);
   if (localConflict) {
+    markDeclined(idToAccept);
     pushToast({
       tone: "warn",
       title: conflictMessage(localConflict),
@@ -278,6 +286,7 @@ export function acceptIncoming() {
 
   const result = acceptRequest(idToAccept);
   if (!result.ok) {
+    markDeclined(idToAccept);
     pushToast({ tone: "warn", title: conflictMessage(result.reason) });
     return;
   }
