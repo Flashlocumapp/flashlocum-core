@@ -23,6 +23,8 @@ const SESSION_KEY = "flashlocum.session";
 const HEARTBEAT_MS = 4000;
 const STALE_MS = 12000;
 const BROADCAST_TTL_MS = 30 * 60 * 1000;
+const MAX_CONFIRMED_SHIFTS = 3;
+const BUFFER_MS = 60 * 60 * 1000;
 
 export type DoctorPresence = {
   sessionId: string;
@@ -96,6 +98,9 @@ export type NetState = {
   requests: Record<string, NetRequest>;
   lastEvent?: NetEvent;
 };
+
+export type AcceptBlockReason = "max" | "overlap" | "buffer" | "claimed" | "unavailable";
+export type AcceptRequestResult = { ok: true } | { ok: false; reason: AcceptBlockReason };
 
 const emptyState = (): NetState => ({ schemaVersion: SCHEMA_VERSION, doctors: {}, requests: {} });
 
