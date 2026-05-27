@@ -1,11 +1,9 @@
-import { useRating, verifiedLabel, type RatingRole } from "@/lib/ratings";
+import { useRating, type RatingRole } from "@/lib/ratings";
 
 /**
  * RatingPill — small calm trust marker.
  *  ⭐ 4.8
- *  Verified Doctor   (only while in default trust state)
- *
- * No counts, no review words. Restrained typography.
+ * No verified labels, counts, or review words. Restrained typography.
  */
 export function RatingPill({
   entityId,
@@ -23,7 +21,6 @@ export function RatingPill({
   const r = useRating(entityId);
   const star = size === "md" ? 13 : 11;
   const num = size === "md" ? "text-[13px]" : "text-[11.5px]";
-  const label = size === "md" ? "text-[11px]" : "text-[10.5px]";
 
   return (
     <span
@@ -47,19 +44,6 @@ export function RatingPill({
           {r.score.toFixed(1)}
         </span>
       </span>
-      {r.verified && (
-        <span
-          className={`${label} ${inline ? "ml-2" : "mt-0.5"} uppercase tracking-[0.08em]`}
-          style={{
-            color: "color-mix(in oklab, var(--color-foreground) 45%, transparent)",
-            letterSpacing: "0.04em",
-            textTransform: "none",
-            fontWeight: 500,
-          }}
-        >
-          {verifiedLabel(role)}
-        </span>
-      )}
     </span>
   );
 }
