@@ -1,8 +1,8 @@
 // FlashLocum ratings — calm ambient trust signals.
 //
 // Rules:
-// - Every newly verified participant begins at 5.0 (Verified).
-// - After 10 completed ratings, real average replaces the verified default.
+// - Every newly seen participant begins at 5.0.
+// - After 10 completed ratings, the real average replaces the default.
 // - We never expose counts to the UI ("128 ratings" is banned).
 
 import { useEffect, useState } from "react";
@@ -54,7 +54,7 @@ if (typeof window !== "undefined") {
 
 export type RatingView = {
   score: number; // displayed value, e.g. 4.8 or 5.0
-  verified: boolean; // true → display "Verified <Role>" label
+  verified: boolean; // retained for compatibility; never rendered as text
 };
 
 export function getRating(entityId: string): RatingView {
@@ -93,5 +93,6 @@ function round1(n: number) {
 }
 
 export function verifiedLabel(role: RatingRole): string {
-  return role === "doctor" ? "Verified Doctor" : "Verified Requester";
+  void role;
+  return "";
 }
