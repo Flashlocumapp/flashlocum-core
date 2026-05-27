@@ -23,6 +23,8 @@ const SESSION_KEY = "flashlocum.session";
 const HEARTBEAT_MS = 4000;
 const STALE_MS = 12000;
 const BROADCAST_TTL_MS = 30 * 60 * 1000;
+const MAX_CONFIRMED_SHIFTS = 3;
+const BUFFER_MS = 60 * 60 * 1000;
 
 export type DoctorPresence = {
   sessionId: string;
@@ -96,6 +98,9 @@ export type NetState = {
   requests: Record<string, NetRequest>;
   lastEvent?: NetEvent;
 };
+
+export type AcceptBlockReason = "max" | "overlap" | "buffer" | "claimed" | "unavailable";
+export type AcceptRequestResult = { ok: true } | { ok: false; reason: AcceptBlockReason };
 
 const emptyState = (): NetState => ({ schemaVersion: SCHEMA_VERSION, doctors: {}, requests: {} });
 
@@ -394,11 +399,32 @@ export function updateRequest(id: string, patch: Partial<NetRequest>) {
   });
 }
 
-export function acceptRequest(id: string): boolean {
+function confirmedForDoctor(s: NetState, doctorId: string): NetRequest[] {
+  return Object.values(s.requests).filter(
+    (r) => r.acceptedBy === doctorId && (r.status === "accepted" || r.status === "active"),
+  );
+}
+
+function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "buffer" | null {
+  if (!incoming.startTs || !incoming.endTs) return null;
+  for (const m of mine) {
+    if (!m.startTs || !m.endTs) continue;
+    if (incoming.startTs < m.endTs && m.startTs < incoming.endTs) return "overlap";
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) return "buffer";
+  }
+  return null;
+}
+
+export function acceptRequest(id: string): AcceptRequestResult {
   refreshState();
   const cur = state.requests[id];
   const sid = getSessionId();
-  if (!cur || cur.status !== "broadcasting" || cur.acceptedBy) return false;
+  if (!cur || cur.status !== "broadcasting") return { ok: false, reason: "unavailable" };
+  if (cur.acceptedBy) return { ok: false, reason: "claimed" };
+  const mine = confirmedForDoctor(state, sid);
+  if (mine.length >= MAX_CONFIRMED_SHIFTS) return { ok: false, reason: "max" };
+  const conflict = conflictReason(mine, cur);
+  if (conflict) return { ok: false, reason: conflict };
   save(
     {
       ...state,
@@ -409,7 +435,7 @@ export function acceptRequest(id: string): boolean {
     },
     { actor: "doctor", actorId: sid, action: "accept", shiftId: id },
   );
-  return true;
+  return { ok: true };
 }
 
 export function cancelRequest(id: string) {

@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import {
   acceptRequest,
+  type AcceptBlockReason,
   broadcastingRequests,
   cancelRequest,
   completeRequest,
@@ -67,6 +68,14 @@ function toCoverage(r: NetRequest): Coverage {
   };
 }
 
+function conflictMessage(reason: AcceptBlockReason): string {
+  if (reason === "max") return "You already have the maximum number of confirmed shifts.";
+  if (reason === "buffer") return "This request does not provide enough transition time before your next confirmed shift.";
+  if (reason === "overlap") return "This request conflicts with an existing confirmed shift.";
+  if (reason === "claimed") return "This request has already been accepted by another doctor.";
+  return "This request is no longer available.";
+}
+
 /* ---------- History ---------- */
 
 export type HistoryItem = Coverage & {
@@ -124,6 +133,8 @@ export function useDispatch(): View {
     .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
+  const declined = new Set(me?.declined ?? []);
+  const liveRequests = broadcastingRequests(net).filter((r) => !declined.has(r.id));
 
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
@@ -141,10 +152,14 @@ export function useDispatch(): View {
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
-    const declined = new Set(me?.declined ?? []);
-    const r = broadcastingRequests(net).find((x) => !declined.has(x.id));
+    const r = liveRequests[0];
     if (r) incoming = toCoverage(r);
   }
+
+  useEffect(() => {
+    if (!online || !me || upcoming.length < 3 || liveRequests.length === 0) return;
+    liveRequests.forEach((r) => markDeclined(r.id));
+  }, [online, me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
@@ -252,22 +267,29 @@ export function acceptIncoming() {
   // Operational guards — block BEFORE touching any state.
   const mine = currentUpcomingForMe();
   if (mine.length >= 3) {
+    markDeclined(idToAccept);
     pushToast({
       tone: "warn",
       title: "You already have the maximum number of confirmed shifts.",
     });
     return;
   }
-  if (hasConflict(mine, incomingReq)) {
+  const localConflict = conflictReason(mine, incomingReq);
+  if (localConflict) {
+    markDeclined(idToAccept);
     pushToast({
       tone: "warn",
-      title: "You already have the maximum number of confirmed shifts.",
+      title: conflictMessage(localConflict),
     });
     return;
   }
 
-  const ok = acceptRequest(idToAccept);
-  if (!ok) return;
+  const result = acceptRequest(idToAccept);
+  if (!result.ok) {
+    markDeclined(idToAccept);
+    pushToast({ tone: "warn", title: conflictMessage(result.reason) });
+    return;
+  }
   const req = currentRequest(idToAccept);
   if (req && req.acceptedBy === sid) {
     acceptedSheet = toCoverage(req);
@@ -282,15 +304,14 @@ export function acceptIncoming() {
  * are missing (legacy requests).
  */
 const BUFFER_MS = 60 * 60 * 1000;
-function hasConflict(mine: NetRequest[], incoming: NetRequest): boolean {
-  if (!incoming.startTs || !incoming.endTs) return false;
+function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "buffer" | null {
+  if (!incoming.startTs || !incoming.endTs) return null;
   for (const m of mine) {
     if (!m.startTs || !m.endTs) continue;
-    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) {
-      return true;
-    }
+    if (incoming.startTs < m.endTs && m.startTs < incoming.endTs) return "overlap";
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) return "buffer";
   }
-  return false;
+  return null;
 }
 
 export function declineIncoming() {

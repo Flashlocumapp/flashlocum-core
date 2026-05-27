@@ -872,6 +872,8 @@ function DispatchOverlay({
   const notifiedRef = useRef<number | null>(null);
   const publishedRef = useRef(false);
   const net = useNetwork();
+  const acceptedRequest = requestId ? net.requests[requestId] : undefined;
+  const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, days });
@@ -1154,11 +1156,7 @@ function DispatchOverlay({
                   <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                     <span>MDCN-12245</span>
                     <span>·</span>
-                    <RatingPill
-                      entityId={requestId ? `doc:${requestId}` : null}
-                      role="doctor"
-                      inline
-                    />
+                    <RatingPill entityId={acceptedDoctorRatingId} role="doctor" inline />
                   </div>
                   <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
                     {requestId && net.requests[requestId]
