@@ -472,7 +472,7 @@ function RequesterDetailSheet({
               <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <span>{item.mdcn}</span>
                 <span>·</span>
-                <RatingPill entityId={doctorEntityId(item.id)} role="doctor" inline />
+                <RatingPill entityId={doctorEntityId(item.mdcn)} role="doctor" inline />
               </div>
             </div>
           </div>
@@ -605,7 +605,7 @@ function RequestCard({
           <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
             <span className="truncate">{item.mdcn}</span>
             <span>·</span>
-            <RatingPill entityId={doctorEntityId(item.id)} role="doctor" inline />
+            <RatingPill entityId={doctorEntityId(item.mdcn)} role="doctor" inline />
           </div>
           <div
             className="mt-0.5 truncate text-[12.5px]"
