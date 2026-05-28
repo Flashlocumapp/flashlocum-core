@@ -50,7 +50,7 @@ export type NetRequest = {
   requesterSessionId: string;
   hospital: string;
   area: string;
-  coverage: string; // "Standard" | "24-Hour" | "Weekend Call" | "Home Care"
+  coverage: string; // "Standard" | "Home Call"
   day: string;
   start: string;
   end: string;
@@ -68,6 +68,11 @@ export type NetRequest = {
   // of truth for conflict detection across all coverage types.
   startTs?: number;
   endTs?: number;
+  // Multi-day lifecycle.
+  daysTotal?: number;
+  daysCompleted?: number;
+  // Cancellation attribution — who actually cancelled.
+  cancelledBy?: "requester" | "doctor";
 };
 
 export type Actor = "requester" | "doctor" | "system";
