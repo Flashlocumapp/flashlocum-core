@@ -61,6 +61,28 @@ export function parseClock(t: string): number | null {
   return h * 60 + min;
 }
 
+/** "Dr. Emmanuel Adeleke" → "Dr. Emmanuel A." */
+export function shortDoctorName(full: string): string {
+  if (!full) return full;
+  const stripped = full.replace(/^Dr\.?\s+/i, "").trim();
+  const parts = stripped.split(/\s+/);
+  if (parts.length === 0) return full;
+  const first = parts[0];
+  const last = parts[parts.length - 1] ?? "";
+  const initial = last ? last[0].toUpperCase() + "." : "";
+  return `Dr. ${first}${initial ? " " + initial : ""}`.trim();
+}
+
+/** "HH:MM" 24h → "8:00AM" */
+export function fmtAmPm(hhmm: string): string {
+  if (!hhmm) return hhmm;
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h)) return hhmm;
+  const period = h >= 12 ? "PM" : "AM";
+  const hr = ((h + 11) % 12) + 1;
+  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+}
+
 // History meta:  Type · Date · Time · Duration · Amount
 export function fmtHistoryMeta(
   coverage: string,
