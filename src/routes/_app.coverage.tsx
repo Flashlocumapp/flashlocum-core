@@ -211,7 +211,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [editInitial, setEditInitial] = useState<EditableShift>({
-    timing: "08:00", duration: 1, accommodation: false, note: "",
+    startTime: "08:00", endTime: "18:00", durationHrs: 10, note: "",
   });
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
