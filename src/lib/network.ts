@@ -463,40 +463,51 @@ export function cancelRequest(id: string) {
   );
 }
 
+/**
+ * Start (or Resume) a shift. If `accumulatedMs` already exists from a prior
+ * Pause, it is preserved — the timer continues from the previous total.
+ * Never resets accumulated billing or creates a new shift instance.
+ */
 export function startRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur) return;
+  const isResume = (cur.accumulatedMs ?? 0) > 0;
   save(
     {
       ...state,
       requests: {
         ...state.requests,
-        [id]: { ...cur, status: "active", startedAt: simNow(), updatedAt: simNow() },
+        [id]: {
+          ...cur,
+          status: "active",
+          startedAt: simNow(),
+          accumulatedMs: cur.accumulatedMs ?? 0,
+          updatedAt: simNow(),
+        },
       },
     },
-    { actor: "requester", actorId: getSessionId(), action: "start", shiftId: id },
-  );
-}
-
-export function completeRequest(id: string) {
-  applyPatch(
-    id,
-    { status: "completed" },
-    { actor: "requester", actorId: getSessionId(), action: "complete" },
+    {
+      actor: "requester",
+      actorId: getSessionId(),
+      action: isResume ? "resume" : "start",
+      shiftId: id,
+    },
   );
 }
 
 /**
- * Multi-day mid-shift pause: end the current operational day and move the
- * request back into Upcoming Coverage for the next day. Does NOT settle,
- * close, or trigger payment — multi-day requests settle once at the end.
+ * Pause an active shift. Folds the current segment into `accumulatedMs`,
+ * clears `startedAt`, and moves the request back to Upcoming Coverage.
+ * Preserves operational continuity — Resume picks up exactly where Pause
+ * left off.
  */
-export function endShiftDay(id: string) {
+export function pauseShift(id: string) {
   refreshState();
   const cur = state.requests[id];
-  if (!cur) return;
-  const nextIndex = Math.max(1, (cur.dayIndex ?? 1)) + 1;
+  if (!cur || cur.status !== "active") return;
+  const segment = cur.startedAt ? Math.max(0, simNow() - cur.startedAt) : 0;
+  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
   save(
     {
       ...state,
@@ -506,7 +517,7 @@ export function endShiftDay(id: string) {
           ...cur,
           status: "accepted",
           startedAt: undefined,
-          dayIndex: nextIndex,
+          accumulatedMs,
           updatedAt: simNow(),
         },
       },
@@ -514,6 +525,38 @@ export function endShiftDay(id: string) {
     { actor: "requester", actorId: getSessionId(), action: "pause", shiftId: id },
   );
 }
+
+/**
+ * Finalize a shift permanently. Flushes the current segment into
+ * `accumulatedMs` so the settled total reflects the full continuous timer.
+ */
+export function completeRequest(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  const segment =
+    cur.status === "active" && cur.startedAt
+      ? Math.max(0, simNow() - cur.startedAt)
+      : 0;
+  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: {
+          ...cur,
+          status: "completed",
+          accumulatedMs,
+          startedAt: undefined,
+          updatedAt: simNow(),
+        },
+      },
+    },
+    { actor: "requester", actorId: getSessionId(), action: "complete", shiftId: id },
+  );
+}
+
 
 
 /** Pause broadcasting (hides from doctors) without losing request. */
