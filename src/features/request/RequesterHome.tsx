@@ -34,10 +34,13 @@ const RECENT: Recent[] = [
 
 const COVERAGE: { id: CoverageId; label: string }[] = [
   { id: "standard", label: "Standard" },
-  { id: "24h", label: "24-Hour" },
-  { id: "weekend", label: "Weekend Call" },
   { id: "home", label: "Home Care" },
 ];
+
+const COVERAGE_SUBTEXT: Partial<Record<CoverageId, string>> = {
+  standard: "For hospitals, clinics, facilities, and medical centers.",
+  home: "For private residences and personal in-home care.",
+};
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
 
