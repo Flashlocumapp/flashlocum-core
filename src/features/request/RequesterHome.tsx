@@ -691,12 +691,16 @@ function CtrlField({
   value,
   onChange,
   readOnly,
+  min,
+  max,
 }: {
   label: string;
   type: "date" | "time";
   value: string;
   onChange?: (v: string) => void;
   readOnly?: boolean;
+  min?: string;
+  max?: string;
 }) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -707,7 +711,30 @@ function CtrlField({
         type={type}
         value={value}
         readOnly={readOnly}
-        onChange={(e) => onChange?.(e.target.value)}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (type === "date") {
+            if (min && v < min) {
+              pushToast({
+                tone: "info",
+                title: "Coverage requests start from today.",
+              });
+              onChange?.(min);
+              return;
+            }
+            if (max && v > max) {
+              pushToast({
+                tone: "info",
+                title: "Coverage requests are limited to 7 days maximum.",
+              });
+              onChange?.(max);
+              return;
+            }
+          }
+          onChange?.(v);
+        }}
         className="bg-transparent text-[14px] font-medium outline-none"
       />
     </label>
@@ -721,6 +748,7 @@ function Stepper({
   min,
   max,
   unit,
+  onCap,
 }: {
   label: string;
   value: number;
@@ -728,6 +756,7 @@ function Stepper({
   min: number;
   max: number;
   unit: (n: number) => string;
+  onCap?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -747,7 +776,13 @@ function Stepper({
         </span>
         <button
           type="button"
-          onClick={() => setValue(Math.min(max, value + 1))}
+          onClick={() => {
+            if (value >= max) {
+              onCap?.();
+              return;
+            }
+            setValue(Math.min(max, value + 1));
+          }}
           className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-elevated text-foreground/70 active:scale-95"
         >
           +
@@ -760,12 +795,18 @@ function Stepper({
 function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
   return (
     <Stepper
-      label="Duration"
+      label="Coverage Length"
       value={value}
       setValue={setValue}
       min={1}
       max={7}
       unit={(n) => (n === 1 ? "day" : "days")}
+      onCap={() =>
+        pushToast({
+          tone: "info",
+          title: "Coverage requests are limited to 7 days maximum.",
+        })
+      }
     />
   );
 }
