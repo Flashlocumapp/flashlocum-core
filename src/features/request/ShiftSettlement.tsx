@@ -168,7 +168,8 @@ export function ShiftSettlement({
     endedAtRef.current = now;
     overtimeStartedAtRef.current = null;
     // Freeze the bill at the moment of End Shift.
-    const w = Math.max(0, (now - shift.startedAt) / 60000);
+    const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
+    const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
     const bm = roundedOverrunMinutes(w);
     frozenBilledMinRef.current = bm;
     frozenAmountRef.current = computeWorkedPricing(
