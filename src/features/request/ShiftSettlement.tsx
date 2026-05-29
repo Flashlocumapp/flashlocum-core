@@ -156,6 +156,8 @@ export function ShiftSettlement({
           shift.coverageKind,
           shift.startHHMM,
           bm,
+          shift.endHHMM,
+          shift.days,
         ).amount;
       } else {
         frozenBilledMinRef.current = 0;
