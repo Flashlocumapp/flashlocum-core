@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { getRole } from "./role";
+import { simNow } from "./clock";
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
@@ -162,7 +163,7 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
   //   1) update global state  → 2) persist  → 3) notify  → 4) broadcast
   const { lastEvent: _previousEvent, ...withoutEvent } = next;
   const stamped: NetState = event
-    ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: Date.now() } }
+    ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: simNow() } }
     : { ...withoutEvent, schemaVersion: SCHEMA_VERSION };
   state = stamped;
   if (typeof window === "undefined") return;
@@ -176,7 +177,7 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
 }
 
 function pruneStale(s: NetState): NetState {
-  const now = Date.now();
+  const now = simNow();
   const doctors: Record<string, DoctorPresence> = {};
   for (const [k, d] of Object.entries(s.doctors)) {
     if (now - d.lastSeen < STALE_MS) doctors[k] = d;
@@ -265,7 +266,7 @@ export function registerDoctor(initialOnline: boolean) {
         acceptedCount: current?.acceptedCount ?? 0,
         top: pos.top,
         left: pos.left,
-        lastSeen: Date.now(),
+        lastSeen: simNow(),
         declined: current?.declined ?? [],
       },
     },
@@ -288,7 +289,7 @@ export function heartbeat() {
   if (!d) return;
   save({
     ...state,
-    doctors: { ...state.doctors, [sid]: { ...d, lastSeen: Date.now() } },
+    doctors: { ...state.doctors, [sid]: { ...d, lastSeen: simNow() } },
   });
 }
 
@@ -304,7 +305,7 @@ export function setDoctorOnline(online: boolean) {
     ...state,
     doctors: {
       ...state.doctors,
-      [sid]: { ...d, online, lastSeen: Date.now() },
+      [sid]: { ...d, online, lastSeen: simNow() },
     },
   });
 }
@@ -318,7 +319,7 @@ export function setDoctorAcceptedCount(n: number) {
     ...state,
     doctors: {
       ...state.doctors,
-      [sid]: { ...d, acceptedCount: n, lastSeen: Date.now() },
+      [sid]: { ...d, acceptedCount: n, lastSeen: simNow() },
     },
   });
 }
@@ -360,7 +361,7 @@ export function publishRequest(
 ): NetRequest {
   refreshState();
   const sid = getSessionId();
-  const now = Date.now();
+  const now = simNow();
   const id = "r_" + now.toString(36) + Math.random().toString(36).slice(2, 6);
   const full: NetRequest = {
     ...req,
@@ -390,7 +391,7 @@ function applyPatch(
       ...state,
       requests: {
         ...state.requests,
-        [id]: { ...cur, ...patch, updatedAt: Date.now() },
+        [id]: { ...cur, ...patch, updatedAt: simNow() },
       },
     },
     { ...event, shiftId: id },
@@ -437,7 +438,7 @@ export function acceptRequest(id: string): AcceptRequestResult {
       ...state,
       requests: {
         ...state.requests,
-        [id]: { ...cur, status: "accepted", acceptedBy: sid, updatedAt: Date.now() },
+        [id]: { ...cur, status: "accepted", acceptedBy: sid, updatedAt: simNow() },
       },
     },
     { actor: "doctor", actorId: sid, action: "accept", shiftId: id },
@@ -463,7 +464,7 @@ export function startRequest(id: string) {
       ...state,
       requests: {
         ...state.requests,
-        [id]: { ...cur, status: "active", startedAt: Date.now(), updatedAt: Date.now() },
+        [id]: { ...cur, status: "active", startedAt: simNow(), updatedAt: simNow() },
       },
     },
     { actor: "requester", actorId: getSessionId(), action: "start", shiftId: id },
@@ -498,7 +499,7 @@ export function endShiftDay(id: string) {
           status: "accepted",
           startedAt: undefined,
           dayIndex: nextIndex,
-          updatedAt: Date.now(),
+          updatedAt: simNow(),
         },
       },
     },
@@ -549,7 +550,7 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
-  const now = Date.now();
+  const now = simNow();
   return Object.values(s.requests)
     .filter((r) => r.status === "broadcasting" && now - r.createdAt <= BROADCAST_TTL_MS)
     .sort((a, b) => a.createdAt - b.createdAt);

@@ -7,7 +7,9 @@ import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
+import { SimClockPanel } from "@/components/SimClockPanel";
 import { getRole, hasRole } from "@/lib/role";
+
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -67,6 +69,8 @@ function AppShell() {
       </AnimatePresence>
       <CoverDispatchPortal />
       <ToastHost />
+      <SimClockPanel />
     </div>
   );
 }
+
