@@ -50,17 +50,35 @@ const COVER_SECTIONS: Section[] = [
 function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>("request");
+  const [switchPrompt, setSwitchPrompt] = useState<Role | null>(null);
   useEffect(() => setLocalRole(getRole()), []);
 
   const roleLabel = role === "cover" ? "Cover & Earn" : "Request Coverage";
   const otherLabel = role === "cover" ? "Request Coverage" : "Cover & Earn";
 
-  const switchRole = () => {
-    const next: Role = role === "cover" ? "request" : "cover";
+  const doSwitch = (next: Role) => {
     setRole(next);
     setLocalRole(next);
-    navigate({ to: "/home" });
+    if (!isOnboarded(next)) {
+      navigate({ to: "/onboarding/$role", params: { role: next } });
+    } else {
+      navigate({ to: "/home" });
+    }
   };
+
+  const switchRole = () => {
+    const next: Role = role === "cover" ? "request" : "cover";
+    if (!isOnboarded(next)) {
+      setSwitchPrompt(next);
+      return;
+    }
+    doSwitch(next);
+  };
+
+  const openProfile = () => {
+    navigate({ to: "/onboarding/$role", params: { role } });
+  };
+
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
