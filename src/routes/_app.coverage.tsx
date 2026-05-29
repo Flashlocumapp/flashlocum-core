@@ -253,9 +253,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     const item = items.find((i) => i.id === id);
     if (!item) return;
     setEditInitial({
-      timing: ampmTo24h(item.start),
-      duration: item.durationHrs,
-      accommodation: false,
+      startTime: ampmTo24h(item.start),
+      endTime: ampmTo24h(item.end),
+      durationHrs: item.durationHrs,
       note: item.note ?? "",
     });
     setEditTargetId(id);
@@ -266,26 +266,24 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setEditTargetId(null);
     if (id) {
       const cur = net.requests[id];
-      const newDur = Math.max(1, next.duration);
+      const newDur = Math.max(1, next.durationHrs);
       // Use the existing request's startTs date portion (or today) as the
       // base so editing only the time of day doesn't shift the calendar day.
       const baseDate = cur?.startTs
         ? new Date(cur.startTs)
         : new Date();
-      const [nh, nm] = next.timing.split(":").map(Number);
+      const [nh, nm] = next.startTime.split(":").map(Number);
       const newStart = new Date(baseDate);
       newStart.setHours(nh, nm, 0, 0);
       const newStartTs = newStart.getTime();
       const newEndTs = newStartTs + newDur * 3_600_000;
-      const endDate = new Date(newEndTs);
-      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
       const fallbackItem = items.find((i) => i.id === id);
       const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (fallbackItem ? fallbackItem.amount / Math.max(1, fallbackItem.durationHrs) : 0);
       const newAmount = Math.round(baseHourly * newDur);
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
-        start: amPmFromHHMM(next.timing),
-        end: amPmFromHHMM(endHHMM),
+        start: amPmFromHHMM(next.startTime),
+        end: amPmFromHHMM(next.endTime),
         durationHrs: newDur,
         amount: newAmount,
         startTs: newStartTs,
@@ -293,9 +291,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {
-      timing: "Coverage timing updated",
-      duration: "Coverage duration updated",
-      accommodation: "Accommodation updated",
+      startTime: "Coverage start time updated",
+      endTime: "Coverage end time updated",
+      durationHrs: "Coverage length updated",
       note: "Coverage notes updated",
       multiple: "Coverage details updated",
     };
