@@ -533,7 +533,7 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                Start Shift
+                {(item.daysCompleted ?? 0) > 0 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
             {item.status === "active" && (
@@ -541,8 +541,13 @@ function RequesterDetailSheet({
                 onClick={() => onEnd(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                End Shift
+                {(() => {
+                  const total = Math.max(1, item.daysTotal ?? 1);
+                  const next = (item.daysCompleted ?? 0) + 1;
+                  return next >= total ? "End Shift" : "End Today's Shift";
+                })()}
               </button>
+            )}
             )}
           </div>
 
