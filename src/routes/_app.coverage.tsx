@@ -36,8 +36,6 @@ export const Route = createFileRoute("/_app/coverage")({
 });
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
-type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
-type ReqStatus = "upcoming" | "active" | "completed";
 type Coverage = "Standard" | "Home Call" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
