@@ -560,6 +560,13 @@ function ConfigureBody({
         })}
       </div>
 
+      {/* Calm operational subtext for the active coverage type */}
+      {COVERAGE_SUBTEXT[coverage] && (
+        <p className="-mt-2 px-1 text-[12px] leading-snug text-muted-foreground">
+          {COVERAGE_SUBTEXT[coverage]}
+        </p>
+      )}
+
       {/* Dynamic fields — switch fluidly per coverage type */}
       <AnimatePresence mode="wait">
         <motion.div
