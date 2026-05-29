@@ -453,9 +453,6 @@ function SettlementPane({
           >
             {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
           </button>
-          <p className="mt-3 text-center text-[11.5px] text-muted-foreground">
-            Payment is detected automatically. This is just a heads-up.
-          </p>
         </div>
       </div>
     </motion.section>
