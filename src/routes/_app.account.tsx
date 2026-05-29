@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
+import { isOnboarded } from "@/lib/onboarding";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
 });
+
 
 type Section = { label: string; rows: { id: string; title: string; meta?: string }[] };
 
