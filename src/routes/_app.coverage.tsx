@@ -314,30 +314,32 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setEditTargetId(null);
     if (id) {
       const cur = net.requests[id];
-      const newDur = Math.max(1, next.durationHrs);
-      // Use the existing request's startTs date portion (or today) as the
-      // base so editing only the time of day doesn't shift the calendar day.
-      const baseDate = cur?.startTs
-        ? new Date(cur.startTs)
-        : new Date();
+      const fallbackItem = items.find((i) => i.id === id);
+      // Coverage Length (days) is NEVER lost during edits. Per-day duration
+      // comes from the sheet (derived from start/end); total = perDay × days.
+      const days = Math.max(1, cur?.days ?? fallbackItem?.days ?? 1);
+      const perDay = Math.max(1, next.durationHrs);
+      const totalDur = perDay * days;
+      const baseDate = cur?.startTs ? new Date(cur.startTs) : new Date();
       const [nh, nm] = next.startTime.split(":").map(Number);
       const newStart = new Date(baseDate);
       newStart.setHours(nh, nm, 0, 0);
       const newStartTs = newStart.getTime();
-      const newEndTs = newStartTs + newDur * 3_600_000;
-      const fallbackItem = items.find((i) => i.id === id);
+      const newEndTs = newStartTs + totalDur * 3_600_000;
       const kind = coverageKindFromLabel(cur?.coverage ?? fallbackItem?.coverage ?? "Standard");
-      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, 1);
+      // Re-price across ALL booked days so multi-day totals stay correct.
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, days);
       const newAmount = repriced.amount;
 
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
         start: amPmFromHHMM(next.startTime),
         end: amPmFromHHMM(next.endTime),
-        durationHrs: newDur,
+        durationHrs: totalDur,
         amount: newAmount,
         startTs: newStartTs,
         endTs: newEndTs,
+        days,
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {
