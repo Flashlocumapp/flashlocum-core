@@ -78,15 +78,25 @@ function nightHoursInWindow(startHHMM: string, endHHMM: string): number {
   return night;
 }
 
-function computePricing({ coverage, days, hoursPerDay, nightHours }: PricingContext) {
-  const d = Math.max(1, days);
-  const dayRate = coverage === "home" ? 5500 : 4500;
+function computePricing(args: { coverage: CoverageId; days: number; draft?: Draft; hoursPerDay?: number; nightHours?: number }) {
+  const d = Math.max(1, args.days);
+  let hoursPerDay = args.hoursPerDay ?? 0;
+  let nightHours = args.nightHours ?? 0;
+  if (args.draft) {
+    const [sh, sm] = args.draft.startTime.split(":").map(Number);
+    const [eh, em] = args.draft.endTime.split(":").map(Number);
+    let mins = eh * 60 + em - (sh * 60 + sm);
+    if (mins <= 0) mins += 24 * 60;
+    hoursPerDay = Math.round(mins / 60);
+    nightHours = nightHoursInWindow(args.draft.startTime, args.draft.endTime);
+  }
+  const dayRate = args.coverage === "home" ? 5500 : 4500;
   const nightPremium = 0.25;
   const dayHours = Math.max(0, hoursPerDay - nightHours);
   const perDay = Math.round(dayHours * dayRate + nightHours * dayRate * (1 + nightPremium));
   const amount = perDay * d;
   const explanation =
-    coverage === "home"
+    args.coverage === "home"
       ? "Home Call coverage with after-hours premium applied."
       : nightHours > 0
         ? "Standard coverage includes after-hours premium for evening hours."
