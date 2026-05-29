@@ -1,60 +1,46 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
-import { isOnboarded } from "@/lib/onboarding";
+import {
+  getProfile,
+  isOnboarded,
+  saveProfile,
+  type DoctorProfile,
+  type RequesterProfile,
+} from "@/lib/onboarding";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
 });
 
-
-type Section = { label: string; rows: { id: string; title: string; meta?: string }[] };
-
-const REQUESTER_SECTIONS: Section[] = [
-  {
-    label: "Identity",
-    rows: [
-      { id: "profile", title: "Profile" },
-      { id: "verification", title: "Verification", meta: "Verified" },
-      { id: "facility", title: "Facility profile" },
-    ],
-  },
-  {
-    label: "Operations",
-    rows: [
-      { id: "payouts", title: "Payouts" },
-      { id: "support", title: "Support" },
-      { id: "settings", title: "Settings" },
-    ],
-  },
-];
-
-const COVER_SECTIONS: Section[] = [
-  {
-    label: "Identity",
-    rows: [
-      { id: "profile", title: "Profile" },
-      { id: "verification", title: "Verification", meta: "Verified" },
-    ],
-  },
-  {
-    label: "Operations",
-    rows: [
-      { id: "payouts", title: "Payouts" },
-      { id: "support", title: "Support" },
-      { id: "settings", title: "Settings" },
-    ],
-  },
-];
+const REQUESTER_IDENTITY = {
+  name: "Ada Okafor",
+  email: "ada@gmail.com",
+  initials: "AO",
+};
+const DOCTOR_IDENTITY = {
+  name: "Dr. Emmanuel Adeleke",
+  email: "doctor@gmail.com",
+  initials: "EA",
+};
 
 function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>("request");
   const [switchPrompt, setSwitchPrompt] = useState<Role | null>(null);
-  useEffect(() => setLocalRole(getRole()), []);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [requester, setRequester] = useState<RequesterProfile>({});
+  const [doctor, setDoctor] = useState<DoctorProfile>({});
 
-  const roleLabel = role === "cover" ? "Cover & Earn" : "Request Coverage";
-  const otherLabel = role === "cover" ? "Request Coverage" : "Cover & Earn";
+  useEffect(() => {
+    const r = getRole();
+    setLocalRole(r);
+    setRequester(getProfile<RequesterProfile>("request"));
+    setDoctor(getProfile<DoctorProfile>("cover"));
+  }, []);
+
+  const isDoctor = role === "cover";
+  const identity = isDoctor ? DOCTOR_IDENTITY : REQUESTER_IDENTITY;
 
   const doSwitch = (next: Role) => {
     setRole(next);
@@ -67,7 +53,7 @@ function AccountScreen() {
   };
 
   const switchRole = () => {
-    const next: Role = role === "cover" ? "request" : "cover";
+    const next: Role = isDoctor ? "request" : "cover";
     if (!isOnboarded(next)) {
       setSwitchPrompt(next);
       return;
@@ -75,10 +61,19 @@ function AccountScreen() {
     doSwitch(next);
   };
 
-  const openProfile = () => {
-    navigate({ to: "/onboarding/$role", params: { role } });
-  };
-
+  const personalRows = useMemo(() => {
+    if (isDoctor) {
+      return [
+        { label: "MDCN Number", value: doctor.mdcn || "—" },
+        { label: "Verification Status", value: doctor.selfie && doctor.mdcn ? "Verified" : "Pending" },
+        { label: "Years of Experience", value: doctor.years || "—" },
+      ];
+    }
+    return [
+      { label: "Phone Number", value: requester.phone || "—" },
+      { label: "Gender", value: requester.gender || "—" },
+    ];
+  }, [isDoctor, doctor, requester]);
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
@@ -88,104 +83,107 @@ function AccountScreen() {
         </div>
       </header>
 
-      <div className="mx-auto mt-4 max-w-md px-5 pb-10">
-        <div
-          className="flex items-center gap-3 rounded-2xl p-4"
-          style={{ background: "var(--color-surface-elevated)" }}
-        >
+      <div className="mx-auto mt-5 max-w-md px-5 pb-10">
+        {/* Identity block */}
+        <div className="flex items-center gap-3.5">
           <span
-            className="flex h-12 w-12 items-center justify-center rounded-full text-[16px] font-semibold"
+            className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-[16px] font-semibold"
             style={{
               background: "color-mix(in oklab, var(--color-primary) 12%, transparent)",
               color: "var(--color-primary)",
             }}
           >
-            AO
+            {isDoctor && doctor.selfie ? (
+              <img src={doctor.selfie} alt="" className="h-full w-full object-cover" />
+            ) : (
+              identity.initials
+            )}
           </span>
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-medium">Dr. Adaobi Okeke</div>
-            <div className="text-[12.5px] text-muted-foreground">
-              {roleLabel} · Lagos
-            </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[18px] font-semibold tracking-tight">{identity.name}</div>
+            <div className="truncate text-[13px] text-muted-foreground">{identity.email}</div>
           </div>
-          <span
-            className="rounded-full px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.12em]"
-            style={{
-              background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
-              color: "var(--color-presence)",
-            }}
-          >
-            Online
-          </span>
         </div>
 
-        <button
-          onClick={switchRole}
-          className="mt-3 flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left active:bg-accent"
-          style={{ background: "var(--color-surface-elevated)" }}
-        >
-          <span className="flex flex-col">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Switch to
-            </span>
-            <span className="text-[14.5px] font-medium">{otherLabel}</span>
-          </span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-            <path d="M7 7h10v10M17 7L7 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+        <Section title={isDoctor ? "Professional Information" : "Personal Information"}>
+          <button
+            onClick={() => setProfileOpen(true)}
+            className="w-full overflow-hidden rounded-2xl text-left active:bg-accent"
+            style={{ background: "var(--color-surface-elevated)" }}
+          >
+            {personalRows.map((r, i) => (
+              <div
+                key={r.label}
+                className="flex items-center justify-between px-4 py-3.5"
+                style={{
+                  borderTop:
+                    i === 0
+                      ? "none"
+                      : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
+                }}
+              >
+                <span className="text-[14.5px]">{r.label}</span>
+                <span className="ml-3 truncate text-[13px] text-muted-foreground">{r.value}</span>
+              </div>
+            ))}
+          </button>
+        </Section>
 
-        {(role === "cover" ? COVER_SECTIONS : REQUESTER_SECTIONS).map((s) => (
-          <div key={s.label} className="mt-6">
-            <div className="px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              {s.label}
-            </div>
-            <ul
-              className="mt-2 overflow-hidden rounded-2xl"
-              style={{ background: "var(--color-surface-elevated)" }}
-            >
-              {s.rows.map((r, i) => (
-                <li
-                  key={r.id}
-                  style={{
-                    borderTop:
-                      i === 0
-                        ? "none"
-                        : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
-                  }}
-                >
-                  <button
-                    onClick={() => {
-                      if (r.id === "profile" || r.id === "verification") openProfile();
-                    }}
-                    className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-accent"
-                  >
-                    <span className="text-[14.5px]">{r.title}</span>
-                    <span className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-                      {r.meta}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </span>
-                  </button>
+        {isDoctor && (
+          <Section title="Payouts">
+            <ListGroup>
+              <DetailRow label="Bank Name" value={doctor.bankName || "—"} />
+              <DetailRow label="Account Number" value={doctor.bankAccount || "—"} />
+              <DetailRow label="Account Name" value={doctor.bankName ? identity.name : "—"} last />
+            </ListGroup>
+          </Section>
+        )}
 
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        <Section title="Support">
+          <ListGroup>
+            <NavRow title="Help Center" onClick={() => {}} />
+            <NavRow title="Contact Support" onClick={() => {}} last />
+          </ListGroup>
+        </Section>
 
-        <button
-          onClick={() => {
-            clearRole();
-            navigate({ to: "/role" });
-          }}
-          className="mt-8 w-full rounded-2xl py-3.5 text-[14px] font-medium text-muted-foreground active:bg-accent"
-          style={{ background: "var(--color-secondary)" }}
-        >
-          Sign out
-        </button>
+        <Section title="Account">
+          <ListGroup>
+            <NavRow
+              title={isDoctor ? "Switch to Request Coverage" : "Switch to Cover & Earn"}
+              onClick={switchRole}
+            />
+            <NavRow
+              title="Sign Out"
+              onClick={() => {
+                clearRole();
+                navigate({ to: "/role" });
+              }}
+              tone="muted"
+              last
+            />
+          </ListGroup>
+        </Section>
       </div>
+
+      {profileOpen && (
+        <ProfileSheet
+          isDoctor={isDoctor}
+          identity={identity}
+          requester={requester}
+          doctor={doctor}
+          onClose={() => setProfileOpen(false)}
+          onSave={(next) => {
+            if (isDoctor) {
+              setDoctor(next as DoctorProfile);
+              saveProfile("cover", next);
+            } else {
+              setRequester(next as RequesterProfile);
+              saveProfile("request", next);
+            }
+            setProfileOpen(false);
+          }}
+        />
+      )}
 
       {switchPrompt && (
         <div
@@ -232,3 +230,248 @@ function AccountScreen() {
   );
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-7">
+      <div className="px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+      </div>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function ListGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="overflow-hidden rounded-2xl [&>*+*]:border-t [&>*+*]:border-[color:color-mix(in_oklab,var(--color-foreground)_5%,transparent)]"
+      style={{ background: "var(--color-surface-elevated)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function NavRow({
+  title,
+  onClick,
+  tone,
+  last,
+}: {
+  title: string;
+  onClick: () => void;
+  tone?: "muted";
+  last?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-accent"
+      style={{
+        borderTop: last || tone ? undefined : undefined,
+        borderBottom: undefined,
+      }}
+    >
+      <span
+        className="text-[14.5px]"
+        style={{ color: tone === "muted" ? "var(--color-muted-foreground)" : undefined }}
+      >
+        {title}
+      </span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div
+      className="flex items-center justify-between px-4 py-3.5"
+      style={{
+        borderTop: "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
+        borderTopWidth: undefined,
+      }}
+    >
+      <span className="text-[14.5px]">{label}</span>
+      <span className="ml-3 truncate text-[13px] text-muted-foreground">{value}</span>
+      {last ? null : null}
+    </div>
+  );
+}
+
+function ProfileSheet({
+  isDoctor,
+  identity,
+  requester,
+  doctor,
+  onClose,
+  onSave,
+}: {
+  isDoctor: boolean;
+  identity: { name: string; email: string };
+  requester: RequesterProfile;
+  doctor: DoctorProfile;
+  onClose: () => void;
+  onSave: (data: RequesterProfile | DoctorProfile) => void;
+}) {
+  const [r, setR] = useState<RequesterProfile>(requester);
+  const [d, setD] = useState<DoctorProfile>(doctor);
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[92%] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card p-5 pb-8"
+        style={{ boxShadow: "0 -20px 60px -20px rgba(0,0,0,0.45)" }}
+      >
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/20" />
+        <div className="text-[18px] font-semibold tracking-tight">
+          {isDoctor ? "Doctor Profile" : "Profile"}
+        </div>
+
+        <div className="mt-5 space-y-3">
+          <ReadField label="Full Name" value={identity.name} />
+          {!isDoctor ? (
+            <>
+              <EditField
+                label="Phone Number"
+                value={r.phone ?? ""}
+                onChange={(v) => setR((p) => ({ ...p, phone: v }))}
+                placeholder="+234 800 000 0000"
+                type="tel"
+              />
+              <SelectField
+                label="Gender"
+                value={r.gender ?? ""}
+                onChange={(v) => setR((p) => ({ ...p, gender: v }))}
+                options={["Female", "Male", "Prefer not to say"]}
+              />
+            </>
+          ) : (
+            <>
+              <EditField
+                label="Phone Number"
+                value={d.phone ?? ""}
+                onChange={(v) => setD((p) => ({ ...p, phone: v }))}
+                placeholder="+234 800 000 0000"
+                type="tel"
+              />
+              <ReadField label="MDCN Number" value={d.mdcn || "—"} />
+              <SelectField
+                label="Years of Experience"
+                value={d.years ?? ""}
+                onChange={(v) => setD((p) => ({ ...p, years: v }))}
+                options={["< 1", "1–3", "3–5", "5–10", "10+"]}
+              />
+              <EditField
+                label="Bank Name"
+                value={d.bankName ?? ""}
+                onChange={(v) => setD((p) => ({ ...p, bankName: v }))}
+                placeholder="GTBank"
+              />
+              <EditField
+                label="Account Number"
+                value={d.bankAccount ?? ""}
+                onChange={(v) => setD((p) => ({ ...p, bankAccount: v }))}
+                placeholder="0123456789"
+              />
+              <ReadField
+                label="Verification Status"
+                value={d.selfie && d.mdcn ? "Verified" : "Pending"}
+              />
+            </>
+          )}
+          <ReadField label="Email Address" value={identity.email} />
+        </div>
+
+        <p className="mt-4 text-[12px] text-muted-foreground">
+          To update your legal name or email address, contact support.
+        </p>
+
+        <div className="mt-5 flex gap-2.5">
+          <button
+            onClick={onClose}
+            className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(isDoctor ? d : r)}
+            className="h-11 flex-1 rounded-2xl bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReadField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <label className="text-[12px] font-medium text-muted-foreground">{label}</label>
+      <div
+        className="mt-1.5 flex h-12 w-full items-center rounded-2xl px-4 text-[15px] text-muted-foreground"
+        style={{ background: "var(--color-surface-elevated)" }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function EditField({
+  label,
+  value,
+  onChange,
+  ...rest
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
+  return (
+    <div>
+      <label className="text-[12px] font-medium text-muted-foreground">{label}</label>
+      <input
+        {...rest}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1.5 h-12 w-full rounded-2xl bg-secondary px-4 text-[15px] outline-none placeholder:text-muted-foreground/70"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  return (
+    <div>
+      <label className="text-[12px] font-medium text-muted-foreground">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1.5 h-12 w-full appearance-none rounded-2xl bg-secondary px-4 text-[15px] outline-none"
+      >
+        <option value="">Select…</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
