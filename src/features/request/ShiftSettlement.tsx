@@ -409,12 +409,10 @@ function ConfirmedPane({
   shift,
   overtimeSec,
   onClose,
-  onRebook,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
   onClose: () => void;
-  onRebook: () => void;
 }) {
   const extra = Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
@@ -453,18 +451,14 @@ function ConfirmedPane({
 
         <div className="mt-auto space-y-2 pb-8">
           <button
-            onClick={onRebook}
-            className="h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
-          >
-            Request Doctor
-          </button>
-          <button
             onClick={onClose}
-            className="h-12 w-full rounded-full text-[13.5px] font-medium text-muted-foreground"
+            className="h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
           >
             Done
           </button>
         </div>
+      </div>
+
       </div>
 
       <RatingOverlay
