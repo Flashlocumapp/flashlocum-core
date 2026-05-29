@@ -37,6 +37,10 @@ export type Coverage = {
   note?: string;
   active?: boolean;
   startedAt?: number;
+  accumulatedMs: number;
+  days: number;
+  dayIndex: number;
+  settledAmount?: number;
 };
 
 // Full monetary formatting everywhere (₦36,500). No K abbreviation.
@@ -65,6 +69,10 @@ function toCoverage(r: NetRequest): Coverage {
     note: r.note,
     active: r.status === "active",
     startedAt: r.startedAt,
+    accumulatedMs: r.accumulatedMs ?? 0,
+    days: Math.max(1, r.days ?? 1),
+    dayIndex: Math.max(1, r.dayIndex ?? 1),
+    settledAmount: r.settledAmount,
   };
 }
 
