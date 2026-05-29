@@ -427,11 +427,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           setRatings((prev) => ({ ...prev, [id]: rating }));
           setHistoryId(null);
         }}
-        onRebook={() => {
-          setHistoryId(null);
-          window.location.assign("/home");
-        }}
       />
+
 
       <RequesterDetailSheet
         item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
