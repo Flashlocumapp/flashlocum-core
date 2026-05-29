@@ -39,7 +39,6 @@ export function ShiftSettlement({
   shift = SAMPLE,
   initialPhase = "active",
   onConfirmed,
-  onRebook,
 }: {
   open: boolean;
   onClose: () => void;
@@ -63,9 +62,15 @@ export function ShiftSettlement({
     }
   }, [open, initialPhase]);
 
-  useEffect(() => {
-    if (phase === "confirmed") onConfirmed?.();
-  }, [phase, onConfirmed]);
+  // Finalize (notify doctor + close shift operationally) only fires when the
+  // requester explicitly dismisses the Settlement Confirmed screen — not the
+  // instant payment is verified. This keeps the rating / end-shift hand-off
+  // synchronized with the requester's calm closure of the settlement.
+  const finalize = () => {
+    onConfirmed?.();
+    onClose();
+  };
+
 
   // Master tick after End Shift
   useEffect(() => {
