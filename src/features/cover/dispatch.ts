@@ -112,8 +112,8 @@ type View = {
   online: boolean;
   upcoming: Coverage[];
   incoming: Coverage | null;
-  accepted: Coverage | null;
-  history: HistoryItem[];
+  pendingRating: { requestId: string; hospitalId: string; hospital: string } | null;
+
   pendingRating: { hospitalId: string; hospital: string } | null;
 };
 
