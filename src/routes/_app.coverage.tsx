@@ -68,6 +68,7 @@ type RequestItem = {
   outcome?: "completed" | "cancelled";
   cancelledBy?: "requester" | "doctor";
   startedAt?: number;
+  accumulatedMs: number;
   days: number;
   dayIndex: number;
 };
