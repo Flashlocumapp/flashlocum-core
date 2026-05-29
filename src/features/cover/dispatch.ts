@@ -230,11 +230,11 @@ export function ensureDoctorSession(initialOnline = true) {
     } else if (ev.action === "pause") {
       pushToast({
         tone: "presence",
-        title: "Your shift has ended for today.",
-        body: `Coverage with ${r.hospital} will resume on the next scheduled day.`,
+        title: `Your shift with ${r.hospital} has been paused.`,
+        body: "Coverage timer is preserved and will resume when restarted.",
         ttl: 5200,
       });
-      if (acceptedSheet?.id === r.id) acceptedSheet = null;
+      if (acceptedSheet?.id === r.id) acceptedSheet = toCoverage(r);
       bump();
     } else if (ev.action === "complete") {
       pushToast({
