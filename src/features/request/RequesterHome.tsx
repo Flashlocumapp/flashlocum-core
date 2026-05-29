@@ -115,7 +115,7 @@ function fmtAmPm(hhmm: string): string {
   if (Number.isNaN(h)) return hhmm;
   const period = h >= 12 ? "PM" : "AM";
   const hr = ((h + 11) % 12) + 1;
-  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+  return `${String(hr).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
 }
 
 function dayLabel(coverage: CoverageId, draft: Draft, days: number): string {
