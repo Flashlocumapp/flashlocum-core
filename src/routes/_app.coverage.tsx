@@ -884,7 +884,7 @@ function CoverCard({
           color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)",
         }}
       >
-        Cancelled
+        {(item as HistoryItem).cancelledBy === "doctor" ? "You Cancelled" : "Cancelled"}
       </span>
     ) : null;
 
