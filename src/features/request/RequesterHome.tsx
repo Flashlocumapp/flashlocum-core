@@ -961,19 +961,19 @@ function DispatchOverlay({
     if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
   };
 
-  // Edit sheet uses HOURS for duration.
+  // Edit sheet: start/end (12h) → coverage length auto-derived.
   const [editInitial, setEditInitial] = useState<EditableShift>({
-    timing: draft.startTime,
-    duration: durationHrs,
-    accommodation: false,
+    startTime: draft.startTime,
+    endTime: draft.endTime,
+    durationHrs,
     note: draft.note ?? "",
   });
 
   const openEdit = () => {
     setEditInitial({
-      timing: draft.startTime,
-      duration: durationHrs,
-      accommodation: false,
+      startTime: draft.startTime,
+      endTime: draft.endTime,
+      durationHrs,
       note: draft.note ?? "",
     });
     setEditOpen(true);
@@ -982,9 +982,9 @@ function DispatchOverlay({
   const handleSaveEdit = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
     setEditOpen(false);
     const label: Record<keyof EditableShift | "multiple", string> = {
-      timing: "Coverage timing updated",
-      duration: "Coverage duration updated",
-      accommodation: "Accommodation updated",
+      startTime: "Coverage start time updated",
+      endTime: "Coverage end time updated",
+      durationHrs: "Coverage length updated",
       note: "Coverage notes updated",
       multiple: "Coverage details updated",
     };
@@ -994,15 +994,12 @@ function DispatchOverlay({
 
     if (requestId) {
       const cur = net.requests[requestId];
-      const newDur = Math.max(1, next.duration);
-      // Derive end from start + new duration as absolute timestamps so
-      // operational continuity (day, end time, conflict window) stays
-      // consistent.
+      const newDur = Math.max(1, next.durationHrs);
+      // Derive absolute timestamps from the original date + new start/end so
+      // operational continuity (day, conflict window) stays consistent.
       const baseDateStr = draft.startDate;
-      const newStartTs = new Date(`${baseDateStr}T${next.timing}:00`).getTime();
+      const newStartTs = new Date(`${baseDateStr}T${next.startTime}:00`).getTime();
       const newEndTs = newStartTs + newDur * 3_600_000;
-      const endDate = new Date(newEndTs);
-      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
       // Recompute amount from the original hourly rate to preserve pricing.
       const baseHourly = cur
         ? cur.amount / Math.max(1, cur.durationHrs)
@@ -1010,8 +1007,8 @@ function DispatchOverlay({
       const newAmount = Math.round(baseHourly * newDur);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
-        start: fmtAmPm(next.timing),
-        end: fmtAmPm(endHHMM),
+        start: fmtAmPm(next.startTime),
+        end: fmtAmPm(next.endTime),
         durationHrs: newDur,
         amount: newAmount,
         startTs: newStartTs,
