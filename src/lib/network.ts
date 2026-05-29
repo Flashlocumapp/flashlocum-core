@@ -68,6 +68,8 @@ export type NetRequest = {
   // of truth for conflict detection across all coverage types.
   startTs?: number;
   endTs?: number;
+  // Who triggered the cancellation (for history labelling).
+  cancelledBy?: "requester" | "doctor";
 };
 
 export type Actor = "requester" | "doctor" | "system";
