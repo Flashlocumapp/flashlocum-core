@@ -154,6 +154,7 @@ export function ShiftSettlement({
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
           />
+        )}
         {phase === "confirmed" && (
           <ConfirmedPane
             key="done"
@@ -167,11 +168,6 @@ export function ShiftSettlement({
   );
 }
 
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
 
 /* ---------------- Active ---------------- */
 
