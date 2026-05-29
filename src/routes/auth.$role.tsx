@@ -17,8 +17,9 @@ function AuthScreen() {
 
   const enter = () => {
     setRole(normalizedRole);
-    navigate({ to: "/home" });
+    navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
   };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
