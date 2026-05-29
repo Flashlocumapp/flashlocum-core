@@ -771,21 +771,39 @@ function RequestCard({
   );
 }
 
-function LiveTimer({ from }: { from: number }) {
+/**
+ * Continuous worked-time pill. `baseMs` is prior accumulated worked
+ * milliseconds (carried across pause/resume). When `from` is set, the
+ * current live segment ticks forward; otherwise only the accumulated total
+ * is shown (used when paused / in Upcoming). `live` styles the dot for the
+ * active state — calm grey otherwise.
+ */
+function LiveTimer({
+  from,
+  baseMs = 0,
+  live = true,
+}: {
+  from?: number;
+  baseMs?: number;
+  live?: boolean;
+}) {
   const now = useSimClock(1000);
+  const segment = from ? Math.max(0, now - from) : 0;
+  const total = baseMs + segment;
+  const anchor = now - total;
+  const tone = live ? "var(--color-presence)" : "color-mix(in oklab, var(--color-foreground) 55%, transparent)";
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
       style={{
-        background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
-        color: "var(--color-presence)",
+        background: live
+          ? "color-mix(in oklab, var(--color-presence) 14%, transparent)"
+          : "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+        color: tone,
       }}
     >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ background: "var(--color-presence)" }}
-      />
-      {fmtElapsed(from, now)}
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} />
+      {fmtElapsed(anchor, now)}
     </span>
   );
 }
