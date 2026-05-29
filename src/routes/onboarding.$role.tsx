@@ -114,26 +114,12 @@ function OnboardingScreen() {
                 onChange={(v) => setDoctor((p) => ({ ...p, phone: v }))}
               />
 
-              <UploadField
-                label="Selfie"
-                hint={doctor.selfie ? "Captured" : "Tap to capture"}
-                onPick={() => selfieRef.current?.click()}
+              <SelfieCapture
+                value={doctor.selfie}
+                onCapture={(dataUrl) => setDoctor((p) => ({ ...p, selfie: dataUrl }))}
+                onClear={() => setDoctor((p) => ({ ...p, selfie: undefined }))}
               />
-              <input
-                ref={selfieRef}
-                type="file"
-                accept="image/*"
-                capture="user"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = () =>
-                    setDoctor((p) => ({ ...p, selfie: String(reader.result ?? "") }));
-                  reader.readAsDataURL(f);
-                }}
-              />
+
 
               <Field
                 label="MDCN number"
