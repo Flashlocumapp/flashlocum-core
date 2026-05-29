@@ -36,6 +36,7 @@ import {
   type NetState,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
+import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
 
 
