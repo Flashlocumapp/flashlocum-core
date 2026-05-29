@@ -23,6 +23,10 @@ type ShiftMeta = {
   startedAt?: number;
   accumulatedMs?: number;
   startHHMM: string;
+  /** End of the per-day window — required for correct multi-day pricing. */
+  endHHMM?: string;
+  /** Number of booked days — multi-day shifts price perDay × days. */
+  days?: number;
   coverageKind: CoverageKind;
 };
 
@@ -33,6 +37,8 @@ const SAMPLE: ShiftMeta = {
   startedAt: Date.now() - 60 * 60 * 1000,
   accumulatedMs: 0,
   startHHMM: "08:00",
+  endHHMM: "18:00",
+  days: 1,
   coverageKind: "standard",
 };
 
