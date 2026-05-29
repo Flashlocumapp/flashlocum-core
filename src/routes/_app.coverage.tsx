@@ -273,21 +273,19 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
+  const pauseToUpcoming = (id: string) => {
+    netPauseShift(id);
+    setTab("upcoming");
+    setNotice("Shift paused · Timer preserved");
+    window.setTimeout(() => setNotice(null), 2600);
+  };
+
   /**
-   * End Shift handler — branches on lifecycle:
-   *   - Multi-day mid-shift (dayIndex < days): pause back to Upcoming for the
-   *     next operational day. No settlement, no payment, no closure.
-   *   - Single-day OR final day: open settlement flow.
+   * End Shift — always settles. Requesters may tap at any time (single-day,
+   * multi-day, mid-day, after a pause) so the lifecycle stays flexible.
+   * Settlement uses the accumulated continuous timer, not scheduled hours.
    */
   const beginEndShift = (id: string) => {
-    const item = items.find((i) => i.id === id);
-    if (!item) return;
-    if (item.days > 1 && item.dayIndex < item.days) {
-      netEndShiftDay(id);
-      setTab("upcoming");
-      setNotice("Day complete · Resume on the next operational day");
-      return;
-    }
     setSettlingId(id);
   };
 
@@ -295,6 +293,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     if (!settlingId) return;
     netCompleteRequest(settlingId);
   };
+
+
 
 
   const openEdit = (id: string) => {
