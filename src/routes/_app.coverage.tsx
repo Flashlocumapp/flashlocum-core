@@ -26,7 +26,7 @@ import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
-  endShiftDay as netEndShiftDay,
+  pauseShift as netPauseShift,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
