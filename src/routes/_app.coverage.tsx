@@ -690,7 +690,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            Start Shift
+            {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && (
