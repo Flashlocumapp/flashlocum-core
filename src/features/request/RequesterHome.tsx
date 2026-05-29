@@ -942,6 +942,8 @@ function DispatchOverlay({
       note: draft.note?.trim() || undefined,
       startTs: win.startTs,
       endTs: win.endTs,
+      days: Math.max(1, days),
+      dayIndex: 1,
     });
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
