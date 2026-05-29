@@ -549,7 +549,7 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                Start Shift
+                {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
             {item.status === "active" && (
@@ -557,9 +557,10 @@ function RequesterDetailSheet({
                 onClick={() => onEnd(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                End Shift
+                {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
               </button>
             )}
+
           </div>
 
           {item.status === "upcoming" && (
