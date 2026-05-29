@@ -36,6 +36,8 @@ import {
   type NetState,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
+import { useSimClock } from "@/lib/clock";
+
 
 
 export const Route = createFileRoute("/_app/coverage")({
