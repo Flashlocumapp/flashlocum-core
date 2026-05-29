@@ -26,7 +26,7 @@ import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
-  endShiftDay as netEndShiftDay,
+  pauseShift as netPauseShift,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
@@ -68,6 +68,7 @@ type RequestItem = {
   outcome?: "completed" | "cancelled";
   cancelledBy?: "requester" | "doctor";
   startedAt?: number;
+  accumulatedMs: number;
   days: number;
   dayIndex: number;
 };
@@ -154,6 +155,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     outcome,
     cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
+    accumulatedMs: r.accumulatedMs ?? 0,
     days: Math.max(1, r.days ?? 1),
     dayIndex: Math.max(1, r.dayIndex ?? 1),
   };
@@ -271,21 +273,19 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
+  const pauseToUpcoming = (id: string) => {
+    netPauseShift(id);
+    setTab("upcoming");
+    setNotice("Shift paused · Timer preserved");
+    window.setTimeout(() => setNotice(null), 2600);
+  };
+
   /**
-   * End Shift handler — branches on lifecycle:
-   *   - Multi-day mid-shift (dayIndex < days): pause back to Upcoming for the
-   *     next operational day. No settlement, no payment, no closure.
-   *   - Single-day OR final day: open settlement flow.
+   * End Shift — always settles. Requesters may tap at any time (single-day,
+   * multi-day, mid-day, after a pause) so the lifecycle stays flexible.
+   * Settlement uses the accumulated continuous timer, not scheduled hours.
    */
   const beginEndShift = (id: string) => {
-    const item = items.find((i) => i.id === id);
-    if (!item) return;
-    if (item.days > 1 && item.dayIndex < item.days) {
-      netEndShiftDay(id);
-      setTab("upcoming");
-      setNotice("Day complete · Resume on the next operational day");
-      return;
-    }
     setSettlingId(id);
   };
 
@@ -293,6 +293,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     if (!settlingId) return;
     netCompleteRequest(settlingId);
   };
+
+
 
 
   const openEdit = (id: string) => {
@@ -376,6 +378,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                   <RequestCard
                     item={item}
                     onStart={() => moveToActive(item.id)}
+                    onPause={() => pauseToUpcoming(item.id)}
                     onEnd={() => beginEndShift(item.id)}
                     onCancel={() => setCancelTargetId(item.id)}
                     onEdit={() => openEdit(item.id)}
@@ -427,7 +430,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                 facility: "Lagoon Health",
                 doctor: settling.doctor,
                 role: `${settling.coverage} · Active`,
-                startedAt: settling.startedAt ?? Date.now(),
+                startedAt: settling.startedAt,
+                accumulatedMs: settling.accumulatedMs,
                 startHHMM: ampmTo24h(settling.start),
                 coverageKind: coverageKindFromLabel(settling.coverage),
               }
@@ -471,6 +475,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
         onDismiss={() => setDetailId(null)}
         onStart={(id) => { setDetailId(null); moveToActive(id); }}
+        onPause={(id) => { setDetailId(null); pauseToUpcoming(id); }}
         onEnd={(id) => { setDetailId(null); beginEndShift(id); }}
         onEdit={(id) => { setDetailId(null); openEdit(id); }}
         onCancel={(id) => { setDetailId(null); setCancelTargetId(id); }}
@@ -483,6 +488,7 @@ function RequesterDetailSheet({
   item,
   onDismiss,
   onStart,
+  onPause,
   onEnd,
   onEdit,
   onCancel,
@@ -490,6 +496,7 @@ function RequesterDetailSheet({
   item: RequestItem | null;
   onDismiss: () => void;
   onStart: (id: string) => void;
+  onPause: (id: string) => void;
   onEnd: (id: string) => void;
   onEdit: (id: string) => void;
   onCancel: (id: string) => void;
@@ -535,9 +542,14 @@ function RequesterDetailSheet({
             </div>
           )}
 
-          {item.status === "active" && item.startedAt && (
+          {item.status === "active" && (
             <div className="mt-3 flex justify-center">
-              <LiveTimer from={item.startedAt} />
+              <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
+            </div>
+          )}
+          {item.status === "upcoming" && item.accumulatedMs > 0 && (
+            <div className="mt-3 flex justify-center">
+              <LiveTimer baseMs={item.accumulatedMs} />
             </div>
           )}
 
@@ -553,19 +565,30 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
+                {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
             {item.status === "active" && (
               <button
-                onClick={() => onEnd(item.id)}
-                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+                onClick={() => onPause(item.id)}
+                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90"
               >
-                {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
+                Pause Shift
               </button>
             )}
-
           </div>
+
+          {(item.status === "active" ||
+            (item.status === "upcoming" && item.accumulatedMs > 0)) && (
+            <div className="mt-2">
+              <button
+                onClick={() => onEnd(item.id)}
+                className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                End Shift
+              </button>
+            </div>
+          )}
 
           {item.status === "upcoming" && (
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -593,6 +616,7 @@ function RequesterDetailSheet({
 function RequestCard({
   item,
   onStart,
+  onPause,
   onEnd,
   onCancel,
   onEdit,
@@ -601,6 +625,7 @@ function RequestCard({
 }: {
   item: RequestItem;
   onStart: () => void;
+  onPause: () => void;
   onEnd: () => void;
   onCancel: () => void;
   onEdit: () => void;
@@ -678,9 +703,14 @@ function RequestCard({
           >
             {meta}
           </div>
-          {isActive && item.startedAt && (
+          {isActive && (
             <div className="mt-0.5">
-              <LiveTimer from={item.startedAt} />
+              <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
+            </div>
+          )}
+          {isUpcoming && item.accumulatedMs > 0 && (
+            <div className="mt-0.5">
+              <LiveTimer baseMs={item.accumulatedMs} />
             </div>
           )}
         </div>
@@ -694,19 +724,19 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
+            {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && (
           <button
-            onClick={(e) => { e.stopPropagation(); onEnd(); }}
+            onClick={(e) => { e.stopPropagation(); onPause(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
             style={{
-              background: "var(--color-foreground)",
-              color: "var(--color-background)",
+              background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
+              color: "var(--color-foreground)",
             }}
           >
-            {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
+            Pause Shift
           </button>
         )}
       </div>
@@ -737,25 +767,48 @@ function RequestCard({
           </a>
         </div>
       )}
+      {(isActive || (isUpcoming && item.accumulatedMs > 0)) && (
+        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
+          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
+        </div>
+      )}
     </div>
   );
 }
 
-function LiveTimer({ from }: { from: number }) {
+/**
+ * Continuous worked-time pill. `baseMs` is prior accumulated worked
+ * milliseconds (carried across pause/resume). When `from` is set, the
+ * current live segment ticks forward; otherwise only the accumulated total
+ * is shown (used when paused / in Upcoming). `live` styles the dot for the
+ * active state — calm grey otherwise.
+ */
+function LiveTimer({
+  from,
+  baseMs = 0,
+  live = true,
+}: {
+  from?: number;
+  baseMs?: number;
+  live?: boolean;
+}) {
   const now = useSimClock(1000);
+  const segment = from ? Math.max(0, now - from) : 0;
+  const total = baseMs + segment;
+  const anchor = now - total;
+  const tone = live ? "var(--color-presence)" : "color-mix(in oklab, var(--color-foreground) 55%, transparent)";
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
       style={{
-        background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
-        color: "var(--color-presence)",
+        background: live
+          ? "color-mix(in oklab, var(--color-presence) 14%, transparent)"
+          : "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+        color: tone,
       }}
     >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ background: "var(--color-presence)" }}
-      />
-      {fmtElapsed(from, now)}
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} />
+      {fmtElapsed(anchor, now)}
     </span>
   );
 }

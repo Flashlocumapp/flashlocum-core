@@ -15,8 +15,13 @@ type ShiftMeta = {
   facility: string;
   doctor: string;
   role: string;
-  /** Realtime billing inputs — derived from LIVE Active Coverage timer. */
-  startedAt: number;
+  /**
+   * Realtime billing inputs — derived from the LIVE Active Coverage timer.
+   * Total worked time = accumulatedMs + (startedAt ? now - startedAt : 0).
+   * `startedAt` may be undefined when settlement opens after a Pause.
+   */
+  startedAt?: number;
+  accumulatedMs?: number;
   startHHMM: string;
   coverageKind: CoverageKind;
 };
@@ -26,6 +31,7 @@ const SAMPLE: ShiftMeta = {
   doctor: "Dr. Adaobi Okeke",
   role: "Standard · Active",
   startedAt: Date.now() - 60 * 60 * 1000,
+  accumulatedMs: 0,
   startHHMM: "08:00",
   coverageKind: "standard",
 };
@@ -95,7 +101,11 @@ export function ShiftSettlement({
       : (phase === "settlement" || phase === "grace") && endedAtRef.current != null
         ? endedAtRef.current
         : tick;
-  const workedMin = Math.max(0, (effectiveNow - shift.startedAt) / 60000);
+  const baseMs = shift.accumulatedMs ?? 0;
+  const liveSegmentMs = shift.startedAt
+    ? Math.max(0, effectiveNow - shift.startedAt)
+    : 0;
+  const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = roundedOverrunMinutes(workedMin);
   const totalAmount = useMemo(
     () => computeWorkedPricing(shift.coverageKind, shift.startHHMM, billedMin).amount,
@@ -109,20 +119,37 @@ export function ShiftSettlement({
   const extensionMin = Math.max(0, billedMin - frozenBilledMin);
   const extensionAmount = Math.max(0, totalAmount - frozenAmount);
 
-  // Reset whenever opened fresh
+  // Reset whenever opened fresh.
   useEffect(() => {
     if (open) {
       setPhase(initialPhase);
+      const now = simNow();
       phaseStartedAtRef.current =
-        initialPhase === "active" || initialPhase === "confirmed" ? null : simNow();
-      overtimeStartedAtRef.current = initialPhase === "overtime" ? simNow() : null;
-      endedAtRef.current = null;
+        initialPhase === "active" || initialPhase === "confirmed" ? null : now;
+      overtimeStartedAtRef.current = initialPhase === "overtime" ? now : null;
+      endedAtRef.current =
+        initialPhase === "settlement" || initialPhase === "grace" ? now : null;
       confirmedAtRef.current = null;
       autoConfirmAt.current = null;
-      frozenBilledMinRef.current = 0;
-      frozenAmountRef.current = 0;
+      // When opening directly into settlement (the standard path from
+      // Coverage → End Shift), freeze the bill immediately using the
+      // accumulated continuous timer so the page never shows ₦0.
+      if (initialPhase === "settlement" || initialPhase === "grace") {
+        const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
+        const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
+        const bm = roundedOverrunMinutes(w);
+        frozenBilledMinRef.current = bm;
+        frozenAmountRef.current = computeWorkedPricing(
+          shift.coverageKind,
+          shift.startHHMM,
+          bm,
+        ).amount;
+      } else {
+        frozenBilledMinRef.current = 0;
+        frozenAmountRef.current = 0;
+      }
     }
-  }, [open, initialPhase]);
+  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM]);
 
   const finalize = () => {
     onConfirmed?.();
@@ -158,7 +185,8 @@ export function ShiftSettlement({
     endedAtRef.current = now;
     overtimeStartedAtRef.current = null;
     // Freeze the bill at the moment of End Shift.
-    const w = Math.max(0, (now - shift.startedAt) / 60000);
+    const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
+    const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
     const bm = roundedOverrunMinutes(w);
     frozenBilledMinRef.current = bm;
     frozenAmountRef.current = computeWorkedPricing(
@@ -374,9 +402,8 @@ function SettlementPane({
         <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
           {fmtNaira(amount)}
         </div>
-        <p className="mt-1 text-[11.5px] text-muted-foreground">
-          Worked {fmtHrMin(billedMin)} · billed in 15-min half-blocks
-        </p>
+
+
 
 
         {/* Account block — operational center of gravity */}
@@ -426,9 +453,6 @@ function SettlementPane({
           >
             {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
           </button>
-          <p className="mt-3 text-center text-[11.5px] text-muted-foreground">
-            Payment is detected automatically. This is just a heads-up.
-          </p>
         </div>
       </div>
     </motion.section>
