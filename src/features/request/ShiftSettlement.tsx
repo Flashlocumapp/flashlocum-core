@@ -23,6 +23,10 @@ type ShiftMeta = {
   startedAt?: number;
   accumulatedMs?: number;
   startHHMM: string;
+  /** End of the per-day window — required for correct multi-day pricing. */
+  endHHMM?: string;
+  /** Number of booked days — multi-day shifts price perDay × days. */
+  days?: number;
   coverageKind: CoverageKind;
 };
 
@@ -33,6 +37,8 @@ const SAMPLE: ShiftMeta = {
   startedAt: Date.now() - 60 * 60 * 1000,
   accumulatedMs: 0,
   startHHMM: "08:00",
+  endHHMM: "18:00",
+  days: 1,
   coverageKind: "standard",
 };
 
@@ -108,8 +114,15 @@ export function ShiftSettlement({
   const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = roundedOverrunMinutes(workedMin);
   const totalAmount = useMemo(
-    () => computeWorkedPricing(shift.coverageKind, shift.startHHMM, billedMin).amount,
-    [shift.coverageKind, shift.startHHMM, billedMin],
+    () =>
+      computeWorkedPricing(
+        shift.coverageKind,
+        shift.startHHMM,
+        billedMin,
+        shift.endHHMM,
+        shift.days,
+      ).amount,
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, billedMin],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
@@ -143,13 +156,15 @@ export function ShiftSettlement({
           shift.coverageKind,
           shift.startHHMM,
           bm,
+          shift.endHHMM,
+          shift.days,
         ).amount;
       } else {
         frozenBilledMinRef.current = 0;
         frozenAmountRef.current = 0;
       }
     }
-  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM]);
+  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days]);
 
   const finalize = () => {
     onConfirmed?.();
@@ -193,6 +208,8 @@ export function ShiftSettlement({
       shift.coverageKind,
       shift.startHHMM,
       bm,
+      shift.endHHMM,
+      shift.days,
     ).amount;
     setPhase("settlement");
     if (Math.random() < 0.35) {

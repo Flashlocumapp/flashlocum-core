@@ -1010,23 +1010,26 @@ function DispatchOverlay({
 
     if (requestId) {
       const cur = net.requests[requestId];
-      const newDur = Math.max(1, next.durationHrs);
+      // Preserve Coverage Length (days) across edits. Per-day duration comes
+      // from the sheet (derived from start/end); total = perDay × days.
+      const bookedDays = Math.max(1, cur?.days ?? days);
+      const perDay = Math.max(1, next.durationHrs);
+      const totalDur = perDay * bookedDays;
       const baseDateStr = draft.startDate;
       const newStartTs = new Date(`${baseDateStr}T${next.startTime}:00`).getTime();
-      const newEndTs = newStartTs + newDur * 3_600_000;
-      // Re-derive pricing from the operational pricing engine — day/night
-      // splits, continuous-coverage overrides, and Home Care rates all stay
-      // synchronized with the edited window.
+      const newEndTs = newStartTs + totalDur * 3_600_000;
+      // Re-price across ALL booked days so multi-day totals stay correct.
       const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
-      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, 1);
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),
         end: fmtAmPm(next.endTime),
-        durationHrs: newDur,
+        durationHrs: totalDur,
         amount: repriced.amount,
         startTs: newStartTs,
         endTs: newEndTs,
+        days: bookedDays,
       });
     }
   };
