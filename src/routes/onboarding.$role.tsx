@@ -279,3 +279,182 @@ function UploadField({
     </div>
   );
 }
+
+function SelfieCapture({
+  value,
+  onCapture,
+  onClear,
+}: {
+  value?: string;
+  onCapture: (dataUrl: string) => void;
+  onClear: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [open, setOpen] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = async () => {
+    setError(null);
+    setOpen(true);
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setStream(s);
+    } catch {
+      setError("Camera unavailable. Please allow camera access and try again.");
+    }
+  };
+
+  const stop = () => {
+    stream?.getTracks().forEach((t) => t.stop());
+    setStream(null);
+    setOpen(false);
+  };
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stream]);
+
+  useEffect(() => {
+    return () => {
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [stream]);
+
+  const snap = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const size = Math.min(v.videoWidth, v.videoHeight) || 480;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    const sx = (v.videoWidth - size) / 2;
+    const sy = (v.videoHeight - size) / 2;
+    // Mirror so it matches the preview
+    ctx.translate(size, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(v, sx, sy, size, size, 0, 0, size, size);
+    onCapture(c.toDataURL("image/jpeg", 0.85));
+    stop();
+  };
+
+  return (
+    <div>
+      <label className="text-[12px] font-medium text-muted-foreground">Selfie</label>
+      <div className="mt-1.5 flex items-center gap-3 rounded-2xl bg-secondary p-3">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-background"
+          style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
+        >
+          {value ? (
+            <img src={value} alt="Selfie" className="h-full w-full object-cover" />
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+              <circle cx="12" cy="9" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M5 20c1.6-3.2 4.2-4.8 7-4.8s5.4 1.6 7 4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[14px] font-medium">
+            {value ? "Selfie captured" : "Live selfie required"}
+          </div>
+          <div className="text-[12px] text-muted-foreground">
+            {value ? "Retake to update" : "Front camera only"}
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          {value && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="h-9 rounded-xl bg-background px-3 text-[12.5px] font-medium active:bg-accent"
+              style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
+            >
+              Clear
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={start}
+            className="h-9 rounded-xl bg-primary px-3 text-[12.5px] font-semibold text-primary-foreground active:opacity-90"
+          >
+            {value ? "Retake" : "Capture"}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4"
+          onClick={stop}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-3xl bg-card p-4"
+          >
+            <div className="text-center text-[15px] font-semibold tracking-tight">
+              Take a live selfie
+            </div>
+            <div className="mt-1 text-center text-[12px] text-muted-foreground">
+              Center your face inside the frame.
+            </div>
+
+            <div
+              className="relative mx-auto mt-4 aspect-square w-full overflow-hidden rounded-2xl bg-black"
+              style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
+            >
+              {error ? (
+                <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-[13px] text-white/85">
+                  {error}
+                </div>
+              ) : (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-full w-full object-cover"
+                    style={{ transform: "scaleX(-1)" }}
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-6 rounded-full"
+                    style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)" }}
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 flex gap-2.5">
+              <button
+                type="button"
+                onClick={stop}
+                className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={snap}
+                disabled={!stream}
+                className="h-11 flex-1 rounded-2xl bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-50"
+              >
+                Capture
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
