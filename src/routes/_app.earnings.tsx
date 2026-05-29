@@ -2,31 +2,50 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { getRole } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
+import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
 
 export const Route = createFileRoute("/_app/earnings")({
   component: EarningsScreen,
 });
 
+// Doctor net payout = total paid − FlashLocum service fee (15%).
+const FEE_PCT = 15;
+const netPayout = (gross: number) => Math.max(0, Math.round(gross * (1 - FEE_PCT / 100)));
+
 type Payout = {
   id: string;
   facility: string;
-  coverage: "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
-  completedOn: string; // e.g. "Mon 17 Nov"
-  amount: number;
+  coverage: string;
+  completedOn: string;
+  amount: number; // NET amount due to doctor
   state: "settled" | "pending";
+  ts: number;
 };
 
-const PAYOUTS: Payout[] = [
-  { id: "p1", facility: "Evercare Hospital", coverage: "Standard", completedOn: "Today · 06:12", amount: 36000, state: "pending" },
-  { id: "p2", facility: "Reddington", coverage: "Weekend Call", completedOn: "Sat 22 Nov", amount: 80000, state: "settled" },
-  { id: "p3", facility: "Lagoon Hospital", coverage: "24-Hour", completedOn: "Tue 18 Nov", amount: 80000, state: "settled" },
-  { id: "p4", facility: "St. Nicholas", coverage: "Standard", completedOn: "Mon 17 Nov", amount: 36000, state: "settled" },
-  { id: "p5", facility: "First Cardiology", coverage: "Home Care", completedOn: "Fri 14 Nov", amount: 45000, state: "settled" },
-];
+// Operational rule: Pending until FlashLocum remits payout (simulated as
+// settled once a completed shift is older than 12h). Keeps the lifecycle
+// visible — doctor sees money owed immediately after requester payment.
+const SETTLEMENT_DELAY_MS = 12 * 60 * 60 * 1000;
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+
+function toPayout(h: HistoryItem & { updatedAtMs?: number }, now: number): Payout {
+  const ts = (h as unknown as { updatedAtMs?: number }).updatedAtMs ?? now;
+  const settled = now - ts > SETTLEMENT_DELAY_MS;
+  return {
+    id: h.id,
+    facility: h.hospital,
+    coverage: h.coverage,
+    completedOn: h.completedOn,
+    amount: netPayout(h.amount),
+    state: settled ? "settled" : "pending",
+    ts,
+  };
+}
 
 function EarningsScreen() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
+  const { history } = useDispatch();
   useEffect(() => {
     if (getRole() !== "cover") {
       navigate({ to: "/home" });
@@ -35,11 +54,27 @@ function EarningsScreen() {
     setReady(true);
   }, [navigate]);
 
+  const payouts = useMemo<Payout[]>(() => {
+    const now = Date.now();
+    const cutoff = now - THREE_MONTHS_MS;
+    return history
+      .filter((h) => h.outcome === "completed")
+      .map((h) => {
+        // updatedAt isn't directly on HistoryItem but completedOn is human;
+        // fall back to "now" so freshly completed shifts appear immediately.
+        const parsed = Date.parse(h.completedOn + " " + new Date().getFullYear());
+        const ts = Number.isFinite(parsed) ? parsed : now;
+        return toPayout({ ...h, updatedAtMs: ts } as HistoryItem & { updatedAtMs?: number }, now);
+      })
+      .filter((p) => p.ts >= cutoff)
+      .sort((a, b) => b.ts - a.ts);
+  }, [history]);
+
   const { thisMonth, pending } = useMemo(() => {
-    const month = PAYOUTS.filter((p) => p.state === "settled").reduce((a, p) => a + p.amount, 0);
-    const pend = PAYOUTS.filter((p) => p.state === "pending").reduce((a, p) => a + p.amount, 0);
+    const month = payouts.filter((p) => p.state === "settled").reduce((a, p) => a + p.amount, 0);
+    const pend = payouts.filter((p) => p.state === "pending").reduce((a, p) => a + p.amount, 0);
     return { thisMonth: month, pending: pend };
-  }, []);
+  }, [payouts]);
 
   if (!ready) return <div className="h-full w-full bg-background" />;
 
@@ -49,7 +84,7 @@ function EarningsScreen() {
         <div className="mx-auto max-w-md">
           <h1 className="text-[26px] font-semibold tracking-tight">Earnings</h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            Payouts from completed coverage
+            Net payouts · last 3 months
           </p>
         </div>
       </header>
@@ -61,7 +96,7 @@ function EarningsScreen() {
           style={{ background: "var(--color-surface-elevated)" }}
         >
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            This month
+            Settled
           </div>
           <div className="mt-1 text-[32px] font-semibold tracking-tight tabular-nums">
             {fmtNairaK(thisMonth)}
@@ -81,13 +116,22 @@ function EarningsScreen() {
         <div className="mt-6 px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Recent
         </div>
-        <ul className="mt-2 space-y-2">
-          {PAYOUTS.map((p) => (
-            <li key={p.id}>
-              <PayoutRow payout={p} />
-            </li>
-          ))}
-        </ul>
+        {payouts.length === 0 ? (
+          <div
+            className="mt-2 rounded-2xl px-4 py-6 text-center text-[13px] text-muted-foreground"
+            style={{ background: "var(--color-surface-elevated)" }}
+          >
+            No payouts yet. Completed shifts will appear here.
+          </div>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {payouts.map((p) => (
+              <li key={p.id}>
+                <PayoutRow payout={p} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );

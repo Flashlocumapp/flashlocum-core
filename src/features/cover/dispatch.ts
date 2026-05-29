@@ -21,6 +21,7 @@ import {
   useNetwork,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
+import { shiftCue } from "@/lib/feedback";
 
 export type Coverage = {
   id: string;
@@ -150,18 +151,31 @@ export function useDispatch(): View {
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((r) => ({
-      ...toCoverage(r),
-      outcome: r.status === "completed" ? "completed" : "cancelled",
-      cancelledBy: r.cancelledBy,
-      completedOn: new Date(r.updatedAt).toLocaleDateString("en-NG", {
-        weekday: "short",
-        day: "2-digit",
-        month: "short",
-      }),
-      rating: historyRatings[r.id],
-      settlementStatus: r.status === "completed" ? "Pending" : "Voided",
-    }));
+    .map((r) => {
+      const base = toCoverage(r);
+      const isCompleted = r.status === "completed";
+      // History reflects FINAL settled operational reality.
+      const settledHrs = isCompleted
+        ? Math.max(0.25, Math.round((r.accumulatedMs ?? 0) / 900_000) / 4)
+        : base.durationHrs;
+      const settledDays = isCompleted ? Math.max(1, r.dayIndex ?? r.days ?? 1) : base.days;
+      const settledAmount = isCompleted ? (r.settledAmount ?? r.amount) : r.amount;
+      return {
+        ...base,
+        durationHrs: settledHrs,
+        days: settledDays,
+        amount: settledAmount,
+        outcome: isCompleted ? "completed" : "cancelled",
+        cancelledBy: r.cancelledBy,
+        completedOn: new Date(r.updatedAt).toLocaleDateString("en-NG", {
+          weekday: "short",
+          day: "2-digit",
+          month: "short",
+        }),
+        rating: historyRatings[r.id],
+        settlementStatus: isCompleted ? "Pending" : "Voided",
+      } as HistoryItem;
+    });
 
 
   let incoming: Coverage | null = null;
@@ -216,18 +230,21 @@ export function ensureDoctorSession(initialOnline = true) {
     processedEvents.add(eventKey);
 
     if (ev.action === "start") {
+      shiftCue("start");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has started.`,
         body: "Tap the active card for shift details.",
       });
     } else if (ev.action === "resume") {
+      shiftCue("resume");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has resumed.`,
         body: "Coverage timer continues from where it paused.",
       });
     } else if (ev.action === "pause") {
+      shiftCue("pause");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has been paused.`,
@@ -237,6 +254,7 @@ export function ensureDoctorSession(initialOnline = true) {
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "complete") {
+      shiftCue("end");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has ended.`,
