@@ -337,6 +337,8 @@ function SettlementPane({
   shift,
   phase,
   elapsed,
+  billedMin,
+  amount,
   onCopy,
   onMadePayment,
   paymentTriggered,
@@ -344,6 +346,8 @@ function SettlementPane({
   shift: ShiftMeta;
   phase: "settlement" | "grace";
   elapsed: number;
+  billedMin: number;
+  amount: number;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
@@ -368,8 +372,12 @@ function SettlementPane({
 
         <div className="mt-3 text-[13px] text-muted-foreground">Total Settlement</div>
         <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(shift.amount)}
+          {fmtNaira(amount)}
         </div>
+        <p className="mt-1 text-[11.5px] text-muted-foreground">
+          Worked {fmtHrMin(billedMin)} · billed in 15-min half-blocks
+        </p>
+
 
         {/* Account block — operational center of gravity */}
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
