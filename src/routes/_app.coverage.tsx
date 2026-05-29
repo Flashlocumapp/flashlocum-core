@@ -1027,7 +1027,9 @@ function DoctorCoverageDetail({
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             {isHist(item)
               ? item.outcome === "cancelled"
-                ? "Cancelled shift"
+                ? item.cancelledBy === "doctor"
+                  ? "You cancelled"
+                  : "Cancelled shift"
                 : "Completed shift"
               : item.active
                 ? "Active shift"
