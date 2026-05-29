@@ -465,13 +465,42 @@ export function startRequest(id: string) {
         ...state.requests,
         [id]: { ...cur, status: "active", startedAt: Date.now(), updatedAt: Date.now() },
       },
-    },
-    { actor: "requester", actorId: getSessionId(), action: "start", shiftId: id },
+export function completeRequest(id: string) {
+  applyPatch(
+    id,
+    { status: "completed" },
+    { actor: "requester", actorId: getSessionId(), action: "complete" },
   );
 }
 
-export function completeRequest(id: string) {
-  applyPatch(
+/**
+ * Multi-day mid-shift pause: end the current operational day and move the
+ * request back into Upcoming Coverage for the next day. Does NOT settle,
+ * close, or trigger payment — multi-day requests settle once at the end.
+ */
+export function endShiftDay(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  const nextIndex = Math.max(1, (cur.dayIndex ?? 1)) + 1;
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: {
+          ...cur,
+          status: "accepted",
+          startedAt: undefined,
+          dayIndex: nextIndex,
+          updatedAt: Date.now(),
+        },
+      },
+    },
+    { actor: "requester", actorId: getSessionId(), action: "pause", shiftId: id },
+  );
+}
+
     id,
     { status: "completed" },
     { actor: "requester", actorId: getSessionId(), action: "complete" },
