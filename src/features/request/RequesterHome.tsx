@@ -80,38 +80,19 @@ function makeInitialDraft(coverage: CoverageId): Draft {
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; days: number };
+import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 
-function computePricing({ coverage, days }: PricingContext) {
-  const d = Math.max(1, days);
-  let amount = 0;
-  let explanation = "";
+type PricingContext = { coverage: CoverageId; draft: Draft; days: number };
 
-  if (coverage === "24h") {
-    amount = d * 80000;
-    explanation = "24-hour coverage includes extended operational continuity.";
-  } else if (coverage === "weekend") {
-    amount = 80000;
-    explanation = "Weekend coverage includes extended operational hours.";
-  } else if (coverage === "home") {
-    amount = d * 45000;
-    explanation = "Home care coverage includes personalized operational coordination.";
-  } else {
-    amount = d * 36000;
-    explanation =
-      d <= 1
-        ? "Short coverage includes adjusted operational pricing."
-        : d <= 3
-          ? "Mid-length coverage includes adjusted operational pricing."
-          : "Standard operational coverage rate.";
-  }
-
-  return { amount, explanation };
+function computePricing({ coverage, draft, days }: PricingContext) {
+  const win = shiftWindow(coverage, draft, days);
+  return computeCoveragePricing(coverageKindFromLabel(COVERAGE_SHORT[coverage]), win.startTs, win.endTs);
 }
 
 function formatNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
 }
+
 
 const COVERAGE_SHORT: Record<CoverageId, string> = {
   standard: "Standard",
