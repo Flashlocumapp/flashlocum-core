@@ -14,10 +14,13 @@ import {
   doctorEntityId,
   hospitalEntityId,
   nairaK,
+  recordHistoryRating,
   useDispatch,
   type Coverage as CoverItem,
   type HistoryItem,
 } from "@/features/cover/dispatch";
+import { recordRating } from "@/lib/ratings";
+
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
