@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { simNow, useSimClock } from "@/lib/clock";
+import { roundedOverrunMinutes } from "@/lib/pricing";
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
@@ -342,10 +343,11 @@ function OvertimePane({
   onMadePayment: () => void;
   paymentTriggered: boolean;
 }) {
-  const extra = useMemo(
-    () => Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN,
+  const billedMin = useMemo(
+    () => roundedOverrunMinutes(overtimeSec / 60),
     [overtimeSec],
   );
+  const extra = billedMin * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
 
   return (
@@ -393,9 +395,12 @@ function OvertimePane({
             Extension
           </span>
           <span className="text-[14px] font-medium tabular-nums">
-            +{fmtClock(overtimeSec)} · +{fmtNaira(extra)}
+            +{billedMin}min · +{fmtNaira(extra)}
           </span>
         </div>
+        <p className="mt-1 text-[11.5px] text-muted-foreground">
+          Billed in 15-minute blocks · {fmtClock(overtimeSec)} elapsed
+        </p>
 
         <div className="mt-auto pb-8">
           <button
@@ -422,7 +427,7 @@ function ConfirmedPane({
   overtimeSec: number;
   onClose: () => void;
 }) {
-  const extra = Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
+  const extra = roundedOverrunMinutes(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
   const [ratingOpen, setRatingOpen] = useState(true);
   const [rated, setRated] = useState(false);
