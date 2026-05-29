@@ -115,26 +115,22 @@ function fmtAmPm(hhmm: string): string {
   return `${hr}:${String(m).padStart(2, "0")}${period}`;
 }
 
-function dayLabel(coverage: CoverageId, draft: Draft, days: number): string {
-  if (coverage === "weekend") return "Sat & Sun";
+function dayLabel(_coverage: CoverageId, draft: Draft, days: number): string {
   if (!draft.startDate) return "";
   const start = new Date(draft.startDate);
   const startWd = WEEKDAY_SHORT[start.getDay()] ?? "";
-  if (coverage === "24h" || days <= 1) return startWd;
+  if (days <= 1) return startWd;
   const end = new Date(start);
   end.setDate(end.getDate() + days - 1);
   const endWd = WEEKDAY_SHORT[end.getDay()] ?? "";
   return `${startWd}–${endWd}`;
 }
 
-function durationHrsOf(coverage: CoverageId, draft: Draft, days: number): number {
-  if (coverage === "24h") return 24 * Math.max(1, days);
-  if (coverage === "weekend") return 48;
-  // standard / home — derive from start/end + days
+function durationHrsOf(_coverage: CoverageId, draft: Draft, days: number): number {
   const [sh, sm] = draft.startTime.split(":").map(Number);
   const [eh, em] = draft.endTime.split(":").map(Number);
   let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins <= 0) mins += 24 * 60; // overnight
+  if (mins <= 0) mins += 24 * 60;
   const perDay = mins / 60;
   return Math.round(perDay * Math.max(1, days));
 }
