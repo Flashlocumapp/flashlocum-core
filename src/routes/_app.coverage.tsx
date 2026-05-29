@@ -767,6 +767,11 @@ function RequestCard({
           </a>
         </div>
       )}
+      {(isActive || (isUpcoming && item.accumulatedMs > 0)) && (
+        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
+          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
+        </div>
+      )}
     </div>
   );
 }
