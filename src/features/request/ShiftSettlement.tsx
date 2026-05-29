@@ -164,7 +164,7 @@ export function ShiftSettlement({
         frozenAmountRef.current = 0;
       }
     }
-  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM]);
+  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days]);
 
   const finalize = () => {
     onConfirmed?.();
