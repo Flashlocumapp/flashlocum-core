@@ -136,19 +136,20 @@ export function useDispatch(): View {
     .map(toCoverage);
   const declined = new Set(me?.declined ?? []);
   const liveRequests = broadcastingRequests(net).filter((r) => !declined.has(r.id));
-
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map((r) => ({
       ...toCoverage(r),
       outcome: r.status === "completed" ? "completed" : "cancelled",
+      cancelledBy: r.cancelledBy,
       completedOn: new Date(r.updatedAt).toLocaleDateString("en-NG", {
         weekday: "short",
         day: "2-digit",
         month: "short",
       }),
       settlementStatus: r.status === "completed" ? "Pending" : "Voided",
+    }));
     }));
 
   let incoming: Coverage | null = null;
