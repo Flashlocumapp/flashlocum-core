@@ -26,6 +26,7 @@ import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
+  endShiftDay as netEndShiftDay,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
@@ -35,6 +36,7 @@ import {
   type NetState,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
+
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
@@ -64,7 +66,10 @@ type RequestItem = {
   outcome?: "completed" | "cancelled";
   cancelledBy?: "requester" | "doctor";
   startedAt?: number;
+  days: number;
+  dayIndex: number;
 };
+
 
 /** "Dr. Emmanuel Adeleke" → "Dr. Emmanuel A." */
 function shortDoctorName(full: string): string {
@@ -147,8 +152,12 @@ function toRequestItem(r: NetRequest): RequestItem {
     outcome,
     cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
+    days: Math.max(1, r.days ?? 1),
+    dayIndex: Math.max(1, r.dayIndex ?? 1),
   };
 }
+
+
 
 
 const TABS = [
@@ -260,12 +269,29 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const beginEndShift = (id: string) => setSettlingId(id);
+  /**
+   * End Shift handler — branches on lifecycle:
+   *   - Multi-day mid-shift (dayIndex < days): pause back to Upcoming for the
+   *     next operational day. No settlement, no payment, no closure.
+   *   - Single-day OR final day: open settlement flow.
+   */
+  const beginEndShift = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    if (item.days > 1 && item.dayIndex < item.days) {
+      netEndShiftDay(id);
+      setTab("upcoming");
+      setNotice("Day complete · Resume on the next operational day");
+      return;
+    }
+    setSettlingId(id);
+  };
 
   const confirmEnd = () => {
     if (!settlingId) return;
     netCompleteRequest(settlingId);
   };
+
 
   const openEdit = (id: string) => {
     const item = items.find((i) => i.id === id);
@@ -523,7 +549,7 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                Start Shift
+                {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
             {item.status === "active" && (
@@ -531,9 +557,10 @@ function RequesterDetailSheet({
                 onClick={() => onEnd(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                End Shift
+                {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
               </button>
             )}
+
           </div>
 
           {item.status === "upcoming" && (
@@ -663,7 +690,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            Start Shift
+            {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && (
@@ -675,7 +702,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            End Shift
+            {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
           </button>
         )}
       </div>

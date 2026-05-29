@@ -70,7 +70,12 @@ export type NetRequest = {
   endTs?: number;
   // Who triggered the cancellation (for history labelling).
   cancelledBy?: "requester" | "doctor";
+  // Multi-day lifecycle: total operational days and 1-based current day.
+  // A request is "final-day" when dayIndex === days (or days is missing/<=1).
+  days?: number;
+  dayIndex?: number;
 };
+
 
 export type Actor = "requester" | "doctor" | "system";
 export type NetActionType =
@@ -472,6 +477,35 @@ export function completeRequest(id: string) {
     { actor: "requester", actorId: getSessionId(), action: "complete" },
   );
 }
+
+/**
+ * Multi-day mid-shift pause: end the current operational day and move the
+ * request back into Upcoming Coverage for the next day. Does NOT settle,
+ * close, or trigger payment — multi-day requests settle once at the end.
+ */
+export function endShiftDay(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  const nextIndex = Math.max(1, (cur.dayIndex ?? 1)) + 1;
+  save(
+    {
+      ...state,
+      requests: {
+        ...state.requests,
+        [id]: {
+          ...cur,
+          status: "accepted",
+          startedAt: undefined,
+          dayIndex: nextIndex,
+          updatedAt: Date.now(),
+        },
+      },
+    },
+    { actor: "requester", actorId: getSessionId(), action: "pause", shiftId: id },
+  );
+}
+
 
 /** Pause broadcasting (hides from doctors) without losing request. */
 export function pauseRequest(id: string) {
