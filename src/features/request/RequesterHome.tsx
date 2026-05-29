@@ -283,7 +283,8 @@ function HomeScreen() {
         ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, days })}
+            pricing={computePricing({ coverage, draft, days })}
+
             onConfirm={() => setStage("dispatch")}
           />
         ) : (
