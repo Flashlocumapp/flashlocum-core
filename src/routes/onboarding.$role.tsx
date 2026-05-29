@@ -33,7 +33,7 @@ function OnboardingScreen() {
     else setRequester(getProfile<RequesterProfile>("request"));
   }, [isDoctor]);
 
-  const selfieRef = useRef<HTMLInputElement>(null);
+  const licenseRef2 = useRef<HTMLInputElement>(null);
   const licenseRef = useRef<HTMLInputElement>(null);
 
   const persist = () => {
