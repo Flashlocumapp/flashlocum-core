@@ -1024,7 +1024,6 @@ function DispatchOverlay({
     }
   };
 
-  };
 
   // Pre-acceptance cancel: remove silently (no notification, no history).
   const handleCancelPreAccept = () => {
