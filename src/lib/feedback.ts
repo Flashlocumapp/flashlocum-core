@@ -47,7 +47,7 @@ function vibrate(pattern: number | number[]) {
   const v = (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate;
   if (!v) return;
   try {
-    v.call(navigator, pattern);
+    v.call(navigator, pattern as number & number[]);
   } catch {
     /* noop */
   }
