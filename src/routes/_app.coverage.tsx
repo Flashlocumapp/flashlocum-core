@@ -378,6 +378,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                   <RequestCard
                     item={item}
                     onStart={() => moveToActive(item.id)}
+                    onPause={() => pauseToUpcoming(item.id)}
                     onEnd={() => beginEndShift(item.id)}
                     onCancel={() => setCancelTargetId(item.id)}
                     onEdit={() => openEdit(item.id)}
