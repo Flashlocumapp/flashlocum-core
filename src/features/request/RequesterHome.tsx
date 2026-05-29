@@ -216,22 +216,6 @@ function HomeScreen() {
     <section className="relative h-full w-full overflow-hidden">
       <MapBackground markers={markers} />
 
-      {/* top chrome */}
-      <header className="absolute inset-x-0 top-0 z-30 safe-top pointer-events-none">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 pt-3">
-          <button className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-surface-elevated shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M4 6h16M4 12h16M4 18h10"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-          <span className="h-10 w-10" />
-        </div>
-      </header>
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
       <AnimatePresence>
