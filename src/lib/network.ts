@@ -70,7 +70,12 @@ export type NetRequest = {
   endTs?: number;
   // Who triggered the cancellation (for history labelling).
   cancelledBy?: "requester" | "doctor";
+  // Multi-day lifecycle: total operational days and 1-based current day.
+  // A request is "final-day" when dayIndex === days (or days is missing/<=1).
+  days?: number;
+  dayIndex?: number;
 };
+
 
 export type Actor = "requester" | "doctor" | "system";
 export type NetActionType =
