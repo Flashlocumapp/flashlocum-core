@@ -355,9 +355,15 @@ export function completeUpcoming(id: string) {
 }
 
 export function recordHistoryRating(historyId: string, value: number) {
+  historyRatings = { ...historyRatings, [historyId]: value };
   history = history.map((h) => (h.id === historyId ? { ...h, rating: value } : h));
   bump();
 }
+
+export function hasHistoryRating(historyId: string): boolean {
+  return historyRatings[historyId] !== undefined;
+}
+
 
 /* ---------- helpers reading network module ---------- */
 
