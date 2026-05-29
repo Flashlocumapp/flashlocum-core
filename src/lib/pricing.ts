@@ -140,3 +140,56 @@ export function roundedOverrunMinutes(overrunMin: number): number {
   else extra = 60;
   return fullHours * 60 + extra;
 }
+
+/**
+ * Compute pricing from a real worked duration starting at `startHHMM`.
+ *
+ * Walks forward minute-by-minute from the start clock time, classifying
+ * each minute as day (08:00–22:00) or night, then applies the same
+ * standard buckets and 24h/48h overrides as `computeCoveragePricing`.
+ *
+ * Used to bind final billing to the LIVE Active Coverage timer — the
+ * scheduled end is irrelevant. Pass `workedMinutes` already rounded by
+ * `roundedOverrunMinutes` for the calm 15-minute half-block behaviour.
+ */
+export function computeWorkedPricing(
+  coverage: CoverageKind,
+  startHHMM: string,
+  workedMinutes: number,
+): PricingResult {
+  const worked = Math.max(0, Math.floor(workedMinutes));
+  const start = minsFromHHMM(startHHMM);
+  let day = 0;
+  let night = 0;
+  for (let i = 0; i < worked; i++) {
+    const h = Math.floor(((start + i) % (24 * 60)) / 60);
+    if (h >= 8 && h < 22) day++;
+    else night++;
+  }
+  const totalHrs = worked / 60;
+
+  if (coverage === "home") {
+    return {
+      amount: Math.round(totalHrs * 15000),
+      explanation: "Home Care · ₦15,000/hr for personal in-home coverage.",
+    };
+  }
+  if (Math.round(totalHrs) === 24) {
+    return { amount: 50000, explanation: "Continuous 24-hour coverage · flat ₦50,000." };
+  }
+  if (Math.round(totalHrs) === 48) {
+    return { amount: 100000, explanation: "Continuous 48-hour coverage · flat ₦100,000." };
+  }
+  const dayHours = day / 60;
+  const nightHours = night / 60;
+  const dayRate = dayRateFor(dayHours);
+  const amount = Math.round(dayHours * dayRate + nightHours * 2000);
+  const parts: string[] = [];
+  if (dayHours > 0)
+    parts.push(`${trim(dayHours)}h day · ₦${dayRate.toLocaleString("en-NG")}/hr`);
+  if (nightHours > 0) parts.push(`${trim(nightHours)}h night · ₦2,000/hr`);
+  return {
+    amount,
+    explanation: parts.join(" + ") || "Standard operational coverage rate.",
+  };
+}
