@@ -260,6 +260,15 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         coverage: historyItem.coverage,
         completedOn: historyItem.completedOn,
         amount: historyItem.amount,
+        rating: ratings[historyItem.id],
+      }
+    : null;
+
+  const moveToActive = (id: string) => {
+    netStartRequest(id);
+    setTab("active");
+  };
+
   /**
    * End Shift handler — branches on lifecycle:
    *   - Multi-day mid-shift (dayIndex < days): pause back to Upcoming for the
@@ -283,14 +292,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     netCompleteRequest(settlingId);
   };
 
-  };
-
-  const beginEndShift = (id: string) => setSettlingId(id);
-
-  const confirmEnd = () => {
-    if (!settlingId) return;
-    netCompleteRequest(settlingId);
-  };
 
   const openEdit = (id: string) => {
     const item = items.find((i) => i.id === id);
