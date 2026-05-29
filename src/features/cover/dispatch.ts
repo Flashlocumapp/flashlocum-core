@@ -150,7 +150,6 @@ export function useDispatch(): View {
       }),
       settlementStatus: r.status === "completed" ? "Pending" : "Voided",
     }));
-    }));
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
