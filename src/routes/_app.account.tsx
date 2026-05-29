@@ -154,7 +154,12 @@ function AccountScreen() {
                         : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
                   }}
                 >
-                  <button className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-accent">
+                  <button
+                    onClick={() => {
+                      if (r.id === "profile" || r.id === "verification") openProfile();
+                    }}
+                    className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-accent"
+                  >
                     <span className="text-[14.5px]">{r.title}</span>
                     <span className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
                       {r.meta}
@@ -163,6 +168,7 @@ function AccountScreen() {
                       </svg>
                     </span>
                   </button>
+
                 </li>
               ))}
             </ul>
