@@ -1003,26 +1003,26 @@ function DispatchOverlay({
     if (requestId) {
       const cur = net.requests[requestId];
       const newDur = Math.max(1, next.durationHrs);
-      // Derive absolute timestamps from the original date + new start/end so
-      // operational continuity (day, conflict window) stays consistent.
       const baseDateStr = draft.startDate;
       const newStartTs = new Date(`${baseDateStr}T${next.startTime}:00`).getTime();
       const newEndTs = newStartTs + newDur * 3_600_000;
-      // Recompute amount from the original hourly rate to preserve pricing.
-      const baseHourly = cur
-        ? cur.amount / Math.max(1, cur.durationHrs)
-        : pricing.amount / Math.max(1, durationHrs);
-      const newAmount = Math.round(baseHourly * newDur);
+      // Re-derive pricing from the operational pricing engine — day/night
+      // splits, continuous-coverage overrides, and Home Care rates all stay
+      // synchronized with the edited window.
+      const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
+      const repriced = computeCoveragePricing(kind, newStartTs, newEndTs);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),
         end: fmtAmPm(next.endTime),
         durationHrs: newDur,
-        amount: newAmount,
+        amount: repriced.amount,
         startTs: newStartTs,
         endTs: newEndTs,
       });
     }
+  };
+
   };
 
   // Pre-acceptance cancel: remove silently (no notification, no history).
