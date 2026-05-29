@@ -294,8 +294,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       const newStartTs = newStart.getTime();
       const newEndTs = newStartTs + newDur * 3_600_000;
       const fallbackItem = items.find((i) => i.id === id);
-      const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (fallbackItem ? fallbackItem.amount / Math.max(1, fallbackItem.durationHrs) : 0);
-      const newAmount = Math.round(baseHourly * newDur);
+      const kind = coverageKindFromLabel(cur?.coverage ?? fallbackItem?.coverage ?? "Standard");
+      const repriced = computeCoveragePricing(kind, newStartTs, newEndTs);
+      const newAmount = repriced.amount;
+
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
         start: amPmFromHHMM(next.startTime),
