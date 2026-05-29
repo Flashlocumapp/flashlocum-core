@@ -230,18 +230,21 @@ export function ensureDoctorSession(initialOnline = true) {
     processedEvents.add(eventKey);
 
     if (ev.action === "start") {
+      shiftCue("start");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has started.`,
         body: "Tap the active card for shift details.",
       });
     } else if (ev.action === "resume") {
+      shiftCue("resume");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has resumed.`,
         body: "Coverage timer continues from where it paused.",
       });
     } else if (ev.action === "pause") {
+      shiftCue("pause");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has been paused.`,
@@ -251,6 +254,7 @@ export function ensureDoctorSession(initialOnline = true) {
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "complete") {
+      shiftCue("end");
       pushToast({
         tone: "presence",
         title: `Your shift with ${r.hospital} has ended.`,
