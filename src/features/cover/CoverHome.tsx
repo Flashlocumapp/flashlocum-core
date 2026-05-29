@@ -50,7 +50,7 @@ export function CoverHome() {
         <div className="mx-auto flex max-w-md flex-col gap-2.5 px-4 pb-4">
           <CoverageTile coverage={focus} active={isActive} />
           <div className="grid grid-cols-2 gap-2.5">
-            <ScoreTile score={score} />
+            <ScoreTile score={myRating.score} />
             <AcceptanceTile rate={acceptance} />
           </div>
         </div>
