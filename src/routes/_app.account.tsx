@@ -244,13 +244,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function ListGroup({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="overflow-hidden rounded-2xl [&>*+*]:border-t"
-      style={{
-        background: "var(--color-surface-elevated)",
-        // @ts-expect-error css var
-        "--tw-border-opacity": 1,
-        borderColor: "color-mix(in oklab, var(--color-foreground) 5%, transparent)",
-      }}
+      className="overflow-hidden rounded-2xl [&>*+*]:border-t [&>*+*]:border-[color:color-mix(in_oklab,var(--color-foreground)_5%,transparent)]"
+      style={{ background: "var(--color-surface-elevated)" }}
     >
       {children}
     </div>
