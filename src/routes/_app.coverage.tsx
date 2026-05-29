@@ -249,7 +249,25 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const beginEndShift = (id: string) => setSettlingId(id);
+  const beginEndShift = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    const total = Math.max(1, item?.daysTotal ?? 1);
+    const completedSoFar = item?.daysCompleted ?? 0;
+    const isFinal = completedSoFar + 1 >= total;
+    if (isFinal) {
+      // Final day → settlement → complete
+      setSettlingId(id);
+    } else {
+      // Non-final day → revert to upcoming without settlement
+      netEndShiftDay(id);
+      pushToast({
+        tone: "presence",
+        title: `Day ${completedSoFar + 1} of ${total} ended.`,
+        body: "Tap Resume Shift to continue the next day.",
+      });
+      setTab("upcoming");
+    }
+  };
 
   const confirmEnd = () => {
     if (!settlingId) return;
