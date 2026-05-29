@@ -531,17 +531,19 @@ function OvertimePane({
 
 function ConfirmedPane({
   shift,
-  overtimeSec,
+  total,
+  billedMin,
   onClose,
 }: {
   shift: ShiftMeta;
-  overtimeSec: number;
+  total: number;
+  billedMin: number;
   onClose: () => void;
 }) {
-  const extra = roundedOverrunMinutes(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
-  const total = shift.amount + extra;
+  void billedMin;
   const [ratingOpen, setRatingOpen] = useState(true);
   const [rated, setRated] = useState(false);
+
 
   return (
     <motion.section
