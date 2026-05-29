@@ -124,12 +124,6 @@ export function HistoryDetailSheet({
         </div>
       )}
 
-      <button
-        onClick={() => onRebook(item.id)}
-        className="mt-5 h-12 w-full rounded-full bg-foreground text-[14px] font-semibold text-background active:opacity-90"
-      >
-        Rebook doctor
-      </button>
     </DismissSheet>
   );
 }
