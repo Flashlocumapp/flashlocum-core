@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { simNow, useSimClock } from "@/lib/clock";
+import { roundedOverrunMinutes } from "@/lib/pricing";
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
