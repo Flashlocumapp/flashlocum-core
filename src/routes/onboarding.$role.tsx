@@ -33,8 +33,8 @@ function OnboardingScreen() {
     else setRequester(getProfile<RequesterProfile>("request"));
   }, [isDoctor]);
 
-  const licenseRef2 = useRef<HTMLInputElement>(null);
   const licenseRef = useRef<HTMLInputElement>(null);
+
 
   const persist = () => {
     if (isDoctor) saveProfile("cover", doctor);
