@@ -427,7 +427,7 @@ function ConfirmedPane({
   overtimeSec: number;
   onClose: () => void;
 }) {
-  const extra = Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
+  const extra = roundedOverrunMinutes(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
   const [ratingOpen, setRatingOpen] = useState(true);
   const [rated, setRated] = useState(false);
