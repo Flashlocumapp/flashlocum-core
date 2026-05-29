@@ -145,10 +145,14 @@ function toRequestItem(r: NetRequest): RequestItem {
       : undefined,
     amount: r.amount,
     status,
-    phone: r.phone,
-    note: r.note,
     outcome,
     cancelledBy: r.cancelledBy,
+    startedAt: r.startedAt,
+    days: Math.max(1, r.days ?? 1),
+    dayIndex: Math.max(1, r.dayIndex ?? 1),
+  };
+}
+
     startedAt: r.startedAt,
   };
 }
