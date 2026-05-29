@@ -16,6 +16,7 @@ import {
   hospitalEntityId,
   nairaK,
   netOf,
+  recordHistoryRating,
   useDispatch,
   type Coverage,
 } from "@/features/cover/dispatch";
