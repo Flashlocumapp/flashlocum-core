@@ -727,7 +727,7 @@ function RequestCard({
             {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
-        {isActive && (
+        {isActive && item.days > 1 && (
           <button
             onClick={(e) => { e.stopPropagation(); onPause(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
@@ -739,9 +739,21 @@ function RequestCard({
             Pause Shift
           </button>
         )}
+        {isActive && item.days <= 1 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEnd(); }}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            style={{
+              background: "var(--color-foreground)",
+              color: "var(--color-background)",
+            }}
+          >
+            End Shift
+          </button>
+        )}
       </div>
 
-      {isUpcoming && (
+      {isUpcoming && item.accumulatedMs === 0 && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
@@ -767,7 +779,7 @@ function RequestCard({
           </a>
         </div>
       )}
-      {(isActive || (isUpcoming && item.accumulatedMs > 0)) && (
+      {((isActive && item.days > 1) || (isUpcoming && item.accumulatedMs > 0)) && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
         </div>
