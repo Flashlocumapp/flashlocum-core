@@ -93,11 +93,17 @@ export function ShiftSettlement({
     return () => clearInterval(id);
   }, [open, phase]);
 
-  // Transition settlement → grace at 5min, grace → overtime at 15min
+  // Transition settlement → grace at 5min, grace → overtime at 15min.
+  // When the 15-min grace elapses without payment, the paused window itself
+  // counts retroactively into overtime — operationally fair for both sides.
   useEffect(() => {
     if (phase === "settlement" && elapsed >= VISIBLE_COUNTDOWN) setPhase("grace");
-    if (phase === "grace" && elapsed >= GRACE_TOTAL) setPhase("overtime");
+    if (phase === "grace" && elapsed >= GRACE_TOTAL) {
+      setOvertimeSec((s) => (s === 0 ? GRACE_TOTAL : s));
+      setPhase("overtime");
+    }
   }, [elapsed, phase]);
+
 
   const handleEndShift = () => {
     setElapsed(0);
