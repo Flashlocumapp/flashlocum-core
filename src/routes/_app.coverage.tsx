@@ -738,11 +738,7 @@ function RequestCard({
 }
 
 function LiveTimer({ from }: { from: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
+  const now = useSimClock(1000);
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
@@ -759,6 +755,7 @@ function LiveTimer({ from }: { from: number }) {
     </span>
   );
 }
+
 
 function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) => void; label: string }) {
   return (
