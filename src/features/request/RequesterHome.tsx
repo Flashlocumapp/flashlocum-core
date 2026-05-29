@@ -18,6 +18,8 @@ import {
   cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
+import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
+
 
 export function RequesterHome() {
   return <HomeScreen />;
