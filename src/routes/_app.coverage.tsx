@@ -30,6 +30,7 @@ import {
   type NetRequest,
   type NetState,
 } from "@/lib/network";
+import { pushToast } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
