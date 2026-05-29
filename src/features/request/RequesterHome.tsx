@@ -177,13 +177,11 @@ function HomeScreen() {
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
     setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
-    if (c === "24h") setDays(1);
-    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
+  const setCoverage = (c: CoverageId) => {
+    setCoverageRaw(c);
+    setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
+    setDays((d) => (d < 1 || d > 7 ? 1 : d));
   };
-
-  const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
-
-  const recents = useMemo(
     () => RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
     [query],
   );
