@@ -5,7 +5,9 @@ import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
+import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
+import { pushToast } from "@/lib/notifications";
 import {
   onlineDoctors,
   pauseRequest,
@@ -34,10 +36,13 @@ const RECENT: Recent[] = [
 
 const COVERAGE: { id: CoverageId; label: string }[] = [
   { id: "standard", label: "Standard" },
-  { id: "24h", label: "24-Hour" },
-  { id: "weekend", label: "Weekend Call" },
   { id: "home", label: "Home Care" },
 ];
+
+const COVERAGE_SUBTEXT: Partial<Record<CoverageId, string>> = {
+  standard: "For hospitals, clinics, facilities, and medical centers.",
+  home: "For private residences and personal in-home care.",
+};
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
 
@@ -555,6 +560,13 @@ function ConfigureBody({
         })}
       </div>
 
+      {/* Calm operational subtext for the active coverage type */}
+      {COVERAGE_SUBTEXT[coverage] && (
+        <p className="-mt-2 px-1 text-[12px] leading-snug text-muted-foreground">
+          {COVERAGE_SUBTEXT[coverage]}
+        </p>
+      )}
+
       {/* Dynamic fields — switch fluidly per coverage type */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -598,8 +610,18 @@ function ConfigureBody({
 
 /* ---------------------- Coverage-specific fields ---------------------- */
 
+function dateBounds(): { min: string; max: string } {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = new Date();
+  const max = new Date(today);
+  max.setDate(max.getDate() + 6);
+  return { min: fmt(today), max: fmt(max) };
+}
+
 function CoverageFields({
-  coverage,
+  coverage: _coverage,
   days,
   setDays,
   draft,
@@ -611,60 +633,14 @@ function CoverageFields({
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
 }) {
-  if (coverage === "weekend") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
+  const bounds = dateBounds();
+  // Clamp start date into the 7-day operational window if it drifts.
+  useEffect(() => {
+    if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
+    else if (draft.startDate > bounds.max) patchDraft({ startDate: bounds.max });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.startDate]);
 
-  if (coverage === "standard" || coverage === "home") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <Row>
-          <CtrlField
-            label="End time"
-            type="time"
-            value={draft.endTime}
-            onChange={(v) => patchDraft({ endTime: v })}
-          />
-          <DaysStepper value={days} setValue={setDays} />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
-
-  // 24-Hour
   return (
     <Fields>
       <Row>
@@ -672,16 +648,24 @@ function CoverageFields({
           label="Start date"
           type="date"
           value={draft.startDate}
+          min={bounds.min}
+          max={bounds.max}
           onChange={(v) => patchDraft({ startDate: v })}
         />
-        <CtrlField
+        <TimeField12h
           label="Start time"
-          type="time"
           value={draft.startTime}
           onChange={(v) => patchDraft({ startTime: v })}
         />
       </Row>
-      <DaysStepper value={days} setValue={setDays} />
+      <Row>
+        <TimeField12h
+          label="End time"
+          value={draft.endTime}
+          onChange={(v) => patchDraft({ endTime: v })}
+        />
+        <DaysStepper value={days} setValue={setDays} />
+      </Row>
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
@@ -700,12 +684,16 @@ function CtrlField({
   value,
   onChange,
   readOnly,
+  min,
+  max,
 }: {
   label: string;
   type: "date" | "time";
   value: string;
   onChange?: (v: string) => void;
   readOnly?: boolean;
+  min?: string;
+  max?: string;
 }) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -716,7 +704,30 @@ function CtrlField({
         type={type}
         value={value}
         readOnly={readOnly}
-        onChange={(e) => onChange?.(e.target.value)}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (type === "date") {
+            if (min && v < min) {
+              pushToast({
+                tone: "info",
+                title: "Coverage requests start from today.",
+              });
+              onChange?.(min);
+              return;
+            }
+            if (max && v > max) {
+              pushToast({
+                tone: "info",
+                title: "Coverage requests are limited to 7 days maximum.",
+              });
+              onChange?.(max);
+              return;
+            }
+          }
+          onChange?.(v);
+        }}
         className="bg-transparent text-[14px] font-medium outline-none"
       />
     </label>
@@ -730,6 +741,7 @@ function Stepper({
   min,
   max,
   unit,
+  onCap,
 }: {
   label: string;
   value: number;
@@ -737,6 +749,7 @@ function Stepper({
   min: number;
   max: number;
   unit: (n: number) => string;
+  onCap?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -756,7 +769,13 @@ function Stepper({
         </span>
         <button
           type="button"
-          onClick={() => setValue(Math.min(max, value + 1))}
+          onClick={() => {
+            if (value >= max) {
+              onCap?.();
+              return;
+            }
+            setValue(Math.min(max, value + 1));
+          }}
           className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-elevated text-foreground/70 active:scale-95"
         >
           +
@@ -769,12 +788,18 @@ function Stepper({
 function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
   return (
     <Stepper
-      label="Duration"
+      label="Coverage Length"
       value={value}
       setValue={setValue}
       min={1}
       max={7}
       unit={(n) => (n === 1 ? "day" : "days")}
+      onCap={() =>
+        pushToast({
+          tone: "info",
+          title: "Coverage requests are limited to 7 days maximum.",
+        })
+      }
     />
   );
 }
@@ -961,19 +986,19 @@ function DispatchOverlay({
     if (info.velocity.y > 280 || info.offset.y > 90) setStage("collapsed");
   };
 
-  // Edit sheet uses HOURS for duration.
+  // Edit sheet: start/end (12h) → coverage length auto-derived.
   const [editInitial, setEditInitial] = useState<EditableShift>({
-    timing: draft.startTime,
-    duration: durationHrs,
-    accommodation: false,
+    startTime: draft.startTime,
+    endTime: draft.endTime,
+    durationHrs,
     note: draft.note ?? "",
   });
 
   const openEdit = () => {
     setEditInitial({
-      timing: draft.startTime,
-      duration: durationHrs,
-      accommodation: false,
+      startTime: draft.startTime,
+      endTime: draft.endTime,
+      durationHrs,
       note: draft.note ?? "",
     });
     setEditOpen(true);
@@ -982,9 +1007,9 @@ function DispatchOverlay({
   const handleSaveEdit = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
     setEditOpen(false);
     const label: Record<keyof EditableShift | "multiple", string> = {
-      timing: "Coverage timing updated",
-      duration: "Coverage duration updated",
-      accommodation: "Accommodation updated",
+      startTime: "Coverage start time updated",
+      endTime: "Coverage end time updated",
+      durationHrs: "Coverage length updated",
       note: "Coverage notes updated",
       multiple: "Coverage details updated",
     };
@@ -994,15 +1019,12 @@ function DispatchOverlay({
 
     if (requestId) {
       const cur = net.requests[requestId];
-      const newDur = Math.max(1, next.duration);
-      // Derive end from start + new duration as absolute timestamps so
-      // operational continuity (day, end time, conflict window) stays
-      // consistent.
+      const newDur = Math.max(1, next.durationHrs);
+      // Derive absolute timestamps from the original date + new start/end so
+      // operational continuity (day, conflict window) stays consistent.
       const baseDateStr = draft.startDate;
-      const newStartTs = new Date(`${baseDateStr}T${next.timing}:00`).getTime();
+      const newStartTs = new Date(`${baseDateStr}T${next.startTime}:00`).getTime();
       const newEndTs = newStartTs + newDur * 3_600_000;
-      const endDate = new Date(newEndTs);
-      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
       // Recompute amount from the original hourly rate to preserve pricing.
       const baseHourly = cur
         ? cur.amount / Math.max(1, cur.durationHrs)
@@ -1010,8 +1032,8 @@ function DispatchOverlay({
       const newAmount = Math.round(baseHourly * newDur);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
-        start: fmtAmPm(next.timing),
-        end: fmtAmPm(endHHMM),
+        start: fmtAmPm(next.startTime),
+        end: fmtAmPm(next.endTime),
         durationHrs: newDur,
         amount: newAmount,
         startTs: newStartTs,

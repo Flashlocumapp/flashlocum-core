@@ -1,17 +1,31 @@
 import { useEffect, useState } from "react";
 import { DismissSheet } from "./DismissSheet";
+import { TimeField12h } from "./TimeField12h";
 
 export type EditableShift = {
-  timing: string;
-  duration: number;
-  accommodation: boolean;
+  /** Start time "HH:MM" 24h */
+  startTime: string;
+  /** End time "HH:MM" 24h */
+  endTime: string;
+  /** Auto-calculated from start/end; overnight wraps to next day */
+  durationHrs: number;
   note: string;
 };
 
+/** Hours between start and end (overnight wraps to next day). */
+function calcDurationHrs(startHHMM: string, endHHMM: string): number {
+  const [sh, sm] = startHHMM.split(":").map(Number);
+  const [eh, em] = endHHMM.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return 1;
+  let mins = eh * 60 + em - (sh * 60 + sm);
+  if (mins <= 0) mins += 24 * 60;
+  return Math.max(1, Math.round(mins / 60));
+}
+
 /**
  * Lightweight edit sheet — updates operational details WITHOUT restarting
- * dispatch or unassigning the doctor. Confirming surfaces a calm
- * "Doctor notified" pulse via the caller.
+ * dispatch or unassigning the doctor. Coverage length is auto-derived from
+ * start and end time; pricing is recomputed by the caller.
  */
 export function EditShiftSheet({
   open,
@@ -30,9 +44,16 @@ export function EditShiftSheet({
     if (open) setDraft(initial);
   }, [open, initial]);
 
+  // Always keep durationHrs in sync with start/end.
+  const liveDuration = calcDurationHrs(draft.startTime, draft.endTime);
+
   const diff = (): (keyof EditableShift)[] => {
-    const keys: (keyof EditableShift)[] = ["timing", "duration", "accommodation", "note"];
-    return keys.filter((k) => draft[k] !== initial[k]);
+    const changed: (keyof EditableShift)[] = [];
+    if (draft.startTime !== initial.startTime) changed.push("startTime");
+    if (draft.endTime !== initial.endTime) changed.push("endTime");
+    if (liveDuration !== initial.durationHrs) changed.push("durationHrs");
+    if (draft.note !== initial.note) changed.push("note");
+    return changed;
   };
 
   const handleSave = () => {
@@ -41,7 +62,11 @@ export function EditShiftSheet({
       onDismiss();
       return;
     }
-    onSave(draft, changed.length === 1 ? changed[0] : "multiple");
+    const next: EditableShift = { ...draft, durationHrs: liveDuration };
+    // Prefer the most user-meaningful single change for the toast label.
+    const primary =
+      changed.find((c) => c === "startTime" || c === "endTime") ?? changed[0];
+    onSave(next, changed.length === 1 ? primary : "multiple");
   };
 
   return (
@@ -52,58 +77,32 @@ export function EditShiftSheet({
       </p>
 
       <div className="mt-4 space-y-2.5">
-        <Cell label="Timing">
-          <input
-            type="time"
-            value={draft.timing}
-            onChange={(e) => setDraft({ ...draft, timing: e.target.value })}
-            className="bg-transparent text-[14px] font-medium outline-none"
+        <div className="grid grid-cols-2 gap-2.5">
+          <TimeField12h
+            label="Start time"
+            value={draft.startTime}
+            onChange={(v) => setDraft({ ...draft, startTime: v })}
           />
-        </Cell>
+          <TimeField12h
+            label="End time"
+            value={draft.endTime}
+            onChange={(v) => setDraft({ ...draft, endTime: v })}
+          />
+        </div>
 
-        <Cell label="Duration (hours)">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setDraft({ ...draft, duration: Math.max(1, draft.duration - 1) })}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-elevated text-foreground/70 active:scale-95"
-            >
-              −
-            </button>
-            <span className="text-[14px] font-medium tabular-nums">
-              {draft.duration} hr
-            </span>
-            <button
-              onClick={() => setDraft({ ...draft, duration: Math.min(72, draft.duration + 1) })}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-elevated text-foreground/70 active:scale-95"
-            >
-              +
-            </button>
-          </div>
-        </Cell>
-
-        <button
-          onClick={() => setDraft({ ...draft, accommodation: !draft.accommodation })}
-          className="flex w-full items-center justify-between rounded-xl bg-secondary/60 px-3 py-2.5 text-left"
-        >
+        <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2.5">
           <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-            Accommodation
+            Coverage Length
           </span>
-          <span
-            className="flex h-5 w-9 items-center rounded-full p-0.5 transition-colors"
-            style={{
-              background: draft.accommodation
-                ? "var(--color-presence)"
-                : "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
-            }}
-          >
-            <span
-              className="h-4 w-4 rounded-full bg-background transition-transform"
-              style={{ transform: draft.accommodation ? "translateX(16px)" : "translateX(0)" }}
-            />
+          <span className="text-[14px] font-medium tabular-nums">
+            {liveDuration} hr
           </span>
-        </button>
+        </div>
 
-        <Cell label="Note">
+        <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
+          <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Note
+          </span>
           <textarea
             rows={2}
             value={draft.note}
@@ -111,7 +110,7 @@ export function EditShiftSheet({
             placeholder="Female doctor needed; accommodation available; Mon, Tue, Weds"
             className="resize-none bg-transparent text-[13.5px] outline-none placeholder:text-muted-foreground/55"
           />
-        </Cell>
+        </label>
       </div>
 
       <button
@@ -121,16 +120,5 @@ export function EditShiftSheet({
         Save & Notify Doctor
       </button>
     </DismissSheet>
-  );
-}
-
-function Cell({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }
