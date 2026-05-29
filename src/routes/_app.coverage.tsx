@@ -111,7 +111,7 @@ function amPmFromHHMM(s: string): string {
   if (Number.isNaN(h)) return s;
   const period = h >= 12 ? "PM" : "AM";
   const hr = ((h + 11) % 12) + 1;
-  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+  return `${String(hr).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
 }
 
 function toRequestItem(r: NetRequest): RequestItem {
@@ -568,7 +568,7 @@ function RequesterDetailSheet({
                 {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
-            {item.status === "active" && item.days > 1 && (
+            {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
               <button
                 onClick={() => onPause(item.id)}
                 className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90"
@@ -727,7 +727,7 @@ function RequestCard({
             {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
-        {isActive && item.days > 1 && (
+        {isActive && item.days > 1 && item.dayIndex < item.days && (
           <button
             onClick={(e) => { e.stopPropagation(); onPause(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
@@ -739,7 +739,7 @@ function RequestCard({
             Pause Shift
           </button>
         )}
-        {isActive && item.days <= 1 && (
+        {isActive && (item.days <= 1 || item.dayIndex >= item.days) && (
           <button
             onClick={(e) => { e.stopPropagation(); onEnd(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
@@ -779,7 +779,8 @@ function RequestCard({
           </a>
         </div>
       )}
-      {((isActive && item.days > 1) || (isUpcoming && item.accumulatedMs > 0)) && (
+      {((isActive && item.days > 1 && item.dayIndex < item.days) ||
+        (isUpcoming && item.accumulatedMs > 0)) && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
         </div>
@@ -1085,14 +1086,23 @@ function CoverCard({
 
       {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
         <div className="mt-2">
-          <LiveTimer from={(item as CoverItem & { startedAt: number }).startedAt} />
+          <LiveTimer
+            from={(item as CoverItem & { startedAt: number }).startedAt}
+            baseMs={(item as CoverItem).accumulatedMs ?? 0}
+            live
+          />
+        </div>
+      )}
+      {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) > 0 && (
+        <div className="mt-2">
+          <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
         </div>
       )}
 
 
       {(isActive || isUpcoming) && (
         <div className="mt-3 flex items-center gap-2">
-          {isUpcoming && (
+          {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) === 0 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

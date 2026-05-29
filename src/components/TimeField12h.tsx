@@ -57,7 +57,7 @@ export function TimeField12h({
         >
           {HOURS.map((h) => (
             <option key={h} value={h}>
-              {h}
+              {String(h).padStart(2, "0")}
             </option>
           ))}
         </select>

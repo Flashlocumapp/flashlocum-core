@@ -10,6 +10,11 @@
 import { useEffect, useState } from "react";
 import { getRole } from "./role";
 import { simNow } from "./clock";
+import {
+  computeWorkedPricing,
+  coverageKindFromLabel,
+  roundedOverrunMinutes,
+} from "./pricing";
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
@@ -83,6 +88,8 @@ export type NetRequest = {
   // tapped at any time; lifecycle is driven by start/pause/resume/end).
   days?: number;
   dayIndex?: number;
+  /** Final billed amount captured at completeRequest time (worked-time based). */
+  settledAmount?: number;
 };
 
 
@@ -508,6 +515,8 @@ export function pauseShift(id: string) {
   if (!cur || cur.status !== "active") return;
   const segment = cur.startedAt ? Math.max(0, simNow() - cur.startedAt) : 0;
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+  const days = Math.max(1, cur.days ?? 1);
+  const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
   save(
     {
       ...state,
@@ -518,6 +527,7 @@ export function pauseShift(id: string) {
           status: "accepted",
           startedAt: undefined,
           accumulatedMs,
+          dayIndex,
           updatedAt: simNow(),
         },
       },
@@ -539,6 +549,22 @@ export function completeRequest(id: string) {
       ? Math.max(0, simNow() - cur.startedAt)
       : 0;
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+  // Derive final settled amount from the LIVE accumulated worked time.
+  const startHHMM = (() => {
+    const m = (cur.start ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!m) return "08:00";
+    let h = parseInt(m[1], 10);
+    const ap = m[3]?.toUpperCase();
+    if (ap === "PM" && h < 12) h += 12;
+    if (ap === "AM" && h === 12) h = 0;
+    return `${String(h).padStart(2, "0")}:${m[2]}`;
+  })();
+  const billedMin = roundedOverrunMinutes(accumulatedMs / 60000);
+  const settledAmount = computeWorkedPricing(
+    coverageKindFromLabel(cur.coverage),
+    startHHMM,
+    billedMin,
+  ).amount;
   save(
     {
       ...state,
@@ -549,6 +575,7 @@ export function completeRequest(id: string) {
           status: "completed",
           accumulatedMs,
           startedAt: undefined,
+          settledAmount,
           updatedAt: simNow(),
         },
       },
