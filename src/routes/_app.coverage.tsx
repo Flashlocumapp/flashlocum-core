@@ -114,9 +114,11 @@ function toRequestItem(r: NetRequest): RequestItem {
       : r.status === "cancelled"
         ? "cancelled"
         : undefined;
+  const fullDoctor = "Dr. Emmanuel Adeleke";
   return {
     id: r.id,
-    doctor: "Dr. Emmanuel Adeleke",
+    doctor: fullDoctor,
+    doctorShort: shortDoctorName(fullDoctor),
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
@@ -138,8 +140,10 @@ function toRequestItem(r: NetRequest): RequestItem {
     phone: r.phone,
     note: r.note,
     outcome,
+    cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
   };
+}
 }
 
 
