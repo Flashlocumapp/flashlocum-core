@@ -882,9 +882,9 @@ function DispatchOverlay({
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
 
+  const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, draft, days });
 
-  const pricing = computePricing({ coverage, days });
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
   const win = shiftWindow(coverage, draft, days);
