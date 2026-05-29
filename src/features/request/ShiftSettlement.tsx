@@ -208,6 +208,8 @@ export function ShiftSettlement({
       shift.coverageKind,
       shift.startHHMM,
       bm,
+      shift.endHHMM,
+      shift.days,
     ).amount;
     setPhase("settlement");
     if (Math.random() < 0.35) {
