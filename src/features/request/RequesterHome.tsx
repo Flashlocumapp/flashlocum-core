@@ -290,7 +290,7 @@ function HomeScreen() {
         ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, days })}
+            pricing={computePricing({ coverage, days, draft })}
             onConfirm={() => setStage("dispatch")}
           />
         ) : (
@@ -869,14 +869,11 @@ function DispatchOverlay({
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
 
   const paused = cancelOpen || editOpen;
-  const pricing = computePricing({ coverage, days });
+  const pricing = computePricing({ coverage, days, draft });
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
   const win = shiftWindow(coverage, draft, days);
-  // For weekend/24h, end is fully derived from start + fixed duration.
-  // For standard/home, draft.endTime drives it.
-  const endStr =
-    coverage === "weekend" || coverage === "24h" ? fmtAmPm(win.endHHMM) : fmtAmPm(draft.endTime);
+  const endStr = fmtAmPm(draft.endTime);
   const durationHrs = win.durHrs;
   const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
