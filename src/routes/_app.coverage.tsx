@@ -660,7 +660,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            Start Shift
+            {(item.daysCompleted ?? 0) > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && (
@@ -672,7 +672,11 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            End Shift
+            {(() => {
+              const total = Math.max(1, item.daysTotal ?? 1);
+              const next = (item.daysCompleted ?? 0) + 1;
+              return next >= total ? "End Shift" : "End Today's Shift";
+            })()}
           </button>
         )}
       </div>
