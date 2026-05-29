@@ -3,12 +3,14 @@ import { MapBackground } from "@/components/MapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { fmtOpMeta } from "@/lib/format";
 import {
+  doctorEntityId,
   hospitalEntityId,
   setOnline,
   useDispatch,
   type Coverage,
 } from "@/features/cover/dispatch";
-
+import { getSessionId } from "@/lib/network";
+import { useRating } from "@/lib/ratings";
 /**
  * CoverHome — doctor home tab.
  * Fullscreen map · top Online/Offline pill · lower floating tiles.
