@@ -702,7 +702,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            End Shift
+            {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
           </button>
         )}
       </div>
