@@ -75,14 +75,15 @@ export function computeCoveragePricing(
     };
   }
 
-  // Continuous overrides
-  if (Math.round(totalHrs) === 24) {
+  // Continuous overrides apply ONLY to a single continuous block — never
+  // to multi-day repeating windows (which must price per-day × N).
+  if (d === 1 && Math.round(totalHrs) === 24) {
     return {
       amount: 50000,
       explanation: "Continuous 24-hour coverage · flat ₦50,000.",
     };
   }
-  if (Math.round(totalHrs) === 48) {
+  if (d === 1 && Math.round(totalHrs) === 48) {
     return {
       amount: 100000,
       explanation: "Continuous 48-hour coverage · flat ₦100,000.",
