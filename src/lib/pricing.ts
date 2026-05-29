@@ -110,16 +110,24 @@ function trim(n: number): string {
 }
 
 /**
- * 15-minute progressive rounding for shift overrun billing.
+ * 15-minute half-block billing expansion.
  *
- * Billing expands forward from the scheduled end in controlled blocks:
- *   • 0–15 min over   → +0   (round down, no extra)
- *   • 16–30 min over  → +15  (extend to next 15-min block)
- *   • 31–45 min over  → +45
- *   • 46–60 min over  → +60  (full hour)
+ * Each hour is split into two halves (0–30 and 31–60), and each half into
+ * 15-min segments. Billing expands forward from the scheduled end:
+ *
+ *   First half (0–30):
+ *     •  0–15 min → +0   (round down to hour mark)
+ *     • 16–30 min → +15  (round down to :15)
+ *   Second half (31–60):
+ *     • 31–45 min → +45  (round up to :45)
+ *     • 46–60 min → +60  (round up to next full hour)
  *
  * Beyond one hour, each completed full hour bills as +60 and the remainder
- * follows the same table. Input/output are minutes.
+ * follows the same half-block table. Input/output are minutes.
+ *
+ * Used both for end-of-shift rounding and for re-evaluating billing when a
+ * payment window lapses and coverage auto-resumes — the same rule keeps
+ * expanding the billed block as simulated time advances.
  */
 export function roundedOverrunMinutes(overrunMin: number): number {
   const total = Math.max(0, Math.floor(overrunMin));
