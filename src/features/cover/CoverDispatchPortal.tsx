@@ -59,10 +59,12 @@ export function CoverDispatchPortal() {
         onSubmit={(rating) => {
           if (rating > 0 && pendingRating) {
             recordRating(pendingRating.hospitalId, rating);
+            recordHistoryRating(pendingRating.requestId, rating);
           }
           dismissPendingRating();
         }}
       />
+
     </div>
   );
 }
