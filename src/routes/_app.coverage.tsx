@@ -20,8 +20,6 @@ import {
 } from "@/features/cover/dispatch";
 import {
   cancelRequest as netCancelRequest,
-import {
-  cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
   endShiftDay as netEndShiftDay,
   getSessionId,
