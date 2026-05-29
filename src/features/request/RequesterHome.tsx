@@ -938,7 +938,7 @@ function DispatchOverlay({
       end: endStr,
       durationHrs,
       amount: pricing.amount,
-      feePct: 10,
+      feePct: 15,
       phone: DOCTOR_PHONE,
       note: draft.note?.trim() || undefined,
       startTs: win.startTs,
