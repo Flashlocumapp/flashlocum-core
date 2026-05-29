@@ -459,7 +459,6 @@ function ConfirmedPane({
         </div>
       </div>
 
-      </div>
 
       <RatingOverlay
         open={ratingOpen}
