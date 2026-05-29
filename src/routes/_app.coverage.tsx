@@ -548,7 +548,6 @@ function RequesterDetailSheet({
                 })()}
               </button>
             )}
-            )}
           </div>
 
           {item.status === "upcoming" && (
