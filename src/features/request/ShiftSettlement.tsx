@@ -114,8 +114,15 @@ export function ShiftSettlement({
   const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = roundedOverrunMinutes(workedMin);
   const totalAmount = useMemo(
-    () => computeWorkedPricing(shift.coverageKind, shift.startHHMM, billedMin).amount,
-    [shift.coverageKind, shift.startHHMM, billedMin],
+    () =>
+      computeWorkedPricing(
+        shift.coverageKind,
+        shift.startHHMM,
+        billedMin,
+        shift.endHHMM,
+        shift.days,
+      ).amount,
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, billedMin],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
