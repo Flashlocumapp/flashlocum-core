@@ -80,6 +80,7 @@ function conflictMessage(reason: AcceptBlockReason): string {
 
 export type HistoryItem = Coverage & {
   outcome: "completed" | "cancelled";
+  cancelledBy?: "requester" | "doctor";
   completedOn: string;
   rating?: number;
   settlementStatus: "Remitted" | "Pending" | "Voided";
