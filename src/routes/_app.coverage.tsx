@@ -435,6 +435,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                 startedAt: settling.startedAt,
                 accumulatedMs: settling.accumulatedMs,
                 startHHMM: ampmTo24h(settling.start),
+                endHHMM: ampmTo24h(settling.end),
+                days: settling.days,
                 coverageKind: coverageKindFromLabel(settling.coverage),
               }
             : undefined
