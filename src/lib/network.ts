@@ -65,14 +65,22 @@ export type NetRequest = {
   createdAt: number;
   updatedAt: number;
   startedAt?: number;
+  /**
+   * Accumulated worked milliseconds carried across pause/resume cycles.
+   * Total worked time of a shift is:
+   *   accumulatedMs + (status==='active' ? simNow() - startedAt : 0)
+   * Preserved through Pause → Upcoming → Resume → Active so multi-day or
+   * interrupted shifts bill on ONE continuous operational timer.
+   */
+  accumulatedMs?: number;
   // Absolute timestamps for the scheduled coverage window — single source
   // of truth for conflict detection across all coverage types.
   startTs?: number;
   endTs?: number;
   // Who triggered the cancellation (for history labelling).
   cancelledBy?: "requester" | "doctor";
-  // Multi-day lifecycle: total operational days and 1-based current day.
-  // A request is "final-day" when dayIndex === days (or days is missing/<=1).
+  // Total operational days scheduled (informational only — End Shift may be
+  // tapped at any time; lifecycle is driven by start/pause/resume/end).
   days?: number;
   dayIndex?: number;
 };
