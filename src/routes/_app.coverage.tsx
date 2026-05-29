@@ -144,7 +144,6 @@ function toRequestItem(r: NetRequest): RequestItem {
     startedAt: r.startedAt,
   };
 }
-}
 
 
 const TABS = [
