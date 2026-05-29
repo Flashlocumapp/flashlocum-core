@@ -703,9 +703,14 @@ function RequestCard({
           >
             {meta}
           </div>
-          {isActive && item.startedAt && (
+          {isActive && (
             <div className="mt-0.5">
-              <LiveTimer from={item.startedAt} />
+              <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
+            </div>
+          )}
+          {isUpcoming && item.accumulatedMs > 0 && (
+            <div className="mt-0.5">
+              <LiveTimer baseMs={item.accumulatedMs} />
             </div>
           )}
         </div>
@@ -719,19 +724,19 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
+            {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && (
           <button
-            onClick={(e) => { e.stopPropagation(); onEnd(); }}
+            onClick={(e) => { e.stopPropagation(); onPause(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
             style={{
-              background: "var(--color-foreground)",
-              color: "var(--color-background)",
+              background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
+              color: "var(--color-foreground)",
             }}
           >
-            {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
+            Pause Shift
           </button>
         )}
       </div>
