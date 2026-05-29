@@ -88,6 +88,8 @@ export type NetRequest = {
   // tapped at any time; lifecycle is driven by start/pause/resume/end).
   days?: number;
   dayIndex?: number;
+  /** Final billed amount captured at completeRequest time (worked-time based). */
+  settledAmount?: number;
 };
 
 
