@@ -465,6 +465,11 @@ export function startRequest(id: string) {
         ...state.requests,
         [id]: { ...cur, status: "active", startedAt: Date.now(), updatedAt: Date.now() },
       },
+    },
+    { actor: "requester", actorId: getSessionId(), action: "start", shiftId: id },
+  );
+}
+
 export function completeRequest(id: string) {
   applyPatch(
     id,
@@ -501,11 +506,6 @@ export function endShiftDay(id: string) {
   );
 }
 
-    id,
-    { status: "completed" },
-    { actor: "requester", actorId: getSessionId(), action: "complete" },
-  );
-}
 
 /** Pause broadcasting (hides from doctors) without losing request. */
 export function pauseRequest(id: string) {
