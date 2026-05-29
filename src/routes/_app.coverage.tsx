@@ -155,6 +155,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     outcome,
     cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
+    accumulatedMs: r.accumulatedMs ?? 0,
     days: Math.max(1, r.days ?? 1),
     dayIndex: Math.max(1, r.dayIndex ?? 1),
   };
