@@ -50,7 +50,7 @@ export type NetRequest = {
   requesterSessionId: string;
   hospital: string;
   area: string;
-  coverage: string; // "Standard" | "Home Call"
+  coverage: string; // "Standard" | "24-Hour" | "Weekend Call" | "Home Care"
   day: string;
   start: string;
   end: string;
@@ -68,11 +68,6 @@ export type NetRequest = {
   // of truth for conflict detection across all coverage types.
   startTs?: number;
   endTs?: number;
-  // Multi-day lifecycle.
-  daysTotal?: number;
-  daysCompleted?: number;
-  // Cancellation attribution — who actually cancelled.
-  cancelledBy?: "requester" | "doctor";
 };
 
 export type Actor = "requester" | "doctor" | "system";
@@ -444,14 +439,10 @@ export function acceptRequest(id: string): AcceptRequestResult {
 }
 
 export function cancelRequest(id: string) {
-  const actor = actorOf();
   applyPatch(
     id,
-    {
-      status: "cancelled",
-      cancelledBy: actor === "doctor" ? "doctor" : "requester",
-    },
-    { actor, actorId: getSessionId(), action: "cancel" },
+    { status: "cancelled" },
+    { actor: actorOf(), actorId: getSessionId(), action: "cancel" },
   );
 }
 
@@ -469,41 +460,6 @@ export function startRequest(id: string) {
     },
     { actor: "requester", actorId: getSessionId(), action: "start", shiftId: id },
   );
-}
-
-/**
- * End the current day of an active shift.
- *  - If this is NOT the last day, the shift moves back to "accepted"
- *    (visible under Upcoming) with daysCompleted incremented. No payment.
- *  - If this IS the last day, returns { final: true } so the caller can
- *    trigger settlement, then invoke completeRequest.
- */
-export function endShiftDay(id: string): { final: boolean } {
-  refreshState();
-  const cur = state.requests[id];
-  if (!cur) return { final: true };
-  const total = Math.max(1, cur.daysTotal ?? 1);
-  const completed = (cur.daysCompleted ?? 0) + 1;
-  if (completed >= total) {
-    return { final: true };
-  }
-  save(
-    {
-      ...state,
-      requests: {
-        ...state.requests,
-        [id]: {
-          ...cur,
-          status: "accepted",
-          startedAt: undefined,
-          daysCompleted: completed,
-          updatedAt: Date.now(),
-        },
-      },
-    },
-    { actor: "requester", actorId: getSessionId(), action: "update", shiftId: id },
-  );
-  return { final: false };
 }
 
 export function completeRequest(id: string) {

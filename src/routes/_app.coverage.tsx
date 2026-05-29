@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
-import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta, shortDoctorName } from "@/lib/format";
+import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
@@ -21,7 +21,6 @@ import {
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
-  endShiftDay as netEndShiftDay,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
@@ -37,7 +36,7 @@ export const Route = createFileRoute("/_app/coverage")({
 });
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
-type Coverage = "Standard" | "Home Call" | "24-Hour" | "Weekend Call" | "Home Care";
+type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
@@ -58,9 +57,6 @@ type RequestItem = {
   note?: string;
   outcome?: "completed" | "cancelled";
   startedAt?: number;
-  daysTotal?: number;
-  daysCompleted?: number;
-  cancelledBy?: "requester" | "doctor";
 };
 
 function doctorInitials(sessionId?: string): string {
@@ -110,7 +106,7 @@ function toRequestItem(r: NetRequest): RequestItem {
         : undefined;
   return {
     id: r.id,
-    doctor: shortDoctorName("Dr. Emmanuel Adeleke"),
+    doctor: "Dr. Emmanuel Adeleke",
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
@@ -133,9 +129,6 @@ function toRequestItem(r: NetRequest): RequestItem {
     note: r.note,
     outcome,
     startedAt: r.startedAt,
-    daysTotal: r.daysTotal,
-    daysCompleted: r.daysCompleted,
-    cancelledBy: r.cancelledBy,
   };
 }
 
@@ -218,7 +211,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [editInitial, setEditInitial] = useState<EditableShift>({
-    startTime: "08:00", endTime: "18:00", note: "",
+    timing: "08:00", duration: 1, accommodation: false, note: "",
   });
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -249,25 +242,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const beginEndShift = (id: string) => {
-    const item = items.find((i) => i.id === id);
-    const total = Math.max(1, item?.daysTotal ?? 1);
-    const completedSoFar = item?.daysCompleted ?? 0;
-    const isFinal = completedSoFar + 1 >= total;
-    if (isFinal) {
-      // Final day → settlement → complete
-      setSettlingId(id);
-    } else {
-      // Non-final day → revert to upcoming without settlement
-      netEndShiftDay(id);
-      pushToast({
-        tone: "presence",
-        title: `Day ${completedSoFar + 1} of ${total} ended.`,
-        body: "Tap Resume Shift to continue the next day.",
-      });
-      setTab("upcoming");
-    }
-  };
+  const beginEndShift = (id: string) => setSettlingId(id);
 
   const confirmEnd = () => {
     if (!settlingId) return;
@@ -277,11 +252,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const openEdit = (id: string) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-    const startHHMM = ampmTo24h(item.start);
-    const endHHMM = ampmTo24h(item.end);
     setEditInitial({
-      startTime: startHHMM,
-      endTime: endHHMM,
+      timing: ampmTo24h(item.start),
+      duration: item.durationHrs,
+      accommodation: false,
       note: item.note ?? "",
     });
     setEditTargetId(id);
@@ -292,26 +266,26 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setEditTargetId(null);
     if (id) {
       const cur = net.requests[id];
-      const baseDate = cur?.startTs ? new Date(cur.startTs) : new Date();
-      const [sh, sm] = next.startTime.split(":").map(Number);
-      const [eh, em] = next.endTime.split(":").map(Number);
+      const newDur = Math.max(1, next.duration);
+      // Use the existing request's startTs date portion (or today) as the
+      // base so editing only the time of day doesn't shift the calendar day.
+      const baseDate = cur?.startTs
+        ? new Date(cur.startTs)
+        : new Date();
+      const [nh, nm] = next.timing.split(":").map(Number);
       const newStart = new Date(baseDate);
-      newStart.setHours(sh, sm, 0, 0);
+      newStart.setHours(nh, nm, 0, 0);
       const newStartTs = newStart.getTime();
-      let newEnd = new Date(baseDate);
-      newEnd.setHours(eh, em, 0, 0);
-      if (newEnd.getTime() <= newStartTs) {
-        newEnd = new Date(newEnd.getTime() + 24 * 3600_000);
-      }
-      const newEndTs = newEnd.getTime();
-      const newDur = Math.max(1, Math.round((newEndTs - newStartTs) / 3600_000));
+      const newEndTs = newStartTs + newDur * 3_600_000;
+      const endDate = new Date(newEndTs);
+      const endHHMM = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
       const fallbackItem = items.find((i) => i.id === id);
       const baseHourly = cur ? cur.amount / Math.max(1, cur.durationHrs) : (fallbackItem ? fallbackItem.amount / Math.max(1, fallbackItem.durationHrs) : 0);
       const newAmount = Math.round(baseHourly * newDur);
       netUpdateRequest(id, {
         note: next.note?.trim() || undefined,
-        start: amPmFromHHMM(next.startTime),
-        end: amPmFromHHMM(next.endTime),
+        start: amPmFromHHMM(next.timing),
+        end: amPmFromHHMM(endHHMM),
         durationHrs: newDur,
         amount: newAmount,
         startTs: newStartTs,
@@ -319,8 +293,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       });
     }
     const label: Record<keyof EditableShift | "multiple", string> = {
-      startTime: "Coverage timing updated",
-      endTime: "Coverage timing updated",
+      timing: "Coverage timing updated",
+      duration: "Coverage duration updated",
+      accommodation: "Accommodation updated",
       note: "Coverage notes updated",
       multiple: "Coverage details updated",
     };
@@ -533,7 +508,7 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                {(item.daysCompleted ?? 0) > 0 ? "Resume Shift" : "Start Shift"}
+                Start Shift
               </button>
             )}
             {item.status === "active" && (
@@ -541,11 +516,7 @@ function RequesterDetailSheet({
                 onClick={() => onEnd(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                {(() => {
-                  const total = Math.max(1, item.daysTotal ?? 1);
-                  const next = (item.daysCompleted ?? 0) + 1;
-                  return next >= total ? "End Shift" : "End Today's Shift";
-                })()}
+                End Shift
               </button>
             )}
           </div>
@@ -664,7 +635,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {(item.daysCompleted ?? 0) > 0 ? "Resume Shift" : "Start Shift"}
+            Start Shift
           </button>
         )}
         {isActive && (
@@ -676,11 +647,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {(() => {
-              const total = Math.max(1, item.daysTotal ?? 1);
-              const next = (item.daysCompleted ?? 0) + 1;
-              return next >= total ? "End Shift" : "End Today's Shift";
-            })()}
+            End Shift
           </button>
         )}
       </div>
