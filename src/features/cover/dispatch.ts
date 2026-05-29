@@ -21,6 +21,7 @@ import {
   useNetwork,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
+import { shiftCue } from "@/lib/feedback";
 
 export type Coverage = {
   id: string;
