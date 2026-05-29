@@ -1086,14 +1086,23 @@ function CoverCard({
 
       {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
         <div className="mt-2">
-          <LiveTimer from={(item as CoverItem & { startedAt: number }).startedAt} />
+          <LiveTimer
+            from={(item as CoverItem & { startedAt: number }).startedAt}
+            baseMs={(item as CoverItem).accumulatedMs ?? 0}
+            live
+          />
+        </div>
+      )}
+      {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) > 0 && (
+        <div className="mt-2">
+          <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
         </div>
       )}
 
 
       {(isActive || isUpcoming) && (
         <div className="mt-3 flex items-center gap-2">
-          {isUpcoming && (
+          {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) === 0 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
