@@ -488,6 +488,7 @@ function RequesterDetailSheet({
   item,
   onDismiss,
   onStart,
+  onPause,
   onEnd,
   onEdit,
   onCancel,
@@ -495,6 +496,7 @@ function RequesterDetailSheet({
   item: RequestItem | null;
   onDismiss: () => void;
   onStart: (id: string) => void;
+  onPause: (id: string) => void;
   onEnd: (id: string) => void;
   onEdit: (id: string) => void;
   onCancel: (id: string) => void;
