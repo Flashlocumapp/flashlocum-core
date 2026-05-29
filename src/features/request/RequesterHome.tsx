@@ -21,7 +21,7 @@ export function RequesterHome() {
   return <HomeScreen />;
 }
 
-type CoverageId = "standard" | "24h" | "weekend" | "home";
+type CoverageId = "standard" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
 type Recent = { name: string; area: string };
@@ -32,11 +32,9 @@ const RECENT: Recent[] = [
   { name: "Reddington Hospital", area: "Victoria Island" },
 ];
 
-const COVERAGE: { id: CoverageId; label: string }[] = [
-  { id: "standard", label: "Standard" },
-  { id: "24h", label: "24-Hour" },
-  { id: "weekend", label: "Weekend Call" },
-  { id: "home", label: "Home Care" },
+const COVERAGE: { id: CoverageId; label: string; sub: string }[] = [
+  { id: "standard", label: "Standard", sub: "Daytime or single-block coverage" },
+  { id: "home", label: "Home Call", sub: "After-hours or in-home coverage" },
 ];
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
