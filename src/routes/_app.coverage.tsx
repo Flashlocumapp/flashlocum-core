@@ -260,13 +260,29 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         coverage: historyItem.coverage,
         completedOn: historyItem.completedOn,
         amount: historyItem.amount,
-        rating: ratings[historyItem.id],
-      }
-    : null;
+  /**
+   * End Shift handler — branches on lifecycle:
+   *   - Multi-day mid-shift (dayIndex < days): pause back to Upcoming for the
+   *     next operational day. No settlement, no payment, no closure.
+   *   - Single-day OR final day: open settlement flow.
+   */
+  const beginEndShift = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    if (item.days > 1 && item.dayIndex < item.days) {
+      netEndShiftDay(id);
+      setTab("upcoming");
+      setNotice("Day complete · Resume on the next operational day");
+      return;
+    }
+    setSettlingId(id);
+  };
 
-  const moveToActive = (id: string) => {
-    netStartRequest(id);
-    setTab("active");
+  const confirmEnd = () => {
+    if (!settlingId) return;
+    netCompleteRequest(settlingId);
+  };
+
   };
 
   const beginEndShift = (id: string) => setSettlingId(id);
