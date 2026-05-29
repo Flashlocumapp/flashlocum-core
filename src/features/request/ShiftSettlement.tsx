@@ -15,8 +15,13 @@ type ShiftMeta = {
   facility: string;
   doctor: string;
   role: string;
-  /** Realtime billing inputs — derived from LIVE Active Coverage timer. */
-  startedAt: number;
+  /**
+   * Realtime billing inputs — derived from the LIVE Active Coverage timer.
+   * Total worked time = accumulatedMs + (startedAt ? now - startedAt : 0).
+   * `startedAt` may be undefined when settlement opens after a Pause.
+   */
+  startedAt?: number;
+  accumulatedMs?: number;
   startHHMM: string;
   coverageKind: CoverageKind;
 };
@@ -26,6 +31,7 @@ const SAMPLE: ShiftMeta = {
   doctor: "Dr. Adaobi Okeke",
   role: "Standard · Active",
   startedAt: Date.now() - 60 * 60 * 1000,
+  accumulatedMs: 0,
   startHHMM: "08:00",
   coverageKind: "standard",
 };
