@@ -508,6 +508,8 @@ export function pauseShift(id: string) {
   if (!cur || cur.status !== "active") return;
   const segment = cur.startedAt ? Math.max(0, simNow() - cur.startedAt) : 0;
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+  const days = Math.max(1, cur.days ?? 1);
+  const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
   save(
     {
       ...state,
@@ -518,6 +520,7 @@ export function pauseShift(id: string) {
           status: "accepted",
           startedAt: undefined,
           accumulatedMs,
+          dayIndex,
           updatedAt: simNow(),
         },
       },
