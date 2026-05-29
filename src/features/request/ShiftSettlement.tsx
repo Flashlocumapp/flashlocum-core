@@ -154,18 +154,19 @@ export function ShiftSettlement({
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
           />
-        )}
         {phase === "confirmed" && (
           <ConfirmedPane
             key="done"
             shift={shift}
             overtimeSec={overtimeSec}
-            onClose={onClose}
-            onRebook={() => {
-              if (onRebook) onRebook();
-              else onClose();
-            }}
+            onClose={finalize}
           />
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
         )}
       </AnimatePresence>
     </motion.div>
