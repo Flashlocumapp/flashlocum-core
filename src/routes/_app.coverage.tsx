@@ -20,6 +20,8 @@ import {
   type HistoryItem,
 } from "@/features/cover/dispatch";
 import { recordRating } from "@/lib/ratings";
+import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
+
 
 import {
   cancelRequest as netCancelRequest,
