@@ -542,9 +542,14 @@ function RequesterDetailSheet({
             </div>
           )}
 
-          {item.status === "active" && item.startedAt && (
+          {item.status === "active" && (
             <div className="mt-3 flex justify-center">
-              <LiveTimer from={item.startedAt} />
+              <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
+            </div>
+          )}
+          {item.status === "upcoming" && item.accumulatedMs > 0 && (
+            <div className="mt-3 flex justify-center">
+              <LiveTimer baseMs={item.accumulatedMs} />
             </div>
           )}
 
@@ -560,19 +565,30 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                {item.dayIndex > 1 ? "Resume Shift" : "Start Shift"}
+                {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
             {item.status === "active" && (
               <button
-                onClick={() => onEnd(item.id)}
-                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+                onClick={() => onPause(item.id)}
+                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90"
               >
-                {item.days > 1 && item.dayIndex >= item.days ? "Complete Shift" : "End Shift"}
+                Pause Shift
               </button>
             )}
-
           </div>
+
+          {(item.status === "active" ||
+            (item.status === "upcoming" && item.accumulatedMs > 0)) && (
+            <div className="mt-2">
+              <button
+                onClick={() => onEnd(item.id)}
+                className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                End Shift
+              </button>
+            </div>
+          )}
 
           {item.status === "upcoming" && (
             <div className="mt-2 grid grid-cols-2 gap-2">
