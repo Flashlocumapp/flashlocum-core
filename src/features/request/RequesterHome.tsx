@@ -604,77 +604,49 @@ function CoverageFields({
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
 }) {
-  if (coverage === "weekend") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
-
-  if (coverage === "standard" || coverage === "home") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <Row>
-          <CtrlField
-            label="End time"
-            type="time"
-            value={draft.endTime}
-            onChange={(v) => patchDraft({ endTime: v })}
-          />
-          <DaysStepper value={days} setValue={setDays} />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
-
-  // 24-Hour
+  const today = new Date().toISOString().slice(0, 10);
+  const maxDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 6); // today + 6 → 7-day window inclusive
+    return d.toISOString().slice(0, 10);
+  })();
+  const isToday = draft.startDate === today;
+  const nowHHMM = (() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  })();
+  const sub = COVERAGE.find((c) => c.id === coverage)?.sub ?? "";
   return (
     <Fields>
+      {sub && (
+        <p className="px-1 text-[11.5px] leading-relaxed text-muted-foreground">{sub}</p>
+      )}
       <Row>
         <CtrlField
           label="Start date"
           type="date"
           value={draft.startDate}
+          min={today}
+          max={maxDate}
           onChange={(v) => patchDraft({ startDate: v })}
         />
         <CtrlField
           label="Start time"
           type="time"
           value={draft.startTime}
+          min={isToday ? nowHHMM : undefined}
           onChange={(v) => patchDraft({ startTime: v })}
         />
       </Row>
-      <DaysStepper value={days} setValue={setDays} />
+      <Row>
+        <CtrlField
+          label="End time"
+          type="time"
+          value={draft.endTime}
+          onChange={(v) => patchDraft({ endTime: v })}
+        />
+        <DaysStepper value={days} setValue={setDays} />
+      </Row>
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
