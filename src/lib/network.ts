@@ -550,20 +550,24 @@ export function completeRequest(id: string) {
       : 0;
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
   // Derive final settled amount from the LIVE accumulated worked time.
-  const startHHMM = (() => {
-    const m = (cur.start ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-    if (!m) return "08:00";
+  const toHHMM = (raw: string | undefined, fallback: string): string => {
+    const m = (raw ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!m) return fallback;
     let h = parseInt(m[1], 10);
     const ap = m[3]?.toUpperCase();
     if (ap === "PM" && h < 12) h += 12;
     if (ap === "AM" && h === 12) h = 0;
     return `${String(h).padStart(2, "0")}:${m[2]}`;
-  })();
+  };
+  const startHHMM = toHHMM(cur.start, "08:00");
+  const endHHMM = toHHMM(cur.end, "18:00");
   const billedMin = roundedOverrunMinutes(accumulatedMs / 60000);
   const settledAmount = computeWorkedPricing(
     coverageKindFromLabel(cur.coverage),
     startHHMM,
     billedMin,
+    endHHMM,
+    Math.max(1, cur.days ?? 1),
   ).amount;
   save(
     {
