@@ -39,7 +39,6 @@ export function ShiftSettlement({
   shift = SAMPLE,
   initialPhase = "active",
   onConfirmed,
-  onRebook,
 }: {
   open: boolean;
   onClose: () => void;
@@ -63,9 +62,15 @@ export function ShiftSettlement({
     }
   }, [open, initialPhase]);
 
-  useEffect(() => {
-    if (phase === "confirmed") onConfirmed?.();
-  }, [phase, onConfirmed]);
+  // Finalize (notify doctor + close shift operationally) only fires when the
+  // requester explicitly dismisses the Settlement Confirmed screen — not the
+  // instant payment is verified. This keeps the rating / end-shift hand-off
+  // synchronized with the requester's calm closure of the settlement.
+  const finalize = () => {
+    onConfirmed?.();
+    onClose();
+  };
+
 
   // Master tick after End Shift
   useEffect(() => {
@@ -155,17 +160,14 @@ export function ShiftSettlement({
             key="done"
             shift={shift}
             overtimeSec={overtimeSec}
-            onClose={onClose}
-            onRebook={() => {
-              if (onRebook) onRebook();
-              else onClose();
-            }}
+            onClose={finalize}
           />
         )}
       </AnimatePresence>
     </motion.div>
   );
 }
+
 
 /* ---------------- Active ---------------- */
 
@@ -407,12 +409,10 @@ function ConfirmedPane({
   shift,
   overtimeSec,
   onClose,
-  onRebook,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
   onClose: () => void;
-  onRebook: () => void;
 }) {
   const extra = Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
@@ -451,19 +451,14 @@ function ConfirmedPane({
 
         <div className="mt-auto space-y-2 pb-8">
           <button
-            onClick={onRebook}
-            className="h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
-          >
-            Request Doctor
-          </button>
-          <button
             onClick={onClose}
-            className="h-12 w-full rounded-full text-[13.5px] font-medium text-muted-foreground"
+            className="h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
           >
             Done
           </button>
         </div>
       </div>
+
 
       <RatingOverlay
         open={ratingOpen}

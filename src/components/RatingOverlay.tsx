@@ -58,8 +58,9 @@ export function RatingOverlay({
                 How was the experience with {doctor.split(" ").slice(0, 2).join(" ")}?
               </h3>
               <p className="mt-1 text-[12.5px] text-muted-foreground">
-                Optional — helps coordinate future coverage.
+                Share your feedback and help us improve.
               </p>
+
 
               <div className="mt-5 flex items-center justify-between px-2">
                 {[1, 2, 3, 4, 5].map((n) => {

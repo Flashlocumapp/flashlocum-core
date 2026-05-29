@@ -87,9 +87,11 @@ export type HistoryItem = Coverage & {
 };
 
 let history: HistoryItem[] = [];
+let historyRatings: Record<string, number> = {};
 let acceptedSheet: Coverage | null = null;
 // Hospital pending rating after End Shift (entityId derived from hospital name).
-let pendingRating: { hospitalId: string; hospital: string } | null = null;
+let pendingRating: { requestId: string; hospitalId: string; hospital: string } | null = null;
+
 const processedEvents = new Set<string>();
 
 const localListeners = new Set<() => void>();
@@ -112,8 +114,9 @@ type View = {
   incoming: Coverage | null;
   accepted: Coverage | null;
   history: HistoryItem[];
-  pendingRating: { hospitalId: string; hospital: string } | null;
+  pendingRating: { requestId: string; hospitalId: string; hospital: string } | null;
 };
+
 
 export function useDispatch(): View {
   const net = useNetwork();
@@ -148,8 +151,10 @@ export function useDispatch(): View {
         day: "2-digit",
         month: "short",
       }),
+      rating: historyRatings[r.id],
       settlementStatus: r.status === "completed" ? "Pending" : "Voided",
     }));
+
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
@@ -216,9 +221,11 @@ export function ensureDoctorSession(initialOnline = true) {
         ttl: 5200,
       });
       pendingRating = {
+        requestId: r.id,
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
       };
+
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "cancel") {
@@ -348,9 +355,15 @@ export function completeUpcoming(id: string) {
 }
 
 export function recordHistoryRating(historyId: string, value: number) {
+  historyRatings = { ...historyRatings, [historyId]: value };
   history = history.map((h) => (h.id === historyId ? { ...h, rating: value } : h));
   bump();
 }
+
+export function hasHistoryRating(historyId: string): boolean {
+  return historyRatings[historyId] !== undefined;
+}
+
 
 /* ---------- helpers reading network module ---------- */
 

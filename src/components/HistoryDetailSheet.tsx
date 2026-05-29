@@ -19,14 +19,13 @@ export function HistoryDetailSheet({
   item,
   onDismiss,
   onRate,
-  onRebook,
 }: {
   open: boolean;
   item: HistoryDetail | null;
   onDismiss: () => void;
   onRate: (id: string, rating: number, feedback: string) => void;
-  onRebook: (id: string) => void;
 }) {
+
   const [rating, setRating] = useState(item?.rating ?? 0);
   const [feedback, setFeedback] = useState("");
 
@@ -124,12 +123,6 @@ export function HistoryDetailSheet({
         </div>
       )}
 
-      <button
-        onClick={() => onRebook(item.id)}
-        className="mt-5 h-12 w-full rounded-full bg-foreground text-[14px] font-semibold text-background active:opacity-90"
-      >
-        Rebook doctor
-      </button>
     </DismissSheet>
   );
 }
