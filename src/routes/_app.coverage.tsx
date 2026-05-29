@@ -430,7 +430,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                 facility: "Lagoon Health",
                 doctor: settling.doctor,
                 role: `${settling.coverage} · Active`,
-                startedAt: settling.startedAt ?? Date.now(),
+                startedAt: settling.startedAt,
+                accumulatedMs: settling.accumulatedMs,
                 startHHMM: ampmTo24h(settling.start),
                 coverageKind: coverageKindFromLabel(settling.coverage),
               }
