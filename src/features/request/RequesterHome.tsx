@@ -932,14 +932,14 @@ function DispatchOverlay({
   // Edit sheet uses start/end TIMES; duration is derived.
   const [editInitial, setEditInitial] = useState<EditableShift>({
     startTime: draft.startTime,
-    endTime: coverage === "weekend" || coverage === "24h" ? win.endHHMM : draft.endTime,
+    endTime: draft.endTime,
     note: draft.note ?? "",
   });
 
   const openEdit = () => {
     setEditInitial({
       startTime: draft.startTime,
-      endTime: coverage === "weekend" || coverage === "24h" ? win.endHHMM : draft.endTime,
+      endTime: draft.endTime,
       note: draft.note ?? "",
     });
     setEditOpen(true);
