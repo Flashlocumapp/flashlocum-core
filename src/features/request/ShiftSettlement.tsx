@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { RatingOverlay } from "@/components/RatingOverlay";
+import { simNow, useSimClock } from "@/lib/clock";
+
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
 
@@ -48,76 +50,76 @@ export function ShiftSettlement({
   onRebook?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>(initialPhase);
-  const [elapsed, setElapsed] = useState(0); // seconds since End Shift
-  const [overtimeSec, setOvertimeSec] = useState(0);
+  // Anchor timestamps drive every elapsed/overtime computation so that a
+  // simulation fast-forward instantly advances the visible state.
+  const phaseStartedAtRef = useRef<number | null>(null);
+  const overtimeStartedAtRef = useRef<number | null>(null);
   const autoConfirmAt = useRef<number | null>(null);
+
+  const tick = useSimClock(1000);
+
+  const elapsed =
+    phaseStartedAtRef.current != null && phase !== "active" && phase !== "confirmed"
+      ? Math.max(0, Math.floor((tick - phaseStartedAtRef.current) / 1000))
+      : 0;
+  const overtimeSec =
+    overtimeStartedAtRef.current != null
+      ? Math.max(0, Math.floor((tick - overtimeStartedAtRef.current) / 1000))
+      : 0;
 
   // Reset whenever opened fresh
   useEffect(() => {
     if (open) {
       setPhase(initialPhase);
-      setElapsed(0);
-      setOvertimeSec(0);
+      phaseStartedAtRef.current = initialPhase === "active" || initialPhase === "confirmed" ? null : simNow();
+      overtimeStartedAtRef.current = initialPhase === "overtime" ? simNow() : null;
       autoConfirmAt.current = null;
     }
   }, [open, initialPhase]);
 
-  // Finalize (notify doctor + close shift operationally) only fires when the
-  // requester explicitly dismisses the Settlement Confirmed screen — not the
-  // instant payment is verified. This keeps the rating / end-shift hand-off
-  // synchronized with the requester's calm closure of the settlement.
   const finalize = () => {
     onConfirmed?.();
     onClose();
   };
 
-
-  // Master tick after End Shift
+  // Passive payment detection — driven by simulated clock.
   useEffect(() => {
     if (!open) return;
-    if (phase === "active" || phase === "confirmed") return;
-
-    const id = setInterval(() => {
-      setElapsed((e) => e + 1);
-      if (phase === "overtime") setOvertimeSec((s) => s + 1);
-
-      // Independent passive payment detection — random small chance to simulate webhook
-      if (
-        (phase === "settlement" || phase === "grace") &&
-        autoConfirmAt.current &&
-        Date.now() >= autoConfirmAt.current
-      ) {
-        setPhase("confirmed");
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [open, phase]);
+    if (phase !== "settlement" && phase !== "grace" && phase !== "overtime") return;
+    if (autoConfirmAt.current && tick >= autoConfirmAt.current) {
+      setPhase("confirmed");
+    }
+  }, [open, phase, tick]);
 
   // Transition settlement → grace at 5min, grace → overtime at 15min.
-  // When the 15-min grace elapses without payment, the paused window itself
-  // counts retroactively into overtime — operationally fair for both sides.
   useEffect(() => {
     if (phase === "settlement" && elapsed >= VISIBLE_COUNTDOWN) setPhase("grace");
     if (phase === "grace" && elapsed >= GRACE_TOTAL) {
-      setOvertimeSec((s) => (s === 0 ? GRACE_TOTAL : s));
+      if (overtimeStartedAtRef.current == null) {
+        // Backdate overtime to the moment grace expired so retroactive
+        // billing is operationally fair.
+        overtimeStartedAtRef.current =
+          (phaseStartedAtRef.current ?? simNow()) + GRACE_TOTAL * 1000;
+      }
       setPhase("overtime");
     }
   }, [elapsed, phase]);
 
 
   const handleEndShift = () => {
-    setElapsed(0);
+    phaseStartedAtRef.current = simNow();
+    overtimeStartedAtRef.current = null;
     setPhase("settlement");
-    // Simulate independent verification arriving 8–14s after End Shift in some sessions
     if (Math.random() < 0.35) {
-      autoConfirmAt.current = Date.now() + (8 + Math.random() * 6) * 1000;
+      autoConfirmAt.current = simNow() + (8 + Math.random() * 6) * 1000;
     }
   };
 
   const handleMadePayment = () => {
-    // Reassurance action — kicks verification immediately, but still verifies
-    autoConfirmAt.current = Date.now() + 2500;
+    autoConfirmAt.current = simNow() + 2500;
   };
+
+
 
   const handleCopy = async () => {
     try {
