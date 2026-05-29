@@ -395,9 +395,12 @@ function OvertimePane({
             Extension
           </span>
           <span className="text-[14px] font-medium tabular-nums">
-            +{fmtClock(overtimeSec)} · +{fmtNaira(extra)}
+            +{billedMin}min · +{fmtNaira(extra)}
           </span>
         </div>
+        <p className="mt-1 text-[11.5px] text-muted-foreground">
+          Billed in 15-minute blocks · {fmtClock(overtimeSec)} elapsed
+        </p>
 
         <div className="mt-auto pb-8">
           <button
