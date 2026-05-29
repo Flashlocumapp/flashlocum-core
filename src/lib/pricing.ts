@@ -145,27 +145,42 @@ export function roundedOverrunMinutes(overrunMin: number): number {
 /**
  * Compute pricing from a real worked duration starting at `startHHMM`.
  *
- * Walks forward minute-by-minute from the start clock time, classifying
- * each minute as day (08:00–22:00) or night, then applies the same
- * standard buckets and 24h/48h overrides as `computeCoveragePricing`.
+ * Single-day: walks forward minute-by-minute from the start clock time,
+ * classifying each minute as day (08:00–22:00) or night.
  *
- * Used to bind final billing to the LIVE Active Coverage timer — the
- * scheduled end is irrelevant. Pass `workedMinutes` already rounded by
+ * Multi-day: when `endHHMM` and `days` (>1) are provided, the per-day
+ * window determines the day/night ratio, and accumulated worked minutes
+ * are split proportionally. All hours inherit the same pricing bucket as
+ * the booked daily window — multi-day shifts NEVER trigger the 24h/48h
+ * continuous flat overrides.
+ *
+ * Used to bind final billing to the LIVE Active Coverage timer across
+ * pause/resume cycles. Pass `workedMinutes` already rounded by
  * `roundedOverrunMinutes` for the calm 15-minute half-block behaviour.
  */
 export function computeWorkedPricing(
   coverage: CoverageKind,
   startHHMM: string,
   workedMinutes: number,
+  endHHMM?: string,
+  days: number = 1,
 ): PricingResult {
   const worked = Math.max(0, Math.floor(workedMinutes));
-  const start = minsFromHHMM(startHHMM);
+  const d = Math.max(1, Math.round(days));
   let day = 0;
   let night = 0;
-  for (let i = 0; i < worked; i++) {
-    const h = Math.floor(((start + i) % (24 * 60)) / 60);
-    if (h >= 8 && h < 22) day++;
-    else night++;
+  if (d > 1 && endHHMM) {
+    const perDay = splitPerDayMinutes(startHHMM, endHHMM);
+    const totalPerDay = perDay.dayMinutes + perDay.nightMinutes || 1;
+    day = Math.round((worked * perDay.dayMinutes) / totalPerDay);
+    night = worked - day;
+  } else {
+    const start = minsFromHHMM(startHHMM);
+    for (let i = 0; i < worked; i++) {
+      const h = Math.floor(((start + i) % (24 * 60)) / 60);
+      if (h >= 8 && h < 22) day++;
+      else night++;
+    }
   }
   const totalHrs = worked / 60;
 
@@ -175,10 +190,10 @@ export function computeWorkedPricing(
       explanation: "Home Care · ₦15,000/hr for personal in-home coverage.",
     };
   }
-  if (Math.round(totalHrs) === 24) {
+  if (d === 1 && Math.round(totalHrs) === 24) {
     return { amount: 50000, explanation: "Continuous 24-hour coverage · flat ₦50,000." };
   }
-  if (Math.round(totalHrs) === 48) {
+  if (d === 1 && Math.round(totalHrs) === 48) {
     return { amount: 100000, explanation: "Continuous 48-hour coverage · flat ₦100,000." };
   }
   const dayHours = day / 60;
