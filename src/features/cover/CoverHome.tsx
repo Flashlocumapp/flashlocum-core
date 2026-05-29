@@ -25,8 +25,8 @@ export function CoverHome() {
     null;
   const isActive = !!focus?.active;
 
-  // Lightweight operational stats (calm, no charts).
-  const score = 4.9;
+  // Shared doctor rating — same source used in every requester view.
+  const myRating = useRating(doctorEntityId(getSessionId()));
   const acceptance = 96;
 
   return (
