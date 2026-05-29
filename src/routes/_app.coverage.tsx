@@ -1164,13 +1164,15 @@ function DoctorCoverageDetail({
     </AnimatePresence>
   );
 }
-
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
     <div className="flex items-baseline justify-between">
       <span className="text-[12px] text-muted-foreground">{label}</span>
       <span className="text-[13.5px] font-medium tabular-nums">{value}</span>
     </div>
   );
 }
+
 
 // ============ Shared shell ============
 
