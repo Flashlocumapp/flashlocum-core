@@ -402,9 +402,8 @@ function SettlementPane({
         <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
           {fmtNaira(amount)}
         </div>
-        <p className="mt-1 text-[11.5px] text-muted-foreground">
-          Worked {fmtHrMin(billedMin)} · billed in 15-min half-blocks
-        </p>
+
+
 
 
         {/* Account block — operational center of gravity */}
