@@ -252,10 +252,16 @@ export function ShiftSettlement({
 
 function ActivePane({
   shift,
+  workedMin,
+  billedMin,
+  liveAmount,
   onClose,
   onEnd,
 }: {
   shift: ShiftMeta;
+  workedMin: number;
+  billedMin: number;
+  liveAmount: number;
   onClose: () => void;
   onEnd: () => void;
 }) {
@@ -287,6 +293,29 @@ function ActivePane({
             <div className="text-[13.5px] font-medium">Coverage in progress</div>
             <div className="text-[12px] text-muted-foreground">Settlement begins after End Shift</div>
           </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl bg-surface-elevated p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Worked so far
+            </span>
+            <span className="text-[13px] font-medium tabular-nums">{fmtHrMin(workedMin)}</span>
+          </div>
+          <div className="mt-3 flex items-end justify-between">
+            <div>
+              <div className="text-[11.5px] text-muted-foreground">Live billing</div>
+              <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight tabular-nums">
+                {fmtNaira(liveAmount)}
+              </div>
+            </div>
+            <span className="text-[11.5px] text-muted-foreground tabular-nums">
+              billed {fmtHrMin(billedMin)}
+            </span>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Tied to the live timer · 15-min half-blocks
+          </p>
         </div>
 
         <div className="mt-auto pb-8">
