@@ -108,3 +108,27 @@ export function computeCoveragePricing(
 function trim(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
+
+/**
+ * 15-minute progressive rounding for shift overrun billing.
+ *
+ * Billing expands forward from the scheduled end in controlled blocks:
+ *   • 0–15 min over   → +0   (round down, no extra)
+ *   • 16–30 min over  → +15  (extend to next 15-min block)
+ *   • 31–45 min over  → +45
+ *   • 46–60 min over  → +60  (full hour)
+ *
+ * Beyond one hour, each completed full hour bills as +60 and the remainder
+ * follows the same table. Input/output are minutes.
+ */
+export function roundedOverrunMinutes(overrunMin: number): number {
+  const total = Math.max(0, Math.floor(overrunMin));
+  const fullHours = Math.floor(total / 60);
+  const rem = total % 60;
+  let extra = 0;
+  if (rem <= 15) extra = 0;
+  else if (rem <= 30) extra = 15;
+  else if (rem <= 45) extra = 45;
+  else extra = 60;
+  return fullHours * 60 + extra;
+}
