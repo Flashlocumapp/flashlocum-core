@@ -119,20 +119,37 @@ export function ShiftSettlement({
   const extensionMin = Math.max(0, billedMin - frozenBilledMin);
   const extensionAmount = Math.max(0, totalAmount - frozenAmount);
 
-  // Reset whenever opened fresh
+  // Reset whenever opened fresh.
   useEffect(() => {
     if (open) {
       setPhase(initialPhase);
+      const now = simNow();
       phaseStartedAtRef.current =
-        initialPhase === "active" || initialPhase === "confirmed" ? null : simNow();
-      overtimeStartedAtRef.current = initialPhase === "overtime" ? simNow() : null;
-      endedAtRef.current = null;
+        initialPhase === "active" || initialPhase === "confirmed" ? null : now;
+      overtimeStartedAtRef.current = initialPhase === "overtime" ? now : null;
+      endedAtRef.current =
+        initialPhase === "settlement" || initialPhase === "grace" ? now : null;
       confirmedAtRef.current = null;
       autoConfirmAt.current = null;
-      frozenBilledMinRef.current = 0;
-      frozenAmountRef.current = 0;
+      // When opening directly into settlement (the standard path from
+      // Coverage → End Shift), freeze the bill immediately using the
+      // accumulated continuous timer so the page never shows ₦0.
+      if (initialPhase === "settlement" || initialPhase === "grace") {
+        const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
+        const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
+        const bm = roundedOverrunMinutes(w);
+        frozenBilledMinRef.current = bm;
+        frozenAmountRef.current = computeWorkedPricing(
+          shift.coverageKind,
+          shift.startHHMM,
+          bm,
+        ).amount;
+      } else {
+        frozenBilledMinRef.current = 0;
+        frozenAmountRef.current = 0;
+      }
     }
-  }, [open, initialPhase]);
+  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM]);
 
   const finalize = () => {
     onConfirmed?.();
