@@ -616,6 +616,7 @@ function RequesterDetailSheet({
 function RequestCard({
   item,
   onStart,
+  onPause,
   onEnd,
   onCancel,
   onEdit,
@@ -624,6 +625,7 @@ function RequestCard({
 }: {
   item: RequestItem;
   onStart: () => void;
+  onPause: () => void;
   onEnd: () => void;
   onCancel: () => void;
   onEdit: () => void;
