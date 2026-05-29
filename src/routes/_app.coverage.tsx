@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
-import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
+import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta, shortDoctorName } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
@@ -20,7 +20,10 @@ import {
 } from "@/features/cover/dispatch";
 import {
   cancelRequest as netCancelRequest,
+import {
+  cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
+  endShiftDay as netEndShiftDay,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
@@ -29,7 +32,6 @@ import {
   type NetRequest,
   type NetState,
 } from "@/lib/network";
-import { pushToast } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
@@ -37,6 +39,8 @@ export const Route = createFileRoute("/_app/coverage")({
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
+type ReqStatus = "upcoming" | "active" | "completed";
+type Coverage = "Standard" | "Home Call" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
@@ -57,6 +61,9 @@ type RequestItem = {
   note?: string;
   outcome?: "completed" | "cancelled";
   startedAt?: number;
+  daysTotal?: number;
+  daysCompleted?: number;
+  cancelledBy?: "requester" | "doctor";
 };
 
 function doctorInitials(sessionId?: string): string {
@@ -106,7 +113,7 @@ function toRequestItem(r: NetRequest): RequestItem {
         : undefined;
   return {
     id: r.id,
-    doctor: "Dr. Emmanuel Adeleke",
+    doctor: shortDoctorName("Dr. Emmanuel Adeleke"),
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
@@ -129,6 +136,9 @@ function toRequestItem(r: NetRequest): RequestItem {
     note: r.note,
     outcome,
     startedAt: r.startedAt,
+    daysTotal: r.daysTotal,
+    daysCompleted: r.daysCompleted,
+    cancelledBy: r.cancelledBy,
   };
 }
 
