@@ -26,6 +26,7 @@ import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
+  endShiftDay as netEndShiftDay,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
@@ -35,6 +36,7 @@ import {
   type NetState,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
+
 
 export const Route = createFileRoute("/_app/coverage")({
   component: CoverageScreen,
