@@ -145,6 +145,8 @@ function toRequestItem(r: NetRequest): RequestItem {
       : undefined,
     amount: r.amount,
     status,
+    phone: r.phone,
+    note: r.note,
     outcome,
     cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
@@ -153,9 +155,7 @@ function toRequestItem(r: NetRequest): RequestItem {
   };
 }
 
-    startedAt: r.startedAt,
-  };
-}
+
 
 
 const TABS = [
