@@ -80,8 +80,6 @@ function makeInitialDraft(coverage: CoverageId): Draft {
 
 /* ---------------------- Pricing ---------------------- */
 
-import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
-
 type PricingContext = { coverage: CoverageId; draft: Draft; days: number };
 
 function computePricing({ coverage, draft, days }: PricingContext) {
@@ -92,6 +90,7 @@ function computePricing({ coverage, draft, days }: PricingContext) {
 function formatNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
 }
+
 
 
 const COVERAGE_SHORT: Record<CoverageId, string> = {
