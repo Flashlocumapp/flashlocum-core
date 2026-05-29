@@ -63,9 +63,11 @@ function AppShell() {
             transition={{ type: "spring", stiffness: 320, damping: 34 }}
             className="absolute inset-x-0 bottom-0"
           >
-            <BottomTabs />
-          </motion.div>
-        )}
+      <CoverDispatchPortal />
+      <ToastHost />
+      <SimClockPanel />
+    </div>
+
       </AnimatePresence>
       <CoverDispatchPortal />
       <ToastHost />
