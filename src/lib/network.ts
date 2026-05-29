@@ -68,6 +68,8 @@ export type NetRequest = {
   // of truth for conflict detection across all coverage types.
   startTs?: number;
   endTs?: number;
+  // Who triggered the cancellation (for history labelling).
+  cancelledBy?: "requester" | "doctor";
 };
 
 export type Actor = "requester" | "doctor" | "system";
@@ -439,10 +441,11 @@ export function acceptRequest(id: string): AcceptRequestResult {
 }
 
 export function cancelRequest(id: string) {
+  const actor = actorOf();
   applyPatch(
     id,
-    { status: "cancelled" },
-    { actor: actorOf(), actorId: getSessionId(), action: "cancel" },
+    { status: "cancelled", cancelledBy: actor === "doctor" ? "doctor" : "requester" },
+    { actor, actorId: getSessionId(), action: "cancel" },
   );
 }
 

@@ -41,6 +41,7 @@ type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
   doctor: string;
+  doctorShort: string;
   doctorRatingId: string | null;
   mdcn: string;
   initials: string;
@@ -56,8 +57,17 @@ type RequestItem = {
   phone: string;
   note?: string;
   outcome?: "completed" | "cancelled";
+  cancelledBy?: "requester" | "doctor";
   startedAt?: number;
 };
+
+/** "Dr. Emmanuel Adeleke" → "Dr. Emmanuel A." */
+function shortDoctorName(full: string): string {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length < 3) return full;
+  const last = parts[parts.length - 1];
+  return `${parts.slice(0, -1).join(" ")} ${last[0]}.`;
+}
 
 function doctorInitials(sessionId?: string): string {
   if (!sessionId) return "DR";
@@ -104,9 +114,11 @@ function toRequestItem(r: NetRequest): RequestItem {
       : r.status === "cancelled"
         ? "cancelled"
         : undefined;
+  const fullDoctor = "Dr. Emmanuel Adeleke";
   return {
     id: r.id,
-    doctor: "Dr. Emmanuel Adeleke",
+    doctor: fullDoctor,
+    doctorShort: shortDoctorName(fullDoctor),
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
@@ -128,6 +140,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     phone: r.phone,
     note: r.note,
     outcome,
+    cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
   };
 }
@@ -592,15 +605,28 @@ function RequestCard({
         <Avatar initials={item.initials} dim={isHistory} live={isActive} />
 
         <div className="min-w-0 flex-1">
-          <div
-            className="truncate text-[15px] font-medium"
-            style={{
-              color: isHistory
-                ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
-                : "var(--color-foreground)",
-            }}
-          >
-            {item.doctor}
+          <div className="flex items-center gap-2">
+            <span
+              className="truncate text-[15px] font-medium"
+              style={{
+                color: isHistory
+                  ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
+                  : "var(--color-foreground)",
+              }}
+            >
+              {item.doctorShort}
+            </span>
+            {isHistory && item.outcome === "cancelled" && (
+              <span
+                className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
+                style={{
+                  background: "color-mix(in oklab, var(--color-foreground) 7%, transparent)",
+                  color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)",
+                }}
+              >
+                {item.cancelledBy === "requester" ? "You Cancelled" : "Cancelled"}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
             <span className="truncate">{item.mdcn}</span>
@@ -884,7 +910,7 @@ function CoverCard({
           color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)",
         }}
       >
-        Cancelled
+        {(item as HistoryItem).cancelledBy === "doctor" ? "You Cancelled" : "Cancelled"}
       </span>
     ) : null;
 
@@ -1027,7 +1053,9 @@ function DoctorCoverageDetail({
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             {isHist(item)
               ? item.outcome === "cancelled"
-                ? "Cancelled shift"
+                ? item.cancelledBy === "doctor"
+                  ? "You cancelled"
+                  : "Cancelled shift"
                 : "Completed shift"
               : item.active
                 ? "Active shift"
