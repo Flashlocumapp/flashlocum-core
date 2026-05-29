@@ -19,14 +19,13 @@ export function HistoryDetailSheet({
   item,
   onDismiss,
   onRate,
-  onRebook,
 }: {
   open: boolean;
   item: HistoryDetail | null;
   onDismiss: () => void;
   onRate: (id: string, rating: number, feedback: string) => void;
-  onRebook: (id: string) => void;
 }) {
+
   const [rating, setRating] = useState(item?.rating ?? 0);
   const [feedback, setFeedback] = useState("");
 
