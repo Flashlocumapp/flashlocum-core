@@ -64,7 +64,10 @@ type RequestItem = {
   outcome?: "completed" | "cancelled";
   cancelledBy?: "requester" | "doctor";
   startedAt?: number;
+  days: number;
+  dayIndex: number;
 };
+
 
 /** "Dr. Emmanuel Adeleke" → "Dr. Emmanuel A." */
 function shortDoctorName(full: string): string {
