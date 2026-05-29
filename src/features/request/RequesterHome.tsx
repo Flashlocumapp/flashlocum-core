@@ -610,8 +610,18 @@ function ConfigureBody({
 
 /* ---------------------- Coverage-specific fields ---------------------- */
 
+function dateBounds(): { min: string; max: string } {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = new Date();
+  const max = new Date(today);
+  max.setDate(max.getDate() + 6);
+  return { min: fmt(today), max: fmt(max) };
+}
+
 function CoverageFields({
-  coverage,
+  coverage: _coverage,
   days,
   setDays,
   draft,
@@ -623,60 +633,14 @@ function CoverageFields({
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
 }) {
-  if (coverage === "weekend") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
+  const bounds = dateBounds();
+  // Clamp start date into the 7-day operational window if it drifts.
+  useEffect(() => {
+    if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
+    else if (draft.startDate > bounds.max) patchDraft({ startDate: bounds.max });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.startDate]);
 
-  if (coverage === "standard" || coverage === "home") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <Row>
-          <CtrlField
-            label="End time"
-            type="time"
-            value={draft.endTime}
-            onChange={(v) => patchDraft({ endTime: v })}
-          />
-          <DaysStepper value={days} setValue={setDays} />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
-
-  // 24-Hour
   return (
     <Fields>
       <Row>
@@ -684,19 +648,34 @@ function CoverageFields({
           label="Start date"
           type="date"
           value={draft.startDate}
+          min={bounds.min}
+          max={bounds.max}
           onChange={(v) => patchDraft({ startDate: v })}
         />
-        <CtrlField
+        <TimeField12h
           label="Start time"
-          type="time"
           value={draft.startTime}
           onChange={(v) => patchDraft({ startTime: v })}
         />
       </Row>
-      <DaysStepper value={days} setValue={setDays} />
+      <Row>
+        <TimeField12h
+          label="End time"
+          value={draft.endTime}
+          onChange={(v) => patchDraft({ endTime: v })}
+        />
+        <DaysStepper value={days} setValue={setDays} />
+      </Row>
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
+}
+
+function Fields({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-2.5">{children}</div>;
+}
+function Row({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-2.5">{children}</div>;
 }
 
 function Fields({ children }: { children: React.ReactNode }) {
