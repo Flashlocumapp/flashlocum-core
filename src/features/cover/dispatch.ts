@@ -234,7 +234,7 @@ export function ensureDoctorSession(initialOnline = true) {
         body: "Coverage timer is preserved and will resume when restarted.",
         ttl: 5200,
       });
-      if (acceptedSheet?.id === r.id) acceptedSheet = toCoverage(r);
+      if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "complete") {
       pushToast({
