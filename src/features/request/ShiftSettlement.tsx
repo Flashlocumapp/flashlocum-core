@@ -343,10 +343,11 @@ function OvertimePane({
   onMadePayment: () => void;
   paymentTriggered: boolean;
 }) {
-  const extra = useMemo(
-    () => Math.ceil(overtimeSec / 60) * OVERTIME_RATE_PER_MIN,
+  const billedMin = useMemo(
+    () => roundedOverrunMinutes(overtimeSec / 60),
     [overtimeSec],
   );
+  const extra = billedMin * OVERTIME_RATE_PER_MIN;
   const total = shift.amount + extra;
 
   return (
