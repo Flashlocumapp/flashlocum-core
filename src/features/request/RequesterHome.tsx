@@ -919,6 +919,7 @@ function DispatchOverlay({
         note: draft.note?.trim() || undefined,
         startTs: win.startTs,
         endTs: win.endTs,
+        days: Math.max(1, days),
       });
       resumeRequest(cur.id);
       return;
