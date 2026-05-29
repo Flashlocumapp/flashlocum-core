@@ -21,10 +21,10 @@ function actorOf(): Actor {
   return getRole() === "cover" ? "doctor" : "requester";
 }
 
-const SCHEMA_VERSION = 2;
-const CHANNEL = "flashlocum.net.v2";
-const STORAGE = "flashlocum.net.v2";
-const LEGACY_STORAGE = "flashlocum.net.v1";
+const SCHEMA_VERSION = 3;
+const CHANNEL = "flashlocum.net.v3";
+const STORAGE = "flashlocum.net.v3";
+const LEGACY_STORAGE = "flashlocum.net.v2";
 const SESSION_KEY = "flashlocum.session";
 const HEARTBEAT_MS = 4000;
 const STALE_MS = 12000;
