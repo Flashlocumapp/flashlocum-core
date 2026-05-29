@@ -277,12 +277,16 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     : null;
 
   const moveToActive = (id: string) => {
+    const cur = net.requests[id];
+    const isResume = (cur?.accumulatedMs ?? 0) > 0;
     netStartRequest(id);
+    shiftCue(isResume ? "resume" : "start");
     setTab("active");
   };
 
   const pauseToUpcoming = (id: string) => {
     netPauseShift(id);
+    shiftCue("pause");
     setTab("upcoming");
     setNotice("Shift paused · Timer preserved");
     window.setTimeout(() => setNotice(null), 2600);
@@ -300,6 +304,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const confirmEnd = () => {
     if (!settlingId) return;
     netCompleteRequest(settlingId);
+    shiftCue("end");
   };
 
 
