@@ -111,7 +111,7 @@ function amPmFromHHMM(s: string): string {
   if (Number.isNaN(h)) return s;
   const period = h >= 12 ? "PM" : "AM";
   const hr = ((h + 11) % 12) + 1;
-  return `${hr}:${String(m).padStart(2, "0")}${period}`;
+  return `${String(hr).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
 }
 
 function toRequestItem(r: NetRequest): RequestItem {
