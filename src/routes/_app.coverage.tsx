@@ -129,6 +129,13 @@ function toRequestItem(r: NetRequest): RequestItem {
         ? "cancelled"
         : undefined;
   const fullDoctor = "Dr. Emmanuel Adeleke";
+  // History reflects FINAL settled operational reality, not booking estimate.
+  const isCompleted = outcome === "completed";
+  const settledHrs = isCompleted
+    ? Math.max(0.25, Math.round((r.accumulatedMs ?? 0) / 900_000) / 4)
+    : r.durationHrs;
+  const settledDays = isCompleted ? Math.max(1, r.dayIndex ?? r.days ?? 1) : Math.max(1, r.days ?? 1);
+  const settledAmount = isCompleted ? (r.settledAmount ?? r.amount) : r.amount;
   return {
     id: r.id,
     doctor: fullDoctor,
@@ -140,7 +147,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     day: r.day,
     start: r.start,
     end: r.end,
-    durationHrs: r.durationHrs,
+    durationHrs: settledHrs,
     schedule: `${r.day} · ${r.start}`,
     completedOn: outcome
       ? new Date(r.updatedAt).toLocaleDateString("en-NG", {
@@ -149,7 +156,7 @@ function toRequestItem(r: NetRequest): RequestItem {
           month: "short",
         })
       : undefined,
-    amount: r.amount,
+    amount: settledAmount,
     status,
     phone: r.phone,
     note: r.note,
@@ -157,7 +164,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     cancelledBy: r.cancelledBy,
     startedAt: r.startedAt,
     accumulatedMs: r.accumulatedMs ?? 0,
-    days: Math.max(1, r.days ?? 1),
+    days: settledDays,
     dayIndex: Math.max(1, r.dayIndex ?? 1),
   };
 }
