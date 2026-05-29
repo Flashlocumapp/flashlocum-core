@@ -151,8 +151,10 @@ export function useDispatch(): View {
         day: "2-digit",
         month: "short",
       }),
+      rating: historyRatings[r.id],
       settlementStatus: r.status === "completed" ? "Pending" : "Voided",
     }));
+
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
