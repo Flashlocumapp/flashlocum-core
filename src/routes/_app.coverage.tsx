@@ -41,6 +41,7 @@ type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
   doctor: string;
+  doctorShort: string;
   doctorRatingId: string | null;
   mdcn: string;
   initials: string;
@@ -56,8 +57,17 @@ type RequestItem = {
   phone: string;
   note?: string;
   outcome?: "completed" | "cancelled";
+  cancelledBy?: "requester" | "doctor";
   startedAt?: number;
 };
+
+/** "Dr. Emmanuel Adeleke" → "Dr. Emmanuel A." */
+function shortDoctorName(full: string): string {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length < 3) return full;
+  const last = parts[parts.length - 1];
+  return `${parts.slice(0, -1).join(" ")} ${last[0]}.`;
+}
 
 function doctorInitials(sessionId?: string): string {
   if (!sessionId) return "DR";
