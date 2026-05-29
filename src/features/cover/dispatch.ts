@@ -219,9 +219,11 @@ export function ensureDoctorSession(initialOnline = true) {
         ttl: 5200,
       });
       pendingRating = {
+        requestId: r.id,
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
       };
+
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "cancel") {
