@@ -101,7 +101,11 @@ export function ShiftSettlement({
       : (phase === "settlement" || phase === "grace") && endedAtRef.current != null
         ? endedAtRef.current
         : tick;
-  const workedMin = Math.max(0, (effectiveNow - shift.startedAt) / 60000);
+  const baseMs = shift.accumulatedMs ?? 0;
+  const liveSegmentMs = shift.startedAt
+    ? Math.max(0, effectiveNow - shift.startedAt)
+    : 0;
+  const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = roundedOverrunMinutes(workedMin);
   const totalAmount = useMemo(
     () => computeWorkedPricing(shift.coverageKind, shift.startHHMM, billedMin).amount,
