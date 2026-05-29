@@ -438,14 +438,14 @@ export function acceptRequest(id: string): AcceptRequestResult {
     { actor: "doctor", actorId: sid, action: "accept", shiftId: id },
   );
   return { ok: true };
+}
+
 export function cancelRequest(id: string) {
   const actor = actorOf();
   applyPatch(
     id,
     { status: "cancelled", cancelledBy: actor === "doctor" ? "doctor" : "requester" },
     { actor, actorId: getSessionId(), action: "cancel" },
-  );
-}
   );
 }
 
