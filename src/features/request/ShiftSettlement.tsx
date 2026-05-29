@@ -399,7 +399,7 @@ function OvertimePane({
           </span>
         </div>
         <p className="mt-1 text-[11.5px] text-muted-foreground">
-          Billed in 15-minute blocks · {fmtClock(overtimeSec)} elapsed
+          Billed in 15-min half-blocks · {fmtClock(overtimeSec)} elapsed
         </p>
 
         <div className="mt-auto pb-8">
