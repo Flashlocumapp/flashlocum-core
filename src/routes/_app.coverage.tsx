@@ -297,7 +297,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       const newEndTs = newStartTs + newDur * 3_600_000;
       const fallbackItem = items.find((i) => i.id === id);
       const kind = coverageKindFromLabel(cur?.coverage ?? fallbackItem?.coverage ?? "Standard");
-      const repriced = computeCoveragePricing(kind, newStartTs, newEndTs);
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, 1);
       const newAmount = repriced.amount;
 
       netUpdateRequest(id, {
