@@ -1036,9 +1036,6 @@ function CoverCard({
 function DoctorCoverageDetail({
   item,
   onDismiss,
-function DoctorCoverageDetail({
-  item,
-  onDismiss,
 }: {
   item: CoverItem | HistoryItem | null;
   onDismiss: () => void;
