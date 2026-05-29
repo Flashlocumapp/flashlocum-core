@@ -440,22 +440,26 @@ function SettlementPane({
 function OvertimePane({
   shift,
   overtimeSec,
+  total,
+  extensionMin,
+  extensionAmount,
   onCopy,
   onMadePayment,
   paymentTriggered,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
+  total: number;
+  extensionMin: number;
+  extensionAmount: number;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
 }) {
-  const billedMin = useMemo(
-    () => roundedOverrunMinutes(overtimeSec / 60),
-    [overtimeSec],
-  );
-  const extra = billedMin * OVERTIME_RATE_PER_MIN;
-  const total = shift.amount + extra;
+  void shift;
+  const billedMin = extensionMin;
+  const extra = extensionAmount;
+
 
   return (
     <motion.section
