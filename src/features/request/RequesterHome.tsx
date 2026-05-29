@@ -18,6 +18,8 @@ import {
   cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
+import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
+
 
 export function RequesterHome() {
   return <HomeScreen />;
@@ -80,38 +82,18 @@ function makeInitialDraft(coverage: CoverageId): Draft {
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; days: number };
+type PricingContext = { coverage: CoverageId; draft: Draft; days: number };
 
-function computePricing({ coverage, days }: PricingContext) {
-  const d = Math.max(1, days);
-  let amount = 0;
-  let explanation = "";
-
-  if (coverage === "24h") {
-    amount = d * 80000;
-    explanation = "24-hour coverage includes extended operational continuity.";
-  } else if (coverage === "weekend") {
-    amount = 80000;
-    explanation = "Weekend coverage includes extended operational hours.";
-  } else if (coverage === "home") {
-    amount = d * 45000;
-    explanation = "Home care coverage includes personalized operational coordination.";
-  } else {
-    amount = d * 36000;
-    explanation =
-      d <= 1
-        ? "Short coverage includes adjusted operational pricing."
-        : d <= 3
-          ? "Mid-length coverage includes adjusted operational pricing."
-          : "Standard operational coverage rate.";
-  }
-
-  return { amount, explanation };
+function computePricing({ coverage, draft, days }: PricingContext) {
+  const win = shiftWindow(coverage, draft, days);
+  return computeCoveragePricing(coverageKindFromLabel(COVERAGE_SHORT[coverage]), win.startTs, win.endTs);
 }
 
 function formatNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
 }
+
+
 
 const COVERAGE_SHORT: Record<CoverageId, string> = {
   standard: "Standard",
@@ -302,7 +284,8 @@ function HomeScreen() {
         ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, days })}
+            pricing={computePricing({ coverage, draft, days })}
+
             onConfirm={() => setStage("dispatch")}
           />
         ) : (
@@ -901,7 +884,8 @@ function DispatchOverlay({
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
 
   const paused = cancelOpen || editOpen;
-  const pricing = computePricing({ coverage, days });
+  const pricing = computePricing({ coverage, draft, days });
+
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
   const win = shiftWindow(coverage, draft, days);
@@ -1020,27 +1004,26 @@ function DispatchOverlay({
     if (requestId) {
       const cur = net.requests[requestId];
       const newDur = Math.max(1, next.durationHrs);
-      // Derive absolute timestamps from the original date + new start/end so
-      // operational continuity (day, conflict window) stays consistent.
       const baseDateStr = draft.startDate;
       const newStartTs = new Date(`${baseDateStr}T${next.startTime}:00`).getTime();
       const newEndTs = newStartTs + newDur * 3_600_000;
-      // Recompute amount from the original hourly rate to preserve pricing.
-      const baseHourly = cur
-        ? cur.amount / Math.max(1, cur.durationHrs)
-        : pricing.amount / Math.max(1, durationHrs);
-      const newAmount = Math.round(baseHourly * newDur);
+      // Re-derive pricing from the operational pricing engine — day/night
+      // splits, continuous-coverage overrides, and Home Care rates all stay
+      // synchronized with the edited window.
+      const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
+      const repriced = computeCoveragePricing(kind, newStartTs, newEndTs);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),
         end: fmtAmPm(next.endTime),
         durationHrs: newDur,
-        amount: newAmount,
+        amount: repriced.amount,
         startTs: newStartTs,
         endTs: newEndTs,
       });
     }
   };
+
 
   // Pre-acceptance cancel: remove silently (no notification, no history).
   const handleCancelPreAccept = () => {
