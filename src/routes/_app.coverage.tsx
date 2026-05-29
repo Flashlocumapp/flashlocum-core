@@ -568,7 +568,7 @@ function RequesterDetailSheet({
                 {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
-            {item.status === "active" && item.days > 1 && (
+            {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
               <button
                 onClick={() => onPause(item.id)}
                 className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90"
