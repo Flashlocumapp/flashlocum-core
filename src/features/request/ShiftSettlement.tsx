@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { simNow, useSimClock } from "@/lib/clock";
-import { roundedOverrunMinutes } from "@/lib/pricing";
+import {
+  computeWorkedPricing,
+  roundedOverrunMinutes,
+  type CoverageKind,
+} from "@/lib/pricing";
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
@@ -11,21 +15,25 @@ type ShiftMeta = {
   facility: string;
   doctor: string;
   role: string;
-  amount: number; // base settlement
+  /** Realtime billing inputs — derived from LIVE Active Coverage timer. */
+  startedAt: number;
+  startHHMM: string;
+  coverageKind: CoverageKind;
 };
 
 const SAMPLE: ShiftMeta = {
   facility: "Evercare Hospital",
   doctor: "Dr. Adaobi Okeke",
-  role: "Standard · 10 hrs",
-  amount: 120000,
+  role: "Standard · Active",
+  startedAt: Date.now() - 60 * 60 * 1000,
+  startHHMM: "08:00",
+  coverageKind: "standard",
 };
 
 const ACCOUNT = { bank: "Providus Bank", number: "0123456789" };
 
 const VISIBLE_COUNTDOWN = 5 * 60; // 5 minutes
 const GRACE_TOTAL = 15 * 60; // 15 minutes total settlement window
-const OVERTIME_RATE_PER_MIN = 600; // ₦600/min illustrative
 
 function fmtNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
@@ -34,6 +42,14 @@ function fmtClock(s: number) {
   const m = Math.max(0, Math.floor(s / 60));
   const sec = Math.max(0, s % 60);
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+function fmtHrMin(min: number) {
+  const m = Math.max(0, Math.floor(min));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r}min`;
+  if (r === 0) return `${h}hr`;
+  return `${h}hr ${r}min`;
 }
 
 export function ShiftSettlement({
@@ -55,6 +71,8 @@ export function ShiftSettlement({
   // simulation fast-forward instantly advances the visible state.
   const phaseStartedAtRef = useRef<number | null>(null);
   const overtimeStartedAtRef = useRef<number | null>(null);
+  const endedAtRef = useRef<number | null>(null);
+  const confirmedAtRef = useRef<number | null>(null);
   const autoConfirmAt = useRef<number | null>(null);
 
   const tick = useSimClock(1000);
@@ -68,13 +86,41 @@ export function ShiftSettlement({
       ? Math.max(0, Math.floor((tick - overtimeStartedAtRef.current) / 1000))
       : 0;
 
+  // The LIVE Active Coverage timer is the single source of truth for billing.
+  // During settlement/grace the worked total freezes at End Shift; in
+  // overtime it resumes; in confirmed it freezes at payment.
+  const effectiveNow =
+    phase === "confirmed" && confirmedAtRef.current != null
+      ? confirmedAtRef.current
+      : (phase === "settlement" || phase === "grace") && endedAtRef.current != null
+        ? endedAtRef.current
+        : tick;
+  const workedMin = Math.max(0, (effectiveNow - shift.startedAt) / 60000);
+  const billedMin = roundedOverrunMinutes(workedMin);
+  const totalAmount = useMemo(
+    () => computeWorkedPricing(shift.coverageKind, shift.startHHMM, billedMin).amount,
+    [shift.coverageKind, shift.startHHMM, billedMin],
+  );
+  // Snapshot of the bill at the moment End Shift was pressed.
+  const frozenBilledMinRef = useRef<number>(0);
+  const frozenAmountRef = useRef<number>(0);
+  const frozenBilledMin = frozenBilledMinRef.current;
+  const frozenAmount = frozenAmountRef.current;
+  const extensionMin = Math.max(0, billedMin - frozenBilledMin);
+  const extensionAmount = Math.max(0, totalAmount - frozenAmount);
+
   // Reset whenever opened fresh
   useEffect(() => {
     if (open) {
       setPhase(initialPhase);
-      phaseStartedAtRef.current = initialPhase === "active" || initialPhase === "confirmed" ? null : simNow();
+      phaseStartedAtRef.current =
+        initialPhase === "active" || initialPhase === "confirmed" ? null : simNow();
       overtimeStartedAtRef.current = initialPhase === "overtime" ? simNow() : null;
+      endedAtRef.current = null;
+      confirmedAtRef.current = null;
       autoConfirmAt.current = null;
+      frozenBilledMinRef.current = 0;
+      frozenAmountRef.current = 0;
     }
   }, [open, initialPhase]);
 
@@ -88,6 +134,7 @@ export function ShiftSettlement({
     if (!open) return;
     if (phase !== "settlement" && phase !== "grace" && phase !== "overtime") return;
     if (autoConfirmAt.current && tick >= autoConfirmAt.current) {
+      confirmedAtRef.current = tick;
       setPhase("confirmed");
     }
   }, [open, phase, tick]);
@@ -97,8 +144,6 @@ export function ShiftSettlement({
     if (phase === "settlement" && elapsed >= VISIBLE_COUNTDOWN) setPhase("grace");
     if (phase === "grace" && elapsed >= GRACE_TOTAL) {
       if (overtimeStartedAtRef.current == null) {
-        // Backdate overtime to the moment grace expired so retroactive
-        // billing is operationally fair.
         overtimeStartedAtRef.current =
           (phaseStartedAtRef.current ?? simNow()) + GRACE_TOTAL * 1000;
       }
@@ -108,8 +153,19 @@ export function ShiftSettlement({
 
 
   const handleEndShift = () => {
-    phaseStartedAtRef.current = simNow();
+    const now = simNow();
+    phaseStartedAtRef.current = now;
+    endedAtRef.current = now;
     overtimeStartedAtRef.current = null;
+    // Freeze the bill at the moment of End Shift.
+    const w = Math.max(0, (now - shift.startedAt) / 60000);
+    const bm = roundedOverrunMinutes(w);
+    frozenBilledMinRef.current = bm;
+    frozenAmountRef.current = computeWorkedPricing(
+      shift.coverageKind,
+      shift.startHHMM,
+      bm,
+    ).amount;
     setPhase("settlement");
     if (Math.random() < 0.35) {
       autoConfirmAt.current = simNow() + (8 + Math.random() * 6) * 1000;
@@ -141,7 +197,15 @@ export function ShiftSettlement({
     >
       <AnimatePresence mode="wait">
         {phase === "active" && (
-          <ActivePane key="active" shift={shift} onClose={onClose} onEnd={handleEndShift} />
+          <ActivePane
+            key="active"
+            shift={shift}
+            workedMin={workedMin}
+            billedMin={billedMin}
+            liveAmount={totalAmount}
+            onClose={onClose}
+            onEnd={handleEndShift}
+          />
         )}
         {(phase === "settlement" || phase === "grace") && (
           <SettlementPane
@@ -149,6 +213,8 @@ export function ShiftSettlement({
             shift={shift}
             phase={phase}
             elapsed={elapsed}
+            billedMin={frozenBilledMin}
+            amount={frozenAmount}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -159,6 +225,9 @@ export function ShiftSettlement({
             key="overtime"
             shift={shift}
             overtimeSec={overtimeSec}
+            total={totalAmount}
+            extensionMin={extensionMin}
+            extensionAmount={extensionAmount}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -168,7 +237,8 @@ export function ShiftSettlement({
           <ConfirmedPane
             key="done"
             shift={shift}
-            overtimeSec={overtimeSec}
+            total={totalAmount}
+            billedMin={billedMin}
             onClose={finalize}
           />
         )}
@@ -182,10 +252,16 @@ export function ShiftSettlement({
 
 function ActivePane({
   shift,
+  workedMin,
+  billedMin,
+  liveAmount,
   onClose,
   onEnd,
 }: {
   shift: ShiftMeta;
+  workedMin: number;
+  billedMin: number;
+  liveAmount: number;
   onClose: () => void;
   onEnd: () => void;
 }) {
@@ -219,6 +295,29 @@ function ActivePane({
           </div>
         </div>
 
+        <div className="mt-5 rounded-2xl bg-surface-elevated p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Worked so far
+            </span>
+            <span className="text-[13px] font-medium tabular-nums">{fmtHrMin(workedMin)}</span>
+          </div>
+          <div className="mt-3 flex items-end justify-between">
+            <div>
+              <div className="text-[11.5px] text-muted-foreground">Live billing</div>
+              <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight tabular-nums">
+                {fmtNaira(liveAmount)}
+              </div>
+            </div>
+            <span className="text-[11.5px] text-muted-foreground tabular-nums">
+              billed {fmtHrMin(billedMin)}
+            </span>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Tied to the live timer · 15-min half-blocks
+          </p>
+        </div>
+
         <div className="mt-auto pb-8">
           <button
             onClick={onEnd}
@@ -238,6 +337,8 @@ function SettlementPane({
   shift,
   phase,
   elapsed,
+  billedMin,
+  amount,
   onCopy,
   onMadePayment,
   paymentTriggered,
@@ -245,6 +346,8 @@ function SettlementPane({
   shift: ShiftMeta;
   phase: "settlement" | "grace";
   elapsed: number;
+  billedMin: number;
+  amount: number;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
@@ -269,8 +372,12 @@ function SettlementPane({
 
         <div className="mt-3 text-[13px] text-muted-foreground">Total Settlement</div>
         <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(shift.amount)}
+          {fmtNaira(amount)}
         </div>
+        <p className="mt-1 text-[11.5px] text-muted-foreground">
+          Worked {fmtHrMin(billedMin)} · billed in 15-min half-blocks
+        </p>
+
 
         {/* Account block — operational center of gravity */}
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
@@ -333,22 +440,26 @@ function SettlementPane({
 function OvertimePane({
   shift,
   overtimeSec,
+  total,
+  extensionMin,
+  extensionAmount,
   onCopy,
   onMadePayment,
   paymentTriggered,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
+  total: number;
+  extensionMin: number;
+  extensionAmount: number;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
 }) {
-  const billedMin = useMemo(
-    () => roundedOverrunMinutes(overtimeSec / 60),
-    [overtimeSec],
-  );
-  const extra = billedMin * OVERTIME_RATE_PER_MIN;
-  const total = shift.amount + extra;
+  void shift;
+  const billedMin = extensionMin;
+  const extra = extensionAmount;
+
 
   return (
     <motion.section
@@ -420,17 +531,19 @@ function OvertimePane({
 
 function ConfirmedPane({
   shift,
-  overtimeSec,
+  total,
+  billedMin,
   onClose,
 }: {
   shift: ShiftMeta;
-  overtimeSec: number;
+  total: number;
+  billedMin: number;
   onClose: () => void;
 }) {
-  const extra = roundedOverrunMinutes(overtimeSec / 60) * OVERTIME_RATE_PER_MIN;
-  const total = shift.amount + extra;
+  void billedMin;
   const [ratingOpen, setRatingOpen] = useState(true);
   const [rated, setRated] = useState(false);
+
 
   return (
     <motion.section
