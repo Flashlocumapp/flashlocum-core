@@ -50,55 +50,47 @@ type Draft = {
 
 function makeInitialDraft(coverage: CoverageId): Draft {
   const today = new Date().toISOString().slice(0, 10);
-  if (coverage === "weekend") {
-    // Auto Sat→Mon, 48h block; user can still adjust start time.
-    const d = new Date();
-    const diff = (6 - d.getDay() + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    return {
-      startDate: d.toISOString().slice(0, 10),
-      startTime: "20:00",
-      endTime: "06:00",
-      note: "",
-    };
-  }
   if (coverage === "home") {
     return { startDate: today, startTime: "22:00", endTime: "06:00", note: "" };
-  }
-  if (coverage === "24h") {
-    return { startDate: today, startTime: "08:00", endTime: "08:00", note: "" };
   }
   return { startDate: today, startTime: "08:00", endTime: "18:00", note: "" };
 }
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; days: number };
+type PricingContext = { coverage: CoverageId; days: number; hoursPerDay: number; nightHours: number };
 
-function computePricing({ coverage, days }: PricingContext) {
-  const d = Math.max(1, days);
-  let amount = 0;
-  let explanation = "";
+const NIGHT_START = 18 * 60; // 18:00
+const NIGHT_END = 6 * 60; // 06:00
 
-  if (coverage === "24h") {
-    amount = d * 80000;
-    explanation = "24-hour coverage includes extended operational continuity.";
-  } else if (coverage === "weekend") {
-    amount = 80000;
-    explanation = "Weekend coverage includes extended operational hours.";
-  } else if (coverage === "home") {
-    amount = d * 45000;
-    explanation = "Home care coverage includes personalized operational coordination.";
-  } else {
-    amount = d * 36000;
-    explanation =
-      d <= 1
-        ? "Short coverage includes adjusted operational pricing."
-        : d <= 3
-          ? "Mid-length coverage includes adjusted operational pricing."
-          : "Standard operational coverage rate.";
+function nightHoursInWindow(startHHMM: string, endHHMM: string): number {
+  const [sh, sm] = startHHMM.split(":").map(Number);
+  const [eh, em] = endHHMM.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return 0;
+  let s = sh * 60 + sm;
+  let e = eh * 60 + em;
+  if (e <= s) e += 24 * 60;
+  let night = 0;
+  for (let t = s; t < e; t += 60) {
+    const m = ((t % (24 * 60)) + 24 * 60) % (24 * 60);
+    if (m >= NIGHT_START || m < NIGHT_END) night += 1;
   }
+  return night;
+}
 
+function computePricing({ coverage, days, hoursPerDay, nightHours }: PricingContext) {
+  const d = Math.max(1, days);
+  const dayRate = coverage === "home" ? 5500 : 4500;
+  const nightPremium = 0.25;
+  const dayHours = Math.max(0, hoursPerDay - nightHours);
+  const perDay = Math.round(dayHours * dayRate + nightHours * dayRate * (1 + nightPremium));
+  const amount = perDay * d;
+  const explanation =
+    coverage === "home"
+      ? "Home Call coverage with after-hours premium applied."
+      : nightHours > 0
+        ? "Standard coverage includes after-hours premium for evening hours."
+        : "Standard daytime operational coverage rate.";
   return { amount, explanation };
 }
 
@@ -108,9 +100,7 @@ function formatNaira(n: number) {
 
 const COVERAGE_SHORT: Record<CoverageId, string> = {
   standard: "Standard",
-  "24h": "24-Hour",
-  weekend: "Weekend Call",
-  home: "Home Care",
+  home: "Home Call",
 };
 
 /* ---------------------- Timing derivation ---------------------- */
