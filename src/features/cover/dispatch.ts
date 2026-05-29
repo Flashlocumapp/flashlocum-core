@@ -213,6 +213,21 @@ export function ensureDoctorSession(initialOnline = true) {
         title: `Your shift with ${r.hospital} has started.`,
         body: "Tap the active card for shift details.",
       });
+    } else if (ev.action === "resume") {
+      pushToast({
+        tone: "presence",
+        title: `Your shift with ${r.hospital} has resumed.`,
+        body: "Coverage timer continues from where it paused.",
+      });
+    } else if (ev.action === "pause") {
+      pushToast({
+        tone: "presence",
+        title: "Your shift has ended for today.",
+        body: `Coverage with ${r.hospital} will resume on the next scheduled day.`,
+        ttl: 5200,
+      });
+      if (acceptedSheet?.id === r.id) acceptedSheet = null;
+      bump();
     } else if (ev.action === "complete") {
       pushToast({
         tone: "presence",
