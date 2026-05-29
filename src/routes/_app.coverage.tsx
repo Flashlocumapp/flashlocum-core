@@ -605,15 +605,28 @@ function RequestCard({
         <Avatar initials={item.initials} dim={isHistory} live={isActive} />
 
         <div className="min-w-0 flex-1">
-          <div
-            className="truncate text-[15px] font-medium"
-            style={{
-              color: isHistory
-                ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
-                : "var(--color-foreground)",
-            }}
-          >
-            {item.doctor}
+          <div className="flex items-center gap-2">
+            <span
+              className="truncate text-[15px] font-medium"
+              style={{
+                color: isHistory
+                  ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
+                  : "var(--color-foreground)",
+              }}
+            >
+              {item.doctorShort}
+            </span>
+            {isHistory && item.outcome === "cancelled" && (
+              <span
+                className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
+                style={{
+                  background: "color-mix(in oklab, var(--color-foreground) 7%, transparent)",
+                  color: "color-mix(in oklab, var(--color-foreground) 60%, transparent)",
+                }}
+              >
+                {item.cancelledBy === "requester" ? "You Cancelled" : "Cancelled"}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
             <span className="truncate">{item.mdcn}</span>
