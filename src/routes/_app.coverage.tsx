@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
-import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
+import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta, shortDoctorName } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
@@ -21,6 +21,7 @@ import {
 import {
   cancelRequest as netCancelRequest,
   completeRequest as netCompleteRequest,
+  endShiftDay as netEndShiftDay,
   getSessionId,
   startRequest as netStartRequest,
   subscribeNetwork,
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/_app/coverage")({
 });
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
-type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
+type Coverage = "Standard" | "Home Call" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
@@ -57,6 +58,9 @@ type RequestItem = {
   note?: string;
   outcome?: "completed" | "cancelled";
   startedAt?: number;
+  daysTotal?: number;
+  daysCompleted?: number;
+  cancelledBy?: "requester" | "doctor";
 };
 
 function doctorInitials(sessionId?: string): string {
@@ -106,7 +110,7 @@ function toRequestItem(r: NetRequest): RequestItem {
         : undefined;
   return {
     id: r.id,
-    doctor: "Dr. Emmanuel Adeleke",
+    doctor: shortDoctorName("Dr. Emmanuel Adeleke"),
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
     mdcn: mdcnFor(r.acceptedBy),
     initials: doctorInitials(r.acceptedBy),
@@ -129,6 +133,9 @@ function toRequestItem(r: NetRequest): RequestItem {
     note: r.note,
     outcome,
     startedAt: r.startedAt,
+    daysTotal: r.daysTotal,
+    daysCompleted: r.daysCompleted,
+    cancelledBy: r.cancelledBy,
   };
 }
 
@@ -242,7 +249,25 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const beginEndShift = (id: string) => setSettlingId(id);
+  const beginEndShift = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    const total = Math.max(1, item?.daysTotal ?? 1);
+    const completedSoFar = item?.daysCompleted ?? 0;
+    const isFinal = completedSoFar + 1 >= total;
+    if (isFinal) {
+      // Final day → settlement → complete
+      setSettlingId(id);
+    } else {
+      // Non-final day → revert to upcoming without settlement
+      netEndShiftDay(id);
+      pushToast({
+        tone: "presence",
+        title: `Day ${completedSoFar + 1} of ${total} ended.`,
+        body: "Tap Resume Shift to continue the next day.",
+      });
+      setTab("upcoming");
+    }
+  };
 
   const confirmEnd = () => {
     if (!settlingId) return;
@@ -508,7 +533,7 @@ function RequesterDetailSheet({
                 onClick={() => onStart(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                Start Shift
+                {(item.daysCompleted ?? 0) > 0 ? "Resume Shift" : "Start Shift"}
               </button>
             )}
             {item.status === "active" && (
@@ -516,7 +541,11 @@ function RequesterDetailSheet({
                 onClick={() => onEnd(item.id)}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
               >
-                End Shift
+                {(() => {
+                  const total = Math.max(1, item.daysTotal ?? 1);
+                  const next = (item.daysCompleted ?? 0) + 1;
+                  return next >= total ? "End Shift" : "End Today's Shift";
+                })()}
               </button>
             )}
           </div>
@@ -635,7 +664,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            Start Shift
+            {(item.daysCompleted ?? 0) > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && (
@@ -647,7 +676,11 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            End Shift
+            {(() => {
+              const total = Math.max(1, item.daysTotal ?? 1);
+              const next = (item.daysCompleted ?? 0) + 1;
+              return next >= total ? "End Shift" : "End Today's Shift";
+            })()}
           </button>
         )}
       </div>

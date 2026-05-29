@@ -21,7 +21,7 @@ export function RequesterHome() {
   return <HomeScreen />;
 }
 
-type CoverageId = "standard" | "24h" | "weekend" | "home";
+type CoverageId = "standard" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
 type Recent = { name: string; area: string };
@@ -32,11 +32,9 @@ const RECENT: Recent[] = [
   { name: "Reddington Hospital", area: "Victoria Island" },
 ];
 
-const COVERAGE: { id: CoverageId; label: string }[] = [
-  { id: "standard", label: "Standard" },
-  { id: "24h", label: "24-Hour" },
-  { id: "weekend", label: "Weekend Call" },
-  { id: "home", label: "Home Care" },
+const COVERAGE: { id: CoverageId; label: string; sub: string }[] = [
+  { id: "standard", label: "Standard", sub: "Daytime or single-block coverage" },
+  { id: "home", label: "Home Call", sub: "After-hours or in-home coverage" },
 ];
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
@@ -52,55 +50,57 @@ type Draft = {
 
 function makeInitialDraft(coverage: CoverageId): Draft {
   const today = new Date().toISOString().slice(0, 10);
-  if (coverage === "weekend") {
-    // Auto Sat→Mon, 48h block; user can still adjust start time.
-    const d = new Date();
-    const diff = (6 - d.getDay() + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
-    return {
-      startDate: d.toISOString().slice(0, 10),
-      startTime: "20:00",
-      endTime: "06:00",
-      note: "",
-    };
-  }
   if (coverage === "home") {
     return { startDate: today, startTime: "22:00", endTime: "06:00", note: "" };
-  }
-  if (coverage === "24h") {
-    return { startDate: today, startTime: "08:00", endTime: "08:00", note: "" };
   }
   return { startDate: today, startTime: "08:00", endTime: "18:00", note: "" };
 }
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; days: number };
+type PricingContext = { coverage: CoverageId; days: number; hoursPerDay: number; nightHours: number };
 
-function computePricing({ coverage, days }: PricingContext) {
-  const d = Math.max(1, days);
-  let amount = 0;
-  let explanation = "";
+const NIGHT_START = 18 * 60; // 18:00
+const NIGHT_END = 6 * 60; // 06:00
 
-  if (coverage === "24h") {
-    amount = d * 80000;
-    explanation = "24-hour coverage includes extended operational continuity.";
-  } else if (coverage === "weekend") {
-    amount = 80000;
-    explanation = "Weekend coverage includes extended operational hours.";
-  } else if (coverage === "home") {
-    amount = d * 45000;
-    explanation = "Home care coverage includes personalized operational coordination.";
-  } else {
-    amount = d * 36000;
-    explanation =
-      d <= 1
-        ? "Short coverage includes adjusted operational pricing."
-        : d <= 3
-          ? "Mid-length coverage includes adjusted operational pricing."
-          : "Standard operational coverage rate.";
+function nightHoursInWindow(startHHMM: string, endHHMM: string): number {
+  const [sh, sm] = startHHMM.split(":").map(Number);
+  const [eh, em] = endHHMM.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return 0;
+  let s = sh * 60 + sm;
+  let e = eh * 60 + em;
+  if (e <= s) e += 24 * 60;
+  let night = 0;
+  for (let t = s; t < e; t += 60) {
+    const m = ((t % (24 * 60)) + 24 * 60) % (24 * 60);
+    if (m >= NIGHT_START || m < NIGHT_END) night += 1;
   }
+  return night;
+}
 
+function computePricing(args: { coverage: CoverageId; days: number; draft?: Draft; hoursPerDay?: number; nightHours?: number }) {
+  const d = Math.max(1, args.days);
+  let hoursPerDay = args.hoursPerDay ?? 0;
+  let nightHours = args.nightHours ?? 0;
+  if (args.draft) {
+    const [sh, sm] = args.draft.startTime.split(":").map(Number);
+    const [eh, em] = args.draft.endTime.split(":").map(Number);
+    let mins = eh * 60 + em - (sh * 60 + sm);
+    if (mins <= 0) mins += 24 * 60;
+    hoursPerDay = Math.round(mins / 60);
+    nightHours = nightHoursInWindow(args.draft.startTime, args.draft.endTime);
+  }
+  const dayRate = args.coverage === "home" ? 5500 : 4500;
+  const nightPremium = 0.25;
+  const dayHours = Math.max(0, hoursPerDay - nightHours);
+  const perDay = Math.round(dayHours * dayRate + nightHours * dayRate * (1 + nightPremium));
+  const amount = perDay * d;
+  const explanation =
+    args.coverage === "home"
+      ? "Home Call coverage with after-hours premium applied."
+      : nightHours > 0
+        ? "Standard coverage includes after-hours premium for evening hours."
+        : "Standard daytime operational coverage rate.";
   return { amount, explanation };
 }
 
@@ -110,9 +110,7 @@ function formatNaira(n: number) {
 
 const COVERAGE_SHORT: Record<CoverageId, string> = {
   standard: "Standard",
-  "24h": "24-Hour",
-  weekend: "Weekend Call",
-  home: "Home Care",
+  home: "Home Call",
 };
 
 /* ---------------------- Timing derivation ---------------------- */
@@ -127,26 +125,22 @@ function fmtAmPm(hhmm: string): string {
   return `${hr}:${String(m).padStart(2, "0")}${period}`;
 }
 
-function dayLabel(coverage: CoverageId, draft: Draft, days: number): string {
-  if (coverage === "weekend") return "Sat & Sun";
+function dayLabel(_coverage: CoverageId, draft: Draft, days: number): string {
   if (!draft.startDate) return "";
   const start = new Date(draft.startDate);
   const startWd = WEEKDAY_SHORT[start.getDay()] ?? "";
-  if (coverage === "24h" || days <= 1) return startWd;
+  if (days <= 1) return startWd;
   const end = new Date(start);
   end.setDate(end.getDate() + days - 1);
   const endWd = WEEKDAY_SHORT[end.getDay()] ?? "";
   return `${startWd}–${endWd}`;
 }
 
-function durationHrsOf(coverage: CoverageId, draft: Draft, days: number): number {
-  if (coverage === "24h") return 24 * Math.max(1, days);
-  if (coverage === "weekend") return 48;
-  // standard / home — derive from start/end + days
+function durationHrsOf(_coverage: CoverageId, draft: Draft, days: number): number {
   const [sh, sm] = draft.startTime.split(":").map(Number);
   const [eh, em] = draft.endTime.split(":").map(Number);
   let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins <= 0) mins += 24 * 60; // overnight
+  if (mins <= 0) mins += 24 * 60;
   const perDay = mins / 60;
   return Math.round(perDay * Math.max(1, days));
 }
@@ -193,8 +187,7 @@ function HomeScreen() {
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
     setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
-    if (c === "24h") setDays(1);
-    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
+    setDays((d) => (d < 1 || d > 7 ? 1 : d));
   };
 
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -297,7 +290,7 @@ function HomeScreen() {
         ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, days })}
+            pricing={computePricing({ coverage, days, draft })}
             onConfirm={() => setStage("dispatch")}
           />
         ) : (
@@ -611,77 +604,49 @@ function CoverageFields({
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
 }) {
-  if (coverage === "weekend") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
-
-  if (coverage === "standard" || coverage === "home") {
-    return (
-      <Fields>
-        <Row>
-          <CtrlField
-            label="Start date"
-            type="date"
-            value={draft.startDate}
-            onChange={(v) => patchDraft({ startDate: v })}
-          />
-          <CtrlField
-            label="Start time"
-            type="time"
-            value={draft.startTime}
-            onChange={(v) => patchDraft({ startTime: v })}
-          />
-        </Row>
-        <Row>
-          <CtrlField
-            label="End time"
-            type="time"
-            value={draft.endTime}
-            onChange={(v) => patchDraft({ endTime: v })}
-          />
-          <DaysStepper value={days} setValue={setDays} />
-        </Row>
-        <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
-      </Fields>
-    );
-  }
-
-  // 24-Hour
+  const today = new Date().toISOString().slice(0, 10);
+  const maxDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 6); // today + 6 → 7-day window inclusive
+    return d.toISOString().slice(0, 10);
+  })();
+  const isToday = draft.startDate === today;
+  const nowHHMM = (() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  })();
+  const sub = COVERAGE.find((c) => c.id === coverage)?.sub ?? "";
   return (
     <Fields>
+      {sub && (
+        <p className="px-1 text-[11.5px] leading-relaxed text-muted-foreground">{sub}</p>
+      )}
       <Row>
         <CtrlField
           label="Start date"
           type="date"
           value={draft.startDate}
+          min={today}
+          max={maxDate}
           onChange={(v) => patchDraft({ startDate: v })}
         />
         <CtrlField
           label="Start time"
           type="time"
           value={draft.startTime}
+          min={isToday ? nowHHMM : undefined}
           onChange={(v) => patchDraft({ startTime: v })}
         />
       </Row>
-      <DaysStepper value={days} setValue={setDays} />
+      <Row>
+        <CtrlField
+          label="End time"
+          type="time"
+          value={draft.endTime}
+          onChange={(v) => patchDraft({ endTime: v })}
+        />
+        <DaysStepper value={days} setValue={setDays} />
+      </Row>
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
@@ -700,12 +665,16 @@ function CtrlField({
   value,
   onChange,
   readOnly,
+  min,
+  max,
 }: {
   label: string;
   type: "date" | "time";
   value: string;
   onChange?: (v: string) => void;
   readOnly?: boolean;
+  min?: string;
+  max?: string;
 }) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -716,6 +685,8 @@ function CtrlField({
         type={type}
         value={value}
         readOnly={readOnly}
+        min={min}
+        max={max}
         onChange={(e) => onChange?.(e.target.value)}
         className="bg-transparent text-[14px] font-medium outline-none"
       />
@@ -876,14 +847,11 @@ function DispatchOverlay({
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
 
   const paused = cancelOpen || editOpen;
-  const pricing = computePricing({ coverage, days });
+  const pricing = computePricing({ coverage, days, draft });
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
   const win = shiftWindow(coverage, draft, days);
-  // For weekend/24h, end is fully derived from start + fixed duration.
-  // For standard/home, draft.endTime drives it.
-  const endStr =
-    coverage === "weekend" || coverage === "24h" ? fmtAmPm(win.endHHMM) : fmtAmPm(draft.endTime);
+  const endStr = fmtAmPm(draft.endTime);
   const durationHrs = win.durHrs;
   const acceptedMeta = `${COVERAGE_SHORT[coverage]} · ${dayStr} · ${endStr && endStr !== startStr ? `${startStr} - ${endStr}` : startStr} · ${durationHrs}hr · ${formatNaira(pricing.amount)}`;
 
@@ -964,14 +932,14 @@ function DispatchOverlay({
   // Edit sheet uses start/end TIMES; duration is derived.
   const [editInitial, setEditInitial] = useState<EditableShift>({
     startTime: draft.startTime,
-    endTime: coverage === "weekend" || coverage === "24h" ? win.endHHMM : draft.endTime,
+    endTime: draft.endTime,
     note: draft.note ?? "",
   });
 
   const openEdit = () => {
     setEditInitial({
       startTime: draft.startTime,
-      endTime: coverage === "weekend" || coverage === "24h" ? win.endHHMM : draft.endTime,
+      endTime: draft.endTime,
       note: draft.note ?? "",
     });
     setEditOpen(true);
