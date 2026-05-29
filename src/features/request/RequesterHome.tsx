@@ -1015,7 +1015,7 @@ function DispatchOverlay({
       // splits, continuous-coverage overrides, and Home Care rates all stay
       // synchronized with the edited window.
       const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
-      const repriced = computeCoveragePricing(kind, newStartTs, newEndTs);
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, 1);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),
