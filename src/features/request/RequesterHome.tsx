@@ -665,12 +665,16 @@ function CtrlField({
   value,
   onChange,
   readOnly,
+  min,
+  max,
 }: {
   label: string;
   type: "date" | "time";
   value: string;
   onChange?: (v: string) => void;
   readOnly?: boolean;
+  min?: string;
+  max?: string;
 }) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -681,6 +685,8 @@ function CtrlField({
         type={type}
         value={value}
         readOnly={readOnly}
+        min={min}
+        max={max}
         onChange={(e) => onChange?.(e.target.value)}
         className="bg-transparent text-[14px] font-medium outline-none"
       />
