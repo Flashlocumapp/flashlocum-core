@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
+import { isOnboarded } from "@/lib/onboarding";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
 });
+
 
 type Section = { label: string; rows: { id: string; title: string; meta?: string }[] };
 
@@ -48,17 +50,35 @@ const COVER_SECTIONS: Section[] = [
 function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>("request");
+  const [switchPrompt, setSwitchPrompt] = useState<Role | null>(null);
   useEffect(() => setLocalRole(getRole()), []);
 
   const roleLabel = role === "cover" ? "Cover & Earn" : "Request Coverage";
   const otherLabel = role === "cover" ? "Request Coverage" : "Cover & Earn";
 
-  const switchRole = () => {
-    const next: Role = role === "cover" ? "request" : "cover";
+  const doSwitch = (next: Role) => {
     setRole(next);
     setLocalRole(next);
-    navigate({ to: "/home" });
+    if (!isOnboarded(next)) {
+      navigate({ to: "/onboarding/$role", params: { role: next } });
+    } else {
+      navigate({ to: "/home" });
+    }
   };
+
+  const switchRole = () => {
+    const next: Role = role === "cover" ? "request" : "cover";
+    if (!isOnboarded(next)) {
+      setSwitchPrompt(next);
+      return;
+    }
+    doSwitch(next);
+  };
+
+  const openProfile = () => {
+    navigate({ to: "/onboarding/$role", params: { role } });
+  };
+
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
@@ -134,7 +154,12 @@ function AccountScreen() {
                         : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
                   }}
                 >
-                  <button className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-accent">
+                  <button
+                    onClick={() => {
+                      if (r.id === "profile" || r.id === "verification") openProfile();
+                    }}
+                    className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-accent"
+                  >
                     <span className="text-[14.5px]">{r.title}</span>
                     <span className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
                       {r.meta}
@@ -143,6 +168,7 @@ function AccountScreen() {
                       </svg>
                     </span>
                   </button>
+
                 </li>
               ))}
             </ul>
@@ -160,6 +186,49 @@ function AccountScreen() {
           Sign out
         </button>
       </div>
+
+      {switchPrompt && (
+        <div
+          className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-6"
+          onClick={() => setSwitchPrompt(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-card p-5"
+            style={{ boxShadow: "0 20px 60px -20px rgba(0,0,0,0.45)" }}
+          >
+            <div className="text-[17px] font-semibold tracking-tight">
+              {switchPrompt === "cover"
+                ? "Complete doctor registration"
+                : "Complete requester profile"}
+            </div>
+            <p className="mt-1.5 text-[13.5px] text-muted-foreground">
+              {switchPrompt === "cover"
+                ? "To accept coverage requests, complete doctor registration. You can save and return later."
+                : "Add your phone and gender to request coverage. You can edit anytime."}
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                onClick={() => setSwitchPrompt(null)}
+                className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
+              >
+                Not now
+              </button>
+              <button
+                onClick={() => {
+                  const next = switchPrompt;
+                  setSwitchPrompt(null);
+                  doSwitch(next);
+                }}
+                className="h-11 flex-1 rounded-2xl bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
+

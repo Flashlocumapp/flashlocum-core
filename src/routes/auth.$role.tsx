@@ -17,8 +17,9 @@ function AuthScreen() {
 
   const enter = () => {
     setRole(normalizedRole);
-    navigate({ to: "/home" });
+    navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
   };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +52,14 @@ function AuthScreen() {
 
         <form onSubmit={handleSubmit} className="mt-7 space-y-3">
           {mode === "signup" && (
-            <Field label="Full name" type="text" placeholder="Dr. Ada Okafor" />
+            <Field
+              label="Full name"
+              type="text"
+              placeholder={normalizedRole === "cover" ? "Dr. Ada Okafor" : "Ada Okafor"}
+            />
           )}
-          <Field label="Email" type="email" placeholder="you@hospital.com" />
+          <Field label="Email" type="email" placeholder="you@example.com" />
+
           <div>
             <label className="text-[12px] font-medium text-muted-foreground">Password</label>
             <div className="mt-1.5 flex items-center rounded-2xl bg-secondary px-4">

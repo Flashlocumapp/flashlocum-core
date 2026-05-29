@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoleRouteImport } from './routes/role'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OnboardingRoleRouteImport } from './routes/onboarding.$role'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
@@ -30,6 +31,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoleRoute = OnboardingRoleRouteImport.update({
+  id: '/onboarding/$role',
+  path: '/onboarding/$role',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoleRoute = AuthRoleRouteImport.update({
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
+  '/onboarding/$role': typeof OnboardingRoleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
+  '/onboarding/$role': typeof OnboardingRoleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/_app/earnings': typeof AppEarningsRoute
   '/_app/home': typeof AppHomeRoute
   '/auth/$role': typeof AuthRoleRoute
+  '/onboarding/$role': typeof OnboardingRoleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/earnings'
     | '/home'
     | '/auth/$role'
+    | '/onboarding/$role'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/earnings'
     | '/home'
     | '/auth/$role'
+    | '/onboarding/$role'
   id:
     | '__root__'
     | '/'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/_app/earnings'
     | '/_app/home'
     | '/auth/$role'
+    | '/onboarding/$role'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -123,6 +135,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   RoleRoute: typeof RoleRoute
   AuthRoleRoute: typeof AuthRoleRoute
+  OnboardingRoleRoute: typeof OnboardingRoleRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -146,6 +159,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding/$role': {
+      id: '/onboarding/$role'
+      path: '/onboarding/$role'
+      fullPath: '/onboarding/$role'
+      preLoaderRoute: typeof OnboardingRoleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/$role': {
@@ -207,6 +227,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   RoleRoute: RoleRoute,
   AuthRoleRoute: AuthRoleRoute,
+  OnboardingRoleRoute: OnboardingRoleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
