@@ -10,6 +10,11 @@
 import { useEffect, useState } from "react";
 import { getRole } from "./role";
 import { simNow } from "./clock";
+import {
+  computeWorkedPricing,
+  coverageKindFromLabel,
+  roundedOverrunMinutes,
+} from "./pricing";
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
