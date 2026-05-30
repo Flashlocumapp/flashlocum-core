@@ -112,7 +112,7 @@ export function ShiftSettlement({
     ? Math.max(0, effectiveNow - shift.startedAt)
     : 0;
   const workedMin = (baseMs + liveSegmentMs) / 60000;
-  const billedMin = roundedOverrunMinutes(workedMin);
+  const billedMin = billableMinutes(workedMin);
   const totalAmount = useMemo(
     () =>
       computeWorkedPricing(
@@ -150,7 +150,7 @@ export function ShiftSettlement({
       if (initialPhase === "settlement" || initialPhase === "grace") {
         const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
         const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-        const bm = roundedOverrunMinutes(w);
+        const bm = billableMinutes(w);
         frozenBilledMinRef.current = bm;
         frozenAmountRef.current = computeWorkedPricing(
           shift.coverageKind,
@@ -202,7 +202,7 @@ export function ShiftSettlement({
     // Freeze the bill at the moment of End Shift.
     const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
     const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-    const bm = roundedOverrunMinutes(w);
+    const bm = billableMinutes(w);
     frozenBilledMinRef.current = bm;
     frozenAmountRef.current = computeWorkedPricing(
       shift.coverageKind,
