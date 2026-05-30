@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
@@ -6,7 +6,6 @@ import { RatingOverlay } from "@/components/RatingOverlay";
 import { recordRating } from "@/lib/ratings";
 import { getRole, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
-import { useNetwork } from "@/lib/network";
 import {
   acceptIncoming,
   cancelUpcoming,
@@ -73,51 +72,7 @@ export function CoverDispatchPortal() {
   );
 }
 
-/* ---------------- Payment Summary (doctor side) ---------------- */
 
-function PaymentSummary({
-  hospital,
-  total,
-  onDone,
-}: {
-  hospital: string;
-  total: number;
-  onDone: () => void;
-}) {
-  const FEE_PCT = 15;
-  const fee = Math.round((total * FEE_PCT) / 100);
-  const net = Math.max(0, total - fee);
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: "var(--color-presence)" }}>
-        Coverage Completed
-      </div>
-      <div className="mt-2 text-[20px] font-semibold tracking-tight">{hospital}</div>
-      <p className="mt-1 text-[12.5px] text-muted-foreground">
-        Settlement received · here&apos;s your breakdown.
-      </p>
-
-      <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3">
-        <Row label="Total Amount Paid" value={nairaK(total)} />
-        <div className="my-2 h-px bg-foreground/[0.06]" />
-        <Row label={`FlashLocum Service Fee (${FEE_PCT}%)`} value={"−" + nairaK(fee)} muted />
-        <div className="my-2 h-px bg-foreground/[0.06]" />
-        <Row label="Final Amount to Doctor" value={nairaK(net)} strong />
-      </div>
-
-      <p className="mt-3 text-[12px] text-muted-foreground">
-        Settlement will be remitted to your account by 10PM today.
-      </p>
-
-      <button
-        onClick={onDone}
-        className="mt-5 h-12 w-full rounded-full bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
-      >
-        Done
-      </button>
-    </motion.div>
-  );
-}
 
 function IncomingBody({ item }: { item: Coverage }) {
   const fee = feeOf(item);
