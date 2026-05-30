@@ -31,6 +31,11 @@ function AppShell() {
         navigate({ to: "/role" });
         return;
       }
+      if (!data.session.user.email_confirmed_at) {
+        const role = getRole() ?? "request";
+        navigate({ to: "/auth/$role", params: { role } });
+        return;
+      }
       if (getRole() === "cover") ensureDoctorSession(true);
       setReady(true);
     })();
