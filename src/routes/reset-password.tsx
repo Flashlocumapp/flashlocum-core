@@ -18,34 +18,78 @@ function ResetPasswordScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    const hash = window.location.hash.replace(/^#/, "");
-    const params = new URLSearchParams(hash);
-    const access_token = params.get("access_token");
-    const refresh_token = params.get("refresh_token");
-
-    if (!access_token || !refresh_token) {
-      if (!cancelled) setError("Invalid or expired reset link. Please request a new one.");
-      return;
-    }
+    // Listen for the PASSWORD_RECOVERY event Supabase fires after parsing the
+    // recovery link (works for both hash-based and PKCE ?code= flows).
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+        setReady(true);
+        setError(null);
+      }
+    });
 
     (async () => {
       try {
-        const { error: sessionErr } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
-        });
-        if (cancelled) return;
-        if (sessionErr) {
-          setError(sessionErr.message || "Could not validate reset session.");
+        const url = new URL(window.location.href);
+
+        // PKCE flow: ?code=...
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (cancelled) return;
+          if (exErr) {
+            setError(exErr.message || "Invalid or expired reset link.");
+            return;
+          }
+          setReady(true);
           return;
         }
-        setReady(true);
+
+        // Hash flow: #access_token=...&refresh_token=...
+        const hash = window.location.hash.replace(/^#/, "");
+        if (hash) {
+          const params = new URLSearchParams(hash);
+          const access_token = params.get("access_token");
+          const refresh_token = params.get("refresh_token");
+          if (access_token && refresh_token) {
+            const { error: sErr } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            if (cancelled) return;
+            if (sErr) {
+              setError(sErr.message || "Could not validate reset session.");
+              return;
+            }
+            setReady(true);
+            return;
+          }
+        }
+
+        // Fall back to any existing session (recovery already processed)
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (data.session) {
+          setReady(true);
+        } else {
+          // Give the onAuthStateChange listener a moment to fire
+          setTimeout(() => {
+            if (!cancelled) {
+              setReady((r) =>
+                r ? r : (setError("Invalid or expired reset link. Please request a new one."), false),
+              );
+            }
+          }, 1500);
+        }
       } catch {
         if (!cancelled) setError("Could not validate reset session.");
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -58,6 +102,7 @@ function ResetPasswordScreen() {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
       setDone(true);
+      await supabase.auth.signOut();
       setTimeout(() => navigate({ to: "/role", search: { reset: "success" } }), 1400);
     } catch (err) {
       setError((err as Error).message || "Could not update password.");
@@ -84,7 +129,7 @@ function ResetPasswordScreen() {
           <p className="mt-2 text-[14px] text-muted-foreground">
             {ready
               ? "Choose a new password to finish signing back in."
-              : "Open this page from the email link we sent you."}
+              : "Validating your reset link…"}
           </p>
         </div>
 
@@ -103,8 +148,7 @@ function ResetPasswordScreen() {
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  disabled={!ready}
-                  className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
+                  className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/70"
                 />
                 <button
                   type="button"
@@ -124,10 +168,10 @@ function ResetPasswordScreen() {
 
             <button
               type="submit"
-              disabled={busy || !ready}
+              disabled={busy || !ready || password.length < 6}
               className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
             >
-              {busy ? "Updating…" : "Update password"}
+              {busy ? "Updating…" : ready ? "Update password" : "Validating link…"}
             </button>
           </form>
         )}
