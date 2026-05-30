@@ -53,33 +53,35 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-export type ShiftCue = "start" | "pause" | "resume" | "end";
+export type ShiftCue = "start" | "pause" | "resume" | "end" | "request";
 
 /** Play a calm two-tone cue + light vibration for a shift lifecycle event. */
 export function shiftCue(cue: ShiftCue) {
   switch (cue) {
     case "start":
-      // Soft rising chime — coverage now live.
       tone(660, 0.16);
       tone(880, 0.22, 0.14);
       vibrate(35);
       return;
     case "resume":
-      // Lighter rising — timer continues.
       tone(620, 0.14);
       tone(784, 0.2, 0.12);
       vibrate(25);
       return;
     case "pause":
-      // Single calm descending tone — coverage held.
       tone(560, 0.22);
       vibrate([20, 50, 20]);
       return;
     case "end":
-      // Resolved descending pair — coverage complete.
       tone(660, 0.16);
       tone(440, 0.26, 0.16);
       vibrate([30, 60, 30]);
+      return;
+    case "request":
+      // Calm rising notification — new coverage request reached the doctor.
+      tone(740, 0.14);
+      tone(988, 0.18, 0.12);
+      vibrate(30);
       return;
   }
 }

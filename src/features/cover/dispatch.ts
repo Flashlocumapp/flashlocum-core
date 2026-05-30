@@ -91,6 +91,7 @@ export type HistoryItem = Coverage & {
   outcome: "completed" | "cancelled";
   cancelledBy?: "requester" | "doctor";
   completedOn: string;
+  updatedAt: number;
   rating?: number;
   settlementStatus: "Remitted" | "Pending" | "Voided";
 };
@@ -172,6 +173,7 @@ export function useDispatch(): View {
           day: "2-digit",
           month: "short",
         }),
+        updatedAt: r.updatedAt,
         rating: historyRatings[r.id],
         settlementStatus: isCompleted ? "Pending" : "Voided",
       } as HistoryItem;
@@ -225,7 +227,29 @@ export function ensureDoctorSession(initialOnline = true) {
     const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
     if (processedEvents.has(eventKey)) return;
     const r = s.requests[ev.shiftId];
-    if (!r || r.acceptedBy !== sid) return;
+    if (!r) return;
+
+    // New request reached this doctor → calm notification cue.
+    // Only fire when the doctor is online and has capacity to accept.
+    if (ev.action === "publish" && ev.actor === "requester") {
+      const me = s.doctors[sid];
+      if (!me?.online) return;
+      const mine = Object.values(s.requests).filter(
+        (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active"),
+      );
+      if (mine.length >= 3) return;
+      if ((me.declined ?? []).includes(r.id)) return;
+      processedEvents.add(eventKey);
+      shiftCue("request");
+      pushToast({
+        tone: "presence",
+        title: `New coverage request · ${r.hospital}`,
+        body: `${r.coverage} · ${r.day} · ${r.start}`,
+      });
+      return;
+    }
+
+    if (r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
     processedEvents.add(eventKey);
 

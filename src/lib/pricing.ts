@@ -143,6 +143,17 @@ export function roundedOverrunMinutes(overrunMin: number): number {
 }
 
 /**
+ * Operational minimum: once coverage successfully starts, the first 15
+ * minutes are always billable. Beyond that, regular half-block rounding
+ * applies. Returns 0 only when the shift was never started.
+ */
+export const MIN_BILLABLE_MINUTES = 15;
+export function billableMinutes(workedMin: number): number {
+  if (!Number.isFinite(workedMin) || workedMin <= 0) return 0;
+  return Math.max(MIN_BILLABLE_MINUTES, roundedOverrunMinutes(workedMin));
+}
+
+/**
  * Compute pricing from a real worked duration starting at `startHHMM`.
  *
  * Single-day: walks forward minute-by-minute from the start clock time,

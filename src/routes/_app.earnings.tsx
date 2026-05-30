@@ -28,8 +28,8 @@ type Payout = {
 const SETTLEMENT_DELAY_MS = 12 * 60 * 60 * 1000;
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
-function toPayout(h: HistoryItem & { updatedAtMs?: number }, now: number): Payout {
-  const ts = (h as unknown as { updatedAtMs?: number }).updatedAtMs ?? now;
+function toPayout(h: HistoryItem, now: number): Payout {
+  const ts = h.updatedAt ?? now;
   const settled = now - ts > SETTLEMENT_DELAY_MS;
   return {
     id: h.id,
@@ -59,13 +59,7 @@ function EarningsScreen() {
     const cutoff = now - THREE_MONTHS_MS;
     return history
       .filter((h) => h.outcome === "completed")
-      .map((h) => {
-        // updatedAt isn't directly on HistoryItem but completedOn is human;
-        // fall back to "now" so freshly completed shifts appear immediately.
-        const parsed = Date.parse(h.completedOn + " " + new Date().getFullYear());
-        const ts = Number.isFinite(parsed) ? parsed : now;
-        return toPayout({ ...h, updatedAtMs: ts } as HistoryItem & { updatedAtMs?: number }, now);
-      })
+      .map((h) => toPayout(h, now))
       .filter((p) => p.ts >= cutoff)
       .sort((a, b) => b.ts - a.ts);
   }, [history]);
