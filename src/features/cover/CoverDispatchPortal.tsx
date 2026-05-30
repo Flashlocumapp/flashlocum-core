@@ -26,18 +26,9 @@ export function CoverDispatchPortal() {
   const [role, setLocalRole] = useState<Role | null>(null);
   useEffect(() => setLocalRole(getRole()), []);
   const { incoming, accepted, pendingRating } = useDispatch();
-  const net = useNetwork();
-  const [summaryDone, setSummaryDone] = useState(false);
-
-  // Reset summary acknowledgement whenever a new pendingRating arrives.
-  useEffect(() => {
-    if (pendingRating) setSummaryDone(false);
-  }, [pendingRating?.requestId]);
 
   if (role !== "cover") return null;
   if (!incoming && !accepted && !pendingRating) return null;
-
-  const pendingReq = pendingRating ? net.requests[pendingRating.requestId] : null;
 
   return (
     <div className="absolute inset-0 z-50">
@@ -62,23 +53,12 @@ export function CoverDispatchPortal() {
             <AcceptedBody item={accepted} />
           </DismissSheet>
         )}
-        {!incoming && !accepted && pendingRating && pendingReq && !summaryDone && (
-          <DismissSheet
-            key={"summary-" + pendingRating.requestId}
-            open
-            onDismiss={() => setSummaryDone(true)}
-            zIndex={58}
-          >
-            <PaymentSummary
-              hospital={pendingRating.hospital}
-              total={pendingReq.settledAmount ?? pendingReq.amount}
-              onDone={() => setSummaryDone(true)}
-            />
-          </DismissSheet>
-        )}
       </AnimatePresence>
+      {/* Doctor rating is fully independent of any requester action.
+          As soon as payment is confirmed and pendingRating is set, the
+          rating overlay opens — the doctor can submit or dismiss freely. */}
       <RatingOverlay
-        open={!!pendingRating && !incoming && !accepted && summaryDone}
+        open={!!pendingRating && !incoming && !accepted}
         doctor={pendingRating?.hospital ?? ""}
         onDismiss={dismissPendingRating}
         onSubmit={(rating) => {
@@ -89,7 +69,6 @@ export function CoverDispatchPortal() {
           dismissPendingRating();
         }}
       />
-
     </div>
   );
 }
