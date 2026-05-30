@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { hasCompletedOnboarding } from "@/lib/profile-remote";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
@@ -26,14 +27,19 @@ function AuthScreen() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase.auth.getSession();
-      if (!cancelled && data.session) proceed();
+      if (!cancelled && data.session) await proceed();
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const proceed = () => {
+  const proceed = async () => {
     setRole(normalizedRole);
-    navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+    const onboarded = await hasCompletedOnboarding();
+    if (onboarded) {
+      navigate({ to: "/home" });
+    } else {
+      navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +72,7 @@ function AuthScreen() {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) throw err;
       }
-      proceed();
+      await proceed();
     } catch (err) {
       setError((err as Error).message || "Something went wrong. Try again.");
     } finally {
@@ -83,7 +89,7 @@ function AuthScreen() {
       });
       if (result.error) throw result.error;
       if (result.redirected) return;
-      proceed();
+      await proceed();
     } catch (err) {
       setError((err as Error).message || "Google sign-in failed. Try again.");
     } finally {
