@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import locumSvg from "@/assets/logo-locum.svg";
 import flashSvg from "@/assets/logo-flash.svg";
