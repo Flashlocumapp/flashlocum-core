@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { hasCompletedOnboarding } from "@/lib/profile-remote";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
