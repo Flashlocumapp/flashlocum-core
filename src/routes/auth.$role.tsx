@@ -22,6 +22,15 @@ function AuthScreen() {
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const roleLabel = normalizedRole === "cover" ? "Cover & Earn" : "Request Coverage";
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!cancelled && data.session) proceed();
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const proceed = () => {
     setRole(normalizedRole);
     navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
