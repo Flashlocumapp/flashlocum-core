@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -43,6 +43,16 @@ function AuthScreen() {
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const roleLabel = normalizedRole === "cover" ? "Cover & Earn" : "Request Coverage";
 
+  const proceed = useCallback(async () => {
+    setRole(normalizedRole);
+    const onboarded = await hasCompletedOnboarding();
+    if (onboarded) {
+      navigate({ to: "/home" });
+    } else {
+      navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+    }
+  }, [navigate, normalizedRole]);
+
   useEffect(() => {
     let cancelled = false;
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -61,17 +71,7 @@ function AuthScreen() {
       cancelled = true;
       authListener.subscription.unsubscribe();
     };
-  }, []);
-
-  const proceed = async () => {
-    setRole(normalizedRole);
-    const onboarded = await hasCompletedOnboarding();
-    if (onboarded) {
-      navigate({ to: "/home" });
-    } else {
-      navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
-    }
-  };
+  }, [proceed]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
