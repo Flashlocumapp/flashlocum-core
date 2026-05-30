@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { setRole, type Role } from "@/lib/role";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
@@ -11,19 +12,56 @@ function AuthScreen() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [showPw, setShowPw] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const roleLabel = normalizedRole === "cover" ? "Cover & Earn" : "Request Coverage";
 
-  const enter = () => {
+  const proceed = () => {
     setRole(normalizedRole);
     navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
   };
 
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    enter();
+    if (busy) return;
+    setError(null);
+
+    if (!email || !password) {
+      setError("Enter your email and password.");
+      return;
+    }
+    if (mode === "signup" && password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        const { error: err } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: { full_name: name || undefined, role: normalizedRole },
+          },
+        });
+        if (err) throw err;
+      } else {
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+        if (err) throw err;
+      }
+      proceed();
+    } catch (err) {
+      setError((err as Error).message || "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -55,16 +93,30 @@ function AuthScreen() {
             <Field
               label="Full name"
               type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
               placeholder={normalizedRole === "cover" ? "Dr. Ada Okafor" : "Ada Okafor"}
             />
           )}
-          <Field label="Email" type="email" placeholder="you@example.com" />
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            inputMode="email"
+            placeholder="you@example.com"
+          />
 
           <div>
             <label className="text-[12px] font-medium text-muted-foreground">Password</label>
             <div className="mt-1.5 flex items-center rounded-2xl bg-secondary px-4">
               <input
                 type={showPw ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 placeholder="••••••••"
                 className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/70"
               />
@@ -79,34 +131,25 @@ function AuthScreen() {
             </div>
           </div>
 
+          {error && (
+            <div className="rounded-xl px-3 py-2 text-[13px]" style={{ background: "color-mix(in oklab, var(--color-destructive, #d24) 14%, transparent)", color: "var(--color-destructive, #d24)" }}>
+              {error}
+            </div>
+          )}
+
           <button
             type="submit"
-            className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90"
+            disabled={busy}
+            className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
           >
-            {mode === "signup" ? "Create account" : "Sign in"}
+            {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
           </button>
         </form>
-
-        <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          <div className="h-px flex-1 bg-border" />
-          <span>or</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        <button
-          type="button"
-          onClick={enter}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl bg-card text-[14px] font-medium hairline-t hairline-b active:bg-accent"
-          style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
-        >
-          <GoogleG />
-          Continue with Google
-        </button>
 
         <div className="mt-auto pt-8 text-center text-[13px] text-muted-foreground">
           {mode === "signup" ? "Already have an account?" : "New to FlashLocum?"}{" "}
           <button
-            onClick={() => setMode(mode === "signup" ? "login" : "signup")}
+            onClick={() => { setError(null); setMode(mode === "signup" ? "login" : "signup"); }}
             className="font-medium text-foreground underline underline-offset-4"
           >
             {mode === "signup" ? "Sign in" : "Create one"}
@@ -138,13 +181,5 @@ const Eye = () => (
 const EyeOff = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
     <path d="M3 3l18 18M10.6 6.1A9 9 0 0122 12s-1.2 2.4-3.6 4.3M6.2 7.7C3.5 9.6 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.5 5-1.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
-);
-const GoogleG = () => (
-  <svg width="18" height="18" viewBox="0 0 48 48">
-    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.6 32.5 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/>
-    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.2 0-9.5-3.5-11.2-8.2l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C40.4 36.6 44 30.8 44 24c0-1.2-.1-2.3-.4-3.5z"/>
   </svg>
 );
