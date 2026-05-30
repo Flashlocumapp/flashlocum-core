@@ -157,7 +157,7 @@ function AuthScreen() {
         options: { emailRedirectTo: `${window.location.origin}/auth/${normalizedRole}` },
       });
       if (err) throw err;
-      setInfo("Verification email sent again.");
+      setInfo("New code sent. Check your email.");
     } catch (err) {
       setError((err as Error).message || "Could not resend email.");
     } finally {
