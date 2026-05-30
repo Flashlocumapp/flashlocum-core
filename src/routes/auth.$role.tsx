@@ -74,35 +74,57 @@ function AuthScreen() {
           },
         });
         if (err) throw err;
-        // If confirmation is required, no session is returned.
-        if (!data.session) {
-          setView("check-email");
-          return;
-        }
-        // Already confirmed (e.g. existing flow) — proceed.
-        if (data.session.user.email_confirmed_at) {
+        if (data.session?.user.email_confirmed_at) {
           await proceed();
           return;
         }
-        setView("check-email");
+        setCode("");
+        setView("verify");
       } else {
         const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) {
-          // Supabase returns "Email not confirmed" when verification is pending.
           if (/confirm/i.test(err.message)) {
-            setView("check-email");
+            setCode("");
+            setView("verify");
             return;
           }
           throw err;
         }
         if (!data.session?.user.email_confirmed_at) {
-          setView("check-email");
+          setCode("");
+          setView("verify");
           return;
         }
         await proceed();
       }
     } catch (err) {
       setError((err as Error).message || "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setError(null); setInfo(null);
+    const token = code.trim();
+    if (token.length < 6) { setError("Enter the 6-digit code from your email."); return; }
+    setBusy(true);
+    try {
+      const { data, error: err } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "signup",
+      });
+      if (err) throw err;
+      if (data.session) {
+        await proceed();
+      } else {
+        setError("Verification failed. Please try again.");
+      }
+    } catch (err) {
+      setError((err as Error).message || "Invalid or expired code.");
     } finally {
       setBusy(false);
     }
