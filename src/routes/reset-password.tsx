@@ -16,20 +16,41 @@ function ResetPasswordScreen() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Supabase parses the recovery token from the URL hash automatically.
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
-    });
+    let cancelled = false;
+
+    const hash = window.location.hash.replace(/^#/, "");
+    const params = new URLSearchParams(hash);
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+
+    if (!access_token || !refresh_token) {
+      if (!cancelled) setError("Invalid or expired reset link. Please request a new one.");
+      return;
+    }
+
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) setReady(true);
+      try {
+        const { error: sessionErr } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+        if (cancelled) return;
+        if (sessionErr) {
+          setError(sessionErr.message || "Could not validate reset session.");
+          return;
+        }
+        setReady(true);
+      } catch {
+        if (!cancelled) setError("Could not validate reset session.");
+      }
     })();
-    return () => sub.subscription.unsubscribe();
+
+    return () => { cancelled = true; };
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !ready) return;
     setError(null);
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     setBusy(true);
@@ -37,7 +58,7 @@ function ResetPasswordScreen() {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
       setDone(true);
-      setTimeout(() => navigate({ to: "/role" }), 1400);
+      setTimeout(() => navigate({ to: "/role", search: { reset: "success" } }), 1400);
     } catch (err) {
       setError((err as Error).message || "Could not update password.");
     } finally {
