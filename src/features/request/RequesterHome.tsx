@@ -867,6 +867,10 @@ function DispatchOverlay({
   const [notified, setNotified] = useState<string | null>(null);
   const notifiedRef = useRef<number | null>(null);
   const publishedRef = useRef(false);
+  // Tracks the request id this dispatch session actually owns. Prevents
+  // stale `requestId` values (left over from a previous flow) from being
+  // misread as a new doctor acceptance.
+  const ownedIdRef = useRef<string | null>(null);
   const net = useNetwork();
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
@@ -906,8 +910,12 @@ function DispatchOverlay({
         days: Math.max(1, days),
       });
       resumeRequest(cur.id);
+      ownedIdRef.current = cur.id;
       return;
     }
+    // Stale or missing id (e.g. left over from a completed/cancelled flow)
+    // — discard it and publish a fresh request so the requester is never
+    // attached to a previous doctor acceptance.
     if (cur && !canReuseRequest) {
       setRequestId(null);
     }
@@ -930,6 +938,7 @@ function DispatchOverlay({
       days: Math.max(1, days),
       dayIndex: 1,
     });
+    ownedIdRef.current = req.id;
     setRequestId(req.id);
     const t = window.setTimeout(() => setAmbient(true), 2800);
     return () => window.clearTimeout(t);
@@ -943,16 +952,23 @@ function DispatchOverlay({
     else if (stage === "dispatch") resumeRequest(requestId);
   }, [paused, requestId, stage]);
 
-  // React to acceptance OR doctor-side cancellation.
+  // React to acceptance OR doctor-side cancellation. Only ever act on the
+  // request this dispatch session actually owns — never on a leftover id.
   useEffect(() => {
-    if (!requestId) return;
+    if (!requestId || requestId !== ownedIdRef.current) return;
     const r = net.requests[requestId];
     if (!r) return;
-    if (stage === "dispatch" && r.status === "accepted") setStage("accepted");
+    if (
+      stage === "dispatch" &&
+      r.status === "accepted" &&
+      !!r.acceptedBy
+    ) {
+      setStage("accepted");
+    }
     if (stage === "accepted" && r.status === "cancelled") {
-      // Doctor cancelled — close accepted screen immediately.
       setStage("collapsed");
       setRequestId(null);
+      ownedIdRef.current = null;
     }
   }, [net, requestId, stage, setStage, setRequestId]);
 
