@@ -89,7 +89,7 @@ function AuthScreen() {
       });
       if (result.error) throw result.error;
       if (result.redirected) return;
-      proceed();
+      await proceed();
     } catch (err) {
       setError((err as Error).message || "Google sign-in failed. Try again.");
     } finally {
