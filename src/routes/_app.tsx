@@ -8,7 +8,8 @@ import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
-import { getRole, hasRole } from "@/lib/role";
+import { clearRole, getRole, hasRole } from "@/lib/role";
+import { supabase } from "@/integrations/supabase/client";
 
 
 export const Route = createFileRoute("/_app")({
@@ -21,14 +22,29 @@ function AppShell() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    // Per-tab session guard: each browser tab is an independent identity.
-    // If this tab has no authenticated role, send it to the role picker.
-    if (!hasRole()) {
-      navigate({ to: "/role" });
-      return;
-    }
-    if (getRole() === "cover") ensureDoctorSession(true);
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (!data.session || !hasRole()) {
+        clearRole();
+        navigate({ to: "/role" });
+        return;
+      }
+      if (getRole() === "cover") ensureDoctorSession(true);
+      setReady(true);
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        clearRole();
+        navigate({ to: "/role" });
+      }
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, [navigate]);
   if (!ready) return <div className="h-full w-full bg-background" />;
   return (
