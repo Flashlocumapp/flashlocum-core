@@ -91,6 +91,7 @@ export type HistoryItem = Coverage & {
   outcome: "completed" | "cancelled";
   cancelledBy?: "requester" | "doctor";
   completedOn: string;
+  updatedAt: number;
   rating?: number;
   settlementStatus: "Remitted" | "Pending" | "Voided";
 };
@@ -172,6 +173,7 @@ export function useDispatch(): View {
           day: "2-digit",
           month: "short",
         }),
+        updatedAt: r.updatedAt,
         rating: historyRatings[r.id],
         settlementStatus: isCompleted ? "Pending" : "Voided",
       } as HistoryItem;
