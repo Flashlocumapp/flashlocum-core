@@ -8,6 +8,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -154,7 +155,8 @@ function AccountScreen() {
             />
             <NavRow
               title="Sign Out"
-              onClick={() => {
+              onClick={async () => {
+                await supabase.auth.signOut();
                 clearRole();
                 navigate({ to: "/role" });
               }}
