@@ -1,10 +1,65 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordScreen,
 });
+
+type ResetSessionResult =
+  | { ok: true }
+  | { ok: false; message: string };
+
+let resetSessionValidation: Promise<ResetSessionResult> | null = null;
+
+function clearRecoveryTokensFromUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("code");
+  url.searchParams.delete("type");
+  url.searchParams.delete("token_hash");
+  url.hash = "";
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+}
+
+function validateResetSessionOnce() {
+  if (resetSessionValidation) return resetSessionValidation;
+
+  resetSessionValidation = (async (): Promise<ResetSessionResult> => {
+    const existing = await supabase.auth.getSession();
+    if (existing.data.session) return { ok: true };
+
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (!error) return { ok: true };
+
+      const afterExchange = await supabase.auth.getSession();
+      if (afterExchange.data.session) return { ok: true };
+
+      return { ok: false, message: error.message || "Invalid or expired reset link." };
+    }
+
+    const hash = window.location.hash.replace(/^#/, "");
+    const params = new URLSearchParams(hash);
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+
+    if (access_token && refresh_token) {
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+      if (!error) return { ok: true };
+      return { ok: false, message: error.message || "Could not validate reset session." };
+    }
+
+    return { ok: false, message: "Invalid or expired reset link. Please request a new one." };
+  })().then((result) => {
+    if (!result.ok) resetSessionValidation = null;
+    return result;
+  });
+
+  return resetSessionValidation;
+}
 
 function ResetPasswordScreen() {
   const navigate = useNavigate();
@@ -18,8 +73,6 @@ function ResetPasswordScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    // Listen for the PASSWORD_RECOVERY event Supabase fires after parsing the
-    // recovery link (works for both hash-based and PKCE ?code= flows).
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
@@ -28,63 +81,21 @@ function ResetPasswordScreen() {
       }
     });
 
-    (async () => {
-      try {
-        const url = new URL(window.location.href);
-
-        // PKCE flow: ?code=...
-        const code = url.searchParams.get("code");
-        if (code) {
-          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
-          if (cancelled) return;
-          if (exErr) {
-            setError(exErr.message || "Invalid or expired reset link.");
-            return;
-          }
-          setReady(true);
-          return;
-        }
-
-        // Hash flow: #access_token=...&refresh_token=...
-        const hash = window.location.hash.replace(/^#/, "");
-        if (hash) {
-          const params = new URLSearchParams(hash);
-          const access_token = params.get("access_token");
-          const refresh_token = params.get("refresh_token");
-          if (access_token && refresh_token) {
-            const { error: sErr } = await supabase.auth.setSession({
-              access_token,
-              refresh_token,
-            });
-            if (cancelled) return;
-            if (sErr) {
-              setError(sErr.message || "Could not validate reset session.");
-              return;
-            }
-            setReady(true);
-            return;
-          }
-        }
-
-        // Fall back to any existing session (recovery already processed)
-        const { data } = await supabase.auth.getSession();
+    validateResetSessionOnce()
+      .then((result) => {
         if (cancelled) return;
-        if (data.session) {
+        if (result.ok) {
           setReady(true);
+          setError(null);
+          clearRecoveryTokensFromUrl();
         } else {
-          // Give the onAuthStateChange listener a moment to fire
-          setTimeout(() => {
-            if (!cancelled) {
-              setReady((r) =>
-                r ? r : (setError("Invalid or expired reset link. Please request a new one."), false),
-              );
-            }
-          }, 1500);
+          setReady(false);
+          setError(result.message);
         }
-      } catch {
+      })
+      .catch(() => {
         if (!cancelled) setError("Could not validate reset session.");
-      }
-    })();
+      });
 
     return () => {
       cancelled = true;
@@ -92,13 +103,21 @@ function ResetPasswordScreen() {
     };
   }, []);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy || !ready) return;
     setError(null);
-    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
     setBusy(true);
     try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        setReady(false);
+        throw new Error("Reset session expired. Please request a new password reset link.");
+      }
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
       setDone(true);
