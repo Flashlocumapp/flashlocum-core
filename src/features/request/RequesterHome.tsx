@@ -1038,6 +1038,8 @@ function DispatchOverlay({
   // Pre-acceptance cancel: remove silently (no notification, no history).
   const handleCancelPreAccept = () => {
     if (requestId) removeRequest(requestId);
+    ownedIdRef.current = null;
+    setRequestId(null);
     setCancelOpen(false);
     setStage("collapsed");
   };
@@ -1045,6 +1047,8 @@ function DispatchOverlay({
   // Post-acceptance cancel: notify doctor + record history.
   const handleCancelPostAccept = () => {
     if (requestId) netCancel(requestId);
+    ownedIdRef.current = null;
+    setRequestId(null);
     setCancelOpen(false);
     setStage("collapsed");
   };
