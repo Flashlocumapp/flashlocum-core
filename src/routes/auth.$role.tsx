@@ -9,15 +9,19 @@ export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
 });
 
+type View = "form" | "check-email" | "forgot" | "forgot-sent";
+
 function AuthScreen() {
   const { role } = Route.useParams();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [view, setView] = useState<View>("form");
   const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
@@ -27,7 +31,7 @@ function AuthScreen() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase.auth.getSession();
-      if (!cancelled && data.session) await proceed();
+      if (!cancelled && data.session?.user.email_confirmed_at) await proceed();
     })();
     return () => { cancelled = true; };
   }, []);
@@ -46,6 +50,7 @@ function AuthScreen() {
     e.preventDefault();
     if (busy) return;
     setError(null);
+    setInfo(null);
 
     if (!email || !password) {
       setError("Enter your email and password.");
@@ -59,20 +64,42 @@ function AuthScreen() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error: err } = await supabase.auth.signUp({
+        const { data, error: err } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/`,
+            emailRedirectTo: `${window.location.origin}/auth/${normalizedRole}`,
             data: { full_name: name || undefined, role: normalizedRole },
           },
         });
         if (err) throw err;
+        // If confirmation is required, no session is returned.
+        if (!data.session) {
+          setView("check-email");
+          return;
+        }
+        // Already confirmed (e.g. existing flow) — proceed.
+        if (data.session.user.email_confirmed_at) {
+          await proceed();
+          return;
+        }
+        setView("check-email");
       } else {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-        if (err) throw err;
+        const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+        if (err) {
+          // Supabase returns "Email not confirmed" when verification is pending.
+          if (/confirm/i.test(err.message)) {
+            setView("check-email");
+            return;
+          }
+          throw err;
+        }
+        if (!data.session?.user.email_confirmed_at) {
+          setView("check-email");
+          return;
+        }
+        await proceed();
       }
-      await proceed();
     } catch (err) {
       setError((err as Error).message || "Something went wrong. Try again.");
     } finally {
@@ -96,6 +123,98 @@ function AuthScreen() {
       setBusy(false);
     }
   };
+
+  const handleResend = async () => {
+    if (!email) { setError("Enter your email first."); return; }
+    setBusy(true); setError(null); setInfo(null);
+    try {
+      const { error: err } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/${normalizedRole}` },
+      });
+      if (err) throw err;
+      setInfo("Verification email sent again.");
+    } catch (err) {
+      setError((err as Error).message || "Could not resend email.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!email) { setError("Enter your email."); return; }
+    setBusy(true); setError(null);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (err) throw err;
+      setView("forgot-sent");
+    } catch (err) {
+      setError((err as Error).message || "Could not send reset email.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ----- Sub-views -----
+  if (view === "check-email") {
+    return (
+      <Shell roleLabel={roleLabel} title="Check your email" subtitle={`We’ve sent a verification link to ${email || "your email"}. Please verify to continue.`}>
+        {info && <p className="text-[13px] text-muted-foreground">{info}</p>}
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={busy}
+          className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+        >
+          {busy ? "Sending…" : "Resend verification email"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setView("form"); setMode("login"); setInfo(null); setError(null); }}
+          className="mt-3 h-12 w-full rounded-2xl bg-secondary text-[14px] font-medium"
+        >
+          Back to sign in
+        </button>
+      </Shell>
+    );
+  }
+
+  if (view === "forgot-sent") {
+    return (
+      <Shell roleLabel={roleLabel} title="Check your email" subtitle="We’ve sent a password reset link. Open it on this device to set a new password.">
+        <button
+          type="button"
+          onClick={() => { setView("form"); setMode("login"); }}
+          className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90"
+        >
+          Back to sign in
+        </button>
+      </Shell>
+    );
+  }
+
+  if (view === "forgot") {
+    return (
+      <Shell roleLabel={roleLabel} title="Reset your password" subtitle="Enter your email and we’ll send you a reset link.">
+        <form onSubmit={handleForgot} className="mt-7 space-y-3">
+          <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" placeholder="you@example.com" />
+          {error && <ErrorBox>{error}</ErrorBox>}
+          <button type="submit" disabled={busy} className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60">
+            {busy ? "Sending…" : "Send reset link"}
+          </button>
+          <button type="button" onClick={() => { setView("form"); setError(null); }} className="mt-2 h-12 w-full rounded-2xl bg-secondary text-[14px] font-medium">
+            Cancel
+          </button>
+        </form>
+      </Shell>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background safe-top safe-bottom">
@@ -162,13 +281,20 @@ function AuthScreen() {
                 {showPw ? <EyeOff /> : <Eye />}
               </button>
             </div>
+            {mode === "login" && (
+              <div className="mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => { setView("forgot"); setError(null); }}
+                  className="text-[13px] font-medium text-muted-foreground underline underline-offset-4 active:text-foreground"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
           </div>
 
-          {error && (
-            <div className="rounded-xl px-3 py-2 text-[13px]" style={{ background: "color-mix(in oklab, var(--color-destructive, #d24) 14%, transparent)", color: "var(--color-destructive, #d24)" }}>
-              {error}
-            </div>
-          )}
+          {error && <ErrorBox>{error}</ErrorBox>}
 
           <button
             type="submit"
@@ -206,6 +332,37 @@ function AuthScreen() {
         </div>
       </div>
     </main>
+  );
+}
+
+function Shell({ roleLabel, title, subtitle, children }: { roleLabel: string; title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <main className="min-h-screen bg-background safe-top safe-bottom">
+      <div className="mx-auto flex min-h-screen max-w-md flex-col px-6 pt-6 pb-8">
+        <div className="flex items-center justify-between">
+          <Link to="/role" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{roleLabel}</div>
+          <div className="h-9 w-9" />
+        </div>
+        <div className="mt-10">
+          <h1 className="text-[26px] font-semibold tracking-tight">{title}</h1>
+          <p className="mt-2 text-[14px] text-muted-foreground">{subtitle}</p>
+        </div>
+        <div className="mt-2">{children}</div>
+      </div>
+    </main>
+  );
+}
+
+function ErrorBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl px-3 py-2 text-[13px]" style={{ background: "color-mix(in oklab, var(--color-destructive, #d24) 14%, transparent)", color: "var(--color-destructive, #d24)" }}>
+      {children}
+    </div>
   );
 }
 
