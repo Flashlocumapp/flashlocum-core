@@ -6,9 +6,7 @@ export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordScreen,
 });
 
-type ResetSessionResult =
-  | { ok: true }
-  | { ok: false; message: string };
+type ResetSessionResult = { ok: true } | { ok: false; message: string };
 
 let resetSessionValidation: Promise<ResetSessionResult> | null = null;
 
@@ -134,12 +132,23 @@ function ResetPasswordScreen() {
     <main className="min-h-screen bg-background safe-top safe-bottom">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-6 pt-6 pb-8">
         <div className="flex items-center justify-between">
-          <Link to="/role" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
+          <Link
+            to="/role"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M15 18l-6-6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </Link>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Reset password</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Reset password
+          </div>
           <div className="h-9 w-9" />
         </div>
 
@@ -180,7 +189,14 @@ function ResetPasswordScreen() {
             </div>
 
             {error && (
-              <div className="rounded-xl px-3 py-2 text-[13px]" style={{ background: "color-mix(in oklab, var(--color-destructive, #d24) 14%, transparent)", color: "var(--color-destructive, #d24)" }}>
+              <div
+                className="rounded-xl px-3 py-2 text-[13px]"
+                style={{
+                  background:
+                    "color-mix(in oklab, var(--color-destructive, #d24) 14%, transparent)",
+                  color: "var(--color-destructive, #d24)",
+                }}
+              >
                 {error}
               </div>
             )}
