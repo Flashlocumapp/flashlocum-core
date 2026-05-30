@@ -9,7 +9,7 @@ export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
 });
 
-type View = "form" | "check-email" | "forgot" | "forgot-sent";
+type View = "form" | "verify" | "forgot" | "forgot-sent";
 
 function AuthScreen() {
   const { role } = Route.useParams();
@@ -20,6 +20,7 @@ function AuthScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
