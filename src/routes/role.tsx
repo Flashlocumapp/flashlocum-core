@@ -8,6 +8,9 @@ export const Route = createFileRoute("/role")({
 });
 
 function RoleScreen() {
+  const search = useSearch({ from: "/role" }) as Record<string, unknown>;
+  const resetSuccess = search.reset === "success";
+
   return (
     <main className="min-h-screen bg-background safe-top safe-bottom">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-6 pt-10 pb-8">
@@ -16,7 +19,13 @@ function RoleScreen() {
           <img src={locumSvg} alt="FlashLocum" className="logo-theme h-5 w-auto" />
         </div>
 
-        <div className="mt-16">
+        {resetSuccess && (
+          <div className="mt-6 rounded-2xl bg-secondary px-4 py-3 text-[14px] text-foreground">
+            Password updated successfully
+          </div>
+        )}
+
+        <div className={resetSuccess ? "mt-8" : "mt-16"}>
           <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
             How will you use<br />FlashLocum?
           </h1>
