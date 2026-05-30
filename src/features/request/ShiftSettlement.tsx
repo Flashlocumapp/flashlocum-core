@@ -4,7 +4,7 @@ import { RatingOverlay } from "@/components/RatingOverlay";
 import { simNow, useSimClock } from "@/lib/clock";
 import {
   computeWorkedPricing,
-  roundedOverrunMinutes,
+  billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
 
