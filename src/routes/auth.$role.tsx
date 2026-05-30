@@ -27,14 +27,19 @@ function AuthScreen() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase.auth.getSession();
-      if (!cancelled && data.session) proceed();
+      if (!cancelled && data.session) await proceed();
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const proceed = () => {
+  const proceed = async () => {
     setRole(normalizedRole);
-    navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+    const onboarded = await hasCompletedOnboarding();
+    if (onboarded) {
+      navigate({ to: "/home" });
+    } else {
+      navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
