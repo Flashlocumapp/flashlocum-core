@@ -42,20 +42,40 @@ function OnboardingScreen() {
     else saveProfile("request", requester);
   };
 
-  const onSave = () => {
+  const remoteFields = () =>
+    isDoctor
+      ? {
+          full_name: doctor.phone ? undefined : undefined, // name set at signup
+          phone: doctor.phone ?? null,
+          mdcn: doctor.mdcn ?? null,
+          license_name: doctor.license ?? null,
+          years_experience: doctor.years ?? null,
+          bank_name: doctor.bankName ?? null,
+          bank_account: doctor.bankAccount ?? null,
+          selfie_url: doctor.selfie ?? null,
+        }
+      : {
+          phone: requester.phone ?? null,
+          gender: requester.gender ?? null,
+        };
+
+  const onSave = async () => {
     persist();
     markOnboarded(normalizedRole);
+    try { await markOnboardedRemote(normalizedRole, remoteFields()); } catch (e) { console.warn(e); }
   };
 
-  const onContinue = () => {
+  const onContinue = async () => {
     persist();
     markOnboarded(normalizedRole);
+    try { await markOnboardedRemote(normalizedRole, remoteFields()); } catch (e) { console.warn(e); }
     navigate({ to: "/home" });
   };
 
-  const onSkip = () => {
+  const onSkip = async () => {
     // Allow leaving without completion — testing mode.
     markOnboarded(normalizedRole);
+    try { await markOnboardedRemote(normalizedRole, remoteFields()); } catch (e) { console.warn(e); }
     navigate({ to: "/home" });
   };
 
