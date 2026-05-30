@@ -74,6 +74,23 @@ function AuthScreen() {
     }
   };
 
+  const handleGoogle = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) throw result.error;
+      if (result.redirected) return;
+      proceed();
+    } catch (err) {
+      setError((err as Error).message || "Google sign-in failed. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background safe-top safe-bottom">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-6 pt-6 pb-8">
