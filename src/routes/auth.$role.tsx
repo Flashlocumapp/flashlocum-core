@@ -72,7 +72,7 @@ function AuthScreen() {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) throw err;
       }
-      proceed();
+      await proceed();
     } catch (err) {
       setError((err as Error).message || "Something went wrong. Try again.");
     } finally {
