@@ -122,6 +122,15 @@ function AuthScreen() {
           otpGeneration: data.session?.user.email_confirmed_at ? "not-required" : "requested-by-auth-service",
           deliveryResponse: "auth-api-accepted-request",
         });
+        if (!data.session && data.user && (data.user.identities?.length ?? 0) === 0) {
+          logAuthDebug("signup:existing-account-no-otp-sent", {
+            email: maskEmail(email),
+            reason: "auth-service-returned-existing-user-without-new-identity",
+          });
+          setMode("login");
+          setError("This email is already registered. Sign in instead, or use Forgot password if needed.");
+          return;
+        }
         if (data.session?.user.email_confirmed_at) {
           await proceed();
           return;
