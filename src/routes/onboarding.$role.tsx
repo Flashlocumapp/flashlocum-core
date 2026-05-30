@@ -9,6 +9,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
+import { markOnboardedRemote } from "@/lib/profile-remote";
 
 export const Route = createFileRoute("/onboarding/$role")({
   component: OnboardingScreen,
