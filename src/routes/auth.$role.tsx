@@ -9,7 +9,7 @@ export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
 });
 
-type View = "form" | "check-email" | "forgot" | "forgot-sent";
+type View = "form" | "verify" | "forgot" | "forgot-sent";
 
 function AuthScreen() {
   const { role } = Route.useParams();
@@ -20,6 +20,7 @@ function AuthScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,35 +74,57 @@ function AuthScreen() {
           },
         });
         if (err) throw err;
-        // If confirmation is required, no session is returned.
-        if (!data.session) {
-          setView("check-email");
-          return;
-        }
-        // Already confirmed (e.g. existing flow) — proceed.
-        if (data.session.user.email_confirmed_at) {
+        if (data.session?.user.email_confirmed_at) {
           await proceed();
           return;
         }
-        setView("check-email");
+        setCode("");
+        setView("verify");
       } else {
         const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) {
-          // Supabase returns "Email not confirmed" when verification is pending.
           if (/confirm/i.test(err.message)) {
-            setView("check-email");
+            setCode("");
+            setView("verify");
             return;
           }
           throw err;
         }
         if (!data.session?.user.email_confirmed_at) {
-          setView("check-email");
+          setCode("");
+          setView("verify");
           return;
         }
         await proceed();
       }
     } catch (err) {
       setError((err as Error).message || "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setError(null); setInfo(null);
+    const token = code.trim();
+    if (token.length < 6) { setError("Enter the 6-digit code from your email."); return; }
+    setBusy(true);
+    try {
+      const { data, error: err } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "signup",
+      });
+      if (err) throw err;
+      if (data.session) {
+        await proceed();
+      } else {
+        setError("Verification failed. Please try again.");
+      }
+    } catch (err) {
+      setError((err as Error).message || "Invalid or expired code.");
     } finally {
       setBusy(false);
     }
@@ -134,7 +157,7 @@ function AuthScreen() {
         options: { emailRedirectTo: `${window.location.origin}/auth/${normalizedRole}` },
       });
       if (err) throw err;
-      setInfo("Verification email sent again.");
+      setInfo("New code sent. Check your email.");
     } catch (err) {
       setError((err as Error).message || "Could not resend email.");
     } finally {
@@ -161,29 +184,50 @@ function AuthScreen() {
   };
 
   // ----- Sub-views -----
-  if (view === "check-email") {
+  if (view === "verify") {
     return (
-      <Shell roleLabel={roleLabel} title="Check your email" subtitle={`We’ve sent a verification link to ${email || "your email"}. Please verify to continue.`}>
-        {info && <p className="text-[13px] text-muted-foreground">{info}</p>}
-        {error && <ErrorBox>{error}</ErrorBox>}
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={busy}
-          className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
-        >
-          {busy ? "Sending…" : "Resend verification email"}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setView("form"); setMode("login"); setInfo(null); setError(null); }}
-          className="mt-3 h-12 w-full rounded-2xl bg-secondary text-[14px] font-medium"
-        >
-          Back to sign in
-        </button>
+      <Shell roleLabel={roleLabel} title="Enter verification code" subtitle={`We’ve sent a 6-digit code to ${email || "your email"}. Enter it below to verify your account.`}>
+        <form onSubmit={handleVerify} className="mt-6 space-y-3">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="000000"
+            className="h-14 w-full rounded-2xl bg-secondary px-4 text-center text-[22px] font-semibold tracking-[0.5em] outline-none placeholder:text-muted-foreground/40"
+          />
+          {info && <p className="text-[13px] text-muted-foreground">{info}</p>}
+          {error && <ErrorBox>{error}</ErrorBox>}
+          <button
+            type="submit"
+            disabled={busy || code.length < 6}
+            className="mt-2 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+          >
+            {busy ? "Verifying…" : "Verify & continue"}
+          </button>
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={busy}
+            className="mt-1 h-12 w-full rounded-2xl bg-secondary text-[14px] font-medium disabled:opacity-60"
+          >
+            Resend code
+          </button>
+          <button
+            type="button"
+            onClick={() => { setView("form"); setMode("login"); setInfo(null); setError(null); }}
+            className="mt-1 h-11 w-full text-[13px] font-medium text-muted-foreground underline underline-offset-4"
+          >
+            Back to sign in
+          </button>
+        </form>
       </Shell>
     );
   }
+
 
   if (view === "forgot-sent") {
     return (
