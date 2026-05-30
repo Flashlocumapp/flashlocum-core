@@ -11,6 +11,21 @@ export const Route = createFileRoute("/auth/$role")({
 
 type View = "form" | "verify" | "forgot" | "forgot-sent";
 
+const AUTH_DEBUG_PREFIX = "[FlashLocum auth debug]";
+
+function maskEmail(value: string) {
+  const [namePart, domainPart] = value.trim().toLowerCase().split("@");
+  if (!namePart || !domainPart) return "unknown";
+  return `${namePart.slice(0, 2)}***@${domainPart}`;
+}
+
+function logAuthDebug(event: string, details: Record<string, unknown> = {}) {
+  console.info(AUTH_DEBUG_PREFIX, event, {
+    at: new Date().toISOString(),
+    ...details,
+  });
+}
+
 function AuthScreen() {
   const { role } = Route.useParams();
   const navigate = useNavigate();
@@ -30,11 +45,22 @@ function AuthScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      logAuthDebug("auth-state-change", {
+        event,
+        hasSession: Boolean(session),
+        emailVerified: Boolean(session?.user.email_confirmed_at),
+      });
+    });
+
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!cancelled && data.session?.user.email_confirmed_at) await proceed();
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const proceed = async () => {
@@ -65,6 +91,12 @@ function AuthScreen() {
     setBusy(true);
     try {
       if (mode === "signup") {
+        logAuthDebug("signup:otp-generation-requested", {
+          email: maskEmail(email),
+          role: normalizedRole,
+          flow: "verifyOtp:type=signup",
+          emailRedirectTo: `${window.location.origin}/auth/${normalizedRole}`,
+        });
         const { data, error: err } = await supabase.auth.signUp({
           email,
           password,
@@ -73,7 +105,23 @@ function AuthScreen() {
             data: { full_name: name || undefined, role: normalizedRole },
           },
         });
-        if (err) throw err;
+        if (err) {
+          logAuthDebug("signup:email-send-failed", {
+            email: maskEmail(email),
+            message: err.message,
+            status: err.status,
+          });
+          throw err;
+        }
+        logAuthDebug("signup:email-send-accepted", {
+          email: maskEmail(email),
+          userId: data.user?.id,
+          hasSession: Boolean(data.session),
+          emailVerified: Boolean(data.user?.email_confirmed_at),
+          identities: data.user?.identities?.length ?? 0,
+          otpGeneration: data.session?.user.email_confirmed_at ? "not-required" : "requested-by-auth-service",
+          deliveryResponse: "auth-api-accepted-request",
+        });
         if (data.session?.user.email_confirmed_at) {
           await proceed();
           return;
@@ -117,7 +165,20 @@ function AuthScreen() {
         token,
         type: "signup",
       });
-      if (err) throw err;
+      if (err) {
+        logAuthDebug("verify-otp:failed", {
+          email: maskEmail(email),
+          tokenLength: token.length,
+          message: err.message,
+          status: err.status,
+        });
+        throw err;
+      }
+      logAuthDebug("verify-otp:succeeded", {
+        email: maskEmail(email),
+        hasSession: Boolean(data.session),
+        emailVerified: Boolean(data.user?.email_confirmed_at),
+      });
       if (data.session) {
         await proceed();
       } else {
@@ -151,12 +212,28 @@ function AuthScreen() {
     if (!email) { setError("Enter your email first."); return; }
     setBusy(true); setError(null); setInfo(null);
     try {
+      logAuthDebug("resend:otp-generation-requested", {
+        email: maskEmail(email),
+        role: normalizedRole,
+        flow: "resend:type=signup",
+      });
       const { error: err } = await supabase.auth.resend({
         type: "signup",
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/${normalizedRole}` },
       });
-      if (err) throw err;
+      if (err) {
+        logAuthDebug("resend:email-send-failed", {
+          email: maskEmail(email),
+          message: err.message,
+          status: err.status,
+        });
+        throw err;
+      }
+      logAuthDebug("resend:email-send-accepted", {
+        email: maskEmail(email),
+        deliveryResponse: "auth-api-accepted-request",
+      });
       setInfo("New code sent. Check your email.");
     } catch (err) {
       setError((err as Error).message || "Could not resend email.");
