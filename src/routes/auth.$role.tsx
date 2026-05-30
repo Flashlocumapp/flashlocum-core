@@ -173,6 +173,22 @@ function AuthScreen() {
           </button>
         </form>
 
+        <div className="mt-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-secondary" />
+          <span className="text-[12px] text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-secondary" />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogle}
+          disabled={busy}
+          className="mt-4 flex h-13 w-full items-center justify-center gap-2.5 rounded-2xl border border-secondary bg-background py-3.5 text-[15px] font-medium text-foreground active:bg-secondary disabled:opacity-60"
+        >
+          <GoogleIcon />
+          Continue with Google
+        </button>
+
         <div className="mt-auto pt-8 text-center text-[13px] text-muted-foreground">
           {mode === "signup" ? "Already have an account?" : "New to FlashLocum?"}{" "}
           <button
