@@ -8,6 +8,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
