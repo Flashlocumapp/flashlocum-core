@@ -15,7 +15,7 @@ function AuthScreen() {
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const roleLabel = normalizedRole === "cover" ? "Cover & Earn" : "Request Coverage";
 
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -23,15 +23,20 @@ function AuthScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [hasExistingSession, setHasExistingSession] = useState(false);
 
   useEffect(() => {
+    // Check for existing session but DON'T auto-redirect — let the user
+    // see the auth screen so they can sign in/up or switch accounts.
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) routeAfterAuth();
+      if (data.session) {
+        setHasExistingSession(true);
+        setMode("signin");
+      }
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((evt, s) => {
-      // Don't auto-route on PASSWORD_RECOVERY — the user lands on /reset-password.
-      if (evt === "PASSWORD_RECOVERY") return;
-      if (s) routeAfterAuth();
+    // Only route after a NEW auth event (sign-in/sign-up just completed).
+    const { data: sub } = supabase.auth.onAuthStateChange((evt) => {
+      if (evt === "SIGNED_IN") routeAfterAuth();
     });
     return () => sub.subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,6 +47,19 @@ function AuthScreen() {
     // Always route to /home — the app shell enforces the backend
     // onboarding gate and will redirect to /onboarding/$role if needed.
     navigate({ to: "/home" });
+  };
+
+  const handleContinueExisting = () => {
+    routeAfterAuth();
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setHasExistingSession(false);
+    setMode("signup");
+    setEmail("");
+    setPassword("");
+    setName("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -147,6 +165,27 @@ function AuthScreen() {
                 : "Enter your email and we'll send you a reset link."}
           </p>
         </div>
+
+        {hasExistingSession && (
+          <div className="mt-6 rounded-2xl bg-secondary px-4 py-3 text-[13px] text-foreground">
+            You're already signed in.{" "}
+            <button
+              type="button"
+              onClick={handleContinueExisting}
+              className="font-semibold underline underline-offset-2"
+            >
+              Continue
+            </button>
+            {" · "}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="font-semibold underline underline-offset-2"
+            >
+              Use a different account
+            </button>
+          </div>
+        )}
 
         {mode !== "forgot" && (
           <>
