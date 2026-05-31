@@ -110,9 +110,11 @@ function VerificationBanner({ status }: { status: string }) {
 function OnlinePill({
   online,
   onToggle,
+  disabled,
 }: {
   online: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
