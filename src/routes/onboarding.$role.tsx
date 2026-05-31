@@ -9,7 +9,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { markOnboardedRemote } from "@/lib/profile-remote";
+// Backend removed — onboarding persists locally only until a new backend is wired.
 
 export const Route = createFileRoute("/onboarding/$role")({
   component: OnboardingScreen,
@@ -41,28 +41,9 @@ function OnboardingScreen() {
     else saveProfile("request", requester);
   };
 
-  const remoteFields = () =>
-    isDoctor
-      ? {
-          phone: doctor.phone ?? null,
-          gender: doctor.gender ?? null,
-          mdcn: doctor.mdcn ?? null,
-          license_name: doctor.license ?? null,
-          selfie_url: doctor.selfie ?? null,
-        }
-      : {
-          phone: requester.phone ?? null,
-          gender: requester.gender ?? null,
-        };
-
   const finish = async () => {
     persist();
     markOnboarded(normalizedRole);
-    try {
-      await markOnboardedRemote(normalizedRole, remoteFields());
-    } catch (e) {
-      console.warn(e);
-    }
     navigate({ to: "/home" });
   };
 
@@ -75,13 +56,8 @@ function OnboardingScreen() {
     await finish();
   };
 
-  const onSkip = async () => {
+  const onSkip = () => {
     markOnboarded(normalizedRole);
-    try {
-      await markOnboardedRemote(normalizedRole, remoteFields());
-    } catch (e) {
-      console.warn(e);
-    }
     navigate({ to: "/home" });
   };
 

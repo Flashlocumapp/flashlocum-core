@@ -8,9 +8,7 @@ import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
-import { clearRole, getRole, hasRole } from "@/lib/role";
-import { supabase } from "@/integrations/supabase/client";
-
+import { getRole, hasRole } from "@/lib/role";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -21,36 +19,16 @@ function AppShell() {
   const immersive = useImmersive();
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!data.session || !hasRole()) {
-        clearRole();
-        navigate({ to: "/role" });
-        return;
-      }
-      if (!data.session.user.email_confirmed_at) {
-        const role = getRole() ?? "request";
-        navigate({ to: "/auth/$role", params: { role } });
-        return;
-      }
-      if (getRole() === "cover") ensureDoctorSession(true);
-      setReady(true);
-    })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        clearRole();
-        navigate({ to: "/role" });
-      }
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
+  useEffect(() => {
+    if (!hasRole()) {
+      navigate({ to: "/role" });
+      return;
+    }
+    if (getRole() === "cover") ensureDoctorSession(true);
+    setReady(true);
   }, [navigate]);
+
   if (!ready) return <div className="h-full w-full bg-background" />;
   return (
     <div
@@ -94,4 +72,3 @@ function AppShell() {
     </div>
   );
 }
-

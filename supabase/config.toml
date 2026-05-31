@@ -1,5 +1,1 @@
 project_id = "htscseakhgwskubrvrgs"
-
-[auth.email.template.confirmation]
-subject = "Your FlashLocum verification code"
-content_path = "supabase/templates/confirmation.html"

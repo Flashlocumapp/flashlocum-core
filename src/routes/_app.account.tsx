@@ -8,7 +8,6 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -33,22 +32,14 @@ function AccountScreen() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
-  const [authIdentity, setAuthIdentity] = useState<{ name: string; email: string }>({
-    name: "",
-    email: "",
-  });
+  // Backend removed — identity is derived from local profile data only.
+  const authIdentity = { name: "", email: "" };
 
   useEffect(() => {
     const r = getRole();
     setLocalRole(r);
     setRequester(getProfile<RequesterProfile>("request"));
     setDoctor(getProfile<DoctorProfile>("cover"));
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
-      if (!u) return;
-      const meta = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
-      setAuthIdentity({ name: meta.full_name || meta.name || "", email: u.email ?? "" });
-    });
   }, []);
 
   const isDoctor = role === "cover";
@@ -171,8 +162,7 @@ function AccountScreen() {
             />
             <NavRow
               title="Sign Out"
-              onClick={async () => {
-                await supabase.auth.signOut();
+              onClick={() => {
                 clearRole();
                 navigate({ to: "/role" });
               }}
