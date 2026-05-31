@@ -166,6 +166,27 @@ function AuthScreen() {
           </p>
         </div>
 
+        {hasExistingSession && (
+          <div className="mt-6 rounded-2xl bg-secondary px-4 py-3 text-[13px] text-foreground">
+            You're already signed in.{" "}
+            <button
+              type="button"
+              onClick={handleContinueExisting}
+              className="font-semibold underline underline-offset-2"
+            >
+              Continue
+            </button>
+            {" · "}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="font-semibold underline underline-offset-2"
+            >
+              Use a different account
+            </button>
+          </div>
+        )}
+
         {mode !== "forgot" && (
           <>
             <button
