@@ -7,7 +7,6 @@ export const Route = createFileRoute("/reset-password")({
 });
 
 function ResetPasswordScreen() {
-  const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
