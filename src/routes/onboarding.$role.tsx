@@ -28,10 +28,8 @@ function OnboardingScreen() {
   const [doctor, setDoctor] = useState<DoctorProfile>({});
   const [step, setStep] = useState<1 | 2>(1);
 
-  useEffect(() => {
-    if (isDoctor) setDoctor(getProfile<DoctorProfile>("cover"));
-    else setRequester(getProfile<RequesterProfile>("request"));
-  }, [isDoctor]);
+  // Per product rule: never autofill/carry-over between flows. Each
+  // onboarding session starts from a clean slate and requires explicit input.
 
   const licenseRef = useRef<HTMLInputElement>(null);
 
