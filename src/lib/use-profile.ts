@@ -73,11 +73,11 @@ export async function upsertProfileFields(
   userId: string,
   fields: Partial<Omit<Profile, "id" | "verification_status">>,
 ) {
-  // Update only — the row was created by the on_auth_user_created trigger.
+  // Upsert so users created before the auto-profile trigger existed
+  // still get a row, while existing rows are simply updated.
   const { error } = await supabase
     .from("profiles")
-    .update({ ...fields })
-    .eq("id", userId);
+    .upsert({ id: userId, ...fields }, { onConflict: "id" });
   if (error) throw error;
 }
 
