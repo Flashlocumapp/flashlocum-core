@@ -46,11 +46,26 @@ function OnboardingScreen() {
           mdcn: doctor.mdcn ?? null,
           license_name: doctor.license ?? null,
           selfie_url: doctor.selfie ?? null,
+          bank_name: doctor.bankName ?? null,
+          bank_account: doctor.bankAccount ?? null,
         }
       : {
           phone: requester.phone ?? null,
           gender: requester.gender ?? null,
         };
+
+  const step1Valid = isDoctor
+    ? !!(doctor.phone?.trim() && doctor.gender?.trim())
+    : !!(requester.phone?.trim() && requester.gender?.trim());
+
+  const step2Valid =
+    !!doctor.selfie &&
+    !!doctor.mdcn?.trim() &&
+    !!doctor.license?.trim() &&
+    !!doctor.bankName?.trim() &&
+    !!doctor.bankAccount?.trim();
+
+  const canContinue = isDoctor ? (step === 1 ? step1Valid : step2Valid) : step1Valid;
 
   const finish = async () => {
     persist();
@@ -64,6 +79,7 @@ function OnboardingScreen() {
   };
 
   const onContinue = async () => {
+    if (!canContinue) return;
     if (isDoctor && step === 1) {
       persist();
       setStep(2);
@@ -72,15 +88,6 @@ function OnboardingScreen() {
     await finish();
   };
 
-  const onSkip = async () => {
-    markOnboarded(normalizedRole);
-    try {
-      await markOnboardedRemote(normalizedRole, remoteFields());
-    } catch (e) {
-      console.warn(e);
-    }
-    navigate({ to: "/home" });
-  };
 
   const title = isDoctor
     ? step === 1
