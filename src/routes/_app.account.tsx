@@ -14,16 +14,17 @@ export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
 });
 
-const REQUESTER_IDENTITY = {
-  name: "Ada Okafor",
-  email: "ada@gmail.com",
-  initials: "AO",
-};
-const DOCTOR_IDENTITY = {
-  name: "Dr. Emmanuel Adeleke",
-  email: "doctor@gmail.com",
-  initials: "EA",
-};
+type Identity = { name: string; email: string; initials: string };
+
+function deriveInitials(name: string, email: string): string {
+  const src = (name || email || "").trim();
+  if (!src) return "—";
+  const cleaned = name.trim().replace(/^Dr\.?\s+/i, "");
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return email.slice(0, 2).toUpperCase();
+}
 
 function AccountScreen() {
   const navigate = useNavigate();
@@ -32,16 +33,31 @@ function AccountScreen() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
+  const [authIdentity, setAuthIdentity] = useState<{ name: string; email: string }>({
+    name: "",
+    email: "",
+  });
 
   useEffect(() => {
     const r = getRole();
     setLocalRole(r);
     setRequester(getProfile<RequesterProfile>("request"));
     setDoctor(getProfile<DoctorProfile>("cover"));
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data.user;
+      if (!u) return;
+      const meta = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
+      setAuthIdentity({ name: meta.full_name || meta.name || "", email: u.email ?? "" });
+    });
   }, []);
 
   const isDoctor = role === "cover";
-  const identity = isDoctor ? DOCTOR_IDENTITY : REQUESTER_IDENTITY;
+  const identity = useMemo<Identity>(() => {
+    const rawName = authIdentity.name || (isDoctor ? "Doctor" : "Requester");
+    const name = isDoctor && rawName && !/^dr\.?\s/i.test(rawName) ? `Dr. ${rawName}` : rawName;
+    const email = authIdentity.email || "—";
+    return { name, email, initials: deriveInitials(name, email) };
+  }, [authIdentity, isDoctor]);
 
   const doSwitch = (next: Role) => {
     setRole(next);
