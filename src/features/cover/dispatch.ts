@@ -132,8 +132,9 @@ type View = {
   incoming: Coverage | null;
   accepted: Coverage | null;
   history: HistoryItem[];
-  pendingRating: { requestId: string; hospitalId: string; hospital: string } | null;
+  pendingRating: PendingRating | null;
 };
+
 
 
 export function useDispatch(): View {
