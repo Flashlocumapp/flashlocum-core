@@ -22,10 +22,20 @@ function OnboardingScreen() {
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
   const { user } = useAuth();
+  const { profile, loading: profileLoading } = useProfile();
 
   useEffect(() => {
     setRole(normalizedRole);
   }, [normalizedRole]);
+
+  // If backend already says this role is fully onboarded, skip the form.
+  useEffect(() => {
+    if (profileLoading) return;
+    if (isRoleOnboarded(normalizedRole, profile)) {
+      markOnboarded(normalizedRole);
+      navigate({ to: "/home" });
+    }
+  }, [profile, profileLoading, normalizedRole, navigate]);
 
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
