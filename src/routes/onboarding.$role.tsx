@@ -254,14 +254,8 @@ function OnboardingScreen() {
           >
             {submitting ? "Saving…" : isDoctor && step === 1 ? "Next" : "Submit"}
           </button>
-          <button
-            onClick={onSkip}
-            className="h-11 w-full rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
-          >
-            Skip for now
-          </button>
           <p className="pt-2 text-center text-[11.5px] text-muted-foreground">
-            You can return later to complete or edit any field.
+            All fields are required to continue.
           </p>
         </div>
       </div>
