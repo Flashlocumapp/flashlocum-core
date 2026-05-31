@@ -81,9 +81,9 @@ function AccountScreen() {
   const personalRows = useMemo(() => {
     if (isDoctor) {
       return [
+        { label: "Phone Number", value: doctor.phone || "—" },
         { label: "MDCN Number", value: doctor.mdcn || "—" },
         { label: "Verification Status", value: doctor.selfie && doctor.mdcn ? "Verified" : "Pending" },
-        { label: "Years of Experience", value: doctor.years || "—" },
       ];
     }
     return [
