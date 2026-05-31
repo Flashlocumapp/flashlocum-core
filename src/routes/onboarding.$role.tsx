@@ -9,7 +9,8 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-// Backend removed — onboarding persists locally only until a new backend is wired.
+import { useAuth } from "@/lib/use-auth";
+import { upsertProfileFields } from "@/lib/use-profile";
 
 export const Route = createFileRoute("/onboarding/$role")({
   component: OnboardingScreen,
@@ -20,6 +21,7 @@ function OnboardingScreen() {
   const navigate = useNavigate();
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
+  const { user } = useAuth();
 
   useEffect(() => {
     setRole(normalizedRole);
@@ -28,6 +30,8 @@ function OnboardingScreen() {
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
   const [step, setStep] = useState<1 | 2>(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isDoctor) setDoctor(getProfile<DoctorProfile>("cover"));
@@ -36,20 +40,51 @@ function OnboardingScreen() {
 
   const licenseRef = useRef<HTMLInputElement>(null);
 
-  const persist = () => {
+  const persistLocal = () => {
     if (isDoctor) saveProfile("cover", doctor);
     else saveProfile("request", requester);
   };
 
+  const persistRemote = async () => {
+    if (!user) return;
+    const fields = isDoctor
+      ? {
+          role: "cover" as const,
+          phone: doctor.phone ?? null,
+          gender: doctor.gender ?? null,
+          mdcn: doctor.mdcn ?? null,
+          license_name: doctor.license ?? null,
+          bank_name: doctor.bankName ?? null,
+          bank_account: doctor.bankAccount ?? null,
+          onboarded_at: new Date().toISOString(),
+        }
+      : {
+          role: "request" as const,
+          phone: requester.phone ?? null,
+          gender: requester.gender ?? null,
+          onboarded_at: new Date().toISOString(),
+        };
+    await upsertProfileFields(user.id, fields);
+  };
+
   const finish = async () => {
-    persist();
-    markOnboarded(normalizedRole);
-    navigate({ to: "/home" });
+    setError(null);
+    setSubmitting(true);
+    try {
+      persistLocal();
+      await persistRemote();
+      markOnboarded(normalizedRole);
+      navigate({ to: "/home" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save your details. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const onContinue = async () => {
     if (isDoctor && step === 1) {
-      persist();
+      persistLocal();
       setStep(2);
       return;
     }
@@ -64,7 +99,7 @@ function OnboardingScreen() {
   const title = isDoctor
     ? step === 1
       ? "Personal details"
-      : "Verification requirements"
+      : "Verification & payout details"
     : "Basic profile";
   const subtitle = isDoctor
     ? step === 1
@@ -163,16 +198,34 @@ function OnboardingScreen() {
                   setDoctor((p) => ({ ...p, license: f.name }));
                 }}
               />
+
+              <Field
+                label="Bank name"
+                type="text"
+                placeholder="GTBank"
+                value={doctor.bankName ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
+              />
+              <Field
+                label="Account number"
+                type="text"
+                placeholder="0123456789"
+                value={doctor.bankAccount ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v }))}
+              />
             </>
           )}
         </div>
 
+        {error && <p className="mt-3 text-[12.5px] text-destructive">{error}</p>}
+
         <div className="mt-8 space-y-2.5">
           <button
             onClick={onContinue}
-            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90"
+            disabled={submitting}
+            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
           >
-            {isDoctor && step === 1 ? "Next" : "Submit"}
+            {submitting ? "Saving…" : isDoctor && step === 1 ? "Next" : "Submit"}
           </button>
           <button
             onClick={onSkip}
