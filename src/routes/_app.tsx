@@ -9,6 +9,7 @@ import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
 import { getRole, hasRole } from "@/lib/role";
+import { useAuth } from "@/lib/use-auth";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -18,18 +19,24 @@ function AppShell() {
   const { pathname } = useLocation();
   const immersive = useImmersive();
   const navigate = useNavigate();
+  const { session, loading } = useAuth();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (loading) return;
+    if (!session) {
+      navigate({ to: "/role" });
+      return;
+    }
     if (!hasRole()) {
       navigate({ to: "/role" });
       return;
     }
     if (getRole() === "cover") ensureDoctorSession(true);
     setReady(true);
-  }, [navigate]);
+  }, [navigate, session, loading]);
 
-  if (!ready) return <div className="h-full w-full bg-background" />;
+  if (loading || !ready) return <div className="h-full w-full bg-background" />;
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-background"

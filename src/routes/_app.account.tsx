@@ -8,6 +8,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
+import { useAuth, signOut } from "@/lib/use-auth";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -32,8 +33,11 @@ function AccountScreen() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
-  // Backend removed — identity is derived from local profile data only.
-  const authIdentity = { name: "", email: "" };
+  const { user } = useAuth();
+  const authIdentity = {
+    name: (user?.user_metadata?.full_name as string) || "",
+    email: user?.email || "",
+  };
 
   useEffect(() => {
     const r = getRole();
@@ -162,7 +166,8 @@ function AccountScreen() {
             />
             <NavRow
               title="Sign Out"
-              onClick={() => {
+              onClick={async () => {
+                await signOut();
                 clearRole();
                 navigate({ to: "/role" });
               }}
