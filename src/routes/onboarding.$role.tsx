@@ -191,6 +191,22 @@ function OnboardingScreen() {
                   setDoctor((p) => ({ ...p, license: f.name }));
                 }}
               />
+
+              <Field
+                label="Bank name"
+                type="text"
+                placeholder="e.g. GTBank"
+                value={doctor.bankName ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
+              />
+              <Field
+                label="Account number"
+                type="text"
+                inputMode="numeric"
+                placeholder="0123456789"
+                value={doctor.bankAccount ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v.replace(/\D/g, "") }))}
+              />
             </>
           )}
         </div>
@@ -198,19 +214,11 @@ function OnboardingScreen() {
         <div className="mt-8 space-y-2.5">
           <button
             onClick={onContinue}
-            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90"
+            disabled={!canContinue}
+            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-50"
           >
             {isDoctor && step === 1 ? "Next" : "Submit"}
           </button>
-          <button
-            onClick={onSkip}
-            className="h-11 w-full rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
-          >
-            Skip for now
-          </button>
-          <p className="pt-2 text-center text-[11.5px] text-muted-foreground">
-            You can return later to complete or edit any field.
-          </p>
         </div>
       </div>
     </main>
