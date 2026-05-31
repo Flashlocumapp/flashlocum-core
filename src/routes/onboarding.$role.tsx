@@ -157,8 +157,11 @@ function OnboardingScreen() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => {
+              // Onboarding is a mandatory gate — do NOT allow escape into
+              // /home. Step 2 can go back to step 1; step 1 returns to
+              // the role picker.
               if (isDoctor && step === 2) setStep(1);
-              else navigate({ to: "/home" });
+              else navigate({ to: "/role" });
             }}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
             aria-label="Back"
