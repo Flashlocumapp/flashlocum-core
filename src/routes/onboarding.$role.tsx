@@ -10,7 +10,7 @@ import {
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { useAuth } from "@/lib/use-auth";
-import { upsertProfileFields } from "@/lib/use-profile";
+import { upsertProfileFields, useProfile, isRoleOnboarded } from "@/lib/use-profile";
 
 export const Route = createFileRoute("/onboarding/$role")({
   component: OnboardingScreen,
