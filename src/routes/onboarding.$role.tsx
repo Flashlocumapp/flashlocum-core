@@ -72,7 +72,14 @@ function OnboardingScreen() {
           phone: requester.phone ?? null,
           gender: requester.gender ?? null,
         };
-    const fields = final ? { ...base, onboarded_at: new Date().toISOString() } : base;
+    const now = new Date().toISOString();
+    const fields = final
+      ? {
+          ...base,
+          onboarded_at: now,
+          ...(isDoctor ? { onboarded_cover_at: now } : { onboarded_request_at: now }),
+        }
+      : base;
     await upsertProfileFields(user.id, fields);
   };
 
