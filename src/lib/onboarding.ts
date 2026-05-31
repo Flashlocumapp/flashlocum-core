@@ -5,6 +5,7 @@ import type { Role } from "@/lib/role";
 
 const KEY = (r: Role) => `flashlocum.onboarded.${r}`;
 const DATA_KEY = (r: Role) => `flashlocum.profile.${r}`;
+const VERIFIED_KEY = "flashlocum.verified.cover";
 
 export type RequesterProfile = {
   phone?: string;
@@ -13,6 +14,7 @@ export type RequesterProfile = {
 
 export type DoctorProfile = {
   phone?: string;
+  gender?: string;
   selfie?: string; // data url
   mdcn?: string;
   license?: string; // filename
@@ -54,6 +56,26 @@ export function saveProfile(role: Role, data: Record<string, unknown>) {
   try {
     const cur = getProfile<Record<string, unknown>>(role);
     window.localStorage.setItem(DATA_KEY(role), JSON.stringify({ ...cur, ...data }));
+  } catch {
+    /* noop */
+  }
+}
+
+/** Doctor verification — defaults to pending after onboarding. An admin
+ *  process (out of scope here) is responsible for flipping this to true. */
+export function isDoctorVerified(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(VERIFIED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markDoctorVerified() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(VERIFIED_KEY, "1");
   } catch {
     /* noop */
   }
