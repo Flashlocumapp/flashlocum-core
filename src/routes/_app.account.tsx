@@ -3,17 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
 import {
   getProfile,
+  isOnboarded,
   saveProfile,
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { useAuth, signOut } from "@/lib/use-auth";
-import {
-  useProfile,
-  upsertProfileFields,
-  isRoleOnboarded,
-  type VerificationStatus,
-} from "@/lib/use-profile";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -31,20 +26,6 @@ function deriveInitials(name: string, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
-function statusLabel(s: VerificationStatus): string {
-  switch (s) {
-    case "approved":
-      return "Approved";
-    case "suspended":
-      return "Suspended";
-    case "rejected":
-      return "Rejected";
-    case "pending":
-    default:
-      return "Verification Pending";
-  }
-}
-
 function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>("request");
@@ -52,45 +33,23 @@ function AccountScreen() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
-  const { user } = useAuth();
-  const { profile } = useProfile();
-
-  const authIdentity = {
-    name:
-      profile?.full_name ||
-      (user?.user_metadata?.full_name as string) ||
-      "",
-    email: user?.email || "",
-  };
+  const [authIdentity, setAuthIdentity] = useState<{ name: string; email: string }>({
+    name: "",
+    email: "",
+  });
 
   useEffect(() => {
     const r = getRole();
     setLocalRole(r);
     setRequester(getProfile<RequesterProfile>("request"));
     setDoctor(getProfile<DoctorProfile>("cover"));
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data.user;
+      if (!u) return;
+      const meta = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
+      setAuthIdentity({ name: meta.full_name || meta.name || "", email: u.email ?? "" });
+    });
   }, []);
-
-  // Hydrate local state from backend profile so the sheet edits real data.
-  useEffect(() => {
-    if (!profile) return;
-    if (role === "cover") {
-      setDoctor((p) => ({
-        ...p,
-        phone: profile.phone ?? p.phone,
-        gender: profile.gender ?? p.gender,
-        mdcn: profile.mdcn ?? p.mdcn,
-        license: profile.license_name ?? p.license,
-        bankName: profile.bank_name ?? p.bankName,
-        bankAccount: profile.bank_account ?? p.bankAccount,
-      }));
-    } else {
-      setRequester((p) => ({
-        ...p,
-        phone: profile.phone ?? p.phone,
-        gender: profile.gender ?? p.gender,
-      }));
-    }
-  }, [profile, role]);
 
   const isDoctor = role === "cover";
   const identity = useMemo<Identity>(() => {
@@ -103,36 +62,35 @@ function AccountScreen() {
   const doSwitch = (next: Role) => {
     setRole(next);
     setLocalRole(next);
-    // App shell enforces the backend onboarding gate — just navigate
-    // to /home and it will redirect to /onboarding/$role if needed.
-    navigate({ to: "/home" });
+    if (!isOnboarded(next)) {
+      navigate({ to: "/onboarding/$role", params: { role: next } });
+    } else {
+      navigate({ to: "/home" });
+    }
   };
 
   const switchRole = () => {
     const next: Role = isDoctor ? "request" : "cover";
-    if (!isRoleOnboarded(next, profile)) {
+    if (!isOnboarded(next)) {
       setSwitchPrompt(next);
       return;
     }
     doSwitch(next);
   };
 
-
   const personalRows = useMemo(() => {
     if (isDoctor) {
       return [
-        { label: "MDCN Number", value: profile?.mdcn || doctor.mdcn || "—" },
-        {
-          label: "Verification Status",
-          value: statusLabel(profile?.verification_status ?? "pending"),
-        },
+        { label: "MDCN Number", value: doctor.mdcn || "—" },
+        { label: "Verification Status", value: doctor.selfie && doctor.mdcn ? "Verified" : "Pending" },
+        { label: "Years of Experience", value: doctor.years || "—" },
       ];
     }
     return [
-      { label: "Phone Number", value: profile?.phone || requester.phone || "—" },
-      { label: "Gender", value: profile?.gender || requester.gender || "—" },
+      { label: "Phone Number", value: requester.phone || "—" },
+      { label: "Gender", value: requester.gender || "—" },
     ];
-  }, [isDoctor, doctor, requester, profile]);
+  }, [isDoctor, doctor, requester]);
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
@@ -191,16 +149,9 @@ function AccountScreen() {
         {isDoctor && (
           <Section title="Payouts">
             <ListGroup>
-              <DetailRow label="Bank Name" value={profile?.bank_name || doctor.bankName || "—"} />
-              <DetailRow
-                label="Account Number"
-                value={profile?.bank_account || doctor.bankAccount || "—"}
-              />
-              <DetailRow
-                label="Account Name"
-                value={profile?.bank_name || doctor.bankName ? identity.name : "—"}
-                last
-              />
+              <DetailRow label="Bank Name" value={doctor.bankName || "—"} />
+              <DetailRow label="Account Number" value={doctor.bankAccount || "—"} />
+              <DetailRow label="Account Name" value={doctor.bankName ? identity.name : "—"} last />
             </ListGroup>
           </Section>
         )}
@@ -221,7 +172,7 @@ function AccountScreen() {
             <NavRow
               title="Sign Out"
               onClick={async () => {
-                await signOut();
+                await supabase.auth.signOut();
                 clearRole();
                 navigate({ to: "/role" });
               }}
@@ -238,31 +189,14 @@ function AccountScreen() {
           identity={identity}
           requester={requester}
           doctor={doctor}
-          verificationStatus={profile?.verification_status ?? "pending"}
           onClose={() => setProfileOpen(false)}
-          onSave={async (next) => {
+          onSave={(next) => {
             if (isDoctor) {
-              const d = next as DoctorProfile;
-              setDoctor(d);
-              saveProfile("cover", d);
-              if (user) {
-                await upsertProfileFields(user.id, {
-                  phone: d.phone ?? null,
-                  mdcn: d.mdcn ?? null,
-                  bank_name: d.bankName ?? null,
-                  bank_account: d.bankAccount ?? null,
-                });
-              }
+              setDoctor(next as DoctorProfile);
+              saveProfile("cover", next);
             } else {
-              const r = next as RequesterProfile;
-              setRequester(r);
-              saveProfile("request", r);
-              if (user) {
-                await upsertProfileFields(user.id, {
-                  phone: r.phone ?? null,
-                  gender: r.gender ?? null,
-                });
-              }
+              setRequester(next as RequesterProfile);
+              saveProfile("request", next);
             }
             setProfileOpen(false);
           }}
@@ -390,7 +324,6 @@ function ProfileSheet({
   identity,
   requester,
   doctor,
-  verificationStatus,
   onClose,
   onSave,
 }: {
@@ -398,7 +331,6 @@ function ProfileSheet({
   identity: { name: string; email: string };
   requester: RequesterProfile;
   doctor: DoctorProfile;
-  verificationStatus: VerificationStatus;
   onClose: () => void;
   onSave: (data: RequesterProfile | DoctorProfile) => void;
 }) {
@@ -445,6 +377,12 @@ function ProfileSheet({
                 type="tel"
               />
               <ReadField label="MDCN Number" value={d.mdcn || "—"} />
+              <SelectField
+                label="Years of Experience"
+                value={d.years ?? ""}
+                onChange={(v) => setD((p) => ({ ...p, years: v }))}
+                options={["< 1", "1–3", "3–5", "5–10", "10+"]}
+              />
               <EditField
                 label="Bank Name"
                 value={d.bankName ?? ""}
@@ -457,7 +395,10 @@ function ProfileSheet({
                 onChange={(v) => setD((p) => ({ ...p, bankAccount: v }))}
                 placeholder="0123456789"
               />
-              <ReadField label="Verification Status" value={statusLabel(verificationStatus)} />
+              <ReadField
+                label="Verification Status"
+                value={d.selfie && d.mdcn ? "Verified" : "Pending"}
+              />
             </>
           )}
           <ReadField label="Email Address" value={identity.email} />

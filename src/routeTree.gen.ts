@@ -18,7 +18,6 @@ import { Route as AuthRoleRouteImport } from './routes/auth.$role'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
-import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
 
 const RoleRoute = RoleRouteImport.update({
@@ -65,11 +64,6 @@ const AppCoverageRoute = AppCoverageRouteImport.update({
   path: '/coverage',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAdminRoute = AppAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAccountRoute = AppAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -81,7 +75,6 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
   '/account': typeof AppAccountRoute
-  '/admin': typeof AppAdminRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
@@ -93,7 +86,6 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
   '/account': typeof AppAccountRoute
-  '/admin': typeof AppAdminRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
@@ -107,7 +99,6 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
   '/_app/account': typeof AppAccountRoute
-  '/_app/admin': typeof AppAdminRoute
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
   '/_app/home': typeof AppHomeRoute
@@ -121,7 +112,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/role'
     | '/account'
-    | '/admin'
     | '/coverage'
     | '/earnings'
     | '/home'
@@ -133,7 +123,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/role'
     | '/account'
-    | '/admin'
     | '/coverage'
     | '/earnings'
     | '/home'
@@ -146,7 +135,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/role'
     | '/_app/account'
-    | '/_app/admin'
     | '/_app/coverage'
     | '/_app/earnings'
     | '/_app/home'
@@ -228,13 +216,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCoverageRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin': {
-      id: '/_app/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AppAdminRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/account': {
       id: '/_app/account'
       path: '/account'
@@ -247,7 +228,6 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
-  AppAdminRoute: typeof AppAdminRoute
   AppCoverageRoute: typeof AppCoverageRoute
   AppEarningsRoute: typeof AppEarningsRoute
   AppHomeRoute: typeof AppHomeRoute
@@ -255,7 +235,6 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRoute,
-  AppAdminRoute: AppAdminRoute,
   AppCoverageRoute: AppCoverageRoute,
   AppEarningsRoute: AppEarningsRoute,
   AppHomeRoute: AppHomeRoute,

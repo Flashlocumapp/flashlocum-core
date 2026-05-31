@@ -8,9 +8,9 @@ import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
-import { getRole, hasRole } from "@/lib/role";
-import { useAuth } from "@/lib/use-auth";
-import { useProfile, isRoleOnboarded } from "@/lib/use-profile";
+import { clearRole, getRole, hasRole } from "@/lib/role";
+import { supabase } from "@/integrations/supabase/client";
+
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -20,35 +20,38 @@ function AppShell() {
   const { pathname } = useLocation();
   const immersive = useImmersive();
   const navigate = useNavigate();
-  const { session, loading } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
   const [ready, setReady] = useState(false);
-
   useEffect(() => {
-    if (loading) return;
-    if (!session) {
-      navigate({ to: "/role" });
-      return;
-    }
-    if (!hasRole()) {
-      navigate({ to: "/role" });
-      return;
-    }
-    // Wait for backend profile before deciding gate.
-    if (profileLoading) return;
-    const role = getRole();
-    // ENFORCE backend onboarding gate. /admin is the only authenticated
-    // surface that's exempt (admins manage other users' verification).
-    if (!isRoleOnboarded(role, profile) && pathname !== "/admin") {
-      navigate({ to: "/onboarding/$role", params: { role } });
-      return;
-    }
-    if (role === "cover") ensureDoctorSession(true);
-    setReady(true);
-  }, [navigate, session, loading, profile, profileLoading, pathname]);
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (!data.session || !hasRole()) {
+        clearRole();
+        navigate({ to: "/role" });
+        return;
+      }
+      if (!data.session.user.email_confirmed_at) {
+        const role = getRole() ?? "request";
+        navigate({ to: "/auth/$role", params: { role } });
+        return;
+      }
+      if (getRole() === "cover") ensureDoctorSession(true);
+      setReady(true);
+    })();
 
-
-  if (loading || !ready) return <div className="h-full w-full bg-background" />;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        clearRole();
+        navigate({ to: "/role" });
+      }
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, [navigate]);
+  if (!ready) return <div className="h-full w-full bg-background" />;
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-background"
@@ -91,3 +94,4 @@ function AppShell() {
     </div>
   );
 }
+

@@ -9,8 +9,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { useAuth } from "@/lib/use-auth";
-import { upsertProfileFields, useProfile, isRoleOnboarded } from "@/lib/use-profile";
+import { markOnboardedRemote } from "@/lib/profile-remote";
 
 export const Route = createFileRoute("/onboarding/$role")({
   component: OnboardingScreen,
@@ -21,27 +20,14 @@ function OnboardingScreen() {
   const navigate = useNavigate();
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
-  const { user } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
 
   useEffect(() => {
     setRole(normalizedRole);
   }, [normalizedRole]);
 
-  // If backend already says this role is fully onboarded, skip the form.
-  useEffect(() => {
-    if (profileLoading) return;
-    if (isRoleOnboarded(normalizedRole, profile)) {
-      markOnboarded(normalizedRole);
-      navigate({ to: "/home" });
-    }
-  }, [profile, profileLoading, normalizedRole, navigate]);
-
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
   const [step, setStep] = useState<1 | 2>(1);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isDoctor) setDoctor(getProfile<DoctorProfile>("cover"));
@@ -50,100 +36,59 @@ function OnboardingScreen() {
 
   const licenseRef = useRef<HTMLInputElement>(null);
 
-  const persistLocal = () => {
+  const persist = () => {
     if (isDoctor) saveProfile("cover", doctor);
     else saveProfile("request", requester);
   };
 
-  const persistRemote = async (final: boolean) => {
-    if (!user) return;
-    const base = isDoctor
+  const remoteFields = () =>
+    isDoctor
       ? {
-          role: "cover" as const,
           phone: doctor.phone ?? null,
           gender: doctor.gender ?? null,
           mdcn: doctor.mdcn ?? null,
           license_name: doctor.license ?? null,
-          bank_name: doctor.bankName ?? null,
-          bank_account: doctor.bankAccount ?? null,
+          selfie_url: doctor.selfie ?? null,
         }
       : {
-          role: "request" as const,
           phone: requester.phone ?? null,
           gender: requester.gender ?? null,
         };
-    const now = new Date().toISOString();
-    const fields = final
-      ? {
-          ...base,
-          onboarded_at: now,
-          ...(isDoctor ? { onboarded_cover_at: now } : { onboarded_request_at: now }),
-        }
-      : base;
-    await upsertProfileFields(user.id, fields);
-  };
-
-  const validateStep = (): string | null => {
-    if (!isDoctor) {
-      if (!requester.phone?.trim()) return "Phone number is required.";
-      if (!requester.gender) return "Please select your gender.";
-      return null;
-    }
-    if (step === 1) {
-      if (!doctor.phone?.trim()) return "Phone number is required.";
-      if (!doctor.gender) return "Please select your gender.";
-      return null;
-    }
-    if (!doctor.selfie) return "Please capture a live selfie.";
-    if (!doctor.mdcn?.trim()) return "MDCN number is required.";
-    if (!doctor.license) return "Please upload your license or receipt.";
-    if (!doctor.bankName?.trim()) return "Bank name is required.";
-    if (!doctor.bankAccount?.trim()) return "Account number is required.";
-    return null;
-  };
 
   const finish = async () => {
-    setError(null);
-    setSubmitting(true);
+    persist();
+    markOnboarded(normalizedRole);
     try {
-      persistLocal();
-      await persistRemote(true);
-      markOnboarded(normalizedRole);
-      navigate({ to: "/home" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save your details. Try again.");
-    } finally {
-      setSubmitting(false);
+      await markOnboardedRemote(normalizedRole, remoteFields());
+    } catch (e) {
+      console.warn(e);
     }
+    navigate({ to: "/home" });
   };
 
   const onContinue = async () => {
-    const v = validateStep();
-    if (v) {
-      setError(v);
-      return;
-    }
-    setError(null);
     if (isDoctor && step === 1) {
-      setSubmitting(true);
-      try {
-        persistLocal();
-        await persistRemote(false);
-        setStep(2);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save your details. Try again.");
-      } finally {
-        setSubmitting(false);
-      }
+      persist();
+      setStep(2);
       return;
     }
     await finish();
   };
 
+  const onSkip = async () => {
+    markOnboarded(normalizedRole);
+    try {
+      await markOnboardedRemote(normalizedRole, remoteFields());
+    } catch (e) {
+      console.warn(e);
+    }
+    navigate({ to: "/home" });
+  };
+
   const title = isDoctor
     ? step === 1
       ? "Personal details"
-      : "Verification & payout details"
+      : "Verification requirements"
     : "Basic profile";
   const subtitle = isDoctor
     ? step === 1
@@ -157,11 +102,8 @@ function OnboardingScreen() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => {
-              // Onboarding is a mandatory gate — do NOT allow escape into
-              // /home. Step 2 can go back to step 1; step 1 returns to
-              // the role picker.
               if (isDoctor && step === 2) setStep(1);
-              else navigate({ to: "/role" });
+              else navigate({ to: "/home" });
             }}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
             aria-label="Back"
@@ -245,37 +187,25 @@ function OnboardingScreen() {
                   setDoctor((p) => ({ ...p, license: f.name }));
                 }}
               />
-
-              <Field
-                label="Bank name"
-                type="text"
-                placeholder="GTBank"
-                value={doctor.bankName ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
-              />
-              <Field
-                label="Account number"
-                type="text"
-                placeholder="0123456789"
-                value={doctor.bankAccount ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v }))}
-              />
             </>
           )}
         </div>
 
-        {error && <p className="mt-3 text-[12.5px] text-destructive">{error}</p>}
-
         <div className="mt-8 space-y-2.5">
           <button
             onClick={onContinue}
-            disabled={submitting}
-            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90"
           >
-            {submitting ? "Saving…" : isDoctor && step === 1 ? "Next" : "Submit"}
+            {isDoctor && step === 1 ? "Next" : "Submit"}
+          </button>
+          <button
+            onClick={onSkip}
+            className="h-11 w-full rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
+          >
+            Skip for now
           </button>
           <p className="pt-2 text-center text-[11.5px] text-muted-foreground">
-            All fields are required to continue.
+            You can return later to complete or edit any field.
           </p>
         </div>
       </div>
