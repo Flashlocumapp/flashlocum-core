@@ -29,6 +29,7 @@ export type Database = {
           role: string | null
           selfie_url: string | null
           updated_at: string
+          verification_status: Database["public"]["Enums"]["verification_status"]
           years_experience: string | null
         }
         Insert: {
@@ -45,6 +46,7 @@ export type Database = {
           role?: string | null
           selfie_url?: string | null
           updated_at?: string
+          verification_status?: Database["public"]["Enums"]["verification_status"]
           years_experience?: string | null
         }
         Update: {
@@ -61,7 +63,29 @@ export type Database = {
           role?: string | null
           selfie_url?: string | null
           updated_at?: string
+          verification_status?: Database["public"]["Enums"]["verification_status"]
           years_experience?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -70,10 +94,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
+      verification_status: "pending" | "approved" | "suspended" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -200,6 +231,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+      verification_status: ["pending", "approved", "suspended", "rejected"],
+    },
   },
 } as const
