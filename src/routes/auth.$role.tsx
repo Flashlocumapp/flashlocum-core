@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { setRole, type Role } from "@/lib/role";
-import { isOnboarded } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/auth/$role")({
