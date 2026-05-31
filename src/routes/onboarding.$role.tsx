@@ -21,13 +21,13 @@ function OnboardingScreen() {
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
 
-  // Ensure session role matches what we're onboarding (e.g. first-time switch).
   useEffect(() => {
     setRole(normalizedRole);
   }, [normalizedRole]);
 
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
+  const [step, setStep] = useState<1 | 2>(1);
 
   useEffect(() => {
     if (isDoctor) setDoctor(getProfile<DoctorProfile>("cover"));
@@ -35,7 +35,6 @@ function OnboardingScreen() {
   }, [isDoctor]);
 
   const licenseRef = useRef<HTMLInputElement>(null);
-
 
   const persist = () => {
     if (isDoctor) saveProfile("cover", doctor);
@@ -45,13 +44,10 @@ function OnboardingScreen() {
   const remoteFields = () =>
     isDoctor
       ? {
-          full_name: doctor.phone ? undefined : undefined, // name set at signup
           phone: doctor.phone ?? null,
+          gender: doctor.gender ?? null,
           mdcn: doctor.mdcn ?? null,
           license_name: doctor.license ?? null,
-          years_experience: doctor.years ?? null,
-          bank_name: doctor.bankName ?? null,
-          bank_account: doctor.bankAccount ?? null,
           selfie_url: doctor.selfie ?? null,
         }
       : {
@@ -59,29 +55,45 @@ function OnboardingScreen() {
           gender: requester.gender ?? null,
         };
 
-  const onSave = async () => {
+  const finish = async () => {
     persist();
     markOnboarded(normalizedRole);
-    try { await markOnboardedRemote(normalizedRole, remoteFields()); } catch (e) { console.warn(e); }
+    try {
+      await markOnboardedRemote(normalizedRole, remoteFields());
+    } catch (e) {
+      console.warn(e);
+    }
+    navigate({ to: "/home" });
   };
 
   const onContinue = async () => {
-    persist();
-    markOnboarded(normalizedRole);
-    try { await markOnboardedRemote(normalizedRole, remoteFields()); } catch (e) { console.warn(e); }
-    navigate({ to: "/home" });
+    if (isDoctor && step === 1) {
+      persist();
+      setStep(2);
+      return;
+    }
+    await finish();
   };
 
   const onSkip = async () => {
-    // Allow leaving without completion — testing mode.
     markOnboarded(normalizedRole);
-    try { await markOnboardedRemote(normalizedRole, remoteFields()); } catch (e) { console.warn(e); }
+    try {
+      await markOnboardedRemote(normalizedRole, remoteFields());
+    } catch (e) {
+      console.warn(e);
+    }
     navigate({ to: "/home" });
   };
 
-  const title = isDoctor ? "Doctor verification profile" : "Basic profile";
+  const title = isDoctor
+    ? step === 1
+      ? "Personal details"
+      : "Verification requirements"
+    : "Basic profile";
   const subtitle = isDoctor
-    ? "Complete to accept coverage requests. You can save and return later."
+    ? step === 1
+      ? "We use these to coordinate coverage requests."
+      : "Submit these so we can verify your account. Usually reviewed within an hour."
     : "Tell us a little about you. You can edit this anytime.";
 
   return (
@@ -89,7 +101,10 @@ function OnboardingScreen() {
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-6 pt-6 pb-8">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => navigate({ to: "/home" })}
+            onClick={() => {
+              if (isDoctor && step === 2) setStep(1);
+              else navigate({ to: "/home" });
+            }}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
             aria-label="Back"
           >
@@ -98,7 +113,7 @@ function OnboardingScreen() {
             </svg>
           </button>
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            {isDoctor ? "Cover & Earn" : "Request Coverage"}
+            {isDoctor ? `Cover & Earn · Step ${step} of 2` : "Request Coverage"}
           </div>
           <div className="h-9 w-9" />
         </div>
@@ -125,7 +140,7 @@ function OnboardingScreen() {
                 options={["Female", "Male", "Prefer not to say"]}
               />
             </>
-          ) : (
+          ) : step === 1 ? (
             <>
               <Field
                 label="Phone number"
@@ -134,24 +149,30 @@ function OnboardingScreen() {
                 value={doctor.phone ?? ""}
                 onChange={(v) => setDoctor((p) => ({ ...p, phone: v }))}
               />
-
+              <SelectField
+                label="Gender"
+                value={doctor.gender ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, gender: v }))}
+                options={["Female", "Male", "Prefer not to say"]}
+              />
+            </>
+          ) : (
+            <>
               <SelfieCapture
                 value={doctor.selfie}
                 onCapture={(dataUrl) => setDoctor((p) => ({ ...p, selfie: dataUrl }))}
                 onClear={() => setDoctor((p) => ({ ...p, selfie: undefined }))}
               />
 
-
               <Field
                 label="MDCN number"
                 type="text"
-                placeholder="MDCN/12345"
                 value={doctor.mdcn ?? ""}
                 onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
               />
 
               <UploadField
-                label="License upload"
+                label="License / Payment receipt upload"
                 hint={doctor.license ? doctor.license : "Tap to upload PDF or image"}
                 onPick={() => licenseRef.current?.click()}
               />
@@ -166,28 +187,6 @@ function OnboardingScreen() {
                   setDoctor((p) => ({ ...p, license: f.name }));
                 }}
               />
-
-              <SelectField
-                label="Years of experience"
-                value={doctor.years ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, years: v }))}
-                options={["< 1", "1–3", "3–5", "5–10", "10+"]}
-              />
-
-              <Field
-                label="Bank name"
-                type="text"
-                placeholder="GTBank"
-                value={doctor.bankName ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
-              />
-              <Field
-                label="Account number"
-                type="text"
-                placeholder="0123456789"
-                value={doctor.bankAccount ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v }))}
-              />
             </>
           )}
         </div>
@@ -197,22 +196,14 @@ function OnboardingScreen() {
             onClick={onContinue}
             className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90"
           >
-            Continue
+            {isDoctor && step === 1 ? "Next" : "Submit"}
           </button>
-          <div className="flex gap-2.5">
-            <button
-              onClick={onSave}
-              className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
-            >
-              Save
-            </button>
-            <button
-              onClick={onSkip}
-              className="h-11 flex-1 rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
-            >
-              Skip for now
-            </button>
-          </div>
+          <button
+            onClick={onSkip}
+            className="h-11 w-full rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
+          >
+            Skip for now
+          </button>
           <p className="pt-2 text-center text-[11.5px] text-muted-foreground">
             You can return later to complete or edit any field.
           </p>
@@ -359,7 +350,6 @@ function SelfieCapture({
     if (!ctx) return;
     const sx = (v.videoWidth - size) / 2;
     const sy = (v.videoHeight - size) / 2;
-    // Mirror so it matches the preview
     ctx.translate(size, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(v, sx, sy, size, size, 0, 0, size, size);
@@ -478,4 +468,3 @@ function SelfieCapture({
     </div>
   );
 }
-

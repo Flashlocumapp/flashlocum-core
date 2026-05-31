@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
+import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
 import { getRole, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
@@ -25,9 +26,15 @@ export function CoverDispatchPortal() {
   const [role, setLocalRole] = useState<Role | null>(null);
   useEffect(() => setLocalRole(getRole()), []);
   const { incoming, accepted, pendingRating } = useDispatch();
+  const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);
 
   if (role !== "cover") return null;
   if (!incoming && !accepted && !pendingRating) return null;
+
+  const showSummary =
+    !!pendingRating && !incoming && !accepted && summaryAckedId !== pendingRating.requestId;
+  const showRating =
+    !!pendingRating && !incoming && !accepted && summaryAckedId === pendingRating.requestId;
 
   return (
     <div className="absolute inset-0 z-50">
@@ -53,26 +60,36 @@ export function CoverDispatchPortal() {
           </DismissSheet>
         )}
       </AnimatePresence>
-      {/* Doctor rating is fully independent of any requester action.
-          As soon as payment is confirmed and pendingRating is set, the
-          rating overlay opens — the doctor can submit or dismiss freely. */}
+
+      <PaymentSummaryOverlay
+        open={showSummary}
+        hospital={pendingRating?.hospital ?? ""}
+        total={pendingRating?.total ?? 0}
+        feePct={pendingRating?.feePct ?? 15}
+        onAcknowledge={() => {
+          if (pendingRating) setSummaryAckedId(pendingRating.requestId);
+        }}
+      />
+
       <RatingOverlay
-        open={!!pendingRating && !incoming && !accepted}
+        open={showRating}
         doctor={pendingRating?.hospital ?? ""}
-        onDismiss={dismissPendingRating}
+        onDismiss={() => {
+          dismissPendingRating();
+          setSummaryAckedId(null);
+        }}
         onSubmit={(rating) => {
           if (rating > 0 && pendingRating) {
             recordRating(pendingRating.hospitalId, rating);
             recordHistoryRating(pendingRating.requestId, rating);
           }
           dismissPendingRating();
+          setSummaryAckedId(null);
         }}
       />
     </div>
   );
 }
-
-
 
 function IncomingBody({ item }: { item: Coverage }) {
   const fee = feeOf(item);
@@ -81,17 +98,10 @@ function IncomingBody({ item }: { item: Coverage }) {
     <div>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span
-            className="relative h-2 w-2 rounded-full"
-            style={{ background: "var(--color-presence)" }}
-          >
+          <span className="relative h-2 w-2 rounded-full" style={{ background: "var(--color-presence)" }}>
             <span
               className="absolute inset-0 rounded-full"
-              style={{
-                background: "var(--color-presence)",
-                opacity: 0.5,
-                animation: "presence-pulse 1.6s ease-out infinite",
-              }}
+              style={{ background: "var(--color-presence)", opacity: 0.5, animation: "presence-pulse 1.6s ease-out infinite" }}
             />
           </span>
           <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -101,9 +111,7 @@ function IncomingBody({ item }: { item: Coverage }) {
         <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
       </div>
 
-      <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">
-        {item.hospital}
-      </div>
+      <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">{item.hospital}</div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
       <div className="mt-4 text-[13.5px] leading-relaxed text-foreground/80">
@@ -118,11 +126,7 @@ function IncomingBody({ item }: { item: Coverage }) {
         <Row label="You receive" value={nairaK(net)} strong />
       </div>
 
-      {item.note && (
-        <p className="mt-3 text-[12.5px] text-muted-foreground">
-          Note · {item.note}
-        </p>
-      )}
+      {item.note && <p className="mt-3 text-[12.5px] text-muted-foreground">Note · {item.note}</p>}
 
       <div className="mt-5 flex items-center gap-3">
         <button
@@ -142,17 +146,7 @@ function IncomingBody({ item }: { item: Coverage }) {
   );
 }
 
-function Row({
-  label,
-  value,
-  strong,
-  muted,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-  muted?: boolean;
-}) {
+function Row({ label, value, strong, muted }: { label: string; value: string; strong?: boolean; muted?: boolean }) {
   return (
     <div className="flex items-baseline justify-between">
       <span
@@ -182,28 +176,19 @@ function AcceptedBody({ item }: { item: Coverage }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <div
-          className="text-[11px] font-medium uppercase tracking-[0.16em]"
-          style={{ color: "var(--color-presence)" }}
-        >
+        <div className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: "var(--color-presence)" }}>
           Coverage confirmed
         </div>
         <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
       </div>
-      <div className="mt-2 text-[20px] font-semibold tracking-tight">
-        {item.hospital}
-      </div>
+      <div className="mt-2 text-[20px] font-semibold tracking-tight">{item.hospital}</div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
       <div className="mt-4 text-[13.5px] leading-relaxed text-foreground/80">
         {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
       </div>
 
-      {item.note && (
-        <p className="mt-3 text-[12.5px] text-muted-foreground">
-          Note · {item.note}
-        </p>
-      )}
+      {item.note && <p className="mt-3 text-[12.5px] text-muted-foreground">Note · {item.note}</p>}
 
       <div className="mt-5 flex items-center gap-3">
         <button

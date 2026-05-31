@@ -100,7 +100,15 @@ let history: HistoryItem[] = [];
 let historyRatings: Record<string, number> = {};
 let acceptedSheet: Coverage | null = null;
 // Hospital pending rating after End Shift (entityId derived from hospital name).
-let pendingRating: { requestId: string; hospitalId: string; hospital: string } | null = null;
+export type PendingRating = {
+  requestId: string;
+  hospitalId: string;
+  hospital: string;
+  total: number;
+  feePct: number;
+};
+let pendingRating: PendingRating | null = null;
+
 
 const processedEvents = new Set<string>();
 
@@ -124,8 +132,9 @@ type View = {
   incoming: Coverage | null;
   accepted: Coverage | null;
   history: HistoryItem[];
-  pendingRating: { requestId: string; hospitalId: string; hospital: string } | null;
+  pendingRating: PendingRating | null;
 };
+
 
 
 export function useDispatch(): View {
@@ -289,7 +298,10 @@ export function ensureDoctorSession(initialOnline = true) {
         requestId: r.id,
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
+        total: r.settledAmount ?? r.amount,
+        feePct: r.feePct,
       };
+
 
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
