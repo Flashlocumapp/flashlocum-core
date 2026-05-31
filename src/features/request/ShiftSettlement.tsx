@@ -32,7 +32,7 @@ type ShiftMeta = {
 
 const SAMPLE: ShiftMeta = {
   facility: "Evercare Hospital",
-  doctor: "Dr. Adaobi Okeke",
+  doctor: "Cover Doctor",
   role: "Standard · Active",
   startedAt: Date.now() - 60 * 60 * 1000,
   accumulatedMs: 0,

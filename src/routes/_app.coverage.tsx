@@ -75,7 +75,7 @@ type RequestItem = {
 };
 
 
-/** "Dr. Emmanuel Adeleke" → "Dr. Emmanuel A." */
+/** Shorten a full name to "First L." form. */
 function shortDoctorName(full: string): string {
   const parts = full.trim().split(/\s+/);
   if (parts.length < 3) return full;
@@ -91,6 +91,10 @@ function doctorInitials(sessionId?: string): string {
 function mdcnFor(sessionId?: string): string {
   if (!sessionId) return "MDCN-—";
   return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
+}
+/** Generic display label for an assigned cover doctor, derived from session id. */
+function doctorLabelFor(sessionId?: string): string {
+  return `Dr. ${doctorInitials(sessionId)}`;
 }
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
@@ -128,7 +132,7 @@ function toRequestItem(r: NetRequest): RequestItem {
       : r.status === "cancelled"
         ? "cancelled"
         : undefined;
-  const fullDoctor = "Dr. Emmanuel Adeleke";
+  const fullDoctor = doctorLabelFor(r.acceptedBy);
   // History reflects FINAL settled operational reality, not booking estimate.
   const isCompleted = outcome === "completed";
   const settledHrs = isCompleted

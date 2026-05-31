@@ -874,6 +874,14 @@ function DispatchOverlay({
   const net = useNetwork();
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
+  const acceptedSid = acceptedRequest?.acceptedBy;
+  const acceptedInitials = acceptedSid
+    ? (acceptedSid.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase() || "DR")
+    : "DR";
+  const acceptedDoctorName = `Dr. ${acceptedInitials}`;
+  const acceptedMdcn = acceptedSid
+    ? "MDCN-" + acceptedSid.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase()
+    : "MDCN-—";
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, draft, days });
@@ -1161,7 +1169,7 @@ function DispatchOverlay({
 
               <div className="mt-3 flex items-center gap-3 rounded-2xl bg-secondary/50 px-3.5 py-3">
                 <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary text-[13px] font-semibold">
-                  EA
+                  {acceptedInitials}
                   <span
                     className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
                     style={{
@@ -1171,9 +1179,9 @@ function DispatchOverlay({
                   />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[15px] font-medium">Dr. Emmanuel Adeleke</div>
+                  <div className="truncate text-[15px] font-medium">{acceptedDoctorName}</div>
                   <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                    <span>MDCN-12245</span>
+                    <span>{acceptedMdcn}</span>
                     <span>·</span>
                     <RatingPill entityId={acceptedDoctorRatingId} role="doctor" inline />
                   </div>
@@ -1242,7 +1250,7 @@ function DispatchOverlay({
               open={cancelOpen}
               onDismiss={() => setCancelOpen(false)}
               confirmTitle="Cancel this shift?"
-              confirmBody="Dr. Emmanuel Adeleke is already assigned. Keeping it preserves continuity."
+              confirmBody={`${acceptedDoctorName} is already assigned. Keeping it preserves continuity.`}
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
               onCancelled={handleCancelPostAccept}
