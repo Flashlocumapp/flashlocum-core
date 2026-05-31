@@ -48,7 +48,7 @@ export type ProfileState = {
 };
 
 export function useProfile(): ProfileState {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -68,10 +68,16 @@ export function useProfile(): ProfileState {
   };
 
   useEffect(() => {
+    // Wait for auth to finish so we never flash a "no profile" state
+    // that the AppShell gate would misinterpret as "not onboarded" and
+    // bounce the user back to /onboarding.
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
     setLoading(true);
     load();
     if (!user) return;
-    // Realtime: admin approve/suspend/reject reflects immediately.
     const channel = supabase
       .channel(`profile:${user.id}`)
       .on(
@@ -86,7 +92,7 @@ export function useProfile(): ProfileState {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   return { profile, loading, refresh: load };
 }
