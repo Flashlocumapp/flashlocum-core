@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Role } from "@/lib/role";
 import { setRole } from "@/lib/role";
 import {
-  getProfile,
   markOnboarded,
   saveProfile,
   type DoctorProfile,
