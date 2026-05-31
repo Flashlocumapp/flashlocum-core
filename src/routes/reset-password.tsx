@@ -42,7 +42,7 @@ function ResetPasswordScreen() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       await supabase.auth.signOut();
-      navigate({ to: "/role", search: { reset: "success" } });
+      window.location.assign("/role?reset=success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update password.");
     } finally {
