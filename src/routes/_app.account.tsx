@@ -103,21 +103,20 @@ function AccountScreen() {
   const doSwitch = (next: Role) => {
     setRole(next);
     setLocalRole(next);
-    if (!isOnboarded(next)) {
-      navigate({ to: "/onboarding/$role", params: { role: next } });
-    } else {
-      navigate({ to: "/home" });
-    }
+    // App shell enforces the backend onboarding gate — just navigate
+    // to /home and it will redirect to /onboarding/$role if needed.
+    navigate({ to: "/home" });
   };
 
   const switchRole = () => {
     const next: Role = isDoctor ? "request" : "cover";
-    if (!isOnboarded(next)) {
+    if (!isRoleOnboarded(next, profile)) {
       setSwitchPrompt(next);
       return;
     }
     doSwitch(next);
   };
+
 
   const personalRows = useMemo(() => {
     if (isDoctor) {
