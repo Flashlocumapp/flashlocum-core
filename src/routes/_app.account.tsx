@@ -162,8 +162,7 @@ function AccountScreen() {
             />
             <NavRow
               title="Sign Out"
-              onClick={async () => {
-                await supabase.auth.signOut();
+              onClick={() => {
                 clearRole();
                 navigate({ to: "/role" });
               }}
