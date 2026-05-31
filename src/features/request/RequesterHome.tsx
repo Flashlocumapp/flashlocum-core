@@ -874,6 +874,14 @@ function DispatchOverlay({
   const net = useNetwork();
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedDoctorRatingId = acceptedRequest?.acceptedBy ? `doc:${acceptedRequest.acceptedBy}` : null;
+  const acceptedSid = acceptedRequest?.acceptedBy;
+  const acceptedInitials = acceptedSid
+    ? (acceptedSid.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase() || "DR")
+    : "DR";
+  const acceptedDoctorName = `Dr. ${acceptedInitials}`;
+  const acceptedMdcn = acceptedSid
+    ? "MDCN-" + acceptedSid.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase()
+    : "MDCN-—";
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, draft, days });
