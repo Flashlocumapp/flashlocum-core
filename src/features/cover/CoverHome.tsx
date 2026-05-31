@@ -21,6 +21,9 @@ import { useProfile } from "@/lib/use-profile";
  */
 export function CoverHome() {
   const { online, upcoming } = useDispatch();
+  const { profile } = useProfile();
+  const status = profile?.verification_status ?? "pending";
+  const approved = status === "approved";
 
   // Pick the focus coverage: any active one, else the next upcoming.
   const focus =
@@ -33,14 +36,32 @@ export function CoverHome() {
   const myRating = useRating(doctorEntityId(getSessionId()));
   const acceptance = 96;
 
+  const handleToggle = () => {
+    if (!approved) {
+      pushToast({
+        tone: "warn",
+        title: "Your account is not approved yet.",
+        body:
+          status === "suspended"
+            ? "Your account has been suspended. Contact support."
+            : status === "rejected"
+              ? "Your verification was rejected. Contact support."
+              : "Your verification is being reviewed. This usually takes less than an hour.",
+      });
+      return;
+    }
+    setOnline(!online);
+  };
+
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <MapBackground variant={online ? "stethoscope" : "empty"} />
+      <MapBackground variant={online && approved ? "stethoscope" : "empty"} />
 
       {/* top primary Online/Offline pill */}
       <header className="absolute inset-x-0 top-0 z-30 safe-top">
-        <div className="mx-auto flex max-w-md justify-center px-4 pt-3">
-          <OnlinePill online={online} onToggle={() => setOnline(!online)} />
+        <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 pt-3">
+          <OnlinePill online={online && approved} onToggle={handleToggle} disabled={!approved} />
+          {!approved && <VerificationBanner status={status} />}
         </div>
       </header>
 
@@ -52,7 +73,7 @@ export function CoverHome() {
         className="absolute inset-x-0 bottom-0 z-20"
       >
         <div className="mx-auto flex max-w-md flex-col gap-2.5 px-4 pb-4">
-          <CoverageTile coverage={focus} active={isActive} />
+          <CoverageTile coverage={approved ? focus : null} active={isActive && approved} />
           <div className="grid grid-cols-2 gap-2.5">
             <ScoreTile score={myRating.score} />
             <AcceptanceTile rate={acceptance} />
@@ -60,6 +81,27 @@ export function CoverHome() {
         </div>
       </motion.section>
     </section>
+  );
+}
+
+function VerificationBanner({ status }: { status: string }) {
+  const msg =
+    status === "suspended"
+      ? "Your account has been suspended. Contact support."
+      : status === "rejected"
+        ? "Your verification was rejected. Contact support."
+        : "Your verification is being reviewed. This usually takes less than an hour.";
+  return (
+    <div
+      className="rounded-full px-3.5 py-1.5 text-[11.5px] font-medium"
+      style={{
+        background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+        color: "var(--color-foreground)",
+        maxWidth: "100%",
+      }}
+    >
+      {msg}
+    </div>
   );
 }
 
