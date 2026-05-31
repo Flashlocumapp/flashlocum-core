@@ -298,7 +298,10 @@ export function ensureDoctorSession(initialOnline = true) {
         requestId: r.id,
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
+        total: r.settledAmount ?? r.amount,
+        feePct: r.feePct,
       };
+
 
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
