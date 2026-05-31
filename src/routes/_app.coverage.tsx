@@ -132,7 +132,7 @@ function toRequestItem(r: NetRequest): RequestItem {
       : r.status === "cancelled"
         ? "cancelled"
         : undefined;
-  const fullDoctor = "Dr. Emmanuel Adeleke";
+  const fullDoctor = doctorLabelFor(r.acceptedBy);
   // History reflects FINAL settled operational reality, not booking estimate.
   const isCompleted = outcome === "completed";
   const settledHrs = isCompleted
