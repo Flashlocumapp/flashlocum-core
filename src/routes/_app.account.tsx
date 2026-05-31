@@ -32,6 +32,7 @@ function AccountScreen() {
   const [switchPrompt, setSwitchPrompt] = useState<Role | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
+  const [doctor, setDoctor] = useState<DoctorProfile>({});
   const { user } = useAuth();
   const authIdentity = {
     name: (user?.user_metadata?.full_name as string) || "",
