@@ -45,9 +45,9 @@ function OnboardingScreen() {
     else saveProfile("request", requester);
   };
 
-  const persistRemote = async () => {
+  const persistRemote = async (final: boolean) => {
     if (!user) return;
-    const fields = isDoctor
+    const base = isDoctor
       ? {
           role: "cover" as const,
           phone: doctor.phone ?? null,
@@ -56,15 +56,33 @@ function OnboardingScreen() {
           license_name: doctor.license ?? null,
           bank_name: doctor.bankName ?? null,
           bank_account: doctor.bankAccount ?? null,
-          onboarded_at: new Date().toISOString(),
         }
       : {
           role: "request" as const,
           phone: requester.phone ?? null,
           gender: requester.gender ?? null,
-          onboarded_at: new Date().toISOString(),
         };
+    const fields = final ? { ...base, onboarded_at: new Date().toISOString() } : base;
     await upsertProfileFields(user.id, fields);
+  };
+
+  const validateStep = (): string | null => {
+    if (!isDoctor) {
+      if (!requester.phone?.trim()) return "Phone number is required.";
+      if (!requester.gender) return "Please select your gender.";
+      return null;
+    }
+    if (step === 1) {
+      if (!doctor.phone?.trim()) return "Phone number is required.";
+      if (!doctor.gender) return "Please select your gender.";
+      return null;
+    }
+    if (!doctor.selfie) return "Please capture a live selfie.";
+    if (!doctor.mdcn?.trim()) return "MDCN number is required.";
+    if (!doctor.license) return "Please upload your license or receipt.";
+    if (!doctor.bankName?.trim()) return "Bank name is required.";
+    if (!doctor.bankAccount?.trim()) return "Account number is required.";
+    return null;
   };
 
   const finish = async () => {
@@ -72,7 +90,7 @@ function OnboardingScreen() {
     setSubmitting(true);
     try {
       persistLocal();
-      await persistRemote();
+      await persistRemote(true);
       markOnboarded(normalizedRole);
       navigate({ to: "/home" });
     } catch (err) {
@@ -83,17 +101,26 @@ function OnboardingScreen() {
   };
 
   const onContinue = async () => {
+    const v = validateStep();
+    if (v) {
+      setError(v);
+      return;
+    }
+    setError(null);
     if (isDoctor && step === 1) {
-      persistLocal();
-      setStep(2);
+      setSubmitting(true);
+      try {
+        persistLocal();
+        await persistRemote(false);
+        setStep(2);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save your details. Try again.");
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
     await finish();
-  };
-
-  const onSkip = () => {
-    markOnboarded(normalizedRole);
-    navigate({ to: "/home" });
   };
 
   const title = isDoctor
@@ -227,14 +254,8 @@ function OnboardingScreen() {
           >
             {submitting ? "Saving…" : isDoctor && step === 1 ? "Next" : "Submit"}
           </button>
-          <button
-            onClick={onSkip}
-            className="h-11 w-full rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
-          >
-            Skip for now
-          </button>
           <p className="pt-2 text-center text-[11.5px] text-muted-foreground">
-            You can return later to complete or edit any field.
+            All fields are required to continue.
           </p>
         </div>
       </div>
