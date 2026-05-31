@@ -11,6 +11,9 @@ import {
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
 import { useRating } from "@/lib/ratings";
+import { isDoctorVerified } from "@/lib/onboarding";
+import { pushToast } from "@/lib/notifications";
+
 /**
  * CoverHome — doctor home tab.
  * Fullscreen map · top Online/Offline pill · lower floating tiles.
