@@ -25,6 +25,8 @@ export type Database = {
           license_name: string | null
           mdcn: string | null
           onboarded_at: string | null
+          onboarded_cover_at: string | null
+          onboarded_request_at: string | null
           phone: string | null
           role: string | null
           selfie_url: string | null
@@ -42,6 +44,8 @@ export type Database = {
           license_name?: string | null
           mdcn?: string | null
           onboarded_at?: string | null
+          onboarded_cover_at?: string | null
+          onboarded_request_at?: string | null
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
@@ -59,6 +63,8 @@ export type Database = {
           license_name?: string | null
           mdcn?: string | null
           onboarded_at?: string | null
+          onboarded_cover_at?: string | null
+          onboarded_request_at?: string | null
           phone?: string | null
           role?: string | null
           selfie_url?: string | null

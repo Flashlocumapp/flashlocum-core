@@ -10,7 +10,7 @@ import {
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { useAuth } from "@/lib/use-auth";
-import { upsertProfileFields } from "@/lib/use-profile";
+import { upsertProfileFields, useProfile, isRoleOnboarded } from "@/lib/use-profile";
 
 export const Route = createFileRoute("/onboarding/$role")({
   component: OnboardingScreen,
@@ -22,10 +22,20 @@ function OnboardingScreen() {
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
   const { user } = useAuth();
+  const { profile, loading: profileLoading } = useProfile();
 
   useEffect(() => {
     setRole(normalizedRole);
   }, [normalizedRole]);
+
+  // If backend already says this role is fully onboarded, skip the form.
+  useEffect(() => {
+    if (profileLoading) return;
+    if (isRoleOnboarded(normalizedRole, profile)) {
+      markOnboarded(normalizedRole);
+      navigate({ to: "/home" });
+    }
+  }, [profile, profileLoading, normalizedRole, navigate]);
 
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
@@ -62,7 +72,14 @@ function OnboardingScreen() {
           phone: requester.phone ?? null,
           gender: requester.gender ?? null,
         };
-    const fields = final ? { ...base, onboarded_at: new Date().toISOString() } : base;
+    const now = new Date().toISOString();
+    const fields = final
+      ? {
+          ...base,
+          onboarded_at: now,
+          ...(isDoctor ? { onboarded_cover_at: now } : { onboarded_request_at: now }),
+        }
+      : base;
     await upsertProfileFields(user.id, fields);
   };
 
@@ -140,8 +157,11 @@ function OnboardingScreen() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => {
+              // Onboarding is a mandatory gate — do NOT allow escape into
+              // /home. Step 2 can go back to step 1; step 1 returns to
+              // the role picker.
               if (isDoctor && step === 2) setStep(1);
-              else navigate({ to: "/home" });
+              else navigate({ to: "/role" });
             }}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
             aria-label="Back"

@@ -17,7 +17,29 @@ export type Profile = {
   selfie_url: string | null;
   verification_status: VerificationStatus;
   onboarded_at: string | null;
+  onboarded_request_at: string | null;
+  onboarded_cover_at: string | null;
 };
+
+export type RoleId = "request" | "cover";
+
+/** Backend-driven gate: true iff onboarding for the given role is fully
+ *  complete. This is the single source of truth for the app shell. */
+export function isRoleOnboarded(role: RoleId, profile: Profile | null): boolean {
+  if (!profile) return false;
+  if (role === "request") {
+    return !!profile.onboarded_request_at && !!profile.phone && !!profile.gender;
+  }
+  return (
+    !!profile.onboarded_cover_at &&
+    !!profile.phone &&
+    !!profile.gender &&
+    !!profile.mdcn &&
+    !!profile.license_name &&
+    !!profile.bank_name &&
+    !!profile.bank_account
+  );
+}
 
 export type ProfileState = {
   profile: Profile | null;

@@ -3,13 +3,17 @@ import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
 import {
   getProfile,
-  isOnboarded,
   saveProfile,
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { useAuth, signOut } from "@/lib/use-auth";
-import { useProfile, upsertProfileFields, type VerificationStatus } from "@/lib/use-profile";
+import {
+  useProfile,
+  upsertProfileFields,
+  isRoleOnboarded,
+  type VerificationStatus,
+} from "@/lib/use-profile";
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -99,21 +103,20 @@ function AccountScreen() {
   const doSwitch = (next: Role) => {
     setRole(next);
     setLocalRole(next);
-    if (!isOnboarded(next)) {
-      navigate({ to: "/onboarding/$role", params: { role: next } });
-    } else {
-      navigate({ to: "/home" });
-    }
+    // App shell enforces the backend onboarding gate — just navigate
+    // to /home and it will redirect to /onboarding/$role if needed.
+    navigate({ to: "/home" });
   };
 
   const switchRole = () => {
     const next: Role = isDoctor ? "request" : "cover";
-    if (!isOnboarded(next)) {
+    if (!isRoleOnboarded(next, profile)) {
       setSwitchPrompt(next);
       return;
     }
     doSwitch(next);
   };
+
 
   const personalRows = useMemo(() => {
     if (isDoctor) {

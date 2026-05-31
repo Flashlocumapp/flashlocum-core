@@ -10,6 +10,7 @@ import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
 import { getRole, hasRole } from "@/lib/role";
 import { useAuth } from "@/lib/use-auth";
+import { useProfile, isRoleOnboarded } from "@/lib/use-profile";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -20,6 +21,7 @@ function AppShell() {
   const immersive = useImmersive();
   const navigate = useNavigate();
   const { session, loading } = useAuth();
+  const { profile, loading: profileLoading } = useProfile();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -32,9 +34,19 @@ function AppShell() {
       navigate({ to: "/role" });
       return;
     }
-    if (getRole() === "cover") ensureDoctorSession(true);
+    // Wait for backend profile before deciding gate.
+    if (profileLoading) return;
+    const role = getRole();
+    // ENFORCE backend onboarding gate. /admin is the only authenticated
+    // surface that's exempt (admins manage other users' verification).
+    if (!isRoleOnboarded(role, profile) && pathname !== "/admin") {
+      navigate({ to: "/onboarding/$role", params: { role } });
+      return;
+    }
+    if (role === "cover") ensureDoctorSession(true);
     setReady(true);
-  }, [navigate, session, loading]);
+  }, [navigate, session, loading, profile, profileLoading, pathname]);
+
 
   if (loading || !ready) return <div className="h-full w-full bg-background" />;
   return (
