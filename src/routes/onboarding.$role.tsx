@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Role } from "@/lib/role";
 import { setRole } from "@/lib/role";
 import {
-  getProfile,
   markOnboarded,
   saveProfile,
   type DoctorProfile,
@@ -29,10 +28,8 @@ function OnboardingScreen() {
   const [doctor, setDoctor] = useState<DoctorProfile>({});
   const [step, setStep] = useState<1 | 2>(1);
 
-  useEffect(() => {
-    if (isDoctor) setDoctor(getProfile<DoctorProfile>("cover"));
-    else setRequester(getProfile<RequesterProfile>("request"));
-  }, [isDoctor]);
+  // Per product rule: never autofill/carry-over between flows. Each
+  // onboarding session starts from a clean slate and requires explicit input.
 
   const licenseRef = useRef<HTMLInputElement>(null);
 
@@ -49,11 +46,26 @@ function OnboardingScreen() {
           mdcn: doctor.mdcn ?? null,
           license_name: doctor.license ?? null,
           selfie_url: doctor.selfie ?? null,
+          bank_name: doctor.bankName ?? null,
+          bank_account: doctor.bankAccount ?? null,
         }
       : {
           phone: requester.phone ?? null,
           gender: requester.gender ?? null,
         };
+
+  const step1Valid = isDoctor
+    ? !!(doctor.phone?.trim() && doctor.gender?.trim())
+    : !!(requester.phone?.trim() && requester.gender?.trim());
+
+  const step2Valid =
+    !!doctor.selfie &&
+    !!doctor.mdcn?.trim() &&
+    !!doctor.license?.trim() &&
+    !!doctor.bankName?.trim() &&
+    !!doctor.bankAccount?.trim();
+
+  const canContinue = isDoctor ? (step === 1 ? step1Valid : step2Valid) : step1Valid;
 
   const finish = async () => {
     persist();
@@ -67,6 +79,7 @@ function OnboardingScreen() {
   };
 
   const onContinue = async () => {
+    if (!canContinue) return;
     if (isDoctor && step === 1) {
       persist();
       setStep(2);
@@ -75,15 +88,6 @@ function OnboardingScreen() {
     await finish();
   };
 
-  const onSkip = async () => {
-    markOnboarded(normalizedRole);
-    try {
-      await markOnboardedRemote(normalizedRole, remoteFields());
-    } catch (e) {
-      console.warn(e);
-    }
-    navigate({ to: "/home" });
-  };
 
   const title = isDoctor
     ? step === 1
@@ -187,6 +191,22 @@ function OnboardingScreen() {
                   setDoctor((p) => ({ ...p, license: f.name }));
                 }}
               />
+
+              <Field
+                label="Bank name"
+                type="text"
+                placeholder="e.g. GTBank"
+                value={doctor.bankName ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
+              />
+              <Field
+                label="Account number"
+                type="text"
+                inputMode="numeric"
+                placeholder="0123456789"
+                value={doctor.bankAccount ?? ""}
+                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v.replace(/\D/g, "") }))}
+              />
             </>
           )}
         </div>
@@ -194,19 +214,11 @@ function OnboardingScreen() {
         <div className="mt-8 space-y-2.5">
           <button
             onClick={onContinue}
-            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90"
+            disabled={!canContinue}
+            className="h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-50"
           >
             {isDoctor && step === 1 ? "Next" : "Submit"}
           </button>
-          <button
-            onClick={onSkip}
-            className="h-11 w-full rounded-2xl text-[14px] font-medium text-muted-foreground active:bg-accent"
-          >
-            Skip for now
-          </button>
-          <p className="pt-2 text-center text-[11.5px] text-muted-foreground">
-            You can return later to complete or edit any field.
-          </p>
         </div>
       </div>
     </main>

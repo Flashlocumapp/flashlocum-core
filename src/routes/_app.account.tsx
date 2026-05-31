@@ -81,9 +81,9 @@ function AccountScreen() {
   const personalRows = useMemo(() => {
     if (isDoctor) {
       return [
+        { label: "Phone Number", value: doctor.phone || "—" },
         { label: "MDCN Number", value: doctor.mdcn || "—" },
         { label: "Verification Status", value: doctor.selfie && doctor.mdcn ? "Verified" : "Pending" },
-        { label: "Years of Experience", value: doctor.years || "—" },
       ];
     }
     return [
@@ -377,12 +377,7 @@ function ProfileSheet({
                 type="tel"
               />
               <ReadField label="MDCN Number" value={d.mdcn || "—"} />
-              <SelectField
-                label="Years of Experience"
-                value={d.years ?? ""}
-                onChange={(v) => setD((p) => ({ ...p, years: v }))}
-                options={["< 1", "1–3", "3–5", "5–10", "10+"]}
-              />
+
               <EditField
                 label="Bank Name"
                 value={d.bankName ?? ""}
