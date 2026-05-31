@@ -39,8 +39,9 @@ function AuthScreen() {
 
   const routeAfterAuth = () => {
     setRole(normalizedRole);
-    if (isOnboarded(normalizedRole)) navigate({ to: "/home" });
-    else navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+    // Always route to /home — the app shell enforces the backend
+    // onboarding gate and will redirect to /onboarding/$role if needed.
+    navigate({ to: "/home" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
