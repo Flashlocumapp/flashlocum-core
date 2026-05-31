@@ -100,7 +100,15 @@ let history: HistoryItem[] = [];
 let historyRatings: Record<string, number> = {};
 let acceptedSheet: Coverage | null = null;
 // Hospital pending rating after End Shift (entityId derived from hospital name).
-let pendingRating: { requestId: string; hospitalId: string; hospital: string } | null = null;
+export type PendingRating = {
+  requestId: string;
+  hospitalId: string;
+  hospital: string;
+  total: number;
+  feePct: number;
+};
+let pendingRating: PendingRating | null = null;
+
 
 const processedEvents = new Set<string>();
 
