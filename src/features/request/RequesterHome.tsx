@@ -1250,7 +1250,7 @@ function DispatchOverlay({
               open={cancelOpen}
               onDismiss={() => setCancelOpen(false)}
               confirmTitle="Cancel this shift?"
-              confirmBody="Dr. Emmanuel Adeleke is already assigned. Keeping it preserves continuity."
+              confirmBody={`${acceptedDoctorName} is already assigned. Keeping it preserves continuity.`}
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
               onCancelled={handleCancelPostAccept}
