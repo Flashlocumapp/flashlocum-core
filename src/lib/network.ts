@@ -405,13 +405,14 @@ export function registerDoctor(initialOnline: boolean) {
   const sid = getSessionId();
   const current = state.doctors[sid];
   const pos = current ?? randomPos(sid);
+  const desiredOnline = current ? current.online : initialOnline;
   const next: NetState = {
     ...state,
     doctors: {
       ...state.doctors,
       [sid]: {
         sessionId: sid,
-        online: current ? current.online : initialOnline,
+        online: desiredOnline,
         acceptedCount: current?.acceptedCount ?? 0,
         top: pos.top,
         left: pos.left,
@@ -421,11 +422,15 @@ export function registerDoctor(initialOnline: boolean) {
     },
   };
   save(next);
+  // Backend write so other devices see this doctor.
+  void upsertMyPresence({ online: desiredOnline, top: pos.top, left: pos.left });
 }
 
 export function unregisterDoctor() {
   refreshState();
   const sid = getSessionId();
+  // Mark offline in backend (don't delete — keeps stable position).
+  void clearMyPresence();
   if (!state.doctors[sid]) return;
   const { [sid]: _gone, ...rest } = state.doctors;
   save({ ...state, doctors: rest });
@@ -440,6 +445,8 @@ export function heartbeat() {
     ...state,
     doctors: { ...state.doctors, [sid]: { ...d, lastSeen: simNow() } },
   });
+  // Backend heartbeat keeps last_seen fresh and re-asserts online flag.
+  void heartbeatPresence(d.online);
 }
 
 export function setDoctorOnline(online: boolean) {
@@ -457,7 +464,10 @@ export function setDoctorOnline(online: boolean) {
       [sid]: { ...d, online, lastSeen: simNow() },
     },
   });
+  // Backend write — true shared operational state.
+  void upsertMyPresence({ online, top: d.top, left: d.left });
 }
+
 
 export function setDoctorAcceptedCount(n: number) {
   refreshState();
