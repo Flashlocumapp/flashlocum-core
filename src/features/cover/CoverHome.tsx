@@ -35,6 +35,11 @@ export function CoverHome() {
   const myRating = useRating(doctorEntityId(getSessionId()));
   const acceptance = 96;
 
+  // Hard-revoke online state if verification is lost (suspension, rejection).
+  useEffect(() => {
+    if (!approved && online) setOnline(false);
+  }, [approved, online]);
+
   const handleToggleOnline = () => {
     if (!approved) {
       pushToast({
