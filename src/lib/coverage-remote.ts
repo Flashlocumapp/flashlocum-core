@@ -318,7 +318,11 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
     cancelled_by: req.cancelledBy ?? null,
   };
   const { error } = await supabase.from(TABLE).insert(row);
-  if (error) console.warn("[coverage-remote] insert error:", error.message);
+  if (error) {
+    console.warn("[coverage-remote] insert error:", error.message);
+    return;
+  }
+  emitInvalidate(req.id);
 }
 
 export async function remoteUpdateRequest(
@@ -328,7 +332,11 @@ export async function remoteUpdateRequest(
   const dbPatch = netPatchToRow(patch);
   if (Object.keys(dbPatch).length === 0) return;
   const { error } = await supabase.from(TABLE).update(dbPatch).eq("id", id);
-  if (error) console.warn("[coverage-remote] update error:", error.message);
+  if (error) {
+    console.warn("[coverage-remote] update error:", error.message);
+    return;
+  }
+  emitInvalidate(id);
 }
 
 /**
@@ -350,10 +358,16 @@ export async function remoteClaimRequest(
     console.warn("[coverage-remote] claim error:", error.message);
     return false;
   }
-  return (data?.length ?? 0) > 0;
+  const won = (data?.length ?? 0) > 0;
+  if (won) emitInvalidate(id);
+  return won;
 }
 
 export async function remoteDeleteRequest(id: string): Promise<void> {
   const { error } = await supabase.from(TABLE).delete().eq("id", id);
-  if (error) console.warn("[coverage-remote] delete error:", error.message);
+  if (error) {
+    console.warn("[coverage-remote] delete error:", error.message);
+    return;
+  }
+  emitInvalidate(id);
 }
