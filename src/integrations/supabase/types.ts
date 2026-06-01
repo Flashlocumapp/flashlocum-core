@@ -101,6 +101,33 @@ export type Database = {
         }
         Relationships: []
       }
+      doctor_presence: {
+        Row: {
+          last_seen: string
+          left: number
+          online: boolean
+          top: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_seen?: string
+          left?: number
+          online?: boolean
+          top?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_seen?: string
+          left?: number
+          online?: boolean
+          top?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           bank_account: string | null

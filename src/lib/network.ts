@@ -26,6 +26,14 @@ import {
   subscribeCoverageRemote,
   type RemoteEvent,
 } from "./coverage-remote";
+import {
+  clearMyPresence,
+  heartbeatPresence,
+  subscribePresence,
+  upsertMyPresence,
+  type PresenceRow,
+} from "./presence-remote";
+
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
@@ -172,61 +180,45 @@ let channel: BroadcastChannel | null = null;
 let state: NetState = emptyState();
 const listeners = new Set<(s: NetState) => void>();
 let remoteUnsubscribe: (() => void) | null = null;
+let presenceUnsubscribe: (() => void) | null = null;
+
 
 function load(): NetState {
-  // Only presence (doctors) is rehydrated from localStorage. Requests are
-  // sourced from Supabase Realtime and replace any prior local cache.
+  // Doctor presence is sourced from Supabase Realtime (doctor_presence
+  // table) — we no longer rehydrate it from localStorage so the backend is
+  // the single source of truth. Requests are likewise remote-backed.
   if (typeof window === "undefined") return emptyState();
   try {
     window.localStorage.removeItem(LEGACY_STORAGE);
-    const raw = window.localStorage.getItem(STORAGE);
-    if (!raw) return emptyState();
-    const parsed = JSON.parse(raw) as NetState;
-    if (parsed.schemaVersion !== SCHEMA_VERSION) return emptyState();
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      doctors: parsed.doctors ?? {},
-      requests: state.requests ?? {}, // keep in-memory remote-backed requests
-      lastEvent: parsed.lastEvent,
-    };
+    window.localStorage.removeItem(STORAGE);
   } catch {
-    return emptyState();
+    /* noop */
   }
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    doctors: state.doctors ?? {},
+    requests: state.requests ?? {},
+    lastEvent: state.lastEvent,
+  };
 }
 
 function refreshState(): NetState {
-  state = pruneStale(load());
+  state = load();
   return state;
 }
 
 function save(next: NetState, event?: Omit<NetEvent, "at">) {
-  // CORRECT SYNC ORDER:
-  //   1) update global state  → 2) persist presence  → 3) notify  → 4) broadcast
   const { lastEvent: _previousEvent, ...withoutEvent } = next;
   const stamped: NetState = event
     ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: simNow() } }
     : { ...withoutEvent, schemaVersion: SCHEMA_VERSION };
   state = stamped;
   if (typeof window === "undefined") return;
-  try {
-    // Persist only presence locally. Requests are authoritative in Supabase.
-    const { requests: _omit, ...presenceOnly } = stamped;
-    window.localStorage.setItem(STORAGE, JSON.stringify(presenceOnly));
-  } catch {
-    /* noop */
-  }
   listeners.forEach((l) => l(state));
   channel?.postMessage({ type: "state", state: stamped });
 }
 
-function pruneStale(s: NetState): NetState {
-  const now = simNow();
-  const doctors: Record<string, DoctorPresence> = {};
-  for (const [k, d] of Object.entries(s.doctors)) {
-    if (now - d.lastSeen < STALE_MS) doctors[k] = d;
-  }
-  return { ...s, schemaVersion: SCHEMA_VERSION, doctors };
-}
+
 
 function applyRemoteEvent(ev: RemoteEvent) {
   const requests = { ...state.requests };
@@ -289,27 +281,21 @@ function init() {
   if (channel) return;
   // Resolve auth user id ASAP so getSessionId() returns it for ownership checks.
   primeUserId();
-  state = pruneStale(load());
+  state = load();
   try {
     channel = new BroadcastChannel(CHANNEL);
     channel.onmessage = (message) => {
       const incoming = message.data?.state as NetState | undefined;
       if (incoming?.schemaVersion === SCHEMA_VERSION) {
-        // Merge presence from other tabs; keep our remote-backed requests.
-        state = pruneStale({ ...incoming, requests: state.requests });
+        // Keep request state local-only; presence is sourced from backend.
+        state = { ...incoming, requests: state.requests, doctors: state.doctors };
         listeners.forEach((l) => l(state));
       }
     };
   } catch {
     /* noop */
   }
-  // Cross-tab fallback via storage events (presence only).
-  window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE) {
-      state = pruneStale(load());
-      listeners.forEach((l) => l(state));
-    }
-  });
+
 
   // Subscribe to Supabase coverage_requests realtime.
   remoteUnsubscribe = subscribeCoverageRemote({
@@ -322,11 +308,35 @@ function init() {
     onEvent: applyRemoteEvent,
   });
 
+  // Subscribe to backend doctor presence realtime — true shared state.
+  presenceUnsubscribe = subscribePresence((rows) => {
+    state = { ...state, doctors: mergePresenceRows(rows) };
+    listeners.forEach((l) => l(state));
+  });
+
   // Re-emit listeners when auth resolves (so derived selectors pick up id).
   onUserIdChange(() => {
     listeners.forEach((l) => l(state));
   });
 }
+
+function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> {
+  const out: Record<string, DoctorPresence> = {};
+  for (const r of rows) {
+    const prev = state.doctors[r.user_id];
+    out[r.user_id] = {
+      sessionId: r.user_id,
+      online: r.online,
+      acceptedCount: prev?.acceptedCount ?? 0,
+      top: r.top,
+      left: r.left,
+      lastSeen: new Date(r.last_seen).getTime(),
+      declined: prev?.declined ?? [],
+    };
+  }
+  return out;
+}
+
 
 if (typeof window !== "undefined") init();
 
@@ -371,13 +381,14 @@ export function registerDoctor(initialOnline: boolean) {
   const sid = getSessionId();
   const current = state.doctors[sid];
   const pos = current ?? randomPos(sid);
+  const desiredOnline = current ? current.online : initialOnline;
   const next: NetState = {
     ...state,
     doctors: {
       ...state.doctors,
       [sid]: {
         sessionId: sid,
-        online: current ? current.online : initialOnline,
+        online: desiredOnline,
         acceptedCount: current?.acceptedCount ?? 0,
         top: pos.top,
         left: pos.left,
@@ -387,11 +398,15 @@ export function registerDoctor(initialOnline: boolean) {
     },
   };
   save(next);
+  // Backend write so other devices see this doctor.
+  void upsertMyPresence({ online: desiredOnline, top: pos.top, left: pos.left });
 }
 
 export function unregisterDoctor() {
   refreshState();
   const sid = getSessionId();
+  // Mark offline in backend (don't delete — keeps stable position).
+  void clearMyPresence();
   if (!state.doctors[sid]) return;
   const { [sid]: _gone, ...rest } = state.doctors;
   save({ ...state, doctors: rest });
@@ -406,6 +421,8 @@ export function heartbeat() {
     ...state,
     doctors: { ...state.doctors, [sid]: { ...d, lastSeen: simNow() } },
   });
+  // Backend heartbeat keeps last_seen fresh and re-asserts online flag.
+  void heartbeatPresence(d.online);
 }
 
 export function setDoctorOnline(online: boolean) {
@@ -423,7 +440,10 @@ export function setDoctorOnline(online: boolean) {
       [sid]: { ...d, online, lastSeen: simNow() },
     },
   });
+  // Backend write — true shared operational state.
+  void upsertMyPresence({ online, top: d.top, left: d.left });
 }
+
 
 export function setDoctorAcceptedCount(n: number) {
   refreshState();
