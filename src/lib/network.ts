@@ -180,6 +180,8 @@ let channel: BroadcastChannel | null = null;
 let state: NetState = emptyState();
 const listeners = new Set<(s: NetState) => void>();
 let remoteUnsubscribe: (() => void) | null = null;
+let presenceUnsubscribe: (() => void) | null = null;
+
 
 function load(): NetState {
   // Only presence (doctors) is rehydrated from localStorage. Requests are
