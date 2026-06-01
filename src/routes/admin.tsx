@@ -187,14 +187,12 @@ function DoctorCard({
   onApprove,
   onReject,
   onSuspend,
-  onReactivate,
 }: {
   doctor: ProfileRow;
   busy: string | null;
   onApprove: () => void;
   onReject: () => void;
   onSuspend: () => void;
-  onReactivate: () => void;
 }) {
   const tone = statusTone(doctor.verification_status);
   const isBusy = (s: string) => busy === doctor.id + s;
