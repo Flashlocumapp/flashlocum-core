@@ -15,6 +15,17 @@ import {
   computeWorkedPricing,
   coverageKindFromLabel,
 } from "./pricing";
+import {
+  getCurrentUserIdSync,
+  onUserIdChange,
+  primeUserId,
+  remoteClaimRequest,
+  remoteDeleteRequest,
+  remoteInsertRequest,
+  remoteUpdateRequest,
+  subscribeCoverageRemote,
+  type RemoteEvent,
+} from "./coverage-remote";
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
