@@ -159,7 +159,6 @@ function AdminScreen() {
                 onApprove={() => act(d.id, "approved")}
                 onReject={() => act(d.id, "rejected")}
                 onSuspend={() => act(d.id, "suspended")}
-                onReactivate={() => act(d.id, "approved")}
               />
             ))
           )}
