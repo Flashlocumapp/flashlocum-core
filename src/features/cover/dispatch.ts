@@ -157,7 +157,11 @@ export function useDispatch(): View {
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
   const declined = new Set(me?.declined ?? []);
-  const liveRequests = broadcastingRequests(net).filter((r) => !declined.has(r.id));
+  // Doctors never see their own requester-side broadcasts (dispatch must
+  // behave as a true multi-user network, not a same-account loopback).
+  const liveRequests = broadcastingRequests(net).filter(
+    (r) => !declined.has(r.id) && r.requesterSessionId !== sid,
+  );
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
