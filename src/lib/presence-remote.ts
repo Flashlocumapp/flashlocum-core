@@ -86,7 +86,13 @@ export async function upsertMyPresence(fields: {
 }): Promise<void> {
   const uid = getCurrentUserIdSync();
   if (!uid) return;
-  const row: Record<string, unknown> = {
+  const row: {
+    user_id: string;
+    online: boolean;
+    last_seen: string;
+    top?: number;
+    left?: number;
+  } = {
     user_id: uid,
     online: fields.online,
     last_seen: new Date().toISOString(),
@@ -96,6 +102,7 @@ export async function upsertMyPresence(fields: {
   const { error } = await supabase
     .from(TABLE)
     .upsert(row, { onConflict: "user_id" });
+
   if (error) console.warn("[presence-remote] upsert error:", error.message);
 }
 
