@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      coverage_requests: {
+        Row: {
+          accepted_by: string | null
+          accommodation: string | null
+          accumulated_ms: number
+          amount: number
+          area: string
+          cancelled_by: string | null
+          coverage_type: string
+          created_at: string
+          day: string
+          day_index: number
+          days: number
+          duration_hrs: number
+          end_time: string
+          end_ts: number | null
+          fee_pct: number
+          hospital: string
+          id: string
+          note: string | null
+          phone: string
+          requester_id: string
+          settled_amount: number | null
+          start_time: string
+          start_ts: number | null
+          started_at: number | null
+          status: Database["public"]["Enums"]["coverage_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          accepted_by?: string | null
+          accommodation?: string | null
+          accumulated_ms?: number
+          amount?: number
+          area: string
+          cancelled_by?: string | null
+          coverage_type: string
+          created_at?: string
+          day: string
+          day_index?: number
+          days?: number
+          duration_hrs?: number
+          end_time: string
+          end_ts?: number | null
+          fee_pct?: number
+          hospital: string
+          id?: string
+          note?: string | null
+          phone?: string
+          requester_id: string
+          settled_amount?: number | null
+          start_time: string
+          start_ts?: number | null
+          started_at?: number | null
+          status?: Database["public"]["Enums"]["coverage_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          accepted_by?: string | null
+          accommodation?: string | null
+          accumulated_ms?: number
+          amount?: number
+          area?: string
+          cancelled_by?: string | null
+          coverage_type?: string
+          created_at?: string
+          day?: string
+          day_index?: number
+          days?: number
+          duration_hrs?: number
+          end_time?: string
+          end_ts?: number | null
+          fee_pct?: number
+          hospital?: string
+          id?: string
+          note?: string | null
+          phone?: string
+          requester_id?: string
+          settled_amount?: number | null
+          start_time?: string
+          start_ts?: number | null
+          started_at?: number | null
+          status?: Database["public"]["Enums"]["coverage_request_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           bank_account: string | null
@@ -111,6 +198,13 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      coverage_request_status:
+        | "searching"
+        | "accepted"
+        | "active"
+        | "paused"
+        | "completed"
+        | "cancelled"
       verification_status: "pending" | "approved" | "suspended" | "rejected"
     }
     CompositeTypes: {
@@ -240,6 +334,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      coverage_request_status: [
+        "searching",
+        "accepted",
+        "active",
+        "paused",
+        "completed",
+        "cancelled",
+      ],
       verification_status: ["pending", "approved", "suspended", "rejected"],
     },
   },
