@@ -50,6 +50,23 @@ function AdminScreen() {
     })();
   }, [refresh]);
 
+  useEffect(() => {
+    if (state !== "ready") return;
+    const channel = supabase
+      .channel("admin-doctor-verification")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          void refresh();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refresh, state]);
+
   const act = async (id: string, status: VerificationStatus) => {
     setBusy(id + status);
     try {
@@ -196,7 +213,7 @@ function DoctorCard({
 }) {
   const tone = statusTone(doctor.verification_status);
   const isBusy = (s: string) => busy === doctor.id + s;
-  const anyBusy = busy?.startsWith(doctor.id);
+  const anyBusy = busy?.startsWith(doctor.id) ?? false;
   const status = doctor.verification_status;
 
   return (
@@ -237,7 +254,7 @@ function DoctorCard({
         {status !== "approved" && (
           <button
             onClick={onApprove}
-            disabled={anyBusy !== null && anyBusy !== false}
+            disabled={anyBusy}
             className="h-9 rounded-full bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground disabled:opacity-60"
           >
             {isBusy("approved")
@@ -250,7 +267,7 @@ function DoctorCard({
         {status !== "suspended" && (
           <button
             onClick={onSuspend}
-            disabled={anyBusy !== null && anyBusy !== false}
+            disabled={anyBusy}
             className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold disabled:opacity-60"
           >
             {isBusy("suspended") ? "Suspending…" : "Suspend"}
@@ -259,7 +276,7 @@ function DoctorCard({
         {status !== "rejected" && (
           <button
             onClick={onReject}
-            disabled={anyBusy !== null && anyBusy !== false}
+            disabled={anyBusy}
             className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold disabled:opacity-60"
             style={{ color: "#b91c1c" }}
           >

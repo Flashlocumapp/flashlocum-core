@@ -67,9 +67,11 @@ export async function markOnboardedRemote(
   const stamp = new Date().toISOString();
   const capabilityStamp =
     role === "cover" ? { onboarded_cover_at: stamp } : { onboarded_request_at: stamp };
+  const verificationReset = role === "cover" ? { verification_status: "pending" as VerificationStatus } : {};
   await upsertMyProfile({
     ...fields,
     role,
+    ...verificationReset,
     ...capabilityStamp,
     onboarded_at: stamp,
   });
@@ -107,7 +109,7 @@ export async function listDoctors(): Promise<ProfileRow[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
-    .eq("role", "cover")
+    .not("onboarded_cover_at", "is", null)
     .order("onboarded_cover_at", { ascending: false });
   if (error) throw error;
   return (data as ProfileRow[]) ?? [];
@@ -120,6 +122,8 @@ export async function updateDoctorVerification(
   const { error } = await supabase
     .from("profiles")
     .update({ verification_status: status })
-    .eq("id", doctorId);
+    .eq("id", doctorId)
+    .select("id")
+    .single();
   if (error) throw error;
 }
