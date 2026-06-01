@@ -281,27 +281,21 @@ function init() {
   if (channel) return;
   // Resolve auth user id ASAP so getSessionId() returns it for ownership checks.
   primeUserId();
-  state = pruneStale(load());
+  state = load();
   try {
     channel = new BroadcastChannel(CHANNEL);
     channel.onmessage = (message) => {
       const incoming = message.data?.state as NetState | undefined;
       if (incoming?.schemaVersion === SCHEMA_VERSION) {
-        // Merge presence from other tabs; keep our remote-backed requests.
-        state = pruneStale({ ...incoming, requests: state.requests });
+        // Keep request state local-only; presence is sourced from backend.
+        state = { ...incoming, requests: state.requests, doctors: state.doctors };
         listeners.forEach((l) => l(state));
       }
     };
   } catch {
     /* noop */
   }
-  // Cross-tab fallback via storage events (presence only).
-  window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE) {
-      state = pruneStale(load());
-      listeners.forEach((l) => l(state));
-    }
-  });
+
 
   // Subscribe to Supabase coverage_requests realtime.
   remoteUnsubscribe = subscribeCoverageRemote({
