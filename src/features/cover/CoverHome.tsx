@@ -118,9 +118,11 @@ function VerificationBanner({ status }: { status: string }) {
 function OnlinePill({
   online,
   onToggle,
+  disabled,
 }: {
   online: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -134,7 +136,9 @@ function OnlinePill({
         border: online
           ? "none"
           : "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
+        opacity: disabled ? 0.55 : 1,
       }}
+      aria-disabled={disabled || undefined}
     >
       <span
         className="relative h-2.5 w-2.5 rounded-full"
@@ -156,7 +160,7 @@ function OnlinePill({
         )}
       </span>
       <span className="text-[13.5px] font-semibold tracking-tight">
-        {online ? "Online" : "Offline"}
+        {disabled ? "Locked" : online ? "Online" : "Offline"}
       </span>
     </button>
   );
