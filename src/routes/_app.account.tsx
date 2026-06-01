@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
 import {
   getProfile,
-  isOnboarded,
   saveProfile,
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
+import { hasCompletedOnboarding } from "@/lib/profile-remote";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/account")({
