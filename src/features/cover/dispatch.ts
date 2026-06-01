@@ -463,7 +463,12 @@ function pendingIncomingId(): string | null {
   const me = s.doctors?.[sid];
   const declined = new Set<string>(me?.declined ?? []);
   const first = Object.values(s.requests ?? {})
-    .filter((r) => r.status === "broadcasting" && !declined.has(r.id))
+    .filter(
+      (r) =>
+        r.status === "broadcasting" &&
+        !declined.has(r.id) &&
+        r.requesterSessionId !== sid,
+    )
     .sort((a, b) => a.createdAt - b.createdAt)[0];
   return first?.id ?? null;
 }
