@@ -184,59 +184,41 @@ let presenceUnsubscribe: (() => void) | null = null;
 
 
 function load(): NetState {
-  // Only presence (doctors) is rehydrated from localStorage. Requests are
-  // sourced from Supabase Realtime and replace any prior local cache.
+  // Doctor presence is sourced from Supabase Realtime (doctor_presence
+  // table) — we no longer rehydrate it from localStorage so the backend is
+  // the single source of truth. Requests are likewise remote-backed.
   if (typeof window === "undefined") return emptyState();
   try {
     window.localStorage.removeItem(LEGACY_STORAGE);
-    const raw = window.localStorage.getItem(STORAGE);
-    if (!raw) return emptyState();
-    const parsed = JSON.parse(raw) as NetState;
-    if (parsed.schemaVersion !== SCHEMA_VERSION) return emptyState();
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      doctors: parsed.doctors ?? {},
-      requests: state.requests ?? {}, // keep in-memory remote-backed requests
-      lastEvent: parsed.lastEvent,
-    };
+    window.localStorage.removeItem(STORAGE);
   } catch {
-    return emptyState();
+    /* noop */
   }
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    doctors: state.doctors ?? {},
+    requests: state.requests ?? {},
+    lastEvent: state.lastEvent,
+  };
 }
 
 function refreshState(): NetState {
-  state = pruneStale(load());
+  state = load();
   return state;
 }
 
 function save(next: NetState, event?: Omit<NetEvent, "at">) {
-  // CORRECT SYNC ORDER:
-  //   1) update global state  → 2) persist presence  → 3) notify  → 4) broadcast
   const { lastEvent: _previousEvent, ...withoutEvent } = next;
   const stamped: NetState = event
     ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: simNow() } }
     : { ...withoutEvent, schemaVersion: SCHEMA_VERSION };
   state = stamped;
   if (typeof window === "undefined") return;
-  try {
-    // Persist only presence locally. Requests are authoritative in Supabase.
-    const { requests: _omit, ...presenceOnly } = stamped;
-    window.localStorage.setItem(STORAGE, JSON.stringify(presenceOnly));
-  } catch {
-    /* noop */
-  }
   listeners.forEach((l) => l(state));
   channel?.postMessage({ type: "state", state: stamped });
 }
 
-function pruneStale(s: NetState): NetState {
-  const now = simNow();
-  const doctors: Record<string, DoctorPresence> = {};
-  for (const [k, d] of Object.entries(s.doctors)) {
-    if (now - d.lastSeen < STALE_MS) doctors[k] = d;
-  }
-  return { ...s, schemaVersion: SCHEMA_VERSION, doctors };
-}
+
 
 function applyRemoteEvent(ev: RemoteEvent) {
   const requests = { ...state.requests };
