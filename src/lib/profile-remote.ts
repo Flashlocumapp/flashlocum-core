@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/lib/role";
 
+export type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
+
 export type ProfileRow = {
   id: string;
   role: string | null;
@@ -14,6 +16,9 @@ export type ProfileRow = {
   bank_account: string | null;
   selfie_url: string | null;
   onboarded_at: string | null;
+  onboarded_cover_at: string | null;
+  onboarded_request_at: string | null;
+  verification_status: VerificationStatus;
 };
 
 /** Fetch the current user's profile row, or null if it doesn't exist. */
@@ -33,10 +38,11 @@ export async function fetchMyProfile(): Promise<ProfileRow | null> {
   return (data as ProfileRow | null) ?? null;
 }
 
-/** True if user has a profile row that has been marked onboarded. */
-export async function hasCompletedOnboarding(): Promise<boolean> {
+/** True if user has completed onboarding for the given capability. */
+export async function hasCompletedOnboarding(role: Role): Promise<boolean> {
   const p = await fetchMyProfile();
-  return !!p && !!p.onboarded_at;
+  if (!p) return false;
+  return role === "cover" ? !!p.onboarded_cover_at : !!p.onboarded_request_at;
 }
 
 /** Upsert profile fields for the current user. */
@@ -52,7 +58,68 @@ export async function upsertMyProfile(
   if (error) throw error;
 }
 
-/** Mark the current user as onboarded for the given role. */
-export async function markOnboardedRemote(role: Role, fields: Partial<Omit<ProfileRow, "id">> = {}) {
-  await upsertMyProfile({ ...fields, role, onboarded_at: new Date().toISOString() });
+/** Mark the current user as onboarded for the given capability.
+ *  Capabilities track independently — completing one does NOT auto-complete the other. */
+export async function markOnboardedRemote(
+  role: Role,
+  fields: Partial<Omit<ProfileRow, "id">> = {},
+) {
+  const stamp = new Date().toISOString();
+  const capabilityStamp =
+    role === "cover" ? { onboarded_cover_at: stamp } : { onboarded_request_at: stamp };
+  await upsertMyProfile({
+    ...fields,
+    role,
+    ...capabilityStamp,
+    onboarded_at: stamp,
+  });
+}
+
+/* ---------- Verification ---------- */
+
+export async function fetchVerificationStatus(): Promise<VerificationStatus> {
+  const p = await fetchMyProfile();
+  return p?.verification_status ?? "pending";
+}
+
+/* ---------- Admin ---------- */
+
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return false;
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", u.user.id)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
+}
+
+export async function claimFirstAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("claim_first_admin");
+  if (error) throw error;
+  return !!data;
+}
+
+export async function listDoctors(): Promise<ProfileRow[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "cover")
+    .order("onboarded_cover_at", { ascending: false });
+  if (error) throw error;
+  return (data as ProfileRow[]) ?? [];
+}
+
+export async function updateDoctorVerification(
+  doctorId: string,
+  status: VerificationStatus,
+): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ verification_status: status })
+    .eq("id", doctorId);
+  if (error) throw error;
 }
