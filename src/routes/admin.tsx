@@ -240,25 +240,30 @@ function DoctorCard({
             disabled={anyBusy !== null && anyBusy !== false}
             className="h-9 rounded-full bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground disabled:opacity-60"
           >
-            {isBusy("approved") ? "Approving…" : status === "suspended" ? "Reactivate" : "Approve"}
+            {isBusy("approved")
+              ? "Approving…"
+              : status === "suspended" || status === "rejected"
+                ? "Reactivate"
+                : "Approve"}
           </button>
         )}
-        {status !== "rejected" && status !== "approved" && (
-          <button
-            onClick={onReject}
-            disabled={anyBusy !== null && anyBusy !== false}
-            className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold disabled:opacity-60"
-          >
-            {isBusy("rejected") ? "Rejecting…" : "Reject"}
-          </button>
-        )}
-        {status === "approved" && (
+        {status !== "suspended" && (
           <button
             onClick={onSuspend}
             disabled={anyBusy !== null && anyBusy !== false}
             className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold disabled:opacity-60"
           >
             {isBusy("suspended") ? "Suspending…" : "Suspend"}
+          </button>
+        )}
+        {status !== "rejected" && (
+          <button
+            onClick={onReject}
+            disabled={anyBusy !== null && anyBusy !== false}
+            className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold disabled:opacity-60"
+            style={{ color: "#b91c1c" }}
+          >
+            {isBusy("rejected") ? "Rejecting…" : "Reject"}
           </button>
         )}
       </div>
