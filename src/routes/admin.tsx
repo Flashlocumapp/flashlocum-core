@@ -50,6 +50,23 @@ function AdminScreen() {
     })();
   }, [refresh]);
 
+  useEffect(() => {
+    if (state !== "ready") return;
+    const channel = supabase
+      .channel("admin-doctor-verification")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          void refresh();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refresh, state]);
+
   const act = async (id: string, status: VerificationStatus) => {
     setBusy(id + status);
     try {
