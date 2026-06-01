@@ -469,7 +469,26 @@ export function startHeartbeat() {
   };
 }
 
-/* ---------------- requests ---------------- */
+/* ---------------- requests (backend-backed) ----------------
+ *
+ * All request lifecycle is persisted in Supabase (coverage_requests).
+ * Each mutation applies an optimistic local update and fires a
+ * background write. The realtime subscription reconciles any drift.
+ */
+
+function newRequestId(): string {
+  try {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+  } catch { /* noop */ }
+  // RFC4122-ish fallback
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 export function publishRequest(
   req: Omit<NetRequest, "id" | "requesterSessionId" | "status" | "createdAt" | "updatedAt">,
@@ -477,7 +496,7 @@ export function publishRequest(
   refreshState();
   const sid = getSessionId();
   const now = simNow();
-  const id = "r_" + now.toString(36) + Math.random().toString(36).slice(2, 6);
+  const id = newRequestId();
   const full: NetRequest = {
     ...req,
     id,
@@ -486,10 +505,13 @@ export function publishRequest(
     createdAt: now,
     updatedAt: now,
   };
+  // Optimistic local update
   save(
     { ...state, requests: { ...state.requests, [id]: full } },
     { actor: "requester", actorId: sid, shiftId: id, action: "publish" },
   );
+  // Backend write
+  void remoteInsertRequest(full);
   return full;
 }
 
@@ -501,16 +523,12 @@ function applyPatch(
   refreshState();
   const cur = state.requests[id];
   if (!cur) return;
+  const next = { ...cur, ...patch, updatedAt: simNow() };
   save(
-    {
-      ...state,
-      requests: {
-        ...state.requests,
-        [id]: { ...cur, ...patch, updatedAt: simNow() },
-      },
-    },
+    { ...state, requests: { ...state.requests, [id]: next } },
     { ...event, shiftId: id },
   );
+  void remoteUpdateRequest(id, patch);
 }
 
 /** Generic patch — actor inferred from current session role. */
@@ -538,6 +556,15 @@ function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "
   return null;
 }
 
+/**
+ * Accept a broadcasting request. Local pre-checks run first; the backend
+ * UPDATE-with-WHERE is the authoritative claim — it only succeeds if the
+ * row is still searching and unclaimed (race-safe).
+ *
+ * Returns synchronously based on local state. Backend reconciliation may
+ * flip a local "ok" to a no-op when another doctor wins; the realtime
+ * subscription will then refresh state.
+ */
 export function acceptRequest(id: string): AcceptRequestResult {
   refreshState();
   const cur = state.requests[id];
@@ -548,6 +575,7 @@ export function acceptRequest(id: string): AcceptRequestResult {
   if (mine.length >= MAX_CONFIRMED_SHIFTS) return { ok: false, reason: "max" };
   const conflict = conflictReason(mine, cur);
   if (conflict) return { ok: false, reason: conflict };
+  // Optimistic local
   save(
     {
       ...state,
@@ -558,6 +586,22 @@ export function acceptRequest(id: string): AcceptRequestResult {
     },
     { actor: "doctor", actorId: sid, action: "accept", shiftId: id },
   );
+  // Backend atomic claim
+  void remoteClaimRequest(id, sid).then((won) => {
+    if (!won) {
+      // Roll back local optimistic accept — another doctor won.
+      const now = state.requests[id];
+      if (now && now.acceptedBy === sid && now.status === "accepted") {
+        save({
+          ...state,
+          requests: {
+            ...state.requests,
+            [id]: { ...now, status: "broadcasting", acceptedBy: undefined, updatedAt: simNow() },
+          },
+        });
+      }
+    }
+  });
   return { ok: true };
 }
 
@@ -570,45 +614,23 @@ export function cancelRequest(id: string) {
   );
 }
 
-/**
- * Start (or Resume) a shift. If `accumulatedMs` already exists from a prior
- * Pause, it is preserved — the timer continues from the previous total.
- * Never resets accumulated billing or creates a new shift instance.
- */
 export function startRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur) return;
   const isResume = (cur.accumulatedMs ?? 0) > 0;
-  save(
-    {
-      ...state,
-      requests: {
-        ...state.requests,
-        [id]: {
-          ...cur,
-          status: "active",
-          startedAt: simNow(),
-          accumulatedMs: cur.accumulatedMs ?? 0,
-          updatedAt: simNow(),
-        },
-      },
-    },
-    {
-      actor: "requester",
-      actorId: getSessionId(),
-      action: isResume ? "resume" : "start",
-      shiftId: id,
-    },
-  );
+  const patch: Partial<NetRequest> = {
+    status: "active",
+    startedAt: simNow(),
+    accumulatedMs: cur.accumulatedMs ?? 0,
+  };
+  applyPatch(id, patch, {
+    actor: "requester",
+    actorId: getSessionId(),
+    action: isResume ? "resume" : "start",
+  });
 }
 
-/**
- * Pause an active shift. Folds the current segment into `accumulatedMs`,
- * clears `startedAt`, and moves the request back to Upcoming Coverage.
- * Preserves operational continuity — Resume picks up exactly where Pause
- * left off.
- */
 export function pauseShift(id: string) {
   refreshState();
   const cur = state.requests[id];
@@ -617,29 +639,13 @@ export function pauseShift(id: string) {
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
   const days = Math.max(1, cur.days ?? 1);
   const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
-  save(
-    {
-      ...state,
-      requests: {
-        ...state.requests,
-        [id]: {
-          ...cur,
-          status: "accepted",
-          startedAt: undefined,
-          accumulatedMs,
-          dayIndex,
-          updatedAt: simNow(),
-        },
-      },
-    },
-    { actor: "requester", actorId: getSessionId(), action: "pause", shiftId: id },
+  applyPatch(
+    id,
+    { status: "accepted", startedAt: undefined, accumulatedMs, dayIndex },
+    { actor: "requester", actorId: getSessionId(), action: "pause" },
   );
 }
 
-/**
- * Finalize a shift permanently. Flushes the current segment into
- * `accumulatedMs` so the settled total reflects the full continuous timer.
- */
 export function completeRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
@@ -649,7 +655,6 @@ export function completeRequest(id: string) {
       ? Math.max(0, simNow() - cur.startedAt)
       : 0;
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
-  // Derive final settled amount from the LIVE accumulated worked time.
   const toHHMM = (raw: string | undefined, fallback: string): string => {
     const m = (raw ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
     if (!m) return fallback;
@@ -669,26 +674,12 @@ export function completeRequest(id: string) {
     endHHMM,
     Math.max(1, cur.days ?? 1),
   ).amount;
-  save(
-    {
-      ...state,
-      requests: {
-        ...state.requests,
-        [id]: {
-          ...cur,
-          status: "completed",
-          accumulatedMs,
-          startedAt: undefined,
-          settledAmount,
-          updatedAt: simNow(),
-        },
-      },
-    },
-    { actor: "requester", actorId: getSessionId(), action: "complete", shiftId: id },
+  applyPatch(
+    id,
+    { status: "completed", accumulatedMs, startedAt: undefined, settledAmount },
+    { actor: "requester", actorId: getSessionId(), action: "complete" },
   );
 }
-
-
 
 /** Pause broadcasting (hides from doctors) without losing request. */
 export function pauseRequest(id: string) {
@@ -723,6 +714,7 @@ export function removeRequest(id: string) {
     { ...state, requests: rest },
     { actor: "requester", actorId: getSessionId(), action: "remove", shiftId: id },
   );
+  void remoteDeleteRequest(id);
 }
 
 /* ---------------- selectors ---------------- */
