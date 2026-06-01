@@ -332,11 +332,35 @@ function init() {
     onEvent: applyRemoteEvent,
   });
 
+  // Subscribe to backend doctor presence realtime — true shared state.
+  presenceUnsubscribe = subscribePresence((rows) => {
+    state = { ...state, doctors: mergePresenceRows(rows) };
+    listeners.forEach((l) => l(state));
+  });
+
   // Re-emit listeners when auth resolves (so derived selectors pick up id).
   onUserIdChange(() => {
     listeners.forEach((l) => l(state));
   });
 }
+
+function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> {
+  const out: Record<string, DoctorPresence> = {};
+  for (const r of rows) {
+    const prev = state.doctors[r.user_id];
+    out[r.user_id] = {
+      sessionId: r.user_id,
+      online: r.online,
+      acceptedCount: prev?.acceptedCount ?? 0,
+      top: r.top,
+      left: r.left,
+      lastSeen: new Date(r.last_seen).getTime(),
+      declined: prev?.declined ?? [],
+    };
+  }
+  return out;
+}
+
 
 if (typeof window !== "undefined") init();
 
