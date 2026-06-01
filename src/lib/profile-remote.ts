@@ -84,6 +84,22 @@ export async function fetchVerificationStatus(): Promise<VerificationStatus> {
   return p?.verification_status ?? "pending";
 }
 
+/** Fetch a specific doctor's profile by user id. RLS must allow the caller
+ *  (admin, the doctor themself, or a requester whose request they accepted). */
+export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null> {
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.warn("fetchDoctorProfile error", error);
+    return null;
+  }
+  return (data as ProfileRow | null) ?? null;
+}
+
 /* ---------- Admin ---------- */
 
 export async function isCurrentUserAdmin(): Promise<boolean> {
