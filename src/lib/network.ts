@@ -26,6 +26,14 @@ import {
   subscribeCoverageRemote,
   type RemoteEvent,
 } from "./coverage-remote";
+import {
+  clearMyPresence,
+  heartbeatPresence,
+  subscribePresence,
+  upsertMyPresence,
+  type PresenceRow,
+} from "./presence-remote";
+
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
