@@ -36,7 +36,7 @@ function AppShell() {
         navigate({ to: "/auth/$role", params: { role } });
         return;
       }
-      if (getRole() === "cover") ensureDoctorSession(true);
+      if (getRole() === "cover") ensureDoctorSession(false);
       setReady(true);
     })();
 

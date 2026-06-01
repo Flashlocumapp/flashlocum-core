@@ -45,7 +45,7 @@ function AuthScreen() {
 
   const proceed = useCallback(async () => {
     setRole(normalizedRole);
-    const onboarded = await hasCompletedOnboarding();
+    const onboarded = await hasCompletedOnboarding(normalizedRole);
     if (onboarded) {
       navigate({ to: "/home" });
     } else {

@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 import { MapBackground } from "@/components/MapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { fmtOpMeta } from "@/lib/format";
@@ -11,7 +12,7 @@ import {
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
 import { useRating } from "@/lib/ratings";
-import { isDoctorVerified } from "@/lib/onboarding";
+import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
 
 /**
@@ -20,6 +21,8 @@ import { pushToast } from "@/lib/notifications";
  */
 export function CoverHome() {
   const { online, upcoming } = useDispatch();
+  const verification = useVerificationStatus();
+  const approved = verification === "approved";
 
   // Pick the focus coverage: any active one, else the next upcoming.
   const focus =
@@ -32,14 +35,41 @@ export function CoverHome() {
   const myRating = useRating(doctorEntityId(getSessionId()));
   const acceptance = 96;
 
+  // Hard-revoke online state if verification is lost (suspension, rejection).
+  useEffect(() => {
+    if (!approved && online) setOnline(false);
+  }, [approved, online]);
+
+  const handleToggleOnline = () => {
+    if (!approved) {
+      pushToast({
+        tone: "warn",
+        title:
+          verification === "suspended"
+            ? "Your account is suspended."
+            : verification === "rejected"
+              ? "Your account was not approved."
+              : "Verification pending — admin approval required.",
+        body: "You'll be able to go online once an admin approves your account.",
+      });
+      return;
+    }
+    setOnline(!online);
+  };
+
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <MapBackground variant={online ? "stethoscope" : "empty"} />
+      <MapBackground variant={online && approved ? "stethoscope" : "empty"} />
 
       {/* top primary Online/Offline pill */}
       <header className="absolute inset-x-0 top-0 z-30 safe-top">
-        <div className="mx-auto flex max-w-md justify-center px-4 pt-3">
-          <OnlinePill online={online} onToggle={() => setOnline(!online)} />
+        <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 pt-3">
+          <OnlinePill
+            online={online && approved}
+            disabled={!approved}
+            onToggle={handleToggleOnline}
+          />
+          {!approved && <VerificationBanner status={verification} />}
         </div>
       </header>
 
@@ -51,7 +81,7 @@ export function CoverHome() {
         className="absolute inset-x-0 bottom-0 z-20"
       >
         <div className="mx-auto flex max-w-md flex-col gap-2.5 px-4 pb-4">
-          <CoverageTile coverage={focus} active={isActive} />
+          <CoverageTile coverage={approved ? focus : null} active={isActive && approved} />
           <div className="grid grid-cols-2 gap-2.5">
             <ScoreTile score={myRating.score} />
             <AcceptanceTile rate={acceptance} />
@@ -62,14 +92,43 @@ export function CoverHome() {
   );
 }
 
+function VerificationBanner({ status }: { status: string }) {
+  const label =
+    status === "suspended"
+      ? "Account suspended"
+      : status === "rejected"
+        ? "Verification rejected"
+        : "Verification pending";
+  const body =
+    status === "suspended"
+      ? "Contact support to restore access."
+      : status === "rejected"
+        ? "Contact support for next steps."
+        : "An admin must approve your account before you can go online.";
+  return (
+    <div
+      className="w-full max-w-xs rounded-2xl px-3.5 py-2.5 text-center"
+      style={{
+        background: "var(--color-surface-elevated)",
+        boxShadow: "0 6px 20px -10px rgba(0,0,0,0.18)",
+      }}
+    >
+      <div className="text-[12px] font-semibold tracking-tight">{label}</div>
+      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">{body}</div>
+    </div>
+  );
+}
+
 /* ------------------ Online toggle ------------------ */
 
 function OnlinePill({
   online,
   onToggle,
+  disabled,
 }: {
   online: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -83,7 +142,9 @@ function OnlinePill({
         border: online
           ? "none"
           : "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
+        opacity: disabled ? 0.55 : 1,
       }}
+      aria-disabled={disabled || undefined}
     >
       <span
         className="relative h-2.5 w-2.5 rounded-full"
@@ -105,7 +166,7 @@ function OnlinePill({
         )}
       </span>
       <span className="text-[13.5px] font-semibold tracking-tight">
-        {online ? "Online" : "Offline"}
+        {disabled ? "Locked" : online ? "Online" : "Offline"}
       </span>
     </button>
   );
