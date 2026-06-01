@@ -140,8 +140,16 @@ const emptyState = (): NetState => ({ schemaVersion: SCHEMA_VERSION, doctors: {}
 
 /* ---------------- session id ---------------- */
 
+/**
+ * Session identifier used for ownership comparisons throughout the app.
+ * Prefers the authenticated Supabase user id when available so requester
+ * and doctor sides see the same id across tabs/devices. Falls back to a
+ * per-tab sessionStorage id (only used pre-auth or during SSR).
+ */
 export function getSessionId(): string {
   if (typeof window === "undefined") return "ssr";
+  const authId = getCurrentUserIdSync();
+  if (authId) return authId;
   try {
     let s = window.sessionStorage.getItem(SESSION_KEY);
     if (!s) {
