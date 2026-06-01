@@ -165,9 +165,11 @@ type SubscribeOpts = {
 
 let activeSubscribers = 0;
 let channel: ReturnType<typeof supabase.channel> | null = null;
+let invalidationChannel: ReturnType<typeof supabase.channel> | null = null;
 const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
 let cachedSnapshot: NetRequest[] = [];
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function fetchAll(): Promise<NetRequest[]> {
   const { data, error } = await supabase
@@ -184,6 +186,36 @@ async function fetchAll(): Promise<NetRequest[]> {
 async function refreshSnapshot() {
   cachedSnapshot = await fetchAll();
   snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+}
+
+/**
+ * Debounced refresh — coalesces invalidation bursts into one re-fetch.
+ */
+function scheduleRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    void refreshSnapshot();
+  }, 80);
+}
+
+/**
+ * Broadcast a coverage_requests change to every subscribed client.
+ *
+ * Why: Supabase postgres_changes events are filtered by RLS against the NEW
+ * row. When a doctor accepts (status: searching → accepted) the row exits
+ * other doctors' RLS scope, so they receive NO update event and their local
+ * cache stays stuck on "broadcasting". A broadcast channel is not RLS-gated,
+ * so we use it as an out-of-band signal: every client refreshes the snapshot
+ * and the row simply drops out of its fetch result.
+ */
+function emitInvalidate(id: string) {
+  if (!invalidationChannel) return;
+  void invalidationChannel.send({
+    type: "broadcast",
+    event: "invalidate",
+    payload: { id, at: Date.now() },
+  });
 }
 
 export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
@@ -221,6 +253,19 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       .subscribe();
   }
 
+  if (!invalidationChannel) {
+    invalidationChannel = supabase
+      .channel("coverage_invalidations", {
+        config: { broadcast: { self: false } },
+      })
+      .on("broadcast", { event: "invalidate" }, () => {
+        // RLS may have filtered the postgres_changes event for this client;
+        // re-fetching reconciles cache divergence.
+        scheduleRefresh();
+      })
+      .subscribe();
+  }
+
   // Re-fetch whenever auth changes so a sign-in/out picks up the new RLS scope.
   const offAuth = onUserIdChange(() => {
     refreshSnapshot();
@@ -231,9 +276,15 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     snapshotListeners.delete(opts.onSnapshot);
     offAuth();
     activeSubscribers--;
-    if (activeSubscribers === 0 && channel) {
-      supabase.removeChannel(channel);
-      channel = null;
+    if (activeSubscribers === 0) {
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+      if (invalidationChannel) {
+        supabase.removeChannel(invalidationChannel);
+        invalidationChannel = null;
+      }
     }
   };
 }
@@ -267,7 +318,11 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
     cancelled_by: req.cancelledBy ?? null,
   };
   const { error } = await supabase.from(TABLE).insert(row);
-  if (error) console.warn("[coverage-remote] insert error:", error.message);
+  if (error) {
+    console.warn("[coverage-remote] insert error:", error.message);
+    return;
+  }
+  emitInvalidate(req.id);
 }
 
 export async function remoteUpdateRequest(
@@ -277,7 +332,11 @@ export async function remoteUpdateRequest(
   const dbPatch = netPatchToRow(patch);
   if (Object.keys(dbPatch).length === 0) return;
   const { error } = await supabase.from(TABLE).update(dbPatch).eq("id", id);
-  if (error) console.warn("[coverage-remote] update error:", error.message);
+  if (error) {
+    console.warn("[coverage-remote] update error:", error.message);
+    return;
+  }
+  emitInvalidate(id);
 }
 
 /**
@@ -299,10 +358,16 @@ export async function remoteClaimRequest(
     console.warn("[coverage-remote] claim error:", error.message);
     return false;
   }
-  return (data?.length ?? 0) > 0;
+  const won = (data?.length ?? 0) > 0;
+  if (won) emitInvalidate(id);
+  return won;
 }
 
 export async function remoteDeleteRequest(id: string): Promise<void> {
   const { error } = await supabase.from(TABLE).delete().eq("id", id);
-  if (error) console.warn("[coverage-remote] delete error:", error.message);
+  if (error) {
+    console.warn("[coverage-remote] delete error:", error.message);
+    return;
+  }
+  emitInvalidate(id);
 }
