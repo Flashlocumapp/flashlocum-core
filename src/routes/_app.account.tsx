@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
 import {
   getProfile,
-  isOnboarded,
   saveProfile,
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
+import { hasCompletedOnboarding } from "@/lib/profile-remote";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/account")({
@@ -29,7 +29,7 @@ function deriveInitials(name: string, email: string): string {
 function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>("request");
-  const [switchPrompt, setSwitchPrompt] = useState<Role | null>(null);
+  const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
@@ -59,23 +59,22 @@ function AccountScreen() {
     return { name, email, initials: deriveInitials(name, email) };
   }, [authIdentity, isDoctor]);
 
-  const doSwitch = (next: Role) => {
-    setRole(next);
-    setLocalRole(next);
-    if (!isOnboarded(next)) {
-      navigate({ to: "/onboarding/$role", params: { role: next } });
-    } else {
-      navigate({ to: "/home" });
-    }
-  };
-
-  const switchRole = () => {
+  const switchRole = async () => {
+    if (switching) return;
     const next: Role = isDoctor ? "request" : "cover";
-    if (!isOnboarded(next)) {
-      setSwitchPrompt(next);
-      return;
+    setSwitching(true);
+    try {
+      const done = await hasCompletedOnboarding(next);
+      setRole(next);
+      setLocalRole(next);
+      if (!done) {
+        navigate({ to: "/onboarding/$role", params: { role: next } });
+      } else {
+        navigate({ to: "/home" });
+      }
+    } finally {
+      setSwitching(false);
     }
-    doSwitch(next);
   };
 
   const personalRows = useMemo(() => {
@@ -203,47 +202,6 @@ function AccountScreen() {
         />
       )}
 
-      {switchPrompt && (
-        <div
-          className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-6"
-          onClick={() => setSwitchPrompt(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl bg-card p-5"
-            style={{ boxShadow: "0 20px 60px -20px rgba(0,0,0,0.45)" }}
-          >
-            <div className="text-[17px] font-semibold tracking-tight">
-              {switchPrompt === "cover"
-                ? "Complete doctor registration"
-                : "Complete requester profile"}
-            </div>
-            <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-              {switchPrompt === "cover"
-                ? "To accept coverage requests, complete doctor registration. You can save and return later."
-                : "Add your phone and gender to request coverage. You can edit anytime."}
-            </p>
-            <div className="mt-5 flex gap-2.5">
-              <button
-                onClick={() => setSwitchPrompt(null)}
-                className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
-              >
-                Not now
-              </button>
-              <button
-                onClick={() => {
-                  const next = switchPrompt;
-                  setSwitchPrompt(null);
-                  doSwitch(next);
-                }}
-                className="h-11 flex-1 rounded-2xl bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
