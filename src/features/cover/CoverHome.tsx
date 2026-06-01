@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 import { MapBackground } from "@/components/MapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { fmtOpMeta } from "@/lib/format";
