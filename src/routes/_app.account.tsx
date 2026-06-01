@@ -29,7 +29,7 @@ function deriveInitials(name: string, email: string): string {
 function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>("request");
-  const [switchPrompt, setSwitchPrompt] = useState<Role | null>(null);
+  const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
@@ -59,23 +59,22 @@ function AccountScreen() {
     return { name, email, initials: deriveInitials(name, email) };
   }, [authIdentity, isDoctor]);
 
-  const doSwitch = (next: Role) => {
-    setRole(next);
-    setLocalRole(next);
-    if (!isOnboarded(next)) {
-      navigate({ to: "/onboarding/$role", params: { role: next } });
-    } else {
-      navigate({ to: "/home" });
-    }
-  };
-
-  const switchRole = () => {
+  const switchRole = async () => {
+    if (switching) return;
     const next: Role = isDoctor ? "request" : "cover";
-    if (!isOnboarded(next)) {
-      setSwitchPrompt(next);
-      return;
+    setSwitching(true);
+    try {
+      const done = await hasCompletedOnboarding(next);
+      setRole(next);
+      setLocalRole(next);
+      if (!done) {
+        navigate({ to: "/onboarding/$role", params: { role: next } });
+      } else {
+        navigate({ to: "/home" });
+      }
+    } finally {
+      setSwitching(false);
     }
-    doSwitch(next);
   };
 
   const personalRows = useMemo(() => {
