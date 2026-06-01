@@ -162,13 +162,20 @@ export function getSessionId(): string {
   }
 }
 
-/* ---------------- storage + channel ---------------- */
+/* ---------------- storage + channel ----------------
+ * Requests live in Supabase (coverage_requests) — see coverage-remote.ts.
+ * localStorage / BroadcastChannel still back doctor PRESENCE (online flag,
+ * declined list, map position) which is intentionally per-tab / per-device.
+ */
 
 let channel: BroadcastChannel | null = null;
 let state: NetState = emptyState();
 const listeners = new Set<(s: NetState) => void>();
+let remoteUnsubscribe: (() => void) | null = null;
 
 function load(): NetState {
+  // Only presence (doctors) is rehydrated from localStorage. Requests are
+  // sourced from Supabase Realtime and replace any prior local cache.
   if (typeof window === "undefined") return emptyState();
   try {
     window.localStorage.removeItem(LEGACY_STORAGE);
@@ -179,7 +186,7 @@ function load(): NetState {
     return {
       schemaVersion: SCHEMA_VERSION,
       doctors: parsed.doctors ?? {},
-      requests: parsed.requests ?? {},
+      requests: state.requests ?? {}, // keep in-memory remote-backed requests
       lastEvent: parsed.lastEvent,
     };
   } catch {
@@ -194,7 +201,7 @@ function refreshState(): NetState {
 
 function save(next: NetState, event?: Omit<NetEvent, "at">) {
   // CORRECT SYNC ORDER:
-  //   1) update global state  → 2) persist  → 3) notify  → 4) broadcast
+  //   1) update global state  → 2) persist presence  → 3) notify  → 4) broadcast
   const { lastEvent: _previousEvent, ...withoutEvent } = next;
   const stamped: NetState = event
     ? { ...withoutEvent, schemaVersion: SCHEMA_VERSION, lastEvent: { ...event, at: simNow() } }
@@ -202,7 +209,9 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
   state = stamped;
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE, JSON.stringify(stamped));
+    // Persist only presence locally. Requests are authoritative in Supabase.
+    const { requests: _omit, ...presenceOnly } = stamped;
+    window.localStorage.setItem(STORAGE, JSON.stringify(presenceOnly));
   } catch {
     /* noop */
   }
@@ -216,34 +225,106 @@ function pruneStale(s: NetState): NetState {
   for (const [k, d] of Object.entries(s.doctors)) {
     if (now - d.lastSeen < STALE_MS) doctors[k] = d;
   }
-  const requests: Record<string, NetRequest> = {};
-  for (const [k, r] of Object.entries(s.requests)) {
-    if (r.status === "broadcasting" && now - r.createdAt > BROADCAST_TTL_MS) continue;
-    requests[k] = r;
+  return { ...s, schemaVersion: SCHEMA_VERSION, doctors };
+}
+
+function applyRemoteEvent(ev: RemoteEvent) {
+  const requests = { ...state.requests };
+  let netEvent: Omit<NetEvent, "at"> | undefined;
+  if (ev.type === "INSERT") {
+    requests[ev.row.id] = ev.row;
+    if (ev.row.status === "broadcasting") {
+      netEvent = {
+        actor: "requester",
+        actorId: ev.row.requesterSessionId,
+        shiftId: ev.row.id,
+        action: "publish",
+      };
+    }
+  } else if (ev.type === "UPDATE") {
+    requests[ev.row.id] = ev.row;
+    const oldStatus = ev.old?.status;
+    const newStatus = ev.row.status;
+    let action: NetActionType | null = null;
+    let actor: Actor = "requester";
+    let actorId: string = ev.row.requesterSessionId;
+    if (oldStatus === "broadcasting" && newStatus === "accepted") {
+      action = "accept";
+      actor = "doctor";
+      actorId = ev.row.acceptedBy ?? actorId;
+    } else if (oldStatus === "accepted" && newStatus === "active") {
+      action = (ev.old?.accumulatedMs ?? 0) > 0 ? "resume" : "start";
+    } else if (oldStatus === "active" && newStatus === "accepted") {
+      action = "pause";
+    } else if (newStatus === "completed" && oldStatus !== "completed") {
+      action = "complete";
+    } else if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+      action = "cancel";
+      if (ev.row.cancelledBy === "doctor") {
+        actor = "doctor";
+        actorId = ev.row.acceptedBy ?? actorId;
+      }
+    } else if (oldStatus === "broadcasting" && newStatus === "paused") {
+      action = "pause";
+    } else if (oldStatus === "paused" && newStatus === "broadcasting") {
+      action = "resume";
+    } else if (oldStatus === newStatus) {
+      action = "update";
+    }
+    if (action) netEvent = { actor, actorId, shiftId: ev.row.id, action };
+  } else if (ev.type === "DELETE") {
+    delete requests[ev.id];
+    netEvent = {
+      actor: "requester",
+      actorId: getSessionId(),
+      shiftId: ev.id,
+      action: "remove",
+    };
   }
-  return { ...s, schemaVersion: SCHEMA_VERSION, doctors, requests };
+  save({ ...state, requests }, netEvent);
 }
 
 function init() {
   if (typeof window === "undefined") return;
   if (channel) return;
+  // Resolve auth user id ASAP so getSessionId() returns it for ownership checks.
+  primeUserId();
   state = pruneStale(load());
   try {
     channel = new BroadcastChannel(CHANNEL);
     channel.onmessage = (message) => {
       const incoming = message.data?.state as NetState | undefined;
-      state = pruneStale(incoming?.schemaVersion === SCHEMA_VERSION ? incoming : load());
-      listeners.forEach((l) => l(state));
+      if (incoming?.schemaVersion === SCHEMA_VERSION) {
+        // Merge presence from other tabs; keep our remote-backed requests.
+        state = pruneStale({ ...incoming, requests: state.requests });
+        listeners.forEach((l) => l(state));
+      }
     };
   } catch {
     /* noop */
   }
-  // Cross-tab fallback via storage events.
+  // Cross-tab fallback via storage events (presence only).
   window.addEventListener("storage", (e) => {
     if (e.key === STORAGE) {
       state = pruneStale(load());
       listeners.forEach((l) => l(state));
     }
+  });
+
+  // Subscribe to Supabase coverage_requests realtime.
+  remoteUnsubscribe = subscribeCoverageRemote({
+    onSnapshot: (rows) => {
+      const requests: Record<string, NetRequest> = {};
+      for (const r of rows) requests[r.id] = r;
+      state = { ...state, requests };
+      listeners.forEach((l) => l(state));
+    },
+    onEvent: applyRemoteEvent,
+  });
+
+  // Re-emit listeners when auth resolves (so derived selectors pick up id).
+  onUserIdChange(() => {
+    listeners.forEach((l) => l(state));
   });
 }
 
