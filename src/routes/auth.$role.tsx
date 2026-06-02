@@ -72,10 +72,22 @@ function AuthScreen() {
       });
     });
 
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!cancelled && data.session?.user.email_confirmed_at) await proceed();
-    })();
+    // Only auto-advance when the user actually just completed an auth
+    // action that redirected back here (email verification link or OAuth
+    // callback). A pre-existing session from a prior visit must NOT skip
+    // the Create Your Account screen — the user has to explicitly choose
+    // Sign In / Sign Up / Continue with Google first.
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const arrivedFromAuthRedirect =
+      /access_token=|refresh_token=|type=(signup|recovery|magiclink|invite)/.test(hash) ||
+      /[?&]code=/.test(search);
+    if (arrivedFromAuthRedirect) {
+      (async () => {
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled && data.session?.user.email_confirmed_at) await proceed();
+      })();
+    }
     return () => {
       cancelled = true;
       authListener.subscription.unsubscribe();
