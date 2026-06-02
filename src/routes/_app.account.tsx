@@ -303,6 +303,8 @@ function ProfileSheet({
 }) {
   const [r, setR] = useState<RequesterProfile>(requester);
   const [d, setD] = useState<DoctorProfile>(doctor);
+  const verification = useVerificationStatus();
+
 
   return (
     <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
