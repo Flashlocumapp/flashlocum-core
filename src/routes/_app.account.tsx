@@ -8,7 +8,15 @@ import {
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { hasCompletedOnboarding } from "@/lib/profile-remote";
+import { useVerificationStatus } from "@/lib/verification";
 import { supabase } from "@/integrations/supabase/client";
+
+function verificationLabel(s: string): string {
+  if (s === "approved") return "Verified";
+  if (s === "rejected") return "Rejected";
+  if (s === "suspended") return "Suspended";
+  return "Pending Approval";
+}
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
@@ -37,6 +45,7 @@ function AccountScreen() {
     name: "",
     email: "",
   });
+  const verification = useVerificationStatus();
 
   useEffect(() => {
     const r = getRole();
@@ -82,7 +91,7 @@ function AccountScreen() {
       return [
         { label: "Phone Number", value: doctor.phone || "—" },
         { label: "MDCN Number", value: doctor.mdcn || "—" },
-        { label: "Verification Status", value: doctor.selfie && doctor.mdcn ? "Verified" : "Pending" },
+        { label: "Verification Status", value: verificationLabel(verification) },
       ];
     }
     return [
@@ -294,6 +303,8 @@ function ProfileSheet({
 }) {
   const [r, setR] = useState<RequesterProfile>(requester);
   const [d, setD] = useState<DoctorProfile>(doctor);
+  const verification = useVerificationStatus();
+
 
   return (
     <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
@@ -350,7 +361,7 @@ function ProfileSheet({
               />
               <ReadField
                 label="Verification Status"
-                value={d.selfie && d.mdcn ? "Verified" : "Pending"}
+                value={verificationLabel(verification)}
               />
             </>
           )}
