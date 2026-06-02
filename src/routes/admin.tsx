@@ -24,12 +24,17 @@ function AdminScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
 
+  const [refreshing, setRefreshing] = useState(false);
   const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
       const list = await listDoctors();
       setDoctors(list);
     } catch (e) {
       console.warn(e);
+      pushToast({ tone: "warn", title: (e as Error).message || "Refresh failed." });
+    } finally {
+      setRefreshing(false);
     }
   }, []);
 
