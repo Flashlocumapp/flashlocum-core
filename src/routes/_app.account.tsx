@@ -91,7 +91,7 @@ function AccountScreen() {
       return [
         { label: "Phone Number", value: doctor.phone || "—" },
         { label: "MDCN Number", value: doctor.mdcn || "—" },
-        { label: "Verification Status", value: doctor.selfie && doctor.mdcn ? "Verified" : "Pending" },
+        { label: "Verification Status", value: verificationLabel(verification) },
       ];
     }
     return [
