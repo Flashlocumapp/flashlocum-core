@@ -8,7 +8,15 @@ import {
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { hasCompletedOnboarding } from "@/lib/profile-remote";
+import { useVerificationStatus } from "@/lib/verification";
 import { supabase } from "@/integrations/supabase/client";
+
+function verificationLabel(s: string): string {
+  if (s === "approved") return "Verified";
+  if (s === "rejected") return "Rejected";
+  if (s === "suspended") return "Suspended";
+  return "Pending Approval";
+}
 
 export const Route = createFileRoute("/_app/account")({
   component: AccountScreen,
