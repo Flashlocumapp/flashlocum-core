@@ -45,6 +45,7 @@ function AccountScreen() {
     name: "",
     email: "",
   });
+  const verification = useVerificationStatus();
 
   useEffect(() => {
     const r = getRole();
