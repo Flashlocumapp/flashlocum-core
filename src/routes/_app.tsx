@@ -8,6 +8,8 @@ import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
+import { clearRole, getRole, hasRole } from "@/lib/role";
+import { supabase } from "@/integrations/supabase/client";
 import { hasCompletedOnboarding } from "@/lib/profile-remote";
 
 
