@@ -222,6 +222,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_assigned_doctor_of: {
+        Args: { _doctor: string; _requester: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
