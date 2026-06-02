@@ -158,9 +158,10 @@ function AdminScreen() {
           <h1 className="text-[24px] font-semibold tracking-tight">Doctor verification</h1>
           <button
             onClick={refresh}
-            className="h-9 rounded-full bg-secondary px-3 text-[12.5px] font-medium"
+            disabled={refreshing}
+            className="h-9 rounded-full bg-secondary px-3 text-[12.5px] font-medium disabled:opacity-60"
           >
-            Refresh
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
         <p className="mt-1 text-[13px] text-muted-foreground">
