@@ -361,7 +361,7 @@ function ProfileSheet({
               />
               <ReadField
                 label="Verification Status"
-                value={d.selfie && d.mdcn ? "Verified" : "Pending"}
+                value={verificationLabel(verification)}
               />
             </>
           )}
