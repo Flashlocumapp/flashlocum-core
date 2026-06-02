@@ -10,6 +10,7 @@ import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
 import { clearRole, getRole, hasRole } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
+import { hasCompletedOnboarding } from "@/lib/profile-remote";
 
 
 export const Route = createFileRoute("/_app")({
@@ -21,23 +22,36 @@ function AppShell() {
   const immersive = useImmersive();
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
+
+  const check = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session || !hasRole()) {
+      clearRole();
+      navigate({ to: "/role" });
+      return;
+    }
+    if (!data.session.user.email_confirmed_at) {
+      const role = getRole() ?? "request";
+      navigate({ to: "/auth/$role", params: { role } });
+      return;
+    }
+    const role = getRole();
+    // Backend is the source of truth for onboarding completion. Enforce
+    // here so Back-button or direct URL access cannot bypass onboarding.
+    const onboarded = await hasCompletedOnboarding(role);
+    if (!onboarded) {
+      navigate({ to: "/onboarding/$role", params: { role } });
+      return;
+    }
+    if (role === "cover") ensureDoctorSession(false);
+    setReady(true);
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.auth.getSession();
+      await check();
       if (cancelled) return;
-      if (!data.session || !hasRole()) {
-        clearRole();
-        navigate({ to: "/role" });
-        return;
-      }
-      if (!data.session.user.email_confirmed_at) {
-        const role = getRole() ?? "request";
-        navigate({ to: "/auth/$role", params: { role } });
-        return;
-      }
-      if (getRole() === "cover") ensureDoctorSession(false);
-      setReady(true);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -50,7 +64,9 @@ function AppShell() {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
+
   if (!ready) return <div className="h-full w-full bg-background" />;
   return (
     <div

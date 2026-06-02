@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { hasCompletedOnboarding } from "@/lib/profile-remote";
+import { fetchMyProfile } from "@/lib/profile-remote";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
@@ -45,7 +45,16 @@ function AuthScreen() {
 
   const proceed = useCallback(async () => {
     setRole(normalizedRole);
-    const onboarded = await hasCompletedOnboarding(normalizedRole);
+    // Read backend truth, with a brief retry so the very first request
+    // after sign-in isn't lost to an unattached auth header.
+    let profile = await fetchMyProfile();
+    if (!profile) {
+      await new Promise((r) => setTimeout(r, 250));
+      profile = await fetchMyProfile();
+    }
+    const onboarded =
+      !!profile &&
+      (normalizedRole === "cover" ? !!profile.onboarded_cover_at : !!profile.onboarded_request_at);
     if (onboarded) {
       navigate({ to: "/home" });
     } else {

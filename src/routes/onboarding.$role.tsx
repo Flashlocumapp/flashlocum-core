@@ -69,11 +69,16 @@ function OnboardingScreen() {
 
   const finish = async () => {
     persist();
-    markOnboarded(normalizedRole);
     try {
+      // Persist to backend FIRST. Local marker only set on success so a
+      // failed remote write doesn't produce a ghost-onboarded user that the
+      // admin dashboard can never see.
       await markOnboardedRemote(normalizedRole, remoteFields());
+      markOnboarded(normalizedRole);
     } catch (e) {
-      console.warn(e);
+      console.error("Onboarding remote save failed", e);
+      alert("Could not save your profile. Please check your connection and try again.");
+      return;
     }
     navigate({ to: "/home" });
   };
@@ -87,6 +92,7 @@ function OnboardingScreen() {
     }
     await finish();
   };
+
 
 
   const title = isDoctor
@@ -107,8 +113,9 @@ function OnboardingScreen() {
           <button
             onClick={() => {
               if (isDoctor && step === 2) setStep(1);
-              else navigate({ to: "/home" });
+              else navigate({ to: "/role" });
             }}
+
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
             aria-label="Back"
           >
