@@ -14,9 +14,9 @@ import {
   effectiveOnboardedRole,
   fetchMyProfile,
   getCachedOnboardingStatus,
-  getCachedProfile,
   isAccountOnboardedProfile,
 } from "@/lib/profile-remote";
+
 
 
 export const Route = createFileRoute("/_app")({
