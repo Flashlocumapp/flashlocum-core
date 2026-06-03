@@ -75,7 +75,21 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
   useEffect(() => { initLightMode(); }, []);
+  useEffect(() => {
+    void Promise.allSettled([
+      router.preloadRoute({ to: "/role" }),
+      router.preloadRoute({ to: "/auth/$role", params: { role: "request" } }),
+      router.preloadRoute({ to: "/auth/$role", params: { role: "cover" } }),
+      router.preloadRoute({ to: "/onboarding/$role", params: { role: "request" } }),
+      router.preloadRoute({ to: "/onboarding/$role", params: { role: "cover" } }),
+      router.preloadRoute({ to: "/home" }),
+      router.preloadRoute({ to: "/coverage" }),
+      router.preloadRoute({ to: "/earnings" }),
+      router.preloadRoute({ to: "/account" }),
+    ]);
+  }, [router]);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
