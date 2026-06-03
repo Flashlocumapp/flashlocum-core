@@ -44,7 +44,6 @@ function AuthScreen() {
   const roleLabel = normalizedRole === "cover" ? "Cover & Earn" : "Request Coverage";
 
   const proceed = useCallback(async () => {
-    setRole(normalizedRole);
     // Read backend truth, with a brief retry so the very first request
     // after sign-in isn't lost to an unattached auth header.
     let profile = await fetchMyProfile();
@@ -52,13 +51,21 @@ function AuthScreen() {
       await new Promise((r) => setTimeout(r, 250));
       profile = await fetchMyProfile();
     }
-    const onboarded =
-      !!profile &&
-      (normalizedRole === "cover" ? !!profile.onboarded_cover_at : !!profile.onboarded_request_at);
-    if (onboarded) {
+    // Account-wide onboarding: if EITHER capability has been onboarded,
+    // the returning user goes straight to /home. They never see onboarding
+    // again unless they explicitly unlock the other role via the account
+    // tab — which is the separate "role-switch onboarding" flow.
+    const effectiveRole = effectiveOnboardedRole(profile, normalizedRole);
+    if (effectiveRole) {
+      setRole(effectiveRole);
       navigate({ to: "/home" });
     } else {
-      navigate({ to: "/onboarding/$role", params: { role: normalizedRole } });
+      setRole(normalizedRole);
+      navigate({
+        to: "/onboarding/$role",
+        params: { role: normalizedRole },
+        search: { from: "auth" },
+      });
     }
   }, [navigate, normalizedRole]);
 
