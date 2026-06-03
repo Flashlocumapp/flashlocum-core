@@ -36,6 +36,16 @@ function rememberProfile(profile: ProfileRow | null) {
   }
 }
 
+if (typeof window !== "undefined") {
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session || (cachedProfile && cachedProfile.id !== session.user.id)) {
+      cachedProfile = undefined;
+      cachedOnboarding.cover = undefined;
+      cachedOnboarding.request = undefined;
+    }
+  });
+}
+
 /** Fetch the current user's profile row, or null if it doesn't exist. */
 export async function fetchMyProfile(): Promise<ProfileRow | null> {
   const { data: userData } = await supabase.auth.getUser();
