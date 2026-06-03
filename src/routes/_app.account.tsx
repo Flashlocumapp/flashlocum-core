@@ -40,8 +40,8 @@ function AccountScreen() {
   const [role, setLocalRole] = useState<Role>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [requester, setRequester] = useState<RequesterProfile>({});
-  const [doctor, setDoctor] = useState<DoctorProfile>({});
+  const [requester, setRequester] = useState<RequesterProfile>(() => getProfile<RequesterProfile>("request"));
+  const [doctor, setDoctor] = useState<DoctorProfile>(() => getProfile<DoctorProfile>("cover"));
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
 
