@@ -1,7 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { getRole, type Role } from "@/lib/role";
+import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 
 type TabTo = "/home" | "/coverage" | "/earnings" | "/account";
 type Tab = {
@@ -56,8 +56,8 @@ const COVER_TABS: Tab[] = [HOME, COVERAGE, EARNINGS, ACCOUNT];
 
 export function BottomTabs() {
   const { pathname } = useLocation();
-  const [role, setLocalRole] = useState<Role>("request");
-  useEffect(() => setLocalRole(getRole()), [pathname]);
+  const [role, setLocalRole] = useState<Role>(() => getRole());
+  useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
   const tabs = role === "cover" ? COVER_TABS : REQUESTER_TABS;
 
   return (
@@ -77,7 +77,7 @@ export function BottomTabs() {
           const active = pathname === t.to || pathname.startsWith(t.to + "/");
           return (
             <li key={t.to} className="flex-1">
-              <Link to={t.to} className="relative flex flex-col items-center gap-1 px-3 py-1.5">
+              <Link to={t.to} preload="render" className="relative flex flex-col items-center gap-1 px-3 py-1.5">
                 <span
                   className="flex items-center justify-center transition-colors"
                   style={{

@@ -5,7 +5,7 @@ import { RatingPill } from "@/components/RatingPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
-import { getRole, type Role } from "@/lib/role";
+import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
 import {
   acceptIncoming,
@@ -23,8 +23,8 @@ import {
 } from "@/features/cover/dispatch";
 
 export function CoverDispatchPortal() {
-  const [role, setLocalRole] = useState<Role | null>(null);
-  useEffect(() => setLocalRole(getRole()), []);
+  const [role, setLocalRole] = useState<Role>(() => getRole());
+  useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
   const { incoming, accepted, pendingRating } = useDispatch();
   const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);
 

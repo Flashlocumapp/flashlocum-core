@@ -10,7 +10,7 @@ import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
 import { clearRole, getRole, hasRole } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
-import { hasCompletedOnboarding } from "@/lib/profile-remote";
+import { getCachedOnboardingStatus, hasCompletedOnboarding } from "@/lib/profile-remote";
 
 
 export const Route = createFileRoute("/_app")({
@@ -20,7 +20,10 @@ export const Route = createFileRoute("/_app")({
 function AppShell() {
   const immersive = useImmersive();
   const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => {
+    if (typeof window === "undefined" || !hasRole()) return false;
+    return getCachedOnboardingStatus(getRole()) === true;
+  });
 
   const check = async () => {
     const { data } = await supabase.auth.getSession();
@@ -37,7 +40,8 @@ function AppShell() {
     const role = getRole();
     // Backend is the source of truth for onboarding completion. Enforce
     // here so Back-button or direct URL access cannot bypass onboarding.
-    const onboarded = await hasCompletedOnboarding(role);
+    const cachedOnboarded = getCachedOnboardingStatus(role);
+    const onboarded = cachedOnboarded === true ? true : await hasCompletedOnboarding(role);
     if (!onboarded) {
       navigate({ to: "/onboarding/$role", params: { role } });
       return;
