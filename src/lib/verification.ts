@@ -2,20 +2,32 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchVerificationStatus, type VerificationStatus } from "@/lib/profile-remote";
 
+// Module-level cache — keeps last-known status across tab switches so the
+// UI does NOT flash "Pending" while the backend re-fetches on remount.
+let cached: VerificationStatus | null = null;
+const listeners = new Set<(s: VerificationStatus) => void>();
+function setCached(next: VerificationStatus) {
+  cached = next;
+  listeners.forEach((l) => l(next));
+}
+
 /**
  * useVerificationStatus — subscribes to the current user's verification status
- * with realtime updates. Default: "pending" until a profile row is loaded.
+ * with realtime updates. Initial value comes from the module cache so tab
+ * switches do not flicker.
  */
 export function useVerificationStatus(): VerificationStatus {
-  const [status, setStatus] = useState<VerificationStatus>("pending");
+  const [status, setStatus] = useState<VerificationStatus>(cached ?? "pending");
 
   useEffect(() => {
     let cancelled = false;
+    listeners.add(setStatus);
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     (async () => {
       const s = await fetchVerificationStatus();
-      if (!cancelled) setStatus(s);
+      if (cancelled) return;
+      if (s !== cached) setCached(s);
 
       const { data: u } = await supabase.auth.getUser();
       if (!u.user || cancelled) return;
@@ -32,7 +44,7 @@ export function useVerificationStatus(): VerificationStatus {
           (payload) => {
             const next = (payload.new as { verification_status?: VerificationStatus })
               ?.verification_status;
-            if (next) setStatus(next);
+            if (next) setCached(next);
           },
         )
         .subscribe();
@@ -40,6 +52,7 @@ export function useVerificationStatus(): VerificationStatus {
 
     return () => {
       cancelled = true;
+      listeners.delete(setStatus);
       if (channel) supabase.removeChannel(channel);
     };
   }, []);
