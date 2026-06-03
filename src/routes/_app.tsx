@@ -8,9 +8,15 @@ import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
-import { clearRole, getRole, hasRole } from "@/lib/role";
+import { clearRole, getRole, hasRole, setRole } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
-import { getCachedOnboardingStatus, hasCompletedOnboarding } from "@/lib/profile-remote";
+import {
+  effectiveOnboardedRole,
+  fetchMyProfile,
+  getCachedOnboardingStatus,
+  getCachedProfile,
+  isAccountOnboardedProfile,
+} from "@/lib/profile-remote";
 
 
 export const Route = createFileRoute("/_app")({
@@ -41,12 +47,29 @@ function AppShell() {
     // Backend is the source of truth for onboarding completion. Enforce
     // here so Back-button or direct URL access cannot bypass onboarding.
     const cachedOnboarded = getCachedOnboardingStatus(role);
-    const onboarded = cachedOnboarded === true ? true : await hasCompletedOnboarding(role);
+    let onboarded = cachedOnboarded === true;
     if (!onboarded) {
-      navigate({ to: "/onboarding/$role", params: { role } });
+      const profile = await fetchMyProfile();
+      // Account-wide: if any role is onboarded, the account counts as
+      // onboarded. Switch the active role to one the user has actually
+      // onboarded for so the app shell renders the right surface instead
+      // of bouncing them into onboarding for an unrelated role.
+      if (isAccountOnboardedProfile(profile)) {
+        const eff = effectiveOnboardedRole(profile, role) ?? role;
+        if (eff !== role) setRole(eff);
+        onboarded = true;
+      }
+    }
+    if (!onboarded) {
+      const fromRole = getRole();
+      navigate({
+        to: "/onboarding/$role",
+        params: { role: fromRole },
+        search: { from: "auth" },
+      });
       return;
     }
-    if (role === "cover") ensureDoctorSession(false);
+    if (getRole() === "cover") ensureDoctorSession(false);
     setReady(true);
   };
 
