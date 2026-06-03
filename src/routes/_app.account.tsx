@@ -9,6 +9,7 @@ import {
 } from "@/lib/onboarding";
 import { hasCompletedOnboarding } from "@/lib/profile-remote";
 import { useVerificationStatus } from "@/lib/verification";
+import { useAuthIdentity } from "@/lib/identity";
 import { supabase } from "@/integrations/supabase/client";
 
 function verificationLabel(s: string): string {
