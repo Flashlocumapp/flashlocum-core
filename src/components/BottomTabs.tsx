@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getRole, type Role } from "@/lib/role";
 
 type TabTo = "/home" | "/coverage" | "/earnings" | "/account";
@@ -56,8 +56,7 @@ const COVER_TABS: Tab[] = [HOME, COVERAGE, EARNINGS, ACCOUNT];
 
 export function BottomTabs() {
   const { pathname } = useLocation();
-  const [role, setLocalRole] = useState<Role>("request");
-  useEffect(() => setLocalRole(getRole()), [pathname]);
+  const [role] = useState<Role>(() => getRole());
   const tabs = role === "cover" ? COVER_TABS : REQUESTER_TABS;
 
   return (
