@@ -10,12 +10,23 @@ import {
 } from "@/lib/onboarding";
 import { markOnboardedRemote } from "@/lib/profile-remote";
 
+type OnboardingSearch = {
+  from?: "auth" | "switch";
+  prev?: Role;
+};
+
 export const Route = createFileRoute("/onboarding/$role")({
+  validateSearch: (search: Record<string, unknown>): OnboardingSearch => {
+    const from = search.from === "switch" || search.from === "auth" ? search.from : undefined;
+    const prev = search.prev === "cover" || search.prev === "request" ? search.prev : undefined;
+    return { from, prev };
+  },
   component: OnboardingScreen,
 });
 
 function OnboardingScreen() {
   const { role } = Route.useParams();
+  const { from, prev } = Route.useSearch();
   const navigate = useNavigate();
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
@@ -112,8 +123,25 @@ function OnboardingScreen() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => {
-              if (isDoctor && step === 2) setStep(1);
-              else navigate({ to: "/role" });
+              if (isDoctor && step === 2) {
+                setStep(1);
+                return;
+              }
+              if (from === "switch" && prev) {
+                // Role-switch onboarding started from the Account tab of
+                // the previous role. Restore that role and return there
+                // so the user lands on the screen they came from.
+                setRole(prev);
+                navigate({ to: "/account" });
+                return;
+              }
+              if (from === "auth") {
+                // First-time signup onboarding — Back returns to the
+                // Create Account / Sign In screen they came from.
+                navigate({ to: "/auth/$role", params: { role: normalizedRole } });
+                return;
+              }
+              navigate({ to: "/role" });
             }}
 
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"

@@ -63,6 +63,7 @@ function AccountScreen() {
   const switchRole = async () => {
     if (switching) return;
     const next: Role = isDoctor ? "request" : "cover";
+    const prev: Role = role;
     setSwitching(true);
     try {
       const cachedDone = getCachedOnboardingStatus(next);
@@ -70,7 +71,11 @@ function AccountScreen() {
       setRole(next);
       setLocalRole(next);
       if (!done) {
-        navigate({ to: "/onboarding/$role", params: { role: next } });
+        navigate({
+          to: "/onboarding/$role",
+          params: { role: next },
+          search: { from: "switch", prev },
+        });
       } else {
         navigate({ to: "/home" });
       }
