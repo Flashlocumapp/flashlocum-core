@@ -77,7 +77,7 @@ export function BottomTabs() {
           const active = pathname === t.to || pathname.startsWith(t.to + "/");
           return (
             <li key={t.to} className="flex-1">
-              <Link to={t.to} className="relative flex flex-col items-center gap-1 px-3 py-1.5">
+              <Link to={t.to} preload="render" className="relative flex flex-col items-center gap-1 px-3 py-1.5">
                 <span
                   className="flex items-center justify-center transition-colors"
                   style={{
