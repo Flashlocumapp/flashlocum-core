@@ -7,7 +7,7 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { hasCompletedOnboarding } from "@/lib/profile-remote";
+import { getCachedOnboardingStatus, hasCompletedOnboarding } from "@/lib/profile-remote";
 import { useVerificationStatus } from "@/lib/verification";
 import { useAuthIdentity } from "@/lib/identity";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,7 +37,7 @@ function deriveInitials(name: string, email: string): string {
 
 function AccountScreen() {
   const navigate = useNavigate();
-  const [role, setLocalRole] = useState<Role>("request");
+  const [role, setLocalRole] = useState<Role>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
@@ -65,7 +65,8 @@ function AccountScreen() {
     const next: Role = isDoctor ? "request" : "cover";
     setSwitching(true);
     try {
-      const done = await hasCompletedOnboarding(next);
+      const cachedDone = getCachedOnboardingStatus(next);
+      const done = cachedDone === null ? await hasCompletedOnboarding(next) : cachedDone;
       setRole(next);
       setLocalRole(next);
       if (!done) {
@@ -90,7 +91,7 @@ function AccountScreen() {
       { label: "Phone Number", value: requester.phone || "—" },
       { label: "Gender", value: requester.gender || "—" },
     ];
-  }, [isDoctor, doctor, requester]);
+  }, [isDoctor, doctor, requester, verification]);
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
