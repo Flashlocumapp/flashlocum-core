@@ -18,7 +18,6 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppShell() {
-  const { pathname } = useLocation();
   const immersive = useImmersive();
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
