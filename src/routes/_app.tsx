@@ -77,18 +77,8 @@ function AppShell() {
         className="absolute inset-x-0 top-0"
         style={{ bottom: `var(--tab-bar-h)` }}
       >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-            className="h-full w-full"
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+        <Outlet />
+
       </div>
       <AnimatePresence>
         {!immersive && (
