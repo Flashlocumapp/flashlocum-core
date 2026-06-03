@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getRole, type Role } from "@/lib/role";
 import { RequesterHome } from "@/features/request/RequesterHome";
 import { CoverHome } from "@/features/cover/CoverHome";
@@ -9,10 +9,7 @@ export const Route = createFileRoute("/_app/home")({
 });
 
 function HomeRouter() {
-  // Role lives in localStorage; read on the client only.
-  const [role, setLocalRole] = useState<Role | null>(null);
-  useEffect(() => setLocalRole(getRole()), []);
-
-  if (!role) return <div className="h-full w-full bg-background" />;
+  // Role is synchronous session state; seed immediately to avoid a blank frame.
+  const [role] = useState<Role>(() => getRole());
   return role === "cover" ? <CoverHome /> : <RequesterHome />;
 }
