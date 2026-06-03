@@ -123,8 +123,25 @@ function OnboardingScreen() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => {
-              if (isDoctor && step === 2) setStep(1);
-              else navigate({ to: "/role" });
+              if (isDoctor && step === 2) {
+                setStep(1);
+                return;
+              }
+              if (from === "switch" && prev) {
+                // Role-switch onboarding started from the Account tab of
+                // the previous role. Restore that role and return there
+                // so the user lands on the screen they came from.
+                setRole(prev);
+                navigate({ to: "/account" });
+                return;
+              }
+              if (from === "auth") {
+                // First-time signup onboarding — Back returns to the
+                // Create Account / Sign In screen they came from.
+                navigate({ to: "/auth/$role", params: { role: normalizedRole } });
+                return;
+              }
+              navigate({ to: "/role" });
             }}
 
             className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
