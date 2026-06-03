@@ -42,10 +42,7 @@ function AccountScreen() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
-  const [authIdentity, setAuthIdentity] = useState<{ name: string; email: string }>({
-    name: "",
-    email: "",
-  });
+  const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
 
   useEffect(() => {
@@ -53,12 +50,6 @@ function AccountScreen() {
     setLocalRole(r);
     setRequester(getProfile<RequesterProfile>("request"));
     setDoctor(getProfile<DoctorProfile>("cover"));
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
-      if (!u) return;
-      const meta = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
-      setAuthIdentity({ name: meta.full_name || meta.name || "", email: u.email ?? "" });
-    });
   }, []);
 
   const isDoctor = role === "cover";
