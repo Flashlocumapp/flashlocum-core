@@ -79,22 +79,38 @@ function AuthScreen() {
       });
     });
 
-    // Only auto-advance when the user actually just completed an auth
-    // action that redirected back here (email verification link or OAuth
-    // callback). A pre-existing session from a prior visit must NOT skip
-    // the Create Your Account screen — the user has to explicitly choose
-    // Sign In / Sign Up / Continue with Google first.
+    // Auto-advance when either:
+    //  1. The user just completed an auth action that redirected back here
+    //     (email verification link or OAuth callback), OR
+    //  2. The user already has a valid session AND has already completed
+    //     onboarding for some role — they are a returning user signing
+    //     back in and should land directly in the app, not on Create
+    //     Account.
+    // A signed-in user who has NEVER completed onboarding still sees the
+    // Create Account screen so they can choose to sign out, switch
+    // account, or continue with Google before entering onboarding.
     const hash = typeof window !== "undefined" ? window.location.hash : "";
     const search = typeof window !== "undefined" ? window.location.search : "";
     const arrivedFromAuthRedirect =
       /access_token=|refresh_token=|type=(signup|recovery|magiclink|invite)/.test(hash) ||
       /[?&]code=/.test(search);
-    if (arrivedFromAuthRedirect) {
-      (async () => {
-        const { data } = await supabase.auth.getSession();
-        if (!cancelled && data.session?.user.email_confirmed_at) await proceed();
-      })();
-    }
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      if (!session?.user.email_confirmed_at) return;
+      if (cancelled) return;
+      if (arrivedFromAuthRedirect) {
+        await proceed();
+        return;
+      }
+      // Returning user with active session: only auto-advance if they've
+      // actually onboarded before. Otherwise let them see the auth screen.
+      const profile = await fetchMyProfile();
+      if (cancelled) return;
+      if (profile && (profile.onboarded_cover_at || profile.onboarded_request_at)) {
+        await proceed();
+      }
+    })();
     return () => {
       cancelled = true;
       authListener.subscription.unsubscribe();
