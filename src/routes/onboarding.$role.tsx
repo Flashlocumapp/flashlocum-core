@@ -10,12 +10,23 @@ import {
 } from "@/lib/onboarding";
 import { markOnboardedRemote } from "@/lib/profile-remote";
 
+type OnboardingSearch = {
+  from?: "auth" | "switch";
+  prev?: Role;
+};
+
 export const Route = createFileRoute("/onboarding/$role")({
+  validateSearch: (search: Record<string, unknown>): OnboardingSearch => {
+    const from = search.from === "switch" || search.from === "auth" ? search.from : undefined;
+    const prev = search.prev === "cover" || search.prev === "request" ? search.prev : undefined;
+    return { from, prev };
+  },
   component: OnboardingScreen,
 });
 
 function OnboardingScreen() {
   const { role } = Route.useParams();
+  const { from, prev } = Route.useSearch();
   const navigate = useNavigate();
   const normalizedRole: Role = role === "cover" ? "cover" : "request";
   const isDoctor = normalizedRole === "cover";
@@ -23,13 +34,6 @@ function OnboardingScreen() {
   useEffect(() => {
     setRole(normalizedRole);
   }, [normalizedRole]);
-
-  const [requester, setRequester] = useState<RequesterProfile>({});
-  const [doctor, setDoctor] = useState<DoctorProfile>({});
-  const [step, setStep] = useState<1 | 2>(1);
-
-  // Per product rule: never autofill/carry-over between flows. Each
-  // onboarding session starts from a clean slate and requires explicit input.
 
   const licenseRef = useRef<HTMLInputElement>(null);
 
