@@ -1,5 +1,5 @@
 import { AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
@@ -23,8 +23,7 @@ import {
 } from "@/features/cover/dispatch";
 
 export function CoverDispatchPortal() {
-  const [role, setLocalRole] = useState<Role | null>(null);
-  useEffect(() => setLocalRole(getRole()), []);
+  const [role] = useState<Role>(() => getRole());
   const { incoming, accepted, pendingRating } = useDispatch();
   const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);
 
