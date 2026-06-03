@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { getRole } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
@@ -44,15 +44,13 @@ function toPayout(h: HistoryItem, now: number): Payout {
 
 function EarningsScreen() {
   const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
   const { history } = useDispatch();
+  const isDoctor = getRole() === "cover";
   useEffect(() => {
-    if (getRole() !== "cover") {
+    if (!isDoctor) {
       navigate({ to: "/home" });
-      return;
     }
-    setReady(true);
-  }, [navigate]);
+  }, [isDoctor, navigate]);
 
   const payouts = useMemo<Payout[]>(() => {
     const now = Date.now();
@@ -70,7 +68,7 @@ function EarningsScreen() {
     return { thisMonth: month, pending: pend };
   }, [payouts]);
 
-  if (!ready) return <div className="h-full w-full bg-background" />;
+  if (!isDoctor) return null;
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
