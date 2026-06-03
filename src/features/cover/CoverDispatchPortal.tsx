@@ -1,11 +1,11 @@
 import { AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
-import { getRole, type Role } from "@/lib/role";
+import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
 import {
   acceptIncoming,
@@ -23,7 +23,8 @@ import {
 } from "@/features/cover/dispatch";
 
 export function CoverDispatchPortal() {
-  const [role] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role>(() => getRole());
+  useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
   const { incoming, accepted, pendingRating } = useDispatch();
   const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);
 
