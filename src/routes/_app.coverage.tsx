@@ -186,7 +186,7 @@ type TabId = typeof TABS[number]["id"];
 
 function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
-  const [role, setLocalRole] = useState<Role>("request");
+  const [role, setLocalRole] = useState<Role>(() => getRole());
   useEffect(() => setLocalRole(getRole()), []);
 
   return role === "cover" ? (
