@@ -21,6 +21,21 @@ export type ProfileRow = {
   verification_status: VerificationStatus;
 };
 
+let cachedProfile: ProfileRow | null | undefined;
+const cachedOnboarding: Partial<Record<Role, boolean>> = {};
+
+export function getCachedOnboardingStatus(role: Role): boolean | null {
+  return typeof cachedOnboarding[role] === "boolean" ? cachedOnboarding[role]! : null;
+}
+
+function rememberProfile(profile: ProfileRow | null) {
+  cachedProfile = profile;
+  if (profile) {
+    cachedOnboarding.cover = !!profile.onboarded_cover_at;
+    cachedOnboarding.request = !!profile.onboarded_request_at;
+  }
+}
+
 /** Fetch the current user's profile row, or null if it doesn't exist. */
 export async function fetchMyProfile(): Promise<ProfileRow | null> {
   const { data: userData } = await supabase.auth.getUser();
@@ -33,9 +48,12 @@ export async function fetchMyProfile(): Promise<ProfileRow | null> {
     .maybeSingle();
   if (error) {
     console.warn("fetchMyProfile error", error);
+    if (cachedProfile !== undefined) return cachedProfile;
     return null;
   }
-  return (data as ProfileRow | null) ?? null;
+  const profile = (data as ProfileRow | null) ?? null;
+  rememberProfile(profile);
+  return profile;
 }
 
 /** True if user has completed onboarding for the given capability. */
@@ -75,6 +93,7 @@ export async function markOnboardedRemote(
     ...capabilityStamp,
     onboarded_at: stamp,
   });
+  cachedOnboarding[role] = true;
 }
 
 /* ---------- Verification ---------- */
