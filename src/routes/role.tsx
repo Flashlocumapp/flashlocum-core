@@ -68,6 +68,7 @@ function RoleCard({
     >
       <Link
         to={to}
+        preload="render"
         className="block rounded-2xl bg-card p-5 transition-colors active:bg-accent"
         style={{ boxShadow: "0 1px 0 var(--color-hairline), 0 10px 30px -22px rgba(0,0,0,0.25)" }}
       >
