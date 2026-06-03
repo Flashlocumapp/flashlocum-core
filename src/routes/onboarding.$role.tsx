@@ -35,6 +35,13 @@ function OnboardingScreen() {
     setRole(normalizedRole);
   }, [normalizedRole]);
 
+  const [requester, setRequester] = useState<RequesterProfile>({});
+  const [doctor, setDoctor] = useState<DoctorProfile>({});
+  const [step, setStep] = useState<1 | 2>(1);
+
+  // Per product rule: never autofill/carry-over between flows. Each
+  // onboarding session starts from a clean slate and requires explicit input.
+
   const licenseRef = useRef<HTMLInputElement>(null);
 
   const persist = () => {
