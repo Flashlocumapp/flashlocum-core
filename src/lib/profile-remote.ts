@@ -73,6 +73,29 @@ export async function hasCompletedOnboarding(role: Role): Promise<boolean> {
   return role === "cover" ? !!p.onboarded_cover_at : !!p.onboarded_request_at;
 }
 
+/** True if the user has finished onboarding for AT LEAST one capability.
+ *  Account-wide onboarding is considered complete as soon as either role
+ *  has been onboarded — switching to a new role for the first time is the
+ *  separate "role-switch onboarding" flow. */
+export function isAccountOnboardedProfile(p: ProfileRow | null): boolean {
+  return !!p && (!!p.onboarded_cover_at || !!p.onboarded_request_at);
+}
+
+/** Returns a role the user has completed onboarding for, preferring the
+ *  requested role when valid. Returns null if no role is onboarded. */
+export function effectiveOnboardedRole(p: ProfileRow | null, requested: Role): Role | null {
+  if (!p) return null;
+  if (requested === "cover" && p.onboarded_cover_at) return "cover";
+  if (requested === "request" && p.onboarded_request_at) return "request";
+  if (p.onboarded_request_at) return "request";
+  if (p.onboarded_cover_at) return "cover";
+  return null;
+}
+
+export function getCachedProfile(): ProfileRow | null | undefined {
+  return cachedProfile;
+}
+
 /** Upsert profile fields for the current user. */
 export async function upsertMyProfile(
   fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string }
