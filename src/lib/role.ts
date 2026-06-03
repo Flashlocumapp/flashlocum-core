@@ -10,11 +10,18 @@
 export type Role = "request" | "cover";
 
 const KEY = "flashlocum.role";
+const ROLE_EVENT = "flashlocum:role-change";
+
+function notifyRoleChange() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ROLE_EVENT));
+}
 
 export function setRole(role: Role) {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(KEY, role);
+    notifyRoleChange();
   } catch {
     /* noop */
   }
@@ -44,7 +51,14 @@ export function clearRole() {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.removeItem(KEY);
+    notifyRoleChange();
   } catch {
     /* noop */
   }
+}
+
+export function subscribeRoleChange(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(ROLE_EVENT, listener);
+  return () => window.removeEventListener(ROLE_EVENT, listener);
 }
