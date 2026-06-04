@@ -672,7 +672,7 @@ function RequestCard({
                   : "var(--color-foreground)",
               }}
             >
-              {item.doctorShort}
+              {identity.shortName}
             </span>
             {isHistory && item.outcome === "cancelled" && (
               <span
