@@ -19,7 +19,7 @@ import {
   useNetwork,
 } from "@/lib/network";
 import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
-import { fetchDoctorProfile } from "@/lib/profile-remote";
+import { useDoctorIdentity } from "@/lib/doctor-identity";
 
 
 export function RequesterHome() {
