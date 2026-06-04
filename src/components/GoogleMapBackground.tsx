@@ -114,7 +114,7 @@ export function GoogleMapBackground({
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
-    if (center) mapRef.current.setZoom(15);
+    if (center) mapRef.current.setZoom(17);
   }, [center, userCenter]);
 
   // Self marker for the doctor's own location.
