@@ -163,7 +163,7 @@ export function GoogleMapBackground({
     } else {
       selfMarker.current.setPosition(userCenter);
     }
-  }, [userCenter]);
+  }, [userCenter, showSelf]);
 
   // Render available-doctor presence markers. Marker.top/left (0..1) is used
   // as a pseudo-spread around the current center until real coordinates flow
