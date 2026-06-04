@@ -632,6 +632,7 @@ function RequestCard({
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
+  const identity = useDoctorIdentity(item.doctorSid ?? null);
 
   const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
   const meta = isHistory
