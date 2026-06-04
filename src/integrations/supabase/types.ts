@@ -136,7 +136,9 @@ export type Database = {
           full_name: string | null
           gender: string | null
           id: string
+          last_seen_at: string | null
           license_name: string | null
+          location: string | null
           mdcn: string | null
           onboarded_at: string | null
           onboarded_cover_at: string | null
@@ -145,6 +147,7 @@ export type Database = {
           role: string | null
           selfie_url: string | null
           updated_at: string
+          verification_receipt_url: string | null
           verification_status: Database["public"]["Enums"]["verification_status"]
           years_experience: string | null
         }
@@ -155,7 +158,9 @@ export type Database = {
           full_name?: string | null
           gender?: string | null
           id: string
+          last_seen_at?: string | null
           license_name?: string | null
+          location?: string | null
           mdcn?: string | null
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
@@ -164,6 +169,7 @@ export type Database = {
           role?: string | null
           selfie_url?: string | null
           updated_at?: string
+          verification_receipt_url?: string | null
           verification_status?: Database["public"]["Enums"]["verification_status"]
           years_experience?: string | null
         }
@@ -174,7 +180,9 @@ export type Database = {
           full_name?: string | null
           gender?: string | null
           id?: string
+          last_seen_at?: string | null
           license_name?: string | null
+          location?: string | null
           mdcn?: string | null
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
@@ -183,6 +191,7 @@ export type Database = {
           role?: string | null
           selfie_url?: string | null
           updated_at?: string
+          verification_receipt_url?: string | null
           verification_status?: Database["public"]["Enums"]["verification_status"]
           years_experience?: string | null
         }
@@ -214,6 +223,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_users: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          last_seen_at: string
+          location: string
+          onboarded_cover_at: string
+          onboarded_request_at: string
+          phone: string
+          role: string
+          verification_status: Database["public"]["Enums"]["verification_status"]
+        }[]
+      }
+      admin_overview_stats: { Args: never; Returns: Json }
       claim_first_admin: { Args: never; Returns: boolean }
       has_role: {
         Args: {
@@ -226,6 +252,7 @@ export type Database = {
         Args: { _doctor: string; _requester: string }
         Returns: boolean
       }
+      touch_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
