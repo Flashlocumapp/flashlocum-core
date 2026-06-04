@@ -21,6 +21,11 @@ import {
 } from "@/lib/network";
 import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
+import {
+  fetchHospitalSuggestions,
+  fetchPlaceDetails,
+  type PlaceSuggestion,
+} from "@/lib/google-maps";
 
 
 export function RequesterHome() {
@@ -30,7 +35,7 @@ export function RequesterHome() {
 type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
-type Recent = { name: string; area: string };
+type Recent = { name: string; area: string; lat?: number; lng?: number };
 
 const RECENT: Recent[] = [
   { name: "Evercare Hospital", area: "Lekki Phase 1" },
@@ -192,6 +197,36 @@ function HomeScreen() {
 
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
+  // Live Places suggestions for hospital search.
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2 || location?.name === q) {
+      setSuggestions([]);
+      setSuggestLoading(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setSuggestLoading(true);
+    const t = setTimeout(() => {
+      fetchHospitalSuggestions(q, ctrl.signal)
+        .then((s) => {
+          if (!ctrl.signal.aborted) setSuggestions(s);
+        })
+        .catch(() => {
+          if (!ctrl.signal.aborted) setSuggestions([]);
+        })
+        .finally(() => {
+          if (!ctrl.signal.aborted) setSuggestLoading(false);
+        });
+    }, 220);
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [query, location?.name]);
+
   const recents = useMemo(
     () => RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
     [query],
@@ -201,6 +236,24 @@ function HomeScreen() {
     setLocation(r);
     setQuery(r.name);
     setStage("configure");
+  };
+
+  const selectSuggestion = async (s: PlaceSuggestion) => {
+    setQuery(s.primary);
+    setSuggestions([]);
+    try {
+      const details = await fetchPlaceDetails(s.placeId);
+      if (!details) return;
+      setLocation({
+        name: details.name || s.primary,
+        area: details.address || s.secondary,
+        lat: details.lat,
+        lng: details.lng,
+      });
+      setStage("configure");
+    } catch {
+      pushToast({ tone: "warn", title: "Couldn't load that location. Try again." });
+    }
   };
 
   const net = useNetwork();
@@ -214,9 +267,14 @@ function HomeScreen() {
     [net],
   );
 
+  const mapCenter =
+    location?.lat != null && location?.lng != null
+      ? { lat: location.lat, lng: location.lng }
+      : null;
+
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground markers={markers} />
+      <GoogleMapBackground markers={markers} center={mapCenter} />
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
@@ -286,7 +344,10 @@ function HomeScreen() {
             query={query}
             setQuery={setQuery}
             recents={recents}
+            suggestions={suggestions}
+            suggestLoading={suggestLoading}
             onPickRecent={selectLocation}
+            onPickSuggestion={selectSuggestion}
             location={location}
             coverage={coverage}
             setCoverage={setCoverage}
@@ -310,7 +371,10 @@ function DispatchSheet({
   query,
   setQuery,
   recents,
+  suggestions,
+  suggestLoading,
   onPickRecent,
+  onPickSuggestion,
   location,
   coverage,
   setCoverage,
@@ -325,7 +389,10 @@ function DispatchSheet({
   query: string;
   setQuery: (v: string) => void;
   recents: Recent[];
+  suggestions: PlaceSuggestion[];
+  suggestLoading: boolean;
   onPickRecent: (r: Recent) => void;
+  onPickSuggestion: (s: PlaceSuggestion) => void;
   location: Recent | null;
   coverage: CoverageId;
   setCoverage: (c: CoverageId) => void;
@@ -424,9 +491,39 @@ function DispatchSheet({
             )}
           </button>
 
-          {/* Body — adaptive; max 3 recents */}
+          {/* Body — adaptive; live Places suggestions + recents */}
           <div className="mt-3 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {isSearch && recents.length > 0 && (
+            {isSearch && suggestions.length > 0 && (
+              <ul className="space-y-0.5 pb-1">
+                {suggestions.map((s) => (
+                  <li key={s.placeId}>
+                    <button
+                      onClick={() => onPickSuggestion(s)}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+                          <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
+                          <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+                        </svg>
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <div className="truncate text-[15px] font-medium">{s.primary}</div>
+                        <div className="truncate text-[12.5px] text-muted-foreground">{s.secondary}</div>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {isSearch && suggestions.length === 0 && query.trim().length >= 2 && (
+              <div className="px-2 py-3 text-[12.5px] text-muted-foreground">
+                {suggestLoading ? "Searching hospitals…" : "No matching hospitals."}
+              </div>
+            )}
+
+            {isSearch && suggestions.length === 0 && query.trim().length < 2 && recents.length > 0 && (
               <ul className="space-y-0.5 pb-1">
                 {recents.slice(0, 3).map((r) => (
                   <li key={r.name}>
@@ -435,18 +532,8 @@ function DispatchSheet({
                       className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
-                        <svg
-                          width="15"
-                          height="15"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          className="text-muted-foreground"
-                        >
-                          <path
-                            d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                          />
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+                          <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
                           <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
                         </svg>
                       </span>
