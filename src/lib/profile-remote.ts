@@ -20,6 +20,41 @@ export type ProfileRow = {
   onboarded_cover_at: string | null;
   onboarded_request_at: string | null;
   verification_status: VerificationStatus;
+  last_seen_at: string | null;
+  location: string | null;
+  verification_receipt_url: string | null;
+  created_at?: string | null;
+};
+
+export type AdminOverviewStats = {
+  total_users: number;
+  request_users: number;
+  cover_users: number;
+  verified_doctors: number;
+  pending_doctors: number;
+  rejected_doctors: number;
+  suspended_doctors: number;
+  online_doctors: number;
+  coverage_in_progress: number;
+  coverage_upcoming: number;
+  coverage_completed: number;
+  coverage_cancelled: number;
+  active_today: number;
+  active_week: number;
+};
+
+export type AdminUserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  location: string | null;
+  verification_status: VerificationStatus;
+  created_at: string | null;
+  last_seen_at: string | null;
+  onboarded_request_at: string | null;
+  onboarded_cover_at: string | null;
 };
 
 let cachedProfile: ProfileRow | null | undefined;
