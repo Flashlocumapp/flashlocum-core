@@ -146,7 +146,7 @@ export function GoogleMapBackground({
   // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
     if (!mapRef.current) return;
-    if (!userCenter) {
+    if (!userCenter || !showSelf) {
       selfMarker.current?.setMap(null);
       selfMarker.current = null;
       return;
