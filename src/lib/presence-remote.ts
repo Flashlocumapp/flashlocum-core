@@ -23,19 +23,36 @@ let cachedRows: PresenceRow[] = [];
 const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
 
+/** Presence rows older than this are treated as offline / stale. */
+const STALE_MS = 2 * 60 * 1000;
+
 async function fetchAll(): Promise<PresenceRow[]> {
-  const { data, error } = await supabase.from(TABLE).select("*");
-  if (error) {
-    console.warn("[presence-remote] fetch error:", error.message);
+  // Fetch presence rows + the set of currently-approved doctor ids in
+  // parallel. Filter client-side so deleted / suspended / pending doctors
+  // never appear as available, regardless of any stale presence row.
+  const [presenceRes, approvedRes] = await Promise.all([
+    supabase.from(TABLE).select("user_id, online, top, left, last_seen"),
+    supabase.from("profiles").select("id").eq("verification_status", "approved"),
+  ]);
+  if (presenceRes.error) {
+    console.warn("[presence-remote] fetch error:", presenceRes.error.message);
     return [];
   }
-  return (data ?? []).map((r) => ({
-    user_id: r.user_id,
-    online: !!r.online,
-    top: Number(r.top ?? 0.5),
-    left: Number(r.left ?? 0.5),
-    last_seen: r.last_seen,
-  }));
+  const approved = new Set((approvedRes.data ?? []).map((p: any) => p.id));
+  const now = Date.now();
+  return (presenceRes.data ?? [])
+    .filter((r: any) => approved.has(r.user_id))
+    .map((r: any) => {
+      const lastSeenMs = r.last_seen ? new Date(r.last_seen).getTime() : 0;
+      const fresh = now - lastSeenMs < STALE_MS;
+      return {
+        user_id: r.user_id,
+        online: !!r.online && fresh,
+        top: Number(r.top ?? 0.5),
+        left: Number(r.left ?? 0.5),
+        last_seen: r.last_seen,
+      };
+    });
 }
 
 async function refreshSnapshot() {
