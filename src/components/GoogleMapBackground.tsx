@@ -14,18 +14,27 @@ const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };
 
 const BROWSER_KEY_PRESENT = hasMapsKey();
 
-// Light, calm map style aligned with FlashLocum's off-white aesthetic.
+// Soft, warm-cream basemap with gentle hues for parks, water, and roads.
+// Aims for a calm editorial feel — colorful, but never loud.
 const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#f4f4f1" }] },
+  { elementType: "geometry", stylers: [{ color: "#f3ede0" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#8a8a86" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#f4f4f1" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#7a7466" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f6f1e6" }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#5d574a" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#d6e3c6" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6f8a5a" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#ecead7" }] },
   { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#fff7e6" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f6c98a" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#e7b066" }] },
   { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#dfe7ea" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#b8d6dc" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#5a8089" }] },
 ];
 
 // Stethoscope-style SVG marker, mirrors the original MapBackground vibe.
@@ -88,7 +97,7 @@ export function GoogleMapBackground({
           gestureHandling: "greedy",
           clickableIcons: false,
           styles: LIGHT_STYLE,
-          backgroundColor: "#f4f4f1",
+          backgroundColor: "#f3ede0",
         });
       })
       .catch(() => setFailed(true));
@@ -199,7 +208,7 @@ export function GoogleMapBackground({
   }
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: "#f4f4f1" }}>
+    <div className="absolute inset-0 overflow-hidden" style={{ background: "#f3ede0" }}>
       <div ref={ref} className="absolute inset-0 h-full w-full" />
       {/* Subtle bottom fade so floating UI reads against the map */}
       <div
