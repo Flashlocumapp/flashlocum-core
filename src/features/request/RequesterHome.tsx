@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { MapBackground, type Marker } from "@/components/MapBackground";
+import { GoogleMapBackground } from "@/components/GoogleMapBackground";
+import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
@@ -215,7 +216,7 @@ function HomeScreen() {
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <MapBackground markers={markers} />
+      <GoogleMapBackground markers={markers} />
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}

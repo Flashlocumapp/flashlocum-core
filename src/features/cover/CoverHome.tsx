@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect } from "react";
-import { MapBackground } from "@/components/MapBackground";
+import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { fmtOpMeta } from "@/lib/format";
 import {
@@ -59,7 +59,11 @@ export function CoverHome() {
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <MapBackground variant={online && approved ? "stethoscope" : "empty"} />
+      <GoogleMapBackground
+        markers={
+          online && approved ? [{ top: 0.5, left: 0.5, key: "self" }] : []
+        }
+      />
 
       {/* top primary Online/Offline pill */}
       <header className="absolute inset-x-0 top-0 z-30 safe-top">
