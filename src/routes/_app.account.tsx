@@ -291,7 +291,7 @@ function ProfileSheet({
     if (saving) return;
     setSaving(true);
     try {
-      const fields: Partial<ProfileRow> = isDoctor
+      const fields = isDoctor
         ? {
             phone: phone || null,
             bank_name: bankName || null,
@@ -302,7 +302,7 @@ function ProfileSheet({
             gender: gender || null,
           };
       await upsertMyProfile(fields);
-      pushToast({ tone: "success", title: "Profile updated" });
+      pushToast({ tone: "info", title: "Profile updated" });
       onSaved();
     } catch (e) {
       console.warn("profile update failed", e);
