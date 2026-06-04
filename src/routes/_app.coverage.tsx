@@ -660,7 +660,7 @@ function RequestCard({
       }}
     >
       <div className="flex items-center gap-3">
-        <Avatar initials={item.initials} dim={isHistory} live={isActive} />
+        <Avatar initials={identity.initials} selfieUrl={identity.selfieUrl} dim={isHistory} live={isActive} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
