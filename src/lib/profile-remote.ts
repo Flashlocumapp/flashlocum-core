@@ -43,6 +43,13 @@ if (typeof window !== "undefined") {
       cachedProfile = undefined;
       cachedOnboarding.cover = undefined;
       cachedOnboarding.request = undefined;
+      if (profileChannel) {
+        supabase.removeChannel(profileChannel);
+        profileChannel = null;
+        profileChannelUserId = null;
+      }
+      // Notify subscribers so the UI clears stale data on sign out.
+      profileListeners.forEach((l) => l(null));
     }
   });
 }
