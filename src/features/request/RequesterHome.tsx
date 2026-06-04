@@ -164,6 +164,7 @@ function HomeScreen() {
   const [stage, setStage] = useState<Stage>("collapsed");
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState<Recent | null>(null);
+  const [searchOrigin, setSearchOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
   const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
@@ -182,6 +183,15 @@ function HomeScreen() {
     setImmersive(stage !== "collapsed");
     return () => setImmersive(false);
   }, [stage]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
+    );
+  }, []);
 
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
@@ -205,7 +215,7 @@ function HomeScreen() {
     const ctrl = new AbortController();
     setSuggestLoading(true);
     const t = setTimeout(() => {
-      fetchHospitalSuggestions(q, null, ctrl.signal)
+      fetchHospitalSuggestions(q, searchOrigin, ctrl.signal)
         .then((s) => {
           if (!ctrl.signal.aborted) setSuggestions(s);
         })
@@ -220,7 +230,7 @@ function HomeScreen() {
       ctrl.abort();
       clearTimeout(t);
     };
-  }, [query, location?.name]);
+  }, [query, location?.name, searchOrigin]);
 
   const recents: Recent[] = [];
 
