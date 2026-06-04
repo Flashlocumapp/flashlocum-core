@@ -1,0 +1,131 @@
+// Shared source of truth for displaying an assigned doctor's identity
+// across every coverage surface (accepted card, upcoming, active, history,
+// detail sheets). Everything reads the doctor's profile row by id and
+// derives display values from it — no fake initials, no synthesized MDCN.
+
+import { useEffect, useState } from "react";
+import { fetchDoctorProfile, type ProfileRow } from "@/lib/profile-remote";
+
+export type DoctorIdentity = {
+  id: string | null;
+  fullName: string;       // e.g. "Dr. Emmanuel Adeleke"
+  shortName: string;      // e.g. "Dr. Emmanuel A."
+  initials: string;       // e.g. "EA"
+  mdcn: string;           // exactly as stored, e.g. "MDCN/R/34729" — no prefix
+  selfieUrl: string | null;
+  ratingId: string | null; // matches doctorEntityId(id)
+  loaded: boolean;
+};
+
+const cache = new Map<string, DoctorIdentity>();
+const inflight = new Map<string, Promise<void>>();
+const listeners = new Set<() => void>();
+
+function ensureDr(name: string): string {
+  const t = name.trim();
+  if (!t) return "";
+  return /^dr\.?\s/i.test(t) ? t : `Dr. ${t}`;
+}
+
+function stripDr(name: string): string {
+  return name.replace(/^dr\.?\s*/i, "").trim();
+}
+
+function makeInitials(name: string, sessionId: string | null): string {
+  const stripped = stripDr(name);
+  if (stripped) {
+    const ini = stripped
+      .split(/\s+/)
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+    if (ini) return ini;
+  }
+  if (sessionId) {
+    const tail = sessionId.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase();
+    if (tail.length === 2) return tail;
+  }
+  return "DR";
+}
+
+function makeShort(full: string): string {
+  const t = full.trim();
+  if (!t) return "";
+  const parts = stripDr(t).split(/\s+/);
+  if (parts.length < 2) return ensureDr(t);
+  const last = parts[parts.length - 1];
+  return `Dr. ${parts.slice(0, -1).join(" ")} ${last[0]}.`;
+}
+
+function emptyIdentity(sessionId: string | null): DoctorIdentity {
+  return {
+    id: sessionId,
+    fullName: "Loading…",
+    shortName: "Loading…",
+    initials: makeInitials("", sessionId),
+    mdcn: "—",
+    selfieUrl: null,
+    ratingId: sessionId ? `doc:${sessionId}` : null,
+    loaded: false,
+  };
+}
+
+function identityFromProfile(p: ProfileRow): DoctorIdentity {
+  const full = ensureDr(p.full_name ?? "");
+  return {
+    id: p.id,
+    fullName: full || "Doctor",
+    shortName: makeShort(full || "Doctor"),
+    initials: makeInitials(p.full_name ?? "", p.id),
+    mdcn: p.mdcn?.trim() ? p.mdcn.trim() : "—",
+    selfieUrl: p.selfie_url ?? null,
+    ratingId: `doc:${p.id}`,
+    loaded: true,
+  };
+}
+
+function notify() {
+  listeners.forEach((l) => l());
+}
+
+function loadInto(sessionId: string) {
+  if (cache.has(sessionId) && cache.get(sessionId)!.loaded) return;
+  if (inflight.has(sessionId)) return;
+  const p = fetchDoctorProfile(sessionId)
+    .then((row) => {
+      if (row) {
+        cache.set(sessionId, identityFromProfile(row));
+        notify();
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      inflight.delete(sessionId);
+    });
+  inflight.set(sessionId, p);
+}
+
+export function getDoctorIdentity(sessionId: string | null | undefined): DoctorIdentity {
+  if (!sessionId) return emptyIdentity(null);
+  const hit = cache.get(sessionId);
+  if (hit) return hit;
+  const placeholder = emptyIdentity(sessionId);
+  cache.set(sessionId, placeholder);
+  loadInto(sessionId);
+  return placeholder;
+}
+
+export function useDoctorIdentity(sessionId: string | null | undefined): DoctorIdentity {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const l = () => force((x) => x + 1);
+    listeners.add(l);
+    if (sessionId) loadInto(sessionId);
+    return () => {
+      listeners.delete(l);
+    };
+  }, [sessionId]);
+  return getDoctorIdentity(sessionId);
+}
