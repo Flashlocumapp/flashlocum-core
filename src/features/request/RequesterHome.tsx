@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { GoogleMapBackground } from "@/components/GoogleMapBackground";
+import { GoogleMapBackground, type PlaceMapMarker } from "@/components/GoogleMapBackground";
 import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
@@ -274,10 +274,15 @@ function HomeScreen() {
     location?.lat != null && location?.lng != null
       ? { lat: location.lat, lng: location.lng }
       : null;
+  const placeMarkers: PlaceMapMarker[] = location?.lat != null && location?.lng != null
+    ? [{ key: location.placeId ?? location.name, title: location.name, lat: location.lat, lng: location.lng }]
+    : suggestions
+        .filter((s) => s.lat != null && s.lng != null)
+        .map((s) => ({ key: s.placeId, title: s.primary, lat: s.lat!, lng: s.lng! }));
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground markers={markers} center={mapCenter} />
+      <GoogleMapBackground markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
