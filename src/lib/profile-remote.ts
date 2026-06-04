@@ -23,7 +23,7 @@ export type ProfileRow = {
   last_seen_at: string | null;
   location: string | null;
   verification_receipt_url: string | null;
-  created_at?: string | null;
+  created_at?: string;
 };
 
 export type AdminOverviewStats = {
