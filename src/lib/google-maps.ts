@@ -66,7 +66,8 @@ export type PlaceDetails = {
 
 // Lagos bias keeps results relevant to FlashLocum's launch market.
 const BIAS_CENTER = { lat: 6.5244, lng: 3.3792 };
-const SEARCH_BIAS: google.maps.CircleLiteral = { center: BIAS_CENTER, radius: 150_000 };
+const SEARCH_RADIUS_M = 150_000;
+const SEARCH_BIAS: google.maps.CircleLiteral = { center: BIAS_CENTER, radius: SEARCH_RADIUS_M };
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
@@ -88,7 +89,7 @@ export async function fetchHospitalSuggestions(
   if (signal?.aborted) return [];
   const locationBias: google.maps.CircleLiteral = {
     center: origin ?? BIAS_CENTER,
-    radius: origin ? 50_000 : SEARCH_BIAS.radius,
+    radius: origin ? 50_000 : SEARCH_RADIUS_M,
   };
 
   const byId = new Map<string, PlaceSuggestion>();

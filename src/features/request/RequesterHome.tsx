@@ -233,6 +233,16 @@ function HomeScreen() {
   const selectSuggestion = async (s: PlaceSuggestion) => {
     setQuery(s.primary);
     setSuggestions([]);
+    if (s.lat != null && s.lng != null) {
+      setLocation({
+        placeId: s.placeId,
+        name: s.primary,
+        area: s.secondary,
+        lat: s.lat,
+        lng: s.lng,
+      });
+      setStage("configure");
+    }
     try {
       const details = await fetchPlaceDetails(s.placeId);
       if (!details) return;
