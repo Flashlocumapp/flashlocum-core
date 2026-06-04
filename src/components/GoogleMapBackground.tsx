@@ -211,7 +211,7 @@ export function GoogleMapBackground({
         position,
         map: mapRef.current!,
         title: p.title,
-        icon: markerIcon(),
+        icon: hospitalIcon(),
         optimized: true,
         zIndex: 100,
       });
