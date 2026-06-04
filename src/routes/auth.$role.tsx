@@ -51,23 +51,46 @@ function AuthScreen() {
       await new Promise((r) => setTimeout(r, 250));
       profile = await fetchMyProfile();
     }
-    // Account-wide onboarding: if EITHER capability has been onboarded,
-    // the returning user goes straight to /home. They never see onboarding
-    // again unless they explicitly unlock the other role via the account
-    // tab — which is the separate "role-switch onboarding" flow.
-    const effectiveRole = effectiveOnboardedRole(profile, normalizedRole);
-    if (effectiveRole) {
-      setRole(effectiveRole);
-      navigate({ to: "/home" });
-    } else {
+    // STRICT SURFACE SEPARATION:
+    // Request Coverage and Cover & Earn behave as independent auth
+    // environments. An account that has only onboarded the OTHER role
+    // cannot sign in on this surface — they must create a new account
+    // (or unlock the role via the in-app role-switch flow once signed
+    // into their original surface).
+    const onboardedThis =
+      normalizedRole === "cover"
+        ? !!profile?.onboarded_cover_at
+        : !!profile?.onboarded_request_at;
+    const onboardedOther =
+      normalizedRole === "cover"
+        ? !!profile?.onboarded_request_at
+        : !!profile?.onboarded_cover_at;
+
+    if (onboardedThis) {
       setRole(normalizedRole);
-      navigate({
-        to: "/onboarding/$role",
-        params: { role: normalizedRole },
-        search: { from: "auth" },
-      });
+      navigate({ to: "/home" });
+      return;
     }
-  }, [navigate, normalizedRole]);
+    if (onboardedOther) {
+      await supabase.auth.signOut();
+      const otherLabel = normalizedRole === "cover" ? "Request Coverage" : "Cover & Earn";
+      setError(
+        `This account is not registered under ${roleLabel}. It belongs to ${otherLabel}. Please create an account.`,
+      );
+      setMode("signup");
+      setView("form");
+      setPassword("");
+      return;
+    }
+    // No onboarding for either role yet → continue into onboarding for
+    // the surface the user selected.
+    setRole(normalizedRole);
+    navigate({
+      to: "/onboarding/$role",
+      params: { role: normalizedRole },
+      search: { from: "auth" },
+    });
+  }, [navigate, normalizedRole, roleLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,16 +102,6 @@ function AuthScreen() {
       });
     });
 
-    // Auto-advance when either:
-    //  1. The user just completed an auth action that redirected back here
-    //     (email verification link or OAuth callback), OR
-    //  2. The user already has a valid session AND has already completed
-    //     onboarding for some role — they are a returning user signing
-    //     back in and should land directly in the app, not on Create
-    //     Account.
-    // A signed-in user who has NEVER completed onboarding still sees the
-    // Create Account screen so they can choose to sign out, switch
-    // account, or continue with Google before entering onboarding.
     const hash = typeof window !== "undefined" ? window.location.hash : "";
     const search = typeof window !== "undefined" ? window.location.search : "";
     const arrivedFromAuthRedirect =
@@ -103,11 +116,17 @@ function AuthScreen() {
         await proceed();
         return;
       }
-      // Returning user with active session: only auto-advance if they've
-      // actually onboarded before. Otherwise let them see the auth screen.
+      // Returning user with active session: auto-advance ONLY if they've
+      // onboarded for THIS surface. Never silently cross into the other
+      // surface — they'd have to explicitly sign in here to trigger the
+      // strict-separation check.
       const profile = await fetchMyProfile();
       if (cancelled) return;
-      if (profile && (profile.onboarded_cover_at || profile.onboarded_request_at)) {
+      const onboardedThis =
+        normalizedRole === "cover"
+          ? !!profile?.onboarded_cover_at
+          : !!profile?.onboarded_request_at;
+      if (onboardedThis) {
         await proceed();
       }
     })();
@@ -115,7 +134,7 @@ function AuthScreen() {
       cancelled = true;
       authListener.subscription.unsubscribe();
     };
-  }, [proceed]);
+  }, [proceed, normalizedRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
