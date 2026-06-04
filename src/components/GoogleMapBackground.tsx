@@ -7,6 +7,7 @@ import type { Marker } from "@/components/MapBackground";
 import { hasMapsKey, loadMapsApi } from "@/lib/google-maps";
 
 type Coords = { lat: number; lng: number };
+export type PlaceMapMarker = Coords & { key: string; title?: string };
 
 // Lagos as a sensible fallback center for FlashLocum's launch market.
 const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };
@@ -48,13 +49,16 @@ function markerIcon(): google.maps.Icon {
 export function GoogleMapBackground({
   markers,
   center,
+  placeMarkers,
 }: {
   markers?: Marker[];
   center?: Coords | null;
+  placeMarkers?: PlaceMapMarker[];
 } = {}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerObjs = useRef<google.maps.Marker[]>([]);
+  const placeMarkerObjs = useRef<google.maps.Marker[]>([]);
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
   const [userCenter, setUserCenter] = useState<Coords | null>(null);
@@ -100,6 +104,7 @@ export function GoogleMapBackground({
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
+    if (center) mapRef.current.setZoom(15);
   }, [center, userCenter]);
 
   // Self marker for the doctor's own location.
@@ -149,6 +154,38 @@ export function GoogleMapBackground({
       markerObjs.current.push(marker);
     });
   }, [markers, center, userCenter]);
+
+  // Render real hospital/place markers from Google Places results.
+  useEffect(() => {
+    if (!mapRef.current) return;
+    placeMarkerObjs.current.forEach((m) => m.setMap(null));
+    placeMarkerObjs.current = [];
+    if (!placeMarkers || placeMarkers.length === 0) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    placeMarkers.forEach((p) => {
+      const position = { lat: p.lat, lng: p.lng };
+      bounds.extend(position);
+      const marker = new google.maps.Marker({
+        position,
+        map: mapRef.current!,
+        title: p.title,
+        icon: markerIcon(),
+        optimized: true,
+        zIndex: 100,
+      });
+      placeMarkerObjs.current.push(marker);
+    });
+
+    if (!center) {
+      if (placeMarkers.length === 1) {
+        mapRef.current.panTo({ lat: placeMarkers[0].lat, lng: placeMarkers[0].lng });
+        mapRef.current.setZoom(15);
+      } else {
+        mapRef.current.fitBounds(bounds, 72);
+      }
+    }
+  }, [placeMarkers, center]);
 
   if (failed || !BROWSER_KEY_PRESENT) {
     // Graceful fallback to the stylized map so the UI never goes blank.
