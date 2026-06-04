@@ -875,32 +875,12 @@ function DispatchOverlay({
   const net = useNetwork();
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedSid = acceptedRequest?.acceptedBy;
-  const acceptedDoctorRatingId = acceptedSid ? `doc:${acceptedSid}` : null;
-  const [doctorProfile, setDoctorProfile] = useState<{ full_name: string | null; mdcn: string | null } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    setDoctorProfile(null);
-    if (!acceptedSid) return;
-    void fetchDoctorProfile(acceptedSid).then((p) => {
-      if (cancelled || !p) return;
-      setDoctorProfile({ full_name: p.full_name, mdcn: p.mdcn });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [acceptedSid]);
-  const fallbackInitials = acceptedSid
-    ? (acceptedSid.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase() || "DR")
-    : "DR";
-  const acceptedDoctorName = doctorProfile?.full_name?.trim()
-    ? (doctorProfile.full_name.trim().startsWith("Dr") ? doctorProfile.full_name.trim() : `Dr. ${doctorProfile.full_name.trim()}`)
-    : "Loading…";
-  const acceptedInitials = doctorProfile?.full_name?.trim()
-    ? doctorProfile.full_name.trim().replace(/^Dr\.?\s*/i, "").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || fallbackInitials
-    : fallbackInitials;
-  const acceptedMdcn = doctorProfile?.mdcn?.trim()
-    ? `MDCN-${doctorProfile.mdcn.trim()}`
-    : "MDCN-—";
+  const doctorIdentity = useDoctorIdentity(acceptedSid ?? null);
+  const acceptedDoctorRatingId = doctorIdentity.ratingId;
+  const acceptedDoctorName = doctorIdentity.fullName;
+  const acceptedInitials = doctorIdentity.initials;
+  const acceptedMdcn = doctorIdentity.mdcn;
+  const acceptedSelfie = doctorIdentity.selfieUrl;
 
   const paused = cancelOpen || editOpen;
   const pricing = computePricing({ coverage, draft, days });
