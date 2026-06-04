@@ -101,15 +101,13 @@ export async function fetchHospitalSuggestions(
 
   try {
     const { places } = await lib.Place.searchByText({
-      textQuery: /\b(hospital|clinic|medical|centre|center)\b/i.test(q) ? q : `${q} hospital`,
+      textQuery: q,
       fields: ["id", "displayName", "formattedAddress", "location"],
-      includedType: "hospital",
       locationBias,
-      maxResultCount: 8,
+      maxResultCount: 10,
       region: "NG",
       language: "en",
       rankPreference: "RELEVANCE",
-      useStrictTypeFiltering: false,
     });
 
     places.forEach((place) => {
