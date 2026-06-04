@@ -274,7 +274,7 @@ function HomeScreen() {
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground markers={markers} />
+      <GoogleMapBackground markers={markers} center={mapCenter} />
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
