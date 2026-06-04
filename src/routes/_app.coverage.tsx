@@ -492,16 +492,21 @@ function RequesterDetailSheet({
   onEdit: (id: string) => void;
   onCancel: (id: string) => void;
 }) {
+  const identity = useDoctorIdentity(item?.doctorSid ?? null);
   return (
     <AnimatePresence>
       {item && (
         <DismissSheet open onDismiss={onDismiss}>
           <div className="flex items-center gap-3">
             <span
-              className="relative flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-semibold"
+              className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-[15px] font-semibold"
               style={{ background: "var(--color-secondary)" }}
             >
-              {item.initials}
+              {identity.selfieUrl ? (
+                <img src={identity.selfieUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                identity.initials
+              )}
               {item.status === "active" && (
                 <span
                   className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
@@ -513,14 +518,15 @@ function RequesterDetailSheet({
               )}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[16px] font-medium">{item.doctor}</div>
+              <div className="truncate text-[16px] font-medium">{identity.fullName}</div>
               <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                <span>{item.mdcn}</span>
+                <span>{identity.mdcn}</span>
                 <span>·</span>
                 <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
               </div>
             </div>
           </div>
+
 
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
             {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
