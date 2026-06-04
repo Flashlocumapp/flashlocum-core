@@ -23,19 +23,33 @@ let cachedRows: PresenceRow[] = [];
 const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
 
+/** Presence rows older than this are treated as offline / stale. */
+const STALE_MS = 2 * 60 * 1000;
+
 async function fetchAll(): Promise<PresenceRow[]> {
-  const { data, error } = await supabase.from(TABLE).select("*");
+  // Inner-join profiles so only approved doctors (still existing accounts)
+  // are returned. Deleted users cascade away via FK; suspended / pending
+  // doctors are filtered out here.
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("user_id, online, top, left, last_seen, profiles!inner(verification_status)")
+    .eq("profiles.verification_status", "approved");
   if (error) {
     console.warn("[presence-remote] fetch error:", error.message);
     return [];
   }
-  return (data ?? []).map((r) => ({
-    user_id: r.user_id,
-    online: !!r.online,
-    top: Number(r.top ?? 0.5),
-    left: Number(r.left ?? 0.5),
-    last_seen: r.last_seen,
-  }));
+  const now = Date.now();
+  return (data ?? []).map((r: any) => {
+    const lastSeenMs = r.last_seen ? new Date(r.last_seen).getTime() : 0;
+    const fresh = now - lastSeenMs < STALE_MS;
+    return {
+      user_id: r.user_id,
+      online: !!r.online && fresh,
+      top: Number(r.top ?? 0.5),
+      left: Number(r.left ?? 0.5),
+      last_seen: r.last_seen,
+    };
+  });
 }
 
 async function refreshSnapshot() {
