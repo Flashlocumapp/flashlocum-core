@@ -1167,8 +1167,12 @@ function DispatchOverlay({
               </div>
 
               <div className="mt-3 flex items-center gap-3 rounded-2xl bg-secondary/50 px-3.5 py-3">
-                <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary text-[13px] font-semibold">
-                  {acceptedInitials}
+                <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-[13px] font-semibold">
+                  {acceptedSelfie ? (
+                    <img src={acceptedSelfie} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    acceptedInitials
+                  )}
                   <span
                     className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
                     style={{
