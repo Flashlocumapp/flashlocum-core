@@ -50,11 +50,8 @@ type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
-  doctor: string;
-  doctorShort: string;
+  doctorSid: string | undefined;
   doctorRatingId: string | null;
-  mdcn: string;
-  initials: string;
   coverage: Coverage;
   day: string;
   start: string;
@@ -74,28 +71,6 @@ type RequestItem = {
   dayIndex: number;
 };
 
-
-/** Shorten a full name to "First L." form. */
-function shortDoctorName(full: string): string {
-  const parts = full.trim().split(/\s+/);
-  if (parts.length < 3) return full;
-  const last = parts[parts.length - 1];
-  return `${parts.slice(0, -1).join(" ")} ${last[0]}.`;
-}
-
-function doctorInitials(sessionId?: string): string {
-  if (!sessionId) return "DR";
-  const tail = sessionId.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase();
-  return tail.length === 2 ? tail : "DR";
-}
-function mdcnFor(sessionId?: string): string {
-  if (!sessionId) return "MDCN-—";
-  return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
-}
-/** Generic display label for an assigned cover doctor, derived from session id. */
-function doctorLabelFor(sessionId?: string): string {
-  return `Dr. ${doctorInitials(sessionId)}`;
-}
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
 function ampmTo24h(s: string): string {
