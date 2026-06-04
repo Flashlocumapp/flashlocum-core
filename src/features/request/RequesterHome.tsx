@@ -371,7 +371,10 @@ function DispatchSheet({
   query,
   setQuery,
   recents,
+  suggestions,
+  suggestLoading,
   onPickRecent,
+  onPickSuggestion,
   location,
   coverage,
   setCoverage,
@@ -386,7 +389,10 @@ function DispatchSheet({
   query: string;
   setQuery: (v: string) => void;
   recents: Recent[];
+  suggestions: PlaceSuggestion[];
+  suggestLoading: boolean;
   onPickRecent: (r: Recent) => void;
+  onPickSuggestion: (s: PlaceSuggestion) => void;
   location: Recent | null;
   coverage: CoverageId;
   setCoverage: (c: CoverageId) => void;
