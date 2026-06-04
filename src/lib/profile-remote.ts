@@ -108,7 +108,90 @@ export async function upsertMyProfile(
     .from("profiles")
     .upsert({ id: user.id, ...fields }, { onConflict: "id" });
   if (error) throw error;
+  // Update cache + notify subscribers immediately so the UI reflects the
+  // new source of truth without waiting for the network round-trip.
+  if (cachedProfile && cachedProfile.id === user.id) {
+    rememberProfile({ ...cachedProfile, ...(fields as Partial<ProfileRow>) });
+    notifyProfile();
+  } else {
+    // Force next subscriber read to refetch.
+    void fetchMyProfile().then(notifyProfile);
+  }
 }
+
+/* ---------- Live profile subscription ---------- */
+
+const profileListeners = new Set<(p: ProfileRow | null) => void>();
+function notifyProfile() {
+  profileListeners.forEach((l) => l(cachedProfile ?? null));
+}
+
+let profileChannelUserId: string | null = null;
+let profileChannel: ReturnType<typeof supabase.channel> | null = null;
+
+function ensureProfileChannel(userId: string) {
+  if (profileChannelUserId === userId && profileChannel) return;
+  if (profileChannel) {
+    supabase.removeChannel(profileChannel);
+    profileChannel = null;
+  }
+  profileChannelUserId = userId;
+  profileChannel = supabase
+    .channel(`profile-${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+      (payload) => {
+        const next = (payload.new as ProfileRow | null) ?? null;
+        rememberProfile(next);
+        notifyProfile();
+      },
+    )
+    .subscribe();
+}
+
+/** React hook returning the current user's backend profile, with realtime
+ *  updates. Returns the cached value synchronously to avoid flicker. */
+export function useMyProfile(): {
+  profile: ProfileRow | null;
+  loading: boolean;
+  refresh: () => Promise<void>;
+} {
+  const [profile, setProfile] = useState<ProfileRow | null>(cachedProfile ?? null);
+  const [loading, setLoading] = useState(cachedProfile === undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    profileListeners.add(setProfile);
+    (async () => {
+      if (cachedProfile === undefined) {
+        const p = await fetchMyProfile();
+        if (cancelled) return;
+        setProfile(p);
+        setLoading(false);
+      } else {
+        setLoading(false);
+      }
+      const { data } = await supabase.auth.getUser();
+      if (!cancelled && data.user) ensureProfileChannel(data.user.id);
+    })();
+    return () => {
+      cancelled = true;
+      profileListeners.delete(setProfile);
+    };
+  }, []);
+
+  return {
+    profile,
+    loading,
+    refresh: async () => {
+      const p = await fetchMyProfile();
+      notifyProfile();
+      setProfile(p);
+    },
+  };
+}
+
 
 /** Mark the current user as onboarded for the given capability.
  *  Capabilities track independently — completing one does NOT auto-complete the other. */
