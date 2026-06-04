@@ -19,45 +19,92 @@ export type PresenceRow = {
 const TABLE = "doctor_presence";
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
-let cachedRows: PresenceRow[] = [];
+let profilesChannel: ReturnType<typeof supabase.channel> | null = null;
+
+// Raw caches — backend truth.
+const rawRows = new Map<string, PresenceRow>();
+const approvedIds = new Set<string>();
+
 const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
 
 /** Presence rows older than this are treated as offline / stale. */
 const STALE_MS = 2 * 60 * 1000;
 
-async function fetchAll(): Promise<PresenceRow[]> {
-  // Fetch presence rows + the set of currently-approved doctor ids in
-  // parallel. Filter client-side so deleted / suspended / pending doctors
-  // never appear as available, regardless of any stale presence row.
+function buildSnapshot(): PresenceRow[] {
+  const now = Date.now();
+  const out: PresenceRow[] = [];
+  for (const r of rawRows.values()) {
+    if (!approvedIds.has(r.user_id)) continue;
+    const lastSeenMs = r.last_seen ? new Date(r.last_seen).getTime() : 0;
+    const fresh = now - lastSeenMs < STALE_MS;
+    out.push({
+      user_id: r.user_id,
+      online: !!r.online && fresh,
+      top: Number(r.top ?? 0.5),
+      left: Number(r.left ?? 0.5),
+      last_seen: r.last_seen,
+    });
+  }
+  return out;
+}
+
+function emit() {
+  const snap = buildSnapshot();
+  snapshotListeners.forEach((fn) => fn(snap));
+}
+
+async function initialFetch() {
   const [presenceRes, approvedRes] = await Promise.all([
     supabase.from(TABLE).select("user_id, online, top, left, last_seen"),
     supabase.from("profiles").select("id").eq("verification_status", "approved"),
   ]);
   if (presenceRes.error) {
     console.warn("[presence-remote] fetch error:", presenceRes.error.message);
-    return [];
+  } else {
+    rawRows.clear();
+    for (const r of presenceRes.data ?? []) {
+      rawRows.set(r.user_id, r as PresenceRow);
+    }
   }
-  const approved = new Set((approvedRes.data ?? []).map((p: any) => p.id));
-  const now = Date.now();
-  return (presenceRes.data ?? [])
-    .filter((r: any) => approved.has(r.user_id))
-    .map((r: any) => {
-      const lastSeenMs = r.last_seen ? new Date(r.last_seen).getTime() : 0;
-      const fresh = now - lastSeenMs < STALE_MS;
-      return {
-        user_id: r.user_id,
-        online: !!r.online && fresh,
-        top: Number(r.top ?? 0.5),
-        left: Number(r.left ?? 0.5),
-        last_seen: r.last_seen,
-      };
-    });
+  if (!approvedRes.error) {
+    approvedIds.clear();
+    for (const p of approvedRes.data ?? []) approvedIds.add((p as any).id);
+  }
+  emit();
 }
 
-async function refreshSnapshot() {
-  cachedRows = await fetchAll();
-  snapshotListeners.forEach((fn) => fn(cachedRows));
+function applyPresencePayload(payload: any) {
+  const evt = payload.eventType ?? payload.event;
+  if (evt === "DELETE") {
+    const id = payload.old?.user_id;
+    if (id) rawRows.delete(id);
+  } else {
+    const row = payload.new as PresenceRow | undefined;
+    if (row?.user_id) rawRows.set(row.user_id, row);
+  }
+  emit();
+}
+
+function applyProfilePayload(payload: any) {
+  const evt = payload.eventType ?? payload.event;
+  if (evt === "DELETE") {
+    const id = payload.old?.id;
+    if (id) {
+      approvedIds.delete(id);
+      rawRows.delete(id);
+    }
+  } else {
+    const row = payload.new as { id: string; verification_status: string } | undefined;
+    if (row?.id) {
+      if (row.verification_status === "approved") approvedIds.add(row.id);
+      else {
+        approvedIds.delete(row.id);
+        rawRows.delete(row.id);
+      }
+    }
+  }
+  emit();
 }
 
 export function subscribePresence(
@@ -65,7 +112,9 @@ export function subscribePresence(
 ): () => void {
   snapshotListeners.add(onSnapshot);
   activeSubscribers++;
-  refreshSnapshot();
+  // Emit current cache synchronously so subscriber gets instant data.
+  onSnapshot(buildSnapshot());
+  void initialFetch();
 
   if (!channel) {
     channel = supabase
@@ -73,24 +122,38 @@ export function subscribePresence(
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: TABLE },
-        () => {
-          refreshSnapshot();
-        },
+        (payload) => applyPresencePayload(payload),
+      )
+      .subscribe();
+  }
+  if (!profilesChannel) {
+    profilesChannel = supabase
+      .channel("profiles_verification_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload) => applyProfilePayload(payload),
       )
       .subscribe();
   }
 
   const offAuth = onUserIdChange(() => {
-    refreshSnapshot();
+    void initialFetch();
   });
 
   return () => {
     snapshotListeners.delete(onSnapshot);
     offAuth();
     activeSubscribers--;
-    if (activeSubscribers === 0 && channel) {
-      supabase.removeChannel(channel);
-      channel = null;
+    if (activeSubscribers === 0) {
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+      if (profilesChannel) {
+        supabase.removeChannel(profilesChannel);
+        profilesChannel = null;
+      }
     }
   };
 }
@@ -116,6 +179,19 @@ export async function upsertMyPresence(fields: {
   };
   if (fields.top !== undefined) row.top = fields.top;
   if (fields.left !== undefined) row.left = fields.left;
+
+  // Optimistically update local cache so the toggling client sees the
+  // change immediately, without waiting for the realtime echo.
+  const existing = rawRows.get(uid);
+  rawRows.set(uid, {
+    user_id: uid,
+    online: fields.online,
+    top: fields.top ?? existing?.top ?? 0.5,
+    left: fields.left ?? existing?.left ?? 0.5,
+    last_seen: row.last_seen,
+  });
+  emit();
+
   const { error } = await supabase
     .from(TABLE)
     .upsert(row, { onConflict: "user_id" });
@@ -141,5 +217,14 @@ export async function heartbeatPresence(online: boolean): Promise<void> {
 export async function clearMyPresence(): Promise<void> {
   const uid = getCurrentUserIdSync();
   if (!uid) return;
-  await supabase.from(TABLE).update({ online: false, last_seen: new Date().toISOString() }).eq("user_id", uid);
+  // Optimistic local clear.
+  const existing = rawRows.get(uid);
+  if (existing) {
+    rawRows.set(uid, { ...existing, online: false, last_seen: new Date().toISOString() });
+    emit();
+  }
+  await supabase
+    .from(TABLE)
+    .update({ online: false, last_seen: new Date().toISOString() })
+    .eq("user_id", uid);
 }
