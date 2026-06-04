@@ -1,3 +1,4 @@
+/// <reference types="google.maps" />
 // Live Google Map background. Drop-in replacement for MapBackground.
 // Renders the Maps JS API behind the floating UI on Cover & Earn and Request Coverage.
 
