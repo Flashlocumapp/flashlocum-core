@@ -130,7 +130,6 @@ export async function fetchHospitalSuggestions(
     const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
       input: q,
       sessionToken: sessionToken!,
-      includedPrimaryTypes: ["hospital"],
       includedRegionCodes: ["ng"],
       region: "NG",
       language: "en",
