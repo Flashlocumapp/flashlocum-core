@@ -197,6 +197,36 @@ function HomeScreen() {
 
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
+  // Live Places suggestions for hospital search.
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2 || location?.name === q) {
+      setSuggestions([]);
+      setSuggestLoading(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setSuggestLoading(true);
+    const t = setTimeout(() => {
+      fetchHospitalSuggestions(q, ctrl.signal)
+        .then((s) => {
+          if (!ctrl.signal.aborted) setSuggestions(s);
+        })
+        .catch(() => {
+          if (!ctrl.signal.aborted) setSuggestions([]);
+        })
+        .finally(() => {
+          if (!ctrl.signal.aborted) setSuggestLoading(false);
+        });
+    }, 220);
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [query, location?.name]);
+
   const recents = useMemo(
     () => RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
     [query],
@@ -206,6 +236,24 @@ function HomeScreen() {
     setLocation(r);
     setQuery(r.name);
     setStage("configure");
+  };
+
+  const selectSuggestion = async (s: PlaceSuggestion) => {
+    setQuery(s.primary);
+    setSuggestions([]);
+    try {
+      const details = await fetchPlaceDetails(s.placeId);
+      if (!details) return;
+      setLocation({
+        name: details.name || s.primary,
+        area: details.address || s.secondary,
+        lat: details.lat,
+        lng: details.lng,
+      });
+      setStage("configure");
+    } catch {
+      pushToast({ tone: "warn", title: "Couldn't load that location. Try again." });
+    }
   };
 
   const net = useNetwork();
@@ -218,6 +266,11 @@ function HomeScreen() {
       })),
     [net],
   );
+
+  const mapCenter =
+    location?.lat != null && location?.lng != null
+      ? { lat: location.lat, lng: location.lng }
+      : null;
 
   return (
     <section className="relative h-full w-full overflow-hidden">
