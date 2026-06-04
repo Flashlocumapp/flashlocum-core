@@ -83,10 +83,12 @@ export function GoogleMapBackground({
   markers,
   center,
   placeMarkers,
+  showSelf = true,
 }: {
   markers?: Marker[];
   center?: Coords | null;
   placeMarkers?: PlaceMapMarker[];
+  showSelf?: boolean;
 } = {}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -144,7 +146,7 @@ export function GoogleMapBackground({
   // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
     if (!mapRef.current) return;
-    if (!userCenter) {
+    if (!userCenter || !showSelf) {
       selfMarker.current?.setMap(null);
       selfMarker.current = null;
       return;
@@ -161,7 +163,7 @@ export function GoogleMapBackground({
     } else {
       selfMarker.current.setPosition(userCenter);
     }
-  }, [userCenter]);
+  }, [userCenter, showSelf]);
 
   // Render available-doctor presence markers. Marker.top/left (0..1) is used
   // as a pseudo-spread around the current center until real coordinates flow

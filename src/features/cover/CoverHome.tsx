@@ -60,6 +60,7 @@ export function CoverHome() {
   return (
     <section className="relative h-full w-full overflow-hidden">
       <GoogleMapBackground
+        showSelf={false}
         markers={
           online && approved ? [{ top: 0.5, left: 0.5, key: "self" }] : []
         }
