@@ -71,6 +71,7 @@ function AppShell() {
       return;
     }
     if (getRole() === "cover") ensureDoctorSession(false);
+    void touchLastSeen(true);
     setReady(true);
   };
 
