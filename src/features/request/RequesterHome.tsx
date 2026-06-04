@@ -539,9 +539,23 @@ function DispatchSheet({
             )}
 
             {isSearch && suggestions.length === 0 && query.trim().length >= 2 && (
-              <div className="px-2 py-3 text-[12.5px] text-muted-foreground">
-                {suggestLoading ? "Searching hospitals…" : "No matching hospitals."}
-              </div>
+              suggestLoading ? (
+                <ul className="space-y-0.5 pb-1" aria-busy="true">
+                  {[0, 1, 2].map((i) => (
+                    <li key={i} className="flex items-center gap-3 rounded-xl px-2 py-2.5">
+                      <span className="h-9 w-9 rounded-full bg-secondary animate-pulse" />
+                      <span className="flex-1 min-w-0 space-y-1.5">
+                        <span className="block h-3 w-2/3 rounded bg-secondary animate-pulse" />
+                        <span className="block h-2.5 w-1/2 rounded bg-secondary/70 animate-pulse" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-2 py-3 text-[12.5px] text-muted-foreground">
+                  No matching hospitals.
+                </div>
+              )
             )}
 
             {isSearch && suggestions.length === 0 && query.trim().length < 2 && recents.length > 0 && (
