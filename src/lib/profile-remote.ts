@@ -20,6 +20,41 @@ export type ProfileRow = {
   onboarded_cover_at: string | null;
   onboarded_request_at: string | null;
   verification_status: VerificationStatus;
+  last_seen_at: string | null;
+  location: string | null;
+  verification_receipt_url: string | null;
+  created_at?: string;
+};
+
+export type AdminOverviewStats = {
+  total_users: number;
+  request_users: number;
+  cover_users: number;
+  verified_doctors: number;
+  pending_doctors: number;
+  rejected_doctors: number;
+  suspended_doctors: number;
+  online_doctors: number;
+  coverage_in_progress: number;
+  coverage_upcoming: number;
+  coverage_completed: number;
+  coverage_cancelled: number;
+  active_today: number;
+  active_week: number;
+};
+
+export type AdminUserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  location: string | null;
+  verification_status: VerificationStatus;
+  created_at: string | null;
+  last_seen_at: string | null;
+  onboarded_request_at: string | null;
+  onboarded_cover_at: string | null;
 };
 
 let cachedProfile: ProfileRow | null | undefined;
@@ -285,4 +320,38 @@ export async function updateDoctorVerification(
     .select("id")
     .single();
   if (error) throw error;
+}
+
+/* ---------- Admin dashboard ---------- */
+
+export async function fetchAdminOverview(): Promise<AdminOverviewStats | null> {
+  const { data, error } = await supabase.rpc("admin_overview_stats");
+  if (error) {
+    console.warn("fetchAdminOverview error", error);
+    return null;
+  }
+  return (data as unknown as AdminOverviewStats) ?? null;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUserRow[]> {
+  const { data, error } = await supabase.rpc("admin_list_users");
+  if (error) {
+    console.warn("fetchAdminUsers error", error);
+    return [];
+  }
+  return (data as unknown as AdminUserRow[]) ?? [];
+}
+
+/* ---------- Heartbeat ---------- */
+
+let lastTouchAt = 0;
+export async function touchLastSeen(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastTouchAt < 60_000) return;
+  lastTouchAt = now;
+  const { error } = await supabase.rpc("touch_last_seen");
+  if (error) {
+    lastTouchAt = 0;
+    console.warn("touchLastSeen error", error);
+  }
 }
