@@ -847,15 +847,17 @@ function Avatar({
   initials,
   dim,
   live,
+  selfieUrl,
 }: {
   initials: string;
   dim?: boolean;
   live?: boolean;
+  selfieUrl?: string | null;
 }) {
   return (
     <span className="relative shrink-0">
       <span
-        className="flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-semibold"
+        className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold"
         style={{
           background: "var(--color-secondary)",
           color: dim
@@ -863,7 +865,11 @@ function Avatar({
             : "var(--color-foreground)",
         }}
       >
-        {initials}
+        {selfieUrl ? (
+          <img src={selfieUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initials
+        )}
       </span>
       {live && (
         <span
