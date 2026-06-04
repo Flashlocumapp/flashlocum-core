@@ -37,11 +37,6 @@ type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "acce
 
 type Recent = { name: string; area: string; lat?: number; lng?: number };
 
-const RECENT: Recent[] = [
-  { name: "Evercare Hospital", area: "Lekki Phase 1" },
-  { name: "Lagoon Hospital", area: "Apapa" },
-  { name: "Reddington Hospital", area: "Victoria Island" },
-];
 
 const COVERAGE: { id: CoverageId; label: string }[] = [
   { id: "standard", label: "Standard" },
@@ -227,10 +222,7 @@ function HomeScreen() {
     };
   }, [query, location?.name]);
 
-  const recents = useMemo(
-    () => RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
-    [query],
-  );
+  const recents: Recent[] = [];
 
   const selectLocation = (r: Recent) => {
     setLocation(r);
