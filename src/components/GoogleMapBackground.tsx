@@ -98,7 +98,7 @@ export function GoogleMapBackground({
           gestureHandling: "greedy",
           clickableIcons: false,
           styles: LIGHT_STYLE,
-          backgroundColor: "#f3ede0",
+          backgroundColor: "#f1f3f4",
         });
       })
       .catch(() => setFailed(true));
