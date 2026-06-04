@@ -241,9 +241,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const historyDetail: HistoryDetail | null = historyItem
     ? {
         id: historyItem.id,
-        doctor: historyItem.doctor,
-        mdcn: historyItem.mdcn,
-        initials: historyItem.initials,
+        doctorSid: historyItem.doctorSid ?? null,
         coverage: historyItem.coverage,
         completedOn: historyItem.completedOn,
         amount: historyItem.amount,
