@@ -131,17 +131,17 @@ export function GoogleMapBackground({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Recenter when we acquire geolocation (only if caller didn't pin center).
+  // Pan (never zoom) when caller pins a center or we acquire geolocation.
+  // Preserving the user's zoom level keeps the viewport stable as new markers
+  // appear — the map should never auto-reframe under the user.
   useEffect(() => {
     if (!mapRef.current) return;
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
-    if (center) mapRef.current.setZoom(17);
   }, [center, userCenter]);
 
-  // Requester "you are here" dot — always anchored to real geolocation, even
-  // when the map has been panned to a selected hospital.
+  // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
     if (!mapRef.current) return;
     if (!userCenter) {
@@ -154,7 +154,7 @@ export function GoogleMapBackground({
         position: userCenter,
         map: mapRef.current,
         icon: requesterDotIcon(),
-        optimized: true,
+        optimized: false, // SMIL pulse requires non-optimized rendering
         zIndex: 60,
         title: "You are here",
       });
@@ -163,17 +163,16 @@ export function GoogleMapBackground({
     }
   }, [userCenter]);
 
-  // Render presence markers. We treat the provided Marker.top/left (0..1) as a
-  // pseudo-spread around the current center so the map feels populated without
-  // requiring real coordinates from the presence layer yet.
+  // Render available-doctor presence markers. Marker.top/left (0..1) is used
+  // as a pseudo-spread around the current center until real coordinates flow
+  // in from the presence layer.
   useEffect(() => {
     if (!mapRef.current) return;
     markerObjs.current.forEach((m) => m.setMap(null));
     markerObjs.current = [];
     if (!markers || markers.length === 0) return;
     const c = center ?? userCenter ?? FALLBACK_CENTER;
-    // ~3km spread
-    const spread = 0.03;
+    const spread = 0.03; // ~3km
     markers.forEach((m) => {
       const pos = {
         lat: c.lat + (0.5 - m.top) * spread,
@@ -183,43 +182,19 @@ export function GoogleMapBackground({
         position: pos,
         map: mapRef.current!,
         icon: doctorIcon(),
-        optimized: true,
+        optimized: false, // SMIL pulse requires non-optimized rendering
+        zIndex: 40,
       });
       markerObjs.current.push(marker);
     });
   }, [markers, center, userCenter]);
 
-  // Render real hospital/place markers from Google Places results.
-  useEffect(() => {
-    if (!mapRef.current) return;
-    placeMarkerObjs.current.forEach((m) => m.setMap(null));
-    placeMarkerObjs.current = [];
-    if (!placeMarkers || placeMarkers.length === 0) return;
+  // Hospital / place markers are intentionally NOT rendered on the map.
+  // Hospitals exist as data context (search, selection, dispatch), not as
+  // map objects. The map's only entities are: requester + available doctors.
+  // The `placeMarkers` prop is accepted for API compatibility but ignored.
+  void placeMarkers;
 
-    const bounds = new google.maps.LatLngBounds();
-    placeMarkers.forEach((p) => {
-      const position = { lat: p.lat, lng: p.lng };
-      bounds.extend(position);
-      const marker = new google.maps.Marker({
-        position,
-        map: mapRef.current!,
-        title: p.title,
-        icon: hospitalIcon(),
-        optimized: true,
-        zIndex: 100,
-      });
-      placeMarkerObjs.current.push(marker);
-    });
-
-    if (!center) {
-      if (placeMarkers.length === 1) {
-        mapRef.current.panTo({ lat: placeMarkers[0].lat, lng: placeMarkers[0].lng });
-        mapRef.current.setZoom(17);
-      } else {
-        mapRef.current.fitBounds(bounds, 72);
-      }
-    }
-  }, [placeMarkers, center]);
 
   if (failed || !BROWSER_KEY_PRESENT) {
     // Graceful fallback to the stylized map so the UI never goes blank.
