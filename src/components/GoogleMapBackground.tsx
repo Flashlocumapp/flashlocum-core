@@ -97,7 +97,7 @@ export function GoogleMapBackground({
           gestureHandling: "greedy",
           clickableIcons: false,
           styles: LIGHT_STYLE,
-          backgroundColor: "#f4f4f1",
+          backgroundColor: "#f3ede0",
         });
       })
       .catch(() => setFailed(true));
@@ -208,7 +208,7 @@ export function GoogleMapBackground({
   }
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: "#f4f4f1" }}>
+    <div className="absolute inset-0 overflow-hidden" style={{ background: "#f3ede0" }}>
       <div ref={ref} className="absolute inset-0 h-full w-full" />
       {/* Subtle bottom fade so floating UI reads against the map */}
       <div
