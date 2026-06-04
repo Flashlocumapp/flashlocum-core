@@ -21,6 +21,11 @@ import {
 } from "@/lib/network";
 import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
+import {
+  fetchHospitalSuggestions,
+  fetchPlaceDetails,
+  type PlaceSuggestion,
+} from "@/lib/google-maps";
 
 
 export function RequesterHome() {
@@ -30,7 +35,7 @@ export function RequesterHome() {
 type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
-type Recent = { name: string; area: string };
+type Recent = { name: string; area: string; lat?: number; lng?: number };
 
 const RECENT: Recent[] = [
   { name: "Evercare Hospital", area: "Lekki Phase 1" },
