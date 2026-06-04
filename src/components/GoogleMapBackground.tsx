@@ -4,18 +4,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Marker } from "@/components/MapBackground";
+import { hasMapsKey, loadMapsApi } from "@/lib/google-maps";
 
 type Coords = { lat: number; lng: number };
 
 // Lagos as a sensible fallback center for FlashLocum's launch market.
 const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };
 
-const BROWSER_KEY = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as
-  | string
-  | undefined;
-const TRACKING_ID = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as
-  | string
-  | undefined;
+const BROWSER_KEY_PRESENT = hasMapsKey();
 
 // Light, calm map style aligned with FlashLocum's off-white aesthetic.
 const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
@@ -30,44 +26,6 @@ const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
   { featureType: "transit", stylers: [{ visibility: "off" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#dfe7ea" }] },
 ];
-
-let loaderPromise: Promise<typeof google> | null = null;
-function loadMapsApi(): Promise<typeof google> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("no-window"));
-  }
-  if ((window as unknown as { google?: typeof google }).google?.maps) {
-    return Promise.resolve((window as unknown as { google: typeof google }).google);
-  }
-  if (loaderPromise) return loaderPromise;
-  if (!BROWSER_KEY) {
-    return Promise.reject(new Error("missing-google-maps-key"));
-  }
-
-  loaderPromise = new Promise<typeof google>((resolve, reject) => {
-    const cbName = `__flashlocum_gmaps_cb_${Date.now()}`;
-    (window as unknown as Record<string, unknown>)[cbName] = () => {
-      resolve((window as unknown as { google: typeof google }).google);
-      delete (window as unknown as Record<string, unknown>)[cbName];
-    };
-    const params = new URLSearchParams({
-      key: BROWSER_KEY,
-      loading: "async",
-      callback: cbName,
-    });
-    if (TRACKING_ID) params.set("channel", TRACKING_ID);
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => {
-      loaderPromise = null;
-      reject(new Error("maps-script-failed"));
-    };
-    document.head.appendChild(script);
-  });
-  return loaderPromise;
-}
 
 // Stethoscope-style SVG marker, mirrors the original MapBackground vibe.
 function markerIcon(): google.maps.Icon {
