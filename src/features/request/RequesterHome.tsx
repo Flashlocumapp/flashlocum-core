@@ -222,10 +222,7 @@ function HomeScreen() {
     };
   }, [query, location?.name]);
 
-  const recents = useMemo(
-    () => RECENT.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 3),
-    [query],
-  );
+  const recents: Recent[] = [];
 
   const selectLocation = (r: Recent) => {
     setLocation(r);
