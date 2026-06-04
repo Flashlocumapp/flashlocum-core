@@ -114,7 +114,7 @@ export function GoogleMapBackground({
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
-    if (center) mapRef.current.setZoom(15);
+    if (center) mapRef.current.setZoom(17);
   }, [center, userCenter]);
 
   // Self marker for the doctor's own location.
@@ -190,7 +190,7 @@ export function GoogleMapBackground({
     if (!center) {
       if (placeMarkers.length === 1) {
         mapRef.current.panTo({ lat: placeMarkers[0].lat, lng: placeMarkers[0].lng });
-        mapRef.current.setZoom(15);
+        mapRef.current.setZoom(17);
       } else {
         mapRef.current.fitBounds(bounds, 72);
       }
