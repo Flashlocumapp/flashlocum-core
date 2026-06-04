@@ -15,6 +15,7 @@ import {
   fetchMyProfile,
   getCachedOnboardingStatus,
   isAccountOnboardedProfile,
+  touchLastSeen,
 } from "@/lib/profile-remote";
 
 
