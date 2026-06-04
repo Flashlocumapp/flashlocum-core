@@ -88,9 +88,18 @@ function AppShell() {
         navigate({ to: "/role" });
       }
     });
+    const heartbeat = window.setInterval(() => {
+      void touchLastSeen();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void touchLastSeen(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
+      window.clearInterval(heartbeat);
+      document.removeEventListener("visibilitychange", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
