@@ -2,15 +2,16 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, type Role } from "@/lib/role";
 import {
-  getProfile,
-  saveProfile,
-  type DoctorProfile,
-  type RequesterProfile,
-} from "@/lib/onboarding";
-import { getCachedOnboardingStatus, hasCompletedOnboarding } from "@/lib/profile-remote";
+  getCachedOnboardingStatus,
+  hasCompletedOnboarding,
+  upsertMyProfile,
+  useMyProfile,
+  type ProfileRow,
+} from "@/lib/profile-remote";
 import { useVerificationStatus } from "@/lib/verification";
 import { useAuthIdentity } from "@/lib/identity";
 import { supabase } from "@/integrations/supabase/client";
+import { pushToast } from "@/lib/notifications";
 
 function verificationLabel(s: string): string {
   if (s === "approved") return "Verified";
@@ -40,25 +41,21 @@ function AccountScreen() {
   const [role, setLocalRole] = useState<Role>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [requester, setRequester] = useState<RequesterProfile>(() => getProfile<RequesterProfile>("request"));
-  const [doctor, setDoctor] = useState<DoctorProfile>(() => getProfile<DoctorProfile>("cover"));
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
+  const { profile } = useMyProfile();
 
   useEffect(() => {
-    const r = getRole();
-    setLocalRole(r);
-    setRequester(getProfile<RequesterProfile>("request"));
-    setDoctor(getProfile<DoctorProfile>("cover"));
+    setLocalRole(getRole());
   }, []);
 
   const isDoctor = role === "cover";
   const identity = useMemo<Identity>(() => {
-    const rawName = authIdentity.name || (isDoctor ? "Doctor" : "Requester");
-    const name = isDoctor && rawName && !/^dr\.?\s/i.test(rawName) ? `Dr. ${rawName}` : rawName;
+    const baseName = profile?.full_name || authIdentity.name || (isDoctor ? "Doctor" : "Requester");
+    const name = isDoctor && baseName && !/^dr\.?\s/i.test(baseName) ? `Dr. ${baseName}` : baseName;
     const email = authIdentity.email || "—";
     return { name, email, initials: deriveInitials(name, email) };
-  }, [authIdentity, isDoctor]);
+  }, [authIdentity, isDoctor, profile?.full_name]);
 
   const switchRole = async () => {
     if (switching) return;
@@ -87,16 +84,16 @@ function AccountScreen() {
   const personalRows = useMemo(() => {
     if (isDoctor) {
       return [
-        { label: "Phone Number", value: doctor.phone || "—" },
-        { label: "MDCN Number", value: doctor.mdcn || "—" },
+        { label: "Phone Number", value: profile?.phone || "—" },
+        { label: "MDCN Number", value: profile?.mdcn || "—" },
         { label: "Verification Status", value: verificationLabel(verification) },
       ];
     }
     return [
-      { label: "Phone Number", value: requester.phone || "—" },
-      { label: "Gender", value: requester.gender || "—" },
+      { label: "Phone Number", value: profile?.phone || "—" },
+      { label: "Gender", value: profile?.gender || "—" },
     ];
-  }, [isDoctor, doctor, requester, verification]);
+  }, [isDoctor, profile, verification]);
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
@@ -116,8 +113,8 @@ function AccountScreen() {
               color: "var(--color-primary)",
             }}
           >
-            {isDoctor && doctor.selfie ? (
-              <img src={doctor.selfie} alt="" className="h-full w-full object-cover" />
+            {isDoctor && profile?.selfie_url ? (
+              <img src={profile.selfie_url} alt="" className="h-full w-full object-cover" />
             ) : (
               identity.initials
             )}
@@ -155,9 +152,13 @@ function AccountScreen() {
         {isDoctor && (
           <Section title="Payouts">
             <ListGroup>
-              <DetailRow label="Bank Name" value={doctor.bankName || "—"} />
-              <DetailRow label="Account Number" value={doctor.bankAccount || "—"} />
-              <DetailRow label="Account Name" value={doctor.bankName ? identity.name : "—"} last />
+              <DetailRow label="Bank Name" value={profile?.bank_name || "—"} />
+              <DetailRow label="Account Number" value={profile?.bank_account || "—"} />
+              <DetailRow
+                label="Account Name"
+                value={profile?.bank_name ? identity.name : "—"}
+                last
+              />
             </ListGroup>
           </Section>
         )}
@@ -193,22 +194,11 @@ function AccountScreen() {
         <ProfileSheet
           isDoctor={isDoctor}
           identity={identity}
-          requester={requester}
-          doctor={doctor}
+          profile={profile}
           onClose={() => setProfileOpen(false)}
-          onSave={(next) => {
-            if (isDoctor) {
-              setDoctor(next as DoctorProfile);
-              saveProfile("cover", next);
-            } else {
-              setRequester(next as RequesterProfile);
-              saveProfile("request", next);
-            }
-            setProfileOpen(false);
-          }}
+          onSaved={() => setProfileOpen(false)}
         />
       )}
-
     </section>
   );
 }
@@ -268,18 +258,11 @@ function NavRow({
   );
 }
 
-function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function DetailRow({ label, value, last: _last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div
-      className="flex items-center justify-between px-4 py-3.5"
-      style={{
-        borderTop: "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
-        borderTopWidth: undefined,
-      }}
-    >
+    <div className="flex items-center justify-between px-4 py-3.5">
       <span className="text-[14.5px]">{label}</span>
       <span className="ml-3 truncate text-[13px] text-muted-foreground">{value}</span>
-      {last ? null : null}
     </div>
   );
 }
@@ -287,22 +270,51 @@ function DetailRow({ label, value, last }: { label: string; value: string; last?
 function ProfileSheet({
   isDoctor,
   identity,
-  requester,
-  doctor,
+  profile,
   onClose,
-  onSave,
+  onSaved,
 }: {
   isDoctor: boolean;
   identity: { name: string; email: string };
-  requester: RequesterProfile;
-  doctor: DoctorProfile;
+  profile: ProfileRow | null;
   onClose: () => void;
-  onSave: (data: RequesterProfile | DoctorProfile) => void;
+  onSaved: () => void;
 }) {
-  const [r, setR] = useState<RequesterProfile>(requester);
-  const [d, setD] = useState<DoctorProfile>(doctor);
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [gender, setGender] = useState(profile?.gender ?? "");
+  const [bankName, setBankName] = useState(profile?.bank_name ?? "");
+  const [bankAccount, setBankAccount] = useState(profile?.bank_account ?? "");
+  const [saving, setSaving] = useState(false);
   const verification = useVerificationStatus();
 
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const fields = isDoctor
+        ? {
+            phone: phone || null,
+            bank_name: bankName || null,
+            bank_account: bankAccount || null,
+          }
+        : {
+            phone: phone || null,
+            gender: gender || null,
+          };
+      await upsertMyProfile(fields);
+      pushToast({ tone: "info", title: "Profile updated" });
+      onSaved();
+    } catch (e) {
+      console.warn("profile update failed", e);
+      pushToast({
+        tone: "warn",
+        title: "Could not save profile",
+        body: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
@@ -322,15 +334,15 @@ function ProfileSheet({
             <>
               <EditField
                 label="Phone Number"
-                value={r.phone ?? ""}
-                onChange={(v) => setR((p) => ({ ...p, phone: v }))}
+                value={phone}
+                onChange={setPhone}
                 placeholder="+234 800 000 0000"
                 type="tel"
               />
               <SelectField
                 label="Gender"
-                value={r.gender ?? ""}
-                onChange={(v) => setR((p) => ({ ...p, gender: v }))}
+                value={gender}
+                onChange={setGender}
                 options={["Female", "Male", "Prefer not to say"]}
               />
             </>
@@ -338,23 +350,22 @@ function ProfileSheet({
             <>
               <EditField
                 label="Phone Number"
-                value={d.phone ?? ""}
-                onChange={(v) => setD((p) => ({ ...p, phone: v }))}
+                value={phone}
+                onChange={setPhone}
                 placeholder="+234 800 000 0000"
                 type="tel"
               />
-              <ReadField label="MDCN Number" value={d.mdcn || "—"} />
-
+              <ReadField label="MDCN Number" value={profile?.mdcn || "—"} />
               <EditField
                 label="Bank Name"
-                value={d.bankName ?? ""}
-                onChange={(v) => setD((p) => ({ ...p, bankName: v }))}
+                value={bankName}
+                onChange={setBankName}
                 placeholder="GTBank"
               />
               <EditField
                 label="Account Number"
-                value={d.bankAccount ?? ""}
-                onChange={(v) => setD((p) => ({ ...p, bankAccount: v }))}
+                value={bankAccount}
+                onChange={setBankAccount}
                 placeholder="0123456789"
               />
               <ReadField
@@ -367,7 +378,7 @@ function ProfileSheet({
         </div>
 
         <p className="mt-4 text-[12px] text-muted-foreground">
-          To update your legal name or email address, contact support.
+          To update your legal name, email address, or MDCN, contact support.
         </p>
 
         <div className="mt-5 flex gap-2.5">
@@ -378,10 +389,11 @@ function ProfileSheet({
             Cancel
           </button>
           <button
-            onClick={() => onSave(isDoctor ? d : r)}
-            className="h-11 flex-1 rounded-2xl bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90"
+            onClick={handleSave}
+            disabled={saving}
+            className="h-11 flex-1 rounded-2xl bg-primary text-[14px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
           >
-            Save
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
