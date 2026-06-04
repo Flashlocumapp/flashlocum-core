@@ -147,27 +147,28 @@ export function GoogleMapBackground({
     if (center) mapRef.current.setZoom(17);
   }, [center, userCenter]);
 
-  // Self marker for the doctor's own location.
+  // Requester "you are here" dot — always anchored to real geolocation, even
+  // when the map has been panned to a selected hospital.
   useEffect(() => {
     if (!mapRef.current) return;
-    const c = center ?? userCenter;
-    if (!c) {
+    if (!userCenter) {
       selfMarker.current?.setMap(null);
       selfMarker.current = null;
       return;
     }
     if (!selfMarker.current) {
       selfMarker.current = new google.maps.Marker({
-        position: c,
+        position: userCenter,
         map: mapRef.current,
-        icon: markerIcon(),
+        icon: requesterDotIcon(),
         optimized: true,
-        zIndex: 50,
+        zIndex: 60,
+        title: "You are here",
       });
     } else {
-      selfMarker.current.setPosition(c);
+      selfMarker.current.setPosition(userCenter);
     }
-  }, [center, userCenter]);
+  }, [userCenter]);
 
   // Render presence markers. We treat the provided Marker.top/left (0..1) as a
   // pseudo-spread around the current center so the map feels populated without
