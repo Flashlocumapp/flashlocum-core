@@ -150,7 +150,7 @@ export function GoogleMapBackground({
     });
   }, [markers, center, userCenter]);
 
-  if (failed || !BROWSER_KEY) {
+  if (failed || !BROWSER_KEY_PRESENT) {
     // Graceful fallback to the stylized map so the UI never goes blank.
     return (
       <div
