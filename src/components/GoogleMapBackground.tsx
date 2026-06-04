@@ -99,15 +99,16 @@ export function GoogleMapBackground({
   const [userCenter, setUserCenter] = useState<Coords | null>(null);
 
   // Geolocate once on mount (best-effort, silent on denial).
+  // Always fetch user location so the self-marker can show even when
+  // the map is centered on a selected hospital.
   useEffect(() => {
-    if (center) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
       { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
     );
-  }, [center]);
+  }, []);
 
   // Init map.
   useEffect(() => {
