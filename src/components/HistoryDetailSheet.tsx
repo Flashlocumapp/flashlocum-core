@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { DismissSheet } from "./DismissSheet";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
+import { useDoctorIdentity } from "@/lib/doctor-identity";
 
 export type HistoryDetail = {
   id: string;
-  doctor: string;
-  mdcn: string;
-  initials: string;
+  doctorSid: string | null;
   coverage: string;
   completedOn?: string;
   amount: number;
@@ -28,6 +27,7 @@ export function HistoryDetailSheet({
 
   const [rating, setRating] = useState(item?.rating ?? 0);
   const [feedback, setFeedback] = useState("");
+  const identity = useDoctorIdentity(item?.doctorSid ?? null);
 
   if (!item) return null;
 
@@ -38,14 +38,18 @@ export function HistoryDetailSheet({
     <DismissSheet open={open} onDismiss={onDismiss}>
       <div className="flex items-center gap-3">
         <span
-          className="flex h-12 w-12 items-center justify-center rounded-full text-[14px] font-semibold"
+          className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full text-[14px] font-semibold"
           style={{ background: "var(--color-secondary)" }}
         >
-          {item.initials}
+          {identity.selfieUrl ? (
+            <img src={identity.selfieUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            identity.initials
+          )}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[16px] font-medium">{item.doctor}</div>
-          <div className="text-[12px] text-muted-foreground">{item.mdcn}</div>
+          <div className="truncate text-[16px] font-medium">{identity.fullName}</div>
+          <div className="text-[12px] text-muted-foreground">{identity.mdcn}</div>
         </div>
         <span
           className="rounded-full px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.1em]"

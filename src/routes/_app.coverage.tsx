@@ -21,6 +21,7 @@ import {
 } from "@/features/cover/dispatch";
 import { recordRating } from "@/lib/ratings";
 import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
+import { getDoctorIdentity, useDoctorIdentity } from "@/lib/doctor-identity";
 
 
 import {
@@ -50,11 +51,8 @@ type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
 type ReqStatus = "upcoming" | "active" | "completed";
 type RequestItem = {
   id: string;
-  doctor: string;
-  doctorShort: string;
+  doctorSid: string | undefined;
   doctorRatingId: string | null;
-  mdcn: string;
-  initials: string;
   coverage: Coverage;
   day: string;
   start: string;
@@ -74,28 +72,6 @@ type RequestItem = {
   dayIndex: number;
 };
 
-
-/** Shorten a full name to "First L." form. */
-function shortDoctorName(full: string): string {
-  const parts = full.trim().split(/\s+/);
-  if (parts.length < 3) return full;
-  const last = parts[parts.length - 1];
-  return `${parts.slice(0, -1).join(" ")} ${last[0]}.`;
-}
-
-function doctorInitials(sessionId?: string): string {
-  if (!sessionId) return "DR";
-  const tail = sessionId.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase();
-  return tail.length === 2 ? tail : "DR";
-}
-function mdcnFor(sessionId?: string): string {
-  if (!sessionId) return "MDCN-—";
-  return "MDCN-" + sessionId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase();
-}
-/** Generic display label for an assigned cover doctor, derived from session id. */
-function doctorLabelFor(sessionId?: string): string {
-  return `Dr. ${doctorInitials(sessionId)}`;
-}
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
 function ampmTo24h(s: string): string {
@@ -132,7 +108,6 @@ function toRequestItem(r: NetRequest): RequestItem {
       : r.status === "cancelled"
         ? "cancelled"
         : undefined;
-  const fullDoctor = doctorLabelFor(r.acceptedBy);
   // History reflects FINAL settled operational reality, not booking estimate.
   const isCompleted = outcome === "completed";
   const settledHrs = isCompleted
@@ -142,11 +117,8 @@ function toRequestItem(r: NetRequest): RequestItem {
   const settledAmount = isCompleted ? (r.settledAmount ?? r.amount) : r.amount;
   return {
     id: r.id,
-    doctor: fullDoctor,
-    doctorShort: shortDoctorName(fullDoctor),
+    doctorSid: r.acceptedBy,
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
-    mdcn: mdcnFor(r.acceptedBy),
-    initials: doctorInitials(r.acceptedBy),
     coverage: r.coverage as Coverage,
     day: r.day,
     start: r.start,
@@ -270,9 +242,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const historyDetail: HistoryDetail | null = historyItem
     ? {
         id: historyItem.id,
-        doctor: historyItem.doctor,
-        mdcn: historyItem.mdcn,
-        initials: historyItem.initials,
+        doctorSid: historyItem.doctorSid ?? null,
         coverage: historyItem.coverage,
         completedOn: historyItem.completedOn,
         amount: historyItem.amount,
@@ -447,7 +417,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           settling
             ? {
                 facility: "Lagoon Health",
-                doctor: settling.doctor,
+                doctor: getDoctorIdentity(settling.doctorSid).fullName,
                 role: `${settling.coverage} · Active`,
                 startedAt: settling.startedAt,
                 accumulatedMs: settling.accumulatedMs,
@@ -522,16 +492,21 @@ function RequesterDetailSheet({
   onEdit: (id: string) => void;
   onCancel: (id: string) => void;
 }) {
+  const identity = useDoctorIdentity(item?.doctorSid ?? null);
   return (
     <AnimatePresence>
       {item && (
         <DismissSheet open onDismiss={onDismiss}>
           <div className="flex items-center gap-3">
             <span
-              className="relative flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-semibold"
+              className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-[15px] font-semibold"
               style={{ background: "var(--color-secondary)" }}
             >
-              {item.initials}
+              {identity.selfieUrl ? (
+                <img src={identity.selfieUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                identity.initials
+              )}
               {item.status === "active" && (
                 <span
                   className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full"
@@ -543,14 +518,15 @@ function RequesterDetailSheet({
               )}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[16px] font-medium">{item.doctor}</div>
+              <div className="truncate text-[16px] font-medium">{identity.fullName}</div>
               <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                <span>{item.mdcn}</span>
+                <span>{identity.mdcn}</span>
                 <span>·</span>
                 <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
               </div>
             </div>
           </div>
+
 
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
             {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
@@ -656,6 +632,7 @@ function RequestCard({
   const isActive = item.status === "active";
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
+  const identity = useDoctorIdentity(item.doctorSid ?? null);
 
   const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
   const meta = isHistory
@@ -683,7 +660,7 @@ function RequestCard({
       }}
     >
       <div className="flex items-center gap-3">
-        <Avatar initials={item.initials} dim={isHistory} live={isActive} />
+        <Avatar initials={identity.initials} selfieUrl={identity.selfieUrl} dim={isHistory} live={isActive} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -695,7 +672,7 @@ function RequestCard({
                   : "var(--color-foreground)",
               }}
             >
-              {item.doctorShort}
+              {identity.shortName}
             </span>
             {isHistory && item.outcome === "cancelled" && (
               <span
@@ -710,7 +687,7 @@ function RequestCard({
             )}
           </div>
           <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
-            <span className="truncate">{item.mdcn}</span>
+            <span className="truncate">{identity.mdcn}</span>
             <span>·</span>
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
           </div>
@@ -870,15 +847,17 @@ function Avatar({
   initials,
   dim,
   live,
+  selfieUrl,
 }: {
   initials: string;
   dim?: boolean;
   live?: boolean;
+  selfieUrl?: string | null;
 }) {
   return (
     <span className="relative shrink-0">
       <span
-        className="flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-semibold"
+        className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold"
         style={{
           background: "var(--color-secondary)",
           color: dim
@@ -886,7 +865,11 @@ function Avatar({
             : "var(--color-foreground)",
         }}
       >
-        {initials}
+        {selfieUrl ? (
+          <img src={selfieUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initials
+        )}
       </span>
       {live && (
         <span
