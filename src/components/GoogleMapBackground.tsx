@@ -17,25 +17,26 @@ const BROWSER_KEY_PRESENT = hasMapsKey();
 // Soft, warm-cream basemap with gentle hues for parks, water, and roads.
 // Aims for a calm editorial feel — colorful, but never loud.
 const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#f3ede0" }] },
+  { elementType: "geometry", stylers: [{ color: "#f1f3f4" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#7a7466" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#f6f1e6" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#6b6f76" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f1f3f4" }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#5d574a" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#3c4043" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#d6e3c6" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6f8a5a" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#ecead7" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#cfe6c9" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#5a8a4a" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#e8ecee" }] },
   { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#fff7e6" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f6c98a" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#e7b066" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#c9d4ea" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#a9bbdc" }] },
   { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#b8d6dc" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#5a8089" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#aedaf0" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4a90a8" }] },
 ];
+
 
 // Stethoscope-style SVG marker, mirrors the original MapBackground vibe.
 function markerIcon(): google.maps.Icon {
