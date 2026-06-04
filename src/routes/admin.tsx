@@ -236,7 +236,7 @@ function DoctorCard({
             {doctor.full_name || "Unnamed doctor"}
           </div>
           <div className="text-[12.5px] text-muted-foreground">
-            MDCN: {doctor.mdcn || "—"} · {doctor.phone || "no phone"}
+            {doctor.mdcn || "—"} · {doctor.phone || "no phone"}
           </div>
           <div className="mt-0.5 text-[11.5px] text-muted-foreground">
             Onboarded:{" "}
