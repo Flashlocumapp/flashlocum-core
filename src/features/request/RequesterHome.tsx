@@ -35,7 +35,7 @@ export function RequesterHome() {
 type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
-type Recent = { name: string; area: string; lat?: number; lng?: number };
+type Recent = { placeId?: string; name: string; area: string; lat?: number; lng?: number };
 
 
 const COVERAGE: { id: CoverageId; label: string }[] = [
@@ -205,7 +205,7 @@ function HomeScreen() {
     const ctrl = new AbortController();
     setSuggestLoading(true);
     const t = setTimeout(() => {
-      fetchHospitalSuggestions(q, ctrl.signal)
+      fetchHospitalSuggestions(q, null, ctrl.signal)
         .then((s) => {
           if (!ctrl.signal.aborted) setSuggestions(s);
         })
@@ -237,6 +237,7 @@ function HomeScreen() {
       const details = await fetchPlaceDetails(s.placeId);
       if (!details) return;
       setLocation({
+        placeId: details.placeId,
         name: details.name || s.primary,
         area: details.address || s.secondary,
         lat: details.lat,
