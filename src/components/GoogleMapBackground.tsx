@@ -38,8 +38,8 @@ const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
 ];
 
 
-// Stethoscope-style SVG marker, mirrors the original MapBackground vibe.
-function markerIcon(): google.maps.Icon {
+// Stethoscope marker — used ONLY for online doctors available nearby.
+function doctorIcon(): google.maps.Icon {
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
   <circle cx="22" cy="22" r="14" fill="#ffffff" stroke="#3a8a5e" stroke-width="1.8"/>
@@ -53,6 +53,36 @@ function markerIcon(): google.maps.Icon {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     scaledSize: new google.maps.Size(44, 44),
     anchor: new google.maps.Point(22, 22),
+  };
+}
+
+// Requester "you are here" dot — pulsing blue marker.
+function requesterDotIcon(): google.maps.Icon {
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <circle cx="16" cy="16" r="14" fill="#3b82f6" fill-opacity="0.18"/>
+  <circle cx="16" cy="16" r="9" fill="#ffffff"/>
+  <circle cx="16" cy="16" r="6" fill="#3b82f6"/>
+</svg>`.trim();
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(32, 32),
+    anchor: new google.maps.Point(16, 16),
+  };
+}
+
+// Hospital pin — used for hospital/place markers (search results, selected hospital).
+function hospitalIcon(): google.maps.Icon {
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">
+  <path d="M20 2C10.6 2 3 9.4 3 18.4c0 12.3 14.6 26.4 16.2 27.9.5.5 1.2.5 1.7 0C22.4 44.8 37 30.7 37 18.4 37 9.4 29.4 2 20 2z" fill="#e94f5b" stroke="#ffffff" stroke-width="2"/>
+  <rect x="13" y="11" width="14" height="14" rx="2" fill="#ffffff"/>
+  <path d="M20 13v10M15 18h10" stroke="#e94f5b" stroke-width="2.2" stroke-linecap="round"/>
+</svg>`.trim();
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(40, 48),
+    anchor: new google.maps.Point(20, 46),
   };
 }
 
@@ -117,27 +147,28 @@ export function GoogleMapBackground({
     if (center) mapRef.current.setZoom(17);
   }, [center, userCenter]);
 
-  // Self marker for the doctor's own location.
+  // Requester "you are here" dot — always anchored to real geolocation, even
+  // when the map has been panned to a selected hospital.
   useEffect(() => {
     if (!mapRef.current) return;
-    const c = center ?? userCenter;
-    if (!c) {
+    if (!userCenter) {
       selfMarker.current?.setMap(null);
       selfMarker.current = null;
       return;
     }
     if (!selfMarker.current) {
       selfMarker.current = new google.maps.Marker({
-        position: c,
+        position: userCenter,
         map: mapRef.current,
-        icon: markerIcon(),
+        icon: requesterDotIcon(),
         optimized: true,
-        zIndex: 50,
+        zIndex: 60,
+        title: "You are here",
       });
     } else {
-      selfMarker.current.setPosition(c);
+      selfMarker.current.setPosition(userCenter);
     }
-  }, [center, userCenter]);
+  }, [userCenter]);
 
   // Render presence markers. We treat the provided Marker.top/left (0..1) as a
   // pseudo-spread around the current center so the map feels populated without
@@ -158,7 +189,7 @@ export function GoogleMapBackground({
       const marker = new google.maps.Marker({
         position: pos,
         map: mapRef.current!,
-        icon: markerIcon(),
+        icon: doctorIcon(),
         optimized: true,
       });
       markerObjs.current.push(marker);
@@ -180,7 +211,7 @@ export function GoogleMapBackground({
         position,
         map: mapRef.current!,
         title: p.title,
-        icon: markerIcon(),
+        icon: hospitalIcon(),
         optimized: true,
         zIndex: 100,
       });
