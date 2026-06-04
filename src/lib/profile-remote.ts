@@ -321,3 +321,37 @@ export async function updateDoctorVerification(
     .single();
   if (error) throw error;
 }
+
+/* ---------- Admin dashboard ---------- */
+
+export async function fetchAdminOverview(): Promise<AdminOverviewStats | null> {
+  const { data, error } = await supabase.rpc("admin_overview_stats");
+  if (error) {
+    console.warn("fetchAdminOverview error", error);
+    return null;
+  }
+  return (data as unknown as AdminOverviewStats) ?? null;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUserRow[]> {
+  const { data, error } = await supabase.rpc("admin_list_users");
+  if (error) {
+    console.warn("fetchAdminUsers error", error);
+    return [];
+  }
+  return (data as unknown as AdminUserRow[]) ?? [];
+}
+
+/* ---------- Heartbeat ---------- */
+
+let lastTouchAt = 0;
+export async function touchLastSeen(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastTouchAt < 60_000) return;
+  lastTouchAt = now;
+  const { error } = await supabase.rpc("touch_last_seen");
+  if (error) {
+    lastTouchAt = 0;
+    console.warn("touchLastSeen error", error);
+  }
+}
