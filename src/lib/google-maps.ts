@@ -64,44 +64,10 @@ export type PlaceDetails = {
   lng: number;
 };
 
-// Lagos bounds — restricts results to Lagos State, Nigeria.
-const LAGOS_BOUNDS: google.maps.LatLngBoundsLiteral = {
-  south: 6.36,
-  west: 3.05,
-  north: 6.72,
-  east: 3.60,
-};
+// Lagos bias keeps results relevant to FlashLocum's launch market.
 const BIAS_CENTER = { lat: 6.5244, lng: 3.3792 };
-
-// Medical-only place types we accept from Google.
-const MEDICAL_TYPES = new Set([
-  "hospital",
-  "medical_lab",
-  "doctor",
-  "dental_clinic",
-  "dentist",
-  "physiotherapist",
-  "wellness_center",
-  "pharmacy",
-  "drugstore",
-  "health",
-]);
-// Words that imply a medical facility when types are missing/loose.
-const MEDICAL_KEYWORDS = /\b(hospital|clinic|medical|health|healthcare|diagnostic|maternity|pharmacy|surgery|specialist|cardio|ortho|dental|eye|optic|physio)\b/i;
-
-function isMedicalPlace(name: string, address: string, types?: string[] | null) {
-  if (types && types.some((t) => MEDICAL_TYPES.has(t))) return true;
-  return MEDICAL_KEYWORDS.test(name) || MEDICAL_KEYWORDS.test(address);
-}
-
-function isInLagos(lat: number, lng: number) {
-  return (
-    lat >= LAGOS_BOUNDS.south &&
-    lat <= LAGOS_BOUNDS.north &&
-    lng >= LAGOS_BOUNDS.west &&
-    lng <= LAGOS_BOUNDS.east
-  );
-}
+const SEARCH_RADIUS_M = 50_000;
+const SEARCH_BIAS: google.maps.CircleLiteral = { center: BIAS_CENTER, radius: SEARCH_RADIUS_M };
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
@@ -114,31 +80,31 @@ async function ensurePlaces() {
 
 export async function fetchHospitalSuggestions(
   input: string,
-  _origin?: google.maps.LatLngLiteral | null,
+  origin?: google.maps.LatLngLiteral | null,
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
   const q = input.trim();
   if (!q) return [];
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
-
-  const locationRestriction: google.maps.LatLngBoundsLiteral = LAGOS_BOUNDS;
+  const locationBias: google.maps.CircleLiteral = {
+    center: origin ?? BIAS_CENTER,
+    radius: origin ? 50_000 : SEARCH_RADIUS_M,
+  };
 
   const byId = new Map<string, PlaceSuggestion>();
+
   const addSuggestion = (suggestion: PlaceSuggestion) => {
     const current = byId.get(suggestion.placeId);
     byId.set(suggestion.placeId, { ...current, ...suggestion });
   };
 
-  // Primary: text search biased to medical facilities in Lagos.
   try {
     const { places } = await lib.Place.searchByText({
-      textQuery: MEDICAL_KEYWORDS.test(q) ? q : `${q} hospital clinic`,
-      fields: ["id", "displayName", "formattedAddress", "location", "types"],
-      includedType: "hospital",
-      useStrictTypeFiltering: false,
-      locationRestriction,
-      maxResultCount: 12,
+      textQuery: q,
+      fields: ["id", "displayName", "formattedAddress", "location"],
+      locationBias,
+      maxResultCount: 10,
       region: "NG",
       language: "en",
       rankPreference: "RELEVANCE",
@@ -148,58 +114,44 @@ export async function fetchHospitalSuggestions(
       const id = place.id;
       const loc = place.location;
       if (!id || !loc) return;
-      const lat = loc.lat();
-      const lng = loc.lng();
-      if (!isInLagos(lat, lng)) return;
-      const name = place.displayName ?? q;
-      const address = place.formattedAddress ?? "";
-      if (!isMedicalPlace(name, address, place.types as string[] | undefined)) return;
       addSuggestion({
         placeId: id,
-        primary: name,
-        secondary: address,
-        lat,
-        lng,
+        primary: place.displayName ?? q,
+        secondary: place.formattedAddress ?? "",
+        lat: loc.lat(),
+        lng: loc.lng(),
       });
     });
   } catch {
-    // Autocomplete fallback below.
+    // Autocomplete below still gives the user selectable live Google Places results.
   }
 
-  // Secondary: autocomplete restricted to health-related primary types.
   try {
     const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
       input: q,
       sessionToken: sessionToken!,
-      includedPrimaryTypes: ["hospital", "doctor", "dental_clinic", "pharmacy", "health"],
       includedRegionCodes: ["ng"],
       region: "NG",
       language: "en",
-      locationRestriction: new g.maps.LatLngBounds(
-        { lat: LAGOS_BOUNDS.south, lng: LAGOS_BOUNDS.west },
-        { lat: LAGOS_BOUNDS.north, lng: LAGOS_BOUNDS.east },
-      ),
+      locationBias: new g.maps.Circle(locationBias),
     });
 
     suggestions
       .map((s) => s.placePrediction)
       .filter((p): p is NonNullable<typeof p> => !!p)
       .forEach((p) => {
-        const primary = p.mainText?.toString() ?? p.text.toString();
-        const secondary = p.secondaryText?.toString() ?? "";
-        if (!isMedicalPlace(primary, secondary)) return;
         addSuggestion({
           placeId: p.placeId,
-          primary,
-          secondary,
+          primary: p.mainText?.toString() ?? p.text.toString(),
+          secondary: p.secondaryText?.toString() ?? "",
         });
       });
   } catch {
-    // Keep text-search results if autocomplete is unavailable.
+    // Keep text-search results if autocomplete is unavailable for a query.
   }
 
   if (signal?.aborted) return [];
-  return Array.from(byId.values()).slice(0, 10);
+  return Array.from(byId.values()).slice(0, 8);
 }
 
 export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
