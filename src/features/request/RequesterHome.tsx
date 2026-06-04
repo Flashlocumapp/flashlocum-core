@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { GoogleMapBackground } from "@/components/GoogleMapBackground";
+import { GoogleMapBackground, type PlaceMapMarker } from "@/components/GoogleMapBackground";
 import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
@@ -35,7 +35,7 @@ export function RequesterHome() {
 type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
-type Recent = { name: string; area: string; lat?: number; lng?: number };
+type Recent = { placeId?: string; name: string; area: string; lat?: number; lng?: number };
 
 
 const COVERAGE: { id: CoverageId; label: string }[] = [
@@ -164,6 +164,7 @@ function HomeScreen() {
   const [stage, setStage] = useState<Stage>("collapsed");
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState<Recent | null>(null);
+  const [searchOrigin, setSearchOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
   const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
@@ -182,6 +183,15 @@ function HomeScreen() {
     setImmersive(stage !== "collapsed");
     return () => setImmersive(false);
   }, [stage]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
+    );
+  }, []);
 
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
@@ -205,7 +215,7 @@ function HomeScreen() {
     const ctrl = new AbortController();
     setSuggestLoading(true);
     const t = setTimeout(() => {
-      fetchHospitalSuggestions(q, ctrl.signal)
+      fetchHospitalSuggestions(q, searchOrigin, ctrl.signal)
         .then((s) => {
           if (!ctrl.signal.aborted) setSuggestions(s);
         })
@@ -220,7 +230,7 @@ function HomeScreen() {
       ctrl.abort();
       clearTimeout(t);
     };
-  }, [query, location?.name]);
+  }, [query, location?.name, searchOrigin]);
 
   const recents: Recent[] = [];
 
@@ -233,10 +243,21 @@ function HomeScreen() {
   const selectSuggestion = async (s: PlaceSuggestion) => {
     setQuery(s.primary);
     setSuggestions([]);
+    if (s.lat != null && s.lng != null) {
+      setLocation({
+        placeId: s.placeId,
+        name: s.primary,
+        area: s.secondary,
+        lat: s.lat,
+        lng: s.lng,
+      });
+      setStage("configure");
+    }
     try {
       const details = await fetchPlaceDetails(s.placeId);
       if (!details) return;
       setLocation({
+        placeId: details.placeId,
         name: details.name || s.primary,
         area: details.address || s.secondary,
         lat: details.lat,
@@ -263,10 +284,15 @@ function HomeScreen() {
     location?.lat != null && location?.lng != null
       ? { lat: location.lat, lng: location.lng }
       : null;
+  const placeMarkers: PlaceMapMarker[] = location?.lat != null && location?.lng != null
+    ? [{ key: location.placeId ?? location.name, title: location.name, lat: location.lat, lng: location.lng }]
+    : suggestions
+        .filter((s) => s.lat != null && s.lng != null)
+        .map((s) => ({ key: s.placeId, title: s.primary, lat: s.lat!, lng: s.lng! }));
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground markers={markers} center={mapCenter} />
+      <GoogleMapBackground markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}

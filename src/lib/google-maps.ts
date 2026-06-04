@@ -52,6 +52,8 @@ export type PlaceSuggestion = {
   placeId: string;
   primary: string;
   secondary: string;
+  lat?: number;
+  lng?: number;
 };
 
 export type PlaceDetails = {
@@ -64,6 +66,8 @@ export type PlaceDetails = {
 
 // Lagos bias keeps results relevant to FlashLocum's launch market.
 const BIAS_CENTER = { lat: 6.5244, lng: 3.3792 };
+const SEARCH_RADIUS_M = 50_000;
+const SEARCH_BIAS: google.maps.CircleLiteral = { center: BIAS_CENTER, radius: SEARCH_RADIUS_M };
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
@@ -76,32 +80,81 @@ async function ensurePlaces() {
 
 export async function fetchHospitalSuggestions(
   input: string,
+  origin?: google.maps.LatLngLiteral | null,
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
-  if (!input.trim()) return [];
+  const q = input.trim();
+  if (!q) return [];
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
+  const locationBias: google.maps.CircleLiteral = {
+    center: origin ?? BIAS_CENTER,
+    radius: origin ? 50_000 : SEARCH_RADIUS_M,
+  };
 
-  const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-    input,
-    sessionToken: sessionToken!,
-    includedPrimaryTypes: ["hospital", "doctor", "health"],
-    locationBias: new g.maps.Circle({
-      center: BIAS_CENTER,
-      radius: 80_000,
-    }),
-  });
+  const byId = new Map<string, PlaceSuggestion>();
+
+  const addSuggestion = (suggestion: PlaceSuggestion) => {
+    const current = byId.get(suggestion.placeId);
+    byId.set(suggestion.placeId, { ...current, ...suggestion });
+  };
+
+  try {
+    const { places } = await lib.Place.searchByText({
+      textQuery: /\b(hospital|clinic|medical|centre|center)\b/i.test(q) ? q : `${q} hospital`,
+      fields: ["id", "displayName", "formattedAddress", "location"],
+      includedType: "hospital",
+      locationBias,
+      maxResultCount: 8,
+      region: "NG",
+      language: "en",
+      rankPreference: "RELEVANCE",
+      useStrictTypeFiltering: false,
+    });
+
+    places.forEach((place) => {
+      const id = place.id;
+      const loc = place.location;
+      if (!id || !loc) return;
+      addSuggestion({
+        placeId: id,
+        primary: place.displayName ?? q,
+        secondary: place.formattedAddress ?? "",
+        lat: loc.lat(),
+        lng: loc.lng(),
+      });
+    });
+  } catch {
+    // Autocomplete below still gives the user selectable live Google Places results.
+  }
+
+  try {
+    const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+      input: q,
+      sessionToken: sessionToken!,
+      includedPrimaryTypes: ["hospital"],
+      includedRegionCodes: ["ng"],
+      region: "NG",
+      language: "en",
+      locationBias: new g.maps.Circle(locationBias),
+    });
+
+    suggestions
+      .map((s) => s.placePrediction)
+      .filter((p): p is NonNullable<typeof p> => !!p)
+      .forEach((p) => {
+        addSuggestion({
+          placeId: p.placeId,
+          primary: p.mainText?.toString() ?? p.text.toString(),
+          secondary: p.secondaryText?.toString() ?? "",
+        });
+      });
+  } catch {
+    // Keep text-search results if autocomplete is unavailable for a query.
+  }
 
   if (signal?.aborted) return [];
-
-  return suggestions
-    .map((s) => s.placePrediction)
-    .filter((p): p is NonNullable<typeof p> => !!p)
-    .map((p) => ({
-      placeId: p.placeId,
-      primary: p.mainText?.toString() ?? p.text.toString(),
-      secondary: p.secondaryText?.toString() ?? "",
-    }));
+  return Array.from(byId.values()).slice(0, 8);
 }
 
 export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
