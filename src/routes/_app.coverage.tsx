@@ -107,7 +107,6 @@ function toRequestItem(r: NetRequest): RequestItem {
       : r.status === "cancelled"
         ? "cancelled"
         : undefined;
-  const fullDoctor = doctorLabelFor(r.acceptedBy);
   // History reflects FINAL settled operational reality, not booking estimate.
   const isCompleted = outcome === "completed";
   const settledHrs = isCompleted
@@ -117,11 +116,8 @@ function toRequestItem(r: NetRequest): RequestItem {
   const settledAmount = isCompleted ? (r.settledAmount ?? r.amount) : r.amount;
   return {
     id: r.id,
-    doctor: fullDoctor,
-    doctorShort: shortDoctorName(fullDoctor),
+    doctorSid: r.acceptedBy,
     doctorRatingId: r.acceptedBy ? doctorEntityId(r.acceptedBy) : null,
-    mdcn: mdcnFor(r.acceptedBy),
-    initials: doctorInitials(r.acceptedBy),
     coverage: r.coverage as Coverage,
     day: r.day,
     start: r.start,
