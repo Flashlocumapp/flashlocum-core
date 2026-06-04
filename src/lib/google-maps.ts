@@ -79,12 +79,17 @@ async function ensurePlaces() {
 
 export async function fetchHospitalSuggestions(
   input: string,
+  origin?: google.maps.LatLngLiteral | null,
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
   const q = input.trim();
   if (!q) return [];
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
+  const locationBias: google.maps.CircleLiteral = {
+    center: origin ?? BIAS_CENTER,
+    radius: origin ? 50_000 : SEARCH_BIAS.radius,
+  };
 
   const byId = new Map<string, PlaceSuggestion>();
 
@@ -98,11 +103,11 @@ export async function fetchHospitalSuggestions(
       textQuery: /\b(hospital|clinic|medical|centre|center)\b/i.test(q) ? q : `${q} hospital`,
       fields: ["id", "displayName", "formattedAddress", "location"],
       includedType: "hospital",
-      locationBias: SEARCH_BIAS,
+      locationBias,
       maxResultCount: 8,
       region: "NG",
       language: "en",
-      rankPreference: lib.SearchByTextRankPreference.RELEVANCE,
+      rankPreference: "RELEVANCE",
       useStrictTypeFiltering: false,
     });
 
@@ -130,7 +135,7 @@ export async function fetchHospitalSuggestions(
       includedRegionCodes: ["ng"],
       region: "NG",
       language: "en",
-      locationBias: new g.maps.Circle(SEARCH_BIAS),
+      locationBias: new g.maps.Circle(locationBias),
     });
 
     suggestions
