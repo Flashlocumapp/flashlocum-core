@@ -189,7 +189,7 @@ export function GoogleMapBackground({
       const marker = new google.maps.Marker({
         position: pos,
         map: mapRef.current!,
-        icon: markerIcon(),
+        icon: doctorIcon(),
         optimized: true,
       });
       markerObjs.current.push(marker);
