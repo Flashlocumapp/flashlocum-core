@@ -39,11 +39,16 @@ const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
 
 
 // Stethoscope marker — used ONLY for online doctors available nearby.
+// Subtle pulse via SMIL keeps the marker feeling alive without being flashy.
 function doctorIcon(): google.maps.Icon {
   const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
-  <circle cx="22" cy="22" r="14" fill="#ffffff" stroke="#3a8a5e" stroke-width="1.8"/>
-  <g stroke="#3a8a5e" stroke-width="1.8" fill="none" stroke-linecap="round" transform="translate(13 12)">
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
+  <circle cx="28" cy="28" r="22" fill="#3a8a5e" fill-opacity="0.18">
+    <animate attributeName="r" values="16;22;16" dur="2.4s" repeatCount="indefinite"/>
+    <animate attributeName="fill-opacity" values="0.28;0.08;0.28" dur="2.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="28" cy="28" r="14" fill="#ffffff" stroke="#3a8a5e" stroke-width="1.8"/>
+  <g stroke="#3a8a5e" stroke-width="1.8" fill="none" stroke-linecap="round" transform="translate(19 18)">
     <path d="M3 1v6a4 4 0 008 0V1"/>
     <path d="M7 11v2a4 4 0 008 0v-2"/>
     <circle cx="15" cy="9" r="1.6" fill="#3a8a5e" stroke="none"/>
@@ -51,38 +56,26 @@ function doctorIcon(): google.maps.Icon {
 </svg>`.trim();
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(44, 44),
-    anchor: new google.maps.Point(22, 22),
+    scaledSize: new google.maps.Size(56, 56),
+    anchor: new google.maps.Point(28, 28),
   };
 }
 
-// Requester "you are here" dot — pulsing blue marker.
+// Requester "you are here" dot — calm pulsing blue marker.
 function requesterDotIcon(): google.maps.Icon {
   const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <circle cx="16" cy="16" r="14" fill="#3b82f6" fill-opacity="0.18"/>
-  <circle cx="16" cy="16" r="9" fill="#ffffff"/>
-  <circle cx="16" cy="16" r="6" fill="#3b82f6"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <circle cx="24" cy="24" r="20" fill="#3b82f6" fill-opacity="0.18">
+    <animate attributeName="r" values="12;20;12" dur="2.6s" repeatCount="indefinite"/>
+    <animate attributeName="fill-opacity" values="0.32;0.06;0.32" dur="2.6s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="24" cy="24" r="10" fill="#ffffff"/>
+  <circle cx="24" cy="24" r="7" fill="#3b82f6"/>
 </svg>`.trim();
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(32, 32),
-    anchor: new google.maps.Point(16, 16),
-  };
-}
-
-// Hospital pin — used for hospital/place markers (search results, selected hospital).
-function hospitalIcon(): google.maps.Icon {
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">
-  <path d="M20 2C10.6 2 3 9.4 3 18.4c0 12.3 14.6 26.4 16.2 27.9.5.5 1.2.5 1.7 0C22.4 44.8 37 30.7 37 18.4 37 9.4 29.4 2 20 2z" fill="#e94f5b" stroke="#ffffff" stroke-width="2"/>
-  <rect x="13" y="11" width="14" height="14" rx="2" fill="#ffffff"/>
-  <path d="M20 13v10M15 18h10" stroke="#e94f5b" stroke-width="2.2" stroke-linecap="round"/>
-</svg>`.trim();
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(40, 48),
-    anchor: new google.maps.Point(20, 46),
+    scaledSize: new google.maps.Size(48, 48),
+    anchor: new google.maps.Point(24, 24),
   };
 }
 
@@ -138,17 +131,17 @@ export function GoogleMapBackground({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Recenter when we acquire geolocation (only if caller didn't pin center).
+  // Pan (never zoom) when caller pins a center or we acquire geolocation.
+  // Preserving the user's zoom level keeps the viewport stable as new markers
+  // appear — the map should never auto-reframe under the user.
   useEffect(() => {
     if (!mapRef.current) return;
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
-    if (center) mapRef.current.setZoom(17);
   }, [center, userCenter]);
 
-  // Requester "you are here" dot — always anchored to real geolocation, even
-  // when the map has been panned to a selected hospital.
+  // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
     if (!mapRef.current) return;
     if (!userCenter) {
@@ -161,7 +154,7 @@ export function GoogleMapBackground({
         position: userCenter,
         map: mapRef.current,
         icon: requesterDotIcon(),
-        optimized: true,
+        optimized: false, // SMIL pulse requires non-optimized rendering
         zIndex: 60,
         title: "You are here",
       });
@@ -170,17 +163,16 @@ export function GoogleMapBackground({
     }
   }, [userCenter]);
 
-  // Render presence markers. We treat the provided Marker.top/left (0..1) as a
-  // pseudo-spread around the current center so the map feels populated without
-  // requiring real coordinates from the presence layer yet.
+  // Render available-doctor presence markers. Marker.top/left (0..1) is used
+  // as a pseudo-spread around the current center until real coordinates flow
+  // in from the presence layer.
   useEffect(() => {
     if (!mapRef.current) return;
     markerObjs.current.forEach((m) => m.setMap(null));
     markerObjs.current = [];
     if (!markers || markers.length === 0) return;
     const c = center ?? userCenter ?? FALLBACK_CENTER;
-    // ~3km spread
-    const spread = 0.03;
+    const spread = 0.03; // ~3km
     markers.forEach((m) => {
       const pos = {
         lat: c.lat + (0.5 - m.top) * spread,
@@ -190,43 +182,19 @@ export function GoogleMapBackground({
         position: pos,
         map: mapRef.current!,
         icon: doctorIcon(),
-        optimized: true,
+        optimized: false, // SMIL pulse requires non-optimized rendering
+        zIndex: 40,
       });
       markerObjs.current.push(marker);
     });
   }, [markers, center, userCenter]);
 
-  // Render real hospital/place markers from Google Places results.
-  useEffect(() => {
-    if (!mapRef.current) return;
-    placeMarkerObjs.current.forEach((m) => m.setMap(null));
-    placeMarkerObjs.current = [];
-    if (!placeMarkers || placeMarkers.length === 0) return;
+  // Hospital / place markers are intentionally NOT rendered on the map.
+  // Hospitals exist as data context (search, selection, dispatch), not as
+  // map objects. The map's only entities are: requester + available doctors.
+  // The `placeMarkers` prop is accepted for API compatibility but ignored.
+  void placeMarkers;
 
-    const bounds = new google.maps.LatLngBounds();
-    placeMarkers.forEach((p) => {
-      const position = { lat: p.lat, lng: p.lng };
-      bounds.extend(position);
-      const marker = new google.maps.Marker({
-        position,
-        map: mapRef.current!,
-        title: p.title,
-        icon: hospitalIcon(),
-        optimized: true,
-        zIndex: 100,
-      });
-      placeMarkerObjs.current.push(marker);
-    });
-
-    if (!center) {
-      if (placeMarkers.length === 1) {
-        mapRef.current.panTo({ lat: placeMarkers[0].lat, lng: placeMarkers[0].lng });
-        mapRef.current.setZoom(17);
-      } else {
-        mapRef.current.fitBounds(bounds, 72);
-      }
-    }
-  }, [placeMarkers, center]);
 
   if (failed || !BROWSER_KEY_PRESENT) {
     // Graceful fallback to the stylized map so the UI never goes blank.
