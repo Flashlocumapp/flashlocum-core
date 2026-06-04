@@ -687,7 +687,7 @@ function RequestCard({
             )}
           </div>
           <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
-            <span className="truncate">{item.mdcn}</span>
+            <span className="truncate">{identity.mdcn}</span>
             <span>·</span>
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
           </div>
