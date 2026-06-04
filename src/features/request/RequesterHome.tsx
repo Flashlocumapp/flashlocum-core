@@ -217,15 +217,18 @@ function HomeScreen() {
     const t = setTimeout(() => {
       fetchHospitalSuggestions(q, searchOrigin, ctrl.signal)
         .then((s) => {
-          if (!ctrl.signal.aborted) setSuggestions(s);
+          if (ctrl.signal.aborted) return;
+          // Keep prior suggestions visible if the new query returned nothing
+          // transiently — avoids a flash of "No matching hospitals."
+          if (s.length > 0) setSuggestions(s);
         })
         .catch(() => {
-          if (!ctrl.signal.aborted) setSuggestions([]);
+          /* keep prior suggestions on transient errors */
         })
         .finally(() => {
           if (!ctrl.signal.aborted) setSuggestLoading(false);
         });
-    }, 220);
+    }, 140);
     return () => {
       ctrl.abort();
       clearTimeout(t);
