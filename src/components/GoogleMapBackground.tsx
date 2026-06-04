@@ -83,10 +83,12 @@ export function GoogleMapBackground({
   markers,
   center,
   placeMarkers,
+  showSelf = true,
 }: {
   markers?: Marker[];
   center?: Coords | null;
   placeMarkers?: PlaceMapMarker[];
+  showSelf?: boolean;
 } = {}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
