@@ -344,7 +344,10 @@ function HomeScreen() {
             query={query}
             setQuery={setQuery}
             recents={recents}
+            suggestions={suggestions}
+            suggestLoading={suggestLoading}
             onPickRecent={selectLocation}
+            onPickSuggestion={selectSuggestion}
             location={location}
             coverage={coverage}
             setCoverage={setCoverage}
