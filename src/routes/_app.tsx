@@ -111,7 +111,7 @@ function AppShell() {
       style={{ ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px` }}
     >
       <div
-        className="absolute inset-x-0 top-0"
+        className="absolute inset-x-0 top-0 bg-background"
         style={{ bottom: `var(--tab-bar-h)` }}
       >
         <Outlet />

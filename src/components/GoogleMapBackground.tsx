@@ -79,6 +79,12 @@ function requesterDotIcon(): google.maps.Icon {
   };
 }
 
+// Module-level cache for the last known geolocation. Persists across map
+// remounts (e.g. switching tabs) so the requester "you are here" dot is
+// already on screen the moment Home re-renders — no second-long wait while
+// geolocation re-resolves.
+let cachedUserCenter: Coords | null = null;
+
 export function GoogleMapBackground({
   markers,
   center,
@@ -96,18 +102,29 @@ export function GoogleMapBackground({
   const placeMarkerObjs = useRef<google.maps.Marker[]>([]);
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
-  const [userCenter, setUserCenter] = useState<Coords | null>(null);
+  const [userCenter, setUserCenterState] = useState<Coords | null>(cachedUserCenter);
+  const setUserCenter = (c: Coords) => {
+    cachedUserCenter = c;
+    setUserCenterState(c);
+  };
 
-  // Geolocate once on mount (best-effort, silent on denial).
-  // Always fetch user location so the self-marker can show even when
-  // the map is centered on a selected hospital.
+
+  // Geolocate on mount and keep watching, so the requester "you are here"
+  // dot is on screen as quickly as possible and stays accurate as the user
+  // moves. Best-effort; silently no-op on permission denial.
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
     );
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 60_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   // Init map.

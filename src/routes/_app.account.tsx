@@ -83,11 +83,16 @@ function AccountScreen() {
 
   const personalRows = useMemo(() => {
     if (isDoctor) {
-      return [
+      const rows = [
         { label: "Phone Number", value: profile?.phone || "—" },
         { label: "MDCN Number", value: profile?.mdcn || "—" },
-        { label: "Verification Status", value: verificationLabel(verification) },
       ];
+      // Only render the verification row once we know the real status —
+      // avoids a "Pending" flash on first paint for approved/suspended users.
+      if (verification) {
+        rows.push({ label: "Verification Status", value: verificationLabel(verification) });
+      }
+      return rows;
     }
     return [
       { label: "Phone Number", value: profile?.phone || "—" },
@@ -368,10 +373,12 @@ function ProfileSheet({
                 onChange={setBankAccount}
                 placeholder="0123456789"
               />
-              <ReadField
-                label="Verification Status"
-                value={verificationLabel(verification)}
-              />
+              {verification && (
+                <ReadField
+                  label="Verification Status"
+                  value={verificationLabel(verification)}
+                />
+              )}
             </>
           )}
           <ReadField label="Email Address" value={identity.email} />
