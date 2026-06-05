@@ -74,7 +74,7 @@ export function CoverHome() {
             disabled={!approved}
             onToggle={handleToggleOnline}
           />
-          {!approved && <VerificationBanner status={verification} />}
+          {verification && !approved && <VerificationBanner status={verification} />}
         </div>
       </header>
 
