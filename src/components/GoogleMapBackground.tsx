@@ -79,6 +79,12 @@ function requesterDotIcon(): google.maps.Icon {
   };
 }
 
+// Module-level cache for the last known geolocation. Persists across map
+// remounts (e.g. switching tabs) so the requester "you are here" dot is
+// already on screen the moment Home re-renders — no second-long wait while
+// geolocation re-resolves.
+let cachedUserCenter: Coords | null = null;
+
 export function GoogleMapBackground({
   markers,
   center,
@@ -96,7 +102,12 @@ export function GoogleMapBackground({
   const placeMarkerObjs = useRef<google.maps.Marker[]>([]);
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
-  const [userCenter, setUserCenter] = useState<Coords | null>(null);
+  const [userCenter, setUserCenterState] = useState<Coords | null>(cachedUserCenter);
+  const setUserCenter = (c: Coords) => {
+    cachedUserCenter = c;
+    setUserCenterState(c);
+  };
+
 
   // Geolocate on mount and keep watching, so the requester "you are here"
   // dot is on screen as quickly as possible and stays accurate as the user
