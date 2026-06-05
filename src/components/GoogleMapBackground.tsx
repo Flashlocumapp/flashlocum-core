@@ -98,16 +98,22 @@ export function GoogleMapBackground({
   const [failed, setFailed] = useState(false);
   const [userCenter, setUserCenter] = useState<Coords | null>(null);
 
-  // Geolocate once on mount (best-effort, silent on denial).
-  // Always fetch user location so the self-marker can show even when
-  // the map is centered on a selected hospital.
+  // Geolocate on mount and keep watching, so the requester "you are here"
+  // dot is on screen as quickly as possible and stays accurate as the user
+  // moves. Best-effort; silently no-op on permission denial.
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
     );
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 60_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   // Init map.
