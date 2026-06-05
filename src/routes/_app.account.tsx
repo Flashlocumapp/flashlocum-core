@@ -373,10 +373,12 @@ function ProfileSheet({
                 onChange={setBankAccount}
                 placeholder="0123456789"
               />
-              <ReadField
-                label="Verification Status"
-                value={verificationLabel(verification)}
-              />
+              {verification && (
+                <ReadField
+                  label="Verification Status"
+                  value={verificationLabel(verification)}
+                />
+              )}
             </>
           )}
           <ReadField label="Email Address" value={identity.email} />
