@@ -27,6 +27,10 @@ export const Route = createFileRoute("/_app")({
 function AppShell() {
   const immersive = useImmersive();
   const navigate = useNavigate();
+  // Hydrate ready from the persisted onboarding cache so returning users
+  // do NOT see a blank shell while the backend re-validates the session.
+  // The shell stays mounted; check() runs in the background and only
+  // redirects on hard failures (no session, missing onboarding, etc.).
   const [ready, setReady] = useState(() => {
     if (typeof window === "undefined" || !hasRole()) return false;
     return getCachedOnboardingStatus(getRole()) === true;

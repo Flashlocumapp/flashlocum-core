@@ -60,8 +60,65 @@ export type AdminUserRow = {
 let cachedProfile: ProfileRow | null | undefined;
 const cachedOnboarding: Partial<Record<Role, boolean>> = {};
 
+// ---- localStorage persistence ----
+// Onboarding + verification status are hydrated synchronously on module
+// load so AppShell does not blank the screen while waiting for the
+// network round-trip after a fresh login or long offline period.
+const LS_KEY = "fl:profile-cache:v1";
+type PersistedShape = {
+  uid: string;
+  cover: boolean;
+  request: boolean;
+  verification?: VerificationStatus | null;
+};
+
+function readPersisted(): PersistedShape | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as PersistedShape;
+    if (!v || typeof v.uid !== "string") return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+function writePersisted(p: ProfileRow | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (!p) {
+      window.localStorage.removeItem(LS_KEY);
+      return;
+    }
+    const payload: PersistedShape = {
+      uid: p.id,
+      cover: !!p.onboarded_cover_at,
+      request: !!p.onboarded_request_at,
+      verification: p.verification_status ?? null,
+    };
+    window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore quota / privacy-mode errors */
+  }
+}
+
+// Hydrate synchronously so getCachedOnboardingStatus / getCachedVerification
+// return the last known value on the very first render after a reload.
+const _persisted = readPersisted();
+if (_persisted) {
+  cachedOnboarding.cover = _persisted.cover;
+  cachedOnboarding.request = _persisted.request;
+}
+
 export function getCachedOnboardingStatus(role: Role): boolean | null {
   return typeof cachedOnboarding[role] === "boolean" ? cachedOnboarding[role]! : null;
+}
+
+export function getCachedVerificationStatus(): VerificationStatus | null {
+  if (cachedProfile && cachedProfile.verification_status) return cachedProfile.verification_status;
+  return _persisted?.verification ?? null;
 }
 
 function rememberProfile(profile: ProfileRow | null) {
@@ -70,11 +127,28 @@ function rememberProfile(profile: ProfileRow | null) {
     cachedOnboarding.cover = !!profile.onboarded_cover_at;
     cachedOnboarding.request = !!profile.onboarded_request_at;
   }
+  writePersisted(profile);
 }
 
 if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session || (cachedProfile && cachedProfile.id !== session.user.id)) {
+    if (!session) {
+      cachedProfile = undefined;
+      cachedOnboarding.cover = undefined;
+      cachedOnboarding.request = undefined;
+      writePersisted(null);
+      if (profileChannel) {
+        supabase.removeChannel(profileChannel);
+        profileChannel = null;
+        profileChannelUserId = null;
+      }
+      profileListeners.forEach((l) => l(null));
+      return;
+    }
+    // Different user signed in → drop in-memory cache but DO NOT blank
+    // persisted cache until we know the new profile (avoids a needless
+    // white screen during the brief moment between sign-in events).
+    if (cachedProfile && cachedProfile.id !== session.user.id) {
       cachedProfile = undefined;
       cachedOnboarding.cover = undefined;
       cachedOnboarding.request = undefined;
@@ -83,7 +157,6 @@ if (typeof window !== "undefined") {
         profileChannel = null;
         profileChannelUserId = null;
       }
-      // Notify subscribers so the UI clears stale data on sign out.
       profileListeners.forEach((l) => l(null));
     }
   });
