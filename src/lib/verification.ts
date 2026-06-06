@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fetchVerificationStatus,
   getCachedProfile,
+  getCachedVerificationStatus,
   type VerificationStatus,
 } from "@/lib/profile-remote";
 
 // Module-level cache — keeps last-known status across tab switches so the
 // UI does NOT flash "Pending" while the backend re-fetches on remount.
-let cached: VerificationStatus | null = null;
+let cached: VerificationStatus | null = getCachedVerificationStatus();
 const listeners = new Set<(s: VerificationStatus) => void>();
 function setCached(next: VerificationStatus) {
   cached = next;
@@ -16,16 +17,20 @@ function setCached(next: VerificationStatus) {
 }
 
 /**
- * Seed value used at hook init. Prefers the live profile cache (populated
- * by useMyProfile / fetchMyProfile) so the very first render shows the
- * correct status when the profile is already known, instead of flashing
- * "Pending" before the real value loads.
+ * Seed value used at hook init. Prefers the live profile cache, then the
+ * localStorage-persisted value, so the very first render shows the correct
+ * status across sign-out / sign-in and full reloads.
  */
 function seedStatus(): VerificationStatus | null {
   if (cached) return cached;
   const p = getCachedProfile();
   if (p && p.verification_status) {
     cached = p.verification_status;
+    return cached;
+  }
+  const persisted = getCachedVerificationStatus();
+  if (persisted) {
+    cached = persisted;
     return cached;
   }
   return null;
