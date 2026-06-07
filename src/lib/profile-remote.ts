@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/lib/role";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 export type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
 
@@ -166,7 +167,7 @@ function rememberProfile(profile: ProfileRow | null) {
 }
 
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((event, session) => {
+  subscribeAuthState(({ event, session }) => {
     if (!session && event === "SIGNED_OUT") {
       cachedProfile = undefined;
       cachedProfileIsPersistedSeed = false;
@@ -211,8 +212,10 @@ if (typeof window !== "undefined") {
 
 /** Fetch the current user's profile row, or null if it doesn't exist. */
 export async function fetchMyProfile(): Promise<ProfileRow | null> {
+  const auth = await ensureAuthReady();
+  if (!auth.user) return null;
   const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user;
+  const user = userData.user ?? auth.user;
   if (!user) return null;
   const { data, error } = await supabase
     .from("profiles")
@@ -271,8 +274,10 @@ export function getCachedProfile(): ProfileRow | null | undefined {
 export async function upsertMyProfile(
   fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string },
 ): Promise<void> {
+  const auth = await ensureAuthReady();
+  if (!auth.user) throw new Error("Not authenticated");
   const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user;
+  const user = userData.user ?? auth.user;
   if (!user) throw new Error("Not authenticated");
   const { error } = await supabase
     .from("profiles")
@@ -344,8 +349,8 @@ export function useMyProfile(): {
       } else {
         setLoading(false);
       }
-      const { data } = await supabase.auth.getUser();
-      if (!cancelled && data.user) ensureProfileChannel(data.user.id);
+      const auth = await ensureAuthReady();
+      if (!cancelled && auth.userId) ensureProfileChannel(auth.userId);
     })();
     return () => {
       cancelled = true;
