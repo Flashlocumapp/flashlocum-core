@@ -269,7 +269,7 @@ export function getCachedProfile(): ProfileRow | null | undefined {
 
 /** Upsert profile fields for the current user. */
 export async function upsertMyProfile(
-  fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string }
+  fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string },
 ): Promise<void> {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -328,7 +328,9 @@ export function useMyProfile(): {
   refresh: () => Promise<void>;
 } {
   const [profile, setProfile] = useState<ProfileRow | null>(cachedProfile ?? null);
-  const [loading, setLoading] = useState(cachedProfile === undefined || cachedProfileIsPersistedSeed);
+  const [loading, setLoading] = useState(
+    cachedProfile === undefined || cachedProfileIsPersistedSeed,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -362,7 +364,6 @@ export function useMyProfile(): {
   };
 }
 
-
 /** Mark the current user as onboarded for the given capability.
  *  Capabilities track independently — completing one does NOT auto-complete the other. */
 export async function markOnboardedRemote(
@@ -372,7 +373,8 @@ export async function markOnboardedRemote(
   const stamp = new Date().toISOString();
   const capabilityStamp =
     role === "cover" ? { onboarded_cover_at: stamp } : { onboarded_request_at: stamp };
-  const verificationReset = role === "cover" ? { verification_status: "pending" as VerificationStatus } : {};
+  const verificationReset =
+    role === "cover" ? { verification_status: "pending" as VerificationStatus } : {};
   await upsertMyProfile({
     ...fields,
     role,
@@ -394,11 +396,7 @@ export async function fetchVerificationStatus(): Promise<VerificationStatus> {
  *  (admin, the doctor themself, or a requester whose request they accepted). */
 export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null> {
   if (!id) return null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
   if (error) {
     console.warn("fetchDoctorProfile error", error);
     return null;
