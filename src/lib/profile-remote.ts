@@ -149,6 +149,7 @@ if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((event, session) => {
     if (!session && event === "SIGNED_OUT") {
       cachedProfile = undefined;
+      cachedProfileIsPersistedSeed = false;
       // Keep the non-sensitive onboarding/verification seed across explicit
       // logout so same-user re-login after long inactivity can paint the app
       // shell immediately. A different-user sign-in below clears it by uid.
@@ -163,6 +164,7 @@ if (typeof window !== "undefined") {
     if (!session) return;
     if (persistedCache && persistedCache.uid !== session.user.id) {
       cachedProfile = undefined;
+      cachedProfileIsPersistedSeed = false;
       cachedOnboarding.cover = undefined;
       cachedOnboarding.request = undefined;
       writePersisted(null);
@@ -174,6 +176,7 @@ if (typeof window !== "undefined") {
     // white screen during the brief moment between sign-in events).
     if (cachedProfile && cachedProfile.id !== session.user.id) {
       cachedProfile = undefined;
+      cachedProfileIsPersistedSeed = false;
       cachedOnboarding.cover = undefined;
       cachedOnboarding.request = undefined;
       if (profileChannel) {
@@ -202,6 +205,14 @@ export async function fetchMyProfile(): Promise<ProfileRow | null> {
     return null;
   }
   const profile = (data as ProfileRow | null) ?? null;
+  if (profile && !profile.full_name) {
+    const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+    const fullName = meta.full_name || meta.name || null;
+    if (fullName) {
+      profile.full_name = fullName;
+      void supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+    }
+  }
   rememberProfile(profile);
   return profile;
 }
@@ -297,7 +308,7 @@ export function useMyProfile(): {
   refresh: () => Promise<void>;
 } {
   const [profile, setProfile] = useState<ProfileRow | null>(cachedProfile ?? null);
-  const [loading, setLoading] = useState(cachedProfile === undefined);
+  const [loading, setLoading] = useState(cachedProfile === undefined || cachedProfileIsPersistedSeed);
 
   useEffect(() => {
     let cancelled = false;
