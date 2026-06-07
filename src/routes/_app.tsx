@@ -21,7 +21,7 @@ import { HomeRouter } from "@/features/app/HomeRouter";
 import { CoverageScreen } from "@/features/app/CoverageScreen";
 import { EarningsScreen } from "@/features/app/EarningsScreen";
 import { AccountScreen } from "@/features/app/AccountScreen";
-import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
+import { ensureAuthReady, getAuthSnapshot, subscribeAuthState } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -37,7 +37,8 @@ function AppShell() {
   // redirects on hard failures (no session, missing onboarding, etc.).
   const [ready, setReady] = useState(() => {
     if (typeof window === "undefined" || !hasRole()) return false;
-    return getCachedOnboardingStatus(getRole()) === true;
+    const auth = getAuthSnapshot();
+    return auth.ready && !!auth.verifiedAt && !!auth.session && getCachedOnboardingStatus(getRole()) === true;
   });
 
   const check = async () => {
