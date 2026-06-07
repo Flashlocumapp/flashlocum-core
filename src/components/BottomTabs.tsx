@@ -1,5 +1,4 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 
@@ -99,11 +98,9 @@ export function BottomTabs() {
                   {t.label}
                 </span>
                 {active && (
-                  <motion.span
-                    layoutId="tab-dot"
+                  <span
                     className="absolute -top-0.5 h-0.5 w-6 rounded-full"
                     style={{ background: "var(--color-foreground)" }}
-                    transition={{ type: "spring", stiffness: 360, damping: 30 }}
                   />
                 )}
               </Link>

@@ -89,6 +89,7 @@ function writePersisted(p: ProfileRow | null) {
   if (typeof window === "undefined") return;
   try {
     if (!p) {
+      persistedCache = null;
       window.localStorage.removeItem(LS_KEY);
       return;
     }
@@ -98,6 +99,7 @@ function writePersisted(p: ProfileRow | null) {
       request: !!p.onboarded_request_at,
       verification: p.verification_status ?? null,
     };
+    persistedCache = payload;
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
   } catch {
     /* ignore quota / privacy-mode errors */
@@ -106,10 +108,10 @@ function writePersisted(p: ProfileRow | null) {
 
 // Hydrate synchronously so getCachedOnboardingStatus / getCachedVerification
 // return the last known value on the very first render after a reload.
-const _persisted = readPersisted();
-if (_persisted) {
-  cachedOnboarding.cover = _persisted.cover;
-  cachedOnboarding.request = _persisted.request;
+let persistedCache = readPersisted();
+if (persistedCache) {
+  cachedOnboarding.cover = persistedCache.cover;
+  cachedOnboarding.request = persistedCache.request;
 }
 
 export function getCachedOnboardingStatus(role: Role): boolean | null {
@@ -118,7 +120,7 @@ export function getCachedOnboardingStatus(role: Role): boolean | null {
 
 export function getCachedVerificationStatus(): VerificationStatus | null {
   if (cachedProfile && cachedProfile.verification_status) return cachedProfile.verification_status;
-  return _persisted?.verification ?? null;
+  return persistedCache?.verification ?? null;
 }
 
 function rememberProfile(profile: ProfileRow | null) {
@@ -134,14 +136,22 @@ if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((_event, session) => {
     if (!session) {
       cachedProfile = undefined;
-      cachedOnboarding.cover = undefined;
-      cachedOnboarding.request = undefined;
-      writePersisted(null);
+      // Keep the non-sensitive onboarding/verification seed across explicit
+      // logout so same-user re-login after long inactivity can paint the app
+      // shell immediately. A different-user sign-in below clears it by uid.
       if (profileChannel) {
         supabase.removeChannel(profileChannel);
         profileChannel = null;
         profileChannelUserId = null;
       }
+      profileListeners.forEach((l) => l(null));
+      return;
+    }
+    if (persistedCache && persistedCache.uid !== session.user.id) {
+      cachedProfile = undefined;
+      cachedOnboarding.cover = undefined;
+      cachedOnboarding.request = undefined;
+      writePersisted(null);
       profileListeners.forEach((l) => l(null));
       return;
     }

@@ -1,5 +1,5 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, type ReactNode } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -17,6 +17,10 @@ import {
   isAccountOnboardedProfile,
   touchLastSeen,
 } from "@/lib/profile-remote";
+import { HomeRouter } from "@/features/app/HomeRouter";
+import { CoverageScreen } from "@/features/app/CoverageScreen";
+import { EarningsScreen } from "@/features/app/EarningsScreen";
+import { AccountScreen } from "@/features/app/AccountScreen";
 
 
 
@@ -27,6 +31,7 @@ export const Route = createFileRoute("/_app")({
 function AppShell() {
   const immersive = useImmersive();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   // Hydrate ready from the persisted onboarding cache so returning users
   // do NOT see a blank shell while the backend re-validates the session.
   // The shell stays mounted; check() runs in the background and only
@@ -118,8 +123,18 @@ function AppShell() {
         className="absolute inset-x-0 top-0 bg-background"
         style={{ bottom: `var(--tab-bar-h)` }}
       >
-        <Outlet />
-
+        <PersistentTabSurface active={pathname === "/home"}>
+          <HomeRouter active={pathname === "/home"} />
+        </PersistentTabSurface>
+        <PersistentTabSurface active={pathname === "/coverage"}>
+          <CoverageScreen />
+        </PersistentTabSurface>
+        <PersistentTabSurface active={pathname === "/earnings"}>
+          <EarningsScreen active={pathname === "/earnings"} />
+        </PersistentTabSurface>
+        <PersistentTabSurface active={pathname === "/account"}>
+          <AccountScreen />
+        </PersistentTabSurface>
       </div>
       <AnimatePresence>
         {!immersive && (
@@ -138,6 +153,29 @@ function AppShell() {
       <CoverDispatchPortal />
       <ToastHost />
       <SimClockPanel />
+    </div>
+  );
+}
+
+function PersistentTabSurface({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      aria-hidden={!active}
+      className="absolute inset-0 bg-background"
+      style={{
+        opacity: active ? 1 : 0,
+        pointerEvents: active ? "auto" : "none",
+        visibility: active ? "visible" : "hidden",
+        zIndex: active ? 1 : 0,
+      }}
+    >
+      {children}
     </div>
   );
 }
