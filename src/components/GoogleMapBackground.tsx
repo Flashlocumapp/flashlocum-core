@@ -108,12 +108,14 @@ export function GoogleMapBackground({
   center,
   placeMarkers,
   showSelf = true,
+  selfMarkerKind = "requester",
   active = true,
 }: {
   markers?: Marker[];
   center?: Coords | null;
   placeMarkers?: PlaceMapMarker[];
   showSelf?: boolean;
+  selfMarkerKind?: "requester" | "doctor";
   active?: boolean;
 } = {}) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -260,15 +262,16 @@ export function GoogleMapBackground({
       selfMarker.current = new google.maps.Marker({
         position: userCenter,
         map: mapRef.current,
-        icon: requesterDotIcon(),
+        icon: selfMarkerKind === "doctor" ? doctorIcon() : requesterDotIcon(),
         optimized: false, // SMIL pulse requires non-optimized rendering
         zIndex: 60,
-        title: "You are here",
+        title: selfMarkerKind === "doctor" ? "Doctor location" : "You are here",
       });
     } else {
+      selfMarker.current.setIcon(selfMarkerKind === "doctor" ? doctorIcon() : requesterDotIcon());
       selfMarker.current.setPosition(userCenter);
     }
-  }, [userCenter, showSelf, mapReady]);
+  }, [userCenter, showSelf, selfMarkerKind, mapReady]);
 
   // Render available-doctor presence markers. Marker.top/left (0..1) is used
   // as a pseudo-spread around the current center until real coordinates flow
