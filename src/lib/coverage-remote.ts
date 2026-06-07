@@ -9,6 +9,7 @@
 // in network.ts. Only the request lifecycle is backend-driven.
 
 import { supabase } from "@/integrations/supabase/client";
+import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
 
 type Row = {
@@ -41,6 +42,40 @@ type Row = {
 };
 
 const TABLE = "coverage_requests";
+const LS_KEY = "fl:coverage-cache:v1";
+
+type PersistedCoverage = { uid: string; rows: NetRequest[]; savedAt: number };
+
+function activeCacheUserId(): string | null {
+  return cachedUserId ?? getCachedProfileUserId();
+}
+
+function readPersistedSnapshot(): NetRequest[] {
+  if (typeof window === "undefined") return [];
+  const uid = activeCacheUserId();
+  if (!uid) return [];
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return [];
+    const payload = JSON.parse(raw) as PersistedCoverage;
+    if (!payload || payload.uid !== uid || !Array.isArray(payload.rows)) return [];
+    return payload.rows;
+  } catch {
+    return [];
+  }
+}
+
+function writePersistedSnapshot(rows: NetRequest[]) {
+  if (typeof window === "undefined") return;
+  const uid = activeCacheUserId();
+  if (!uid) return;
+  try {
+    const payload: PersistedCoverage = { uid, rows, savedAt: Date.now() };
+    window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore quota / privacy-mode errors */
+  }
+}
 
 const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   searching: "broadcasting",
@@ -168,7 +203,9 @@ let channel: ReturnType<typeof supabase.channel> | null = null;
 let invalidationChannel: ReturnType<typeof supabase.channel> | null = null;
 const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
-let cachedSnapshot: NetRequest[] = [];
+const initialPersistedSnapshot = readPersistedSnapshot();
+let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
+let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function fetchAll(): Promise<NetRequest[]> {
@@ -185,6 +222,8 @@ async function fetchAll(): Promise<NetRequest[]> {
 
 async function refreshSnapshot() {
   cachedSnapshot = await fetchAll();
+  cachedSnapshotUserId = activeCacheUserId();
+  writePersistedSnapshot(cachedSnapshot);
   snapshotListeners.forEach((fn) => fn(cachedSnapshot));
 }
 
@@ -222,6 +261,19 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   eventListeners.add(opts.onEvent);
   snapshotListeners.add(opts.onSnapshot);
   activeSubscribers++;
+
+  // Paint the last known operational state immediately. The async backend
+  // snapshot reconciles afterward, but Coverage never flashes through an
+  // empty/loading state after long inactivity or a fresh sign-in.
+  const uid = activeCacheUserId();
+  const persisted = readPersistedSnapshot();
+  if (persisted.length > 0) {
+    cachedSnapshot = persisted;
+    cachedSnapshotUserId = uid;
+  }
+  if (uid && cachedSnapshotUserId === uid && cachedSnapshot.length > 0) {
+    opts.onSnapshot(cachedSnapshot);
+  }
 
   // Always re-fetch on every new subscription so a freshly-logged-in user
   // immediately sees their authorized rows (RLS scope changes by auth state).

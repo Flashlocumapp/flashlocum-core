@@ -169,10 +169,8 @@ function PersistentTabSurface({
       aria-hidden={!active}
       className="absolute inset-0 bg-background"
       style={{
-        opacity: active ? 1 : 0,
         pointerEvents: active ? "auto" : "none",
-        visibility: active ? "visible" : "hidden",
-        zIndex: active ? 1 : 0,
+        zIndex: active ? 4 : 1,
       }}
     >
       {children}

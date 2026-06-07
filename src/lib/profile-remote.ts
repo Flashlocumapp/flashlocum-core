@@ -123,6 +123,10 @@ export function getCachedVerificationStatus(): VerificationStatus | null {
   return persistedCache?.verification ?? null;
 }
 
+export function getCachedProfileUserId(): string | null {
+  return cachedProfile?.id ?? persistedCache?.uid ?? null;
+}
+
 function rememberProfile(profile: ProfileRow | null) {
   cachedProfile = profile;
   if (profile) {
