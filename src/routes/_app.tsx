@@ -56,8 +56,7 @@ function AppShell() {
     if (!role) {
       const cached = getCachedProfile();
       const cachedRole =
-        cached?.id === auth.user.id &&
-        (cached.role === "cover" || cached.role === "request")
+        cached?.id === auth.user.id && (cached.role === "cover" || cached.role === "request")
           ? cached.role
           : null;
       const cachedOnboardedRole =
