@@ -101,7 +101,27 @@ function writePersisted(p: ProfileRow | null) {
       cover: !!p.onboarded_cover_at,
       request: !!p.onboarded_request_at,
       verification: p.verification_status ?? null,
-      profile: p,
+      profile: {
+        id: p.id,
+        role: p.role,
+        full_name: p.full_name,
+        phone: p.phone,
+        gender: p.gender,
+        mdcn: null,
+        license_name: null,
+        years_experience: null,
+        bank_name: null,
+        bank_account: null,
+        selfie_url: null,
+        onboarded_at: p.onboarded_at,
+        onboarded_cover_at: p.onboarded_cover_at,
+        onboarded_request_at: p.onboarded_request_at,
+        verification_status: p.verification_status,
+        last_seen_at: p.last_seen_at,
+        location: null,
+        verification_receipt_url: null,
+        created_at: p.created_at,
+      },
     };
     persistedCache = payload;
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
