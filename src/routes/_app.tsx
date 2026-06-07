@@ -57,12 +57,15 @@ function AppShell() {
     let role = hasRole() ? getRole() : null;
     if (!role) {
       const cached = getCachedProfile();
-      const cachedRole = cached?.role === "cover" || cached?.role === "request" ? cached.role : null;
+      const cachedRole =
+        cached?.id === data.session.user.id && (cached.role === "cover" || cached.role === "request")
+          ? cached.role
+          : null;
       const cachedOnboardedRole =
         cachedRole ??
-        (getCachedOnboardingStatus("cover") === true
+        (cached?.id === data.session.user.id && getCachedOnboardingStatus("cover") === true
           ? "cover"
-          : getCachedOnboardingStatus("request") === true
+          : cached?.id === data.session.user.id && getCachedOnboardingStatus("request") === true
             ? "request"
             : null);
       if (cachedOnboardedRole) {
