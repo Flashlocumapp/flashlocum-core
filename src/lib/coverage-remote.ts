@@ -206,9 +206,8 @@ const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
 const initialPersistedSnapshot = readPersistedSnapshot();
 let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
-let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0
-  ? activeCacheUserId()
-  : null;
+let cachedSnapshotUserId: string | null =
+  initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function fetchAll(): Promise<NetRequest[] | null> {
@@ -224,6 +223,8 @@ async function fetchAll(): Promise<NetRequest[] | null> {
 }
 
 async function refreshSnapshot() {
+  const auth = await ensureAuthReady();
+  if (!auth.userId) return;
   const rows = await fetchAll();
   if (!rows) return;
   cachedSnapshot = rows;
