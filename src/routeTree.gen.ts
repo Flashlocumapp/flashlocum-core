@@ -16,7 +16,6 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingRoleRouteImport } from './routes/onboarding.$role'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
-import { Route as ApiGeolocateRouteImport } from './routes/api/geolocate'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
@@ -56,11 +55,6 @@ const AuthRoleRoute = AuthRoleRouteImport.update({
   path: '/auth/$role',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiGeolocateRoute = ApiGeolocateRouteImport.update({
-  id: '/api/geolocate',
-  path: '/api/geolocate',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AppHomeRoute = AppHomeRouteImport.update({
   id: '/home',
   path: '/home',
@@ -91,7 +85,6 @@ export interface FileRoutesByFullPath {
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
-  '/api/geolocate': typeof ApiGeolocateRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
 }
@@ -104,7 +97,6 @@ export interface FileRoutesByTo {
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
-  '/api/geolocate': typeof ApiGeolocateRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
 }
@@ -119,7 +111,6 @@ export interface FileRoutesById {
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
   '/_app/home': typeof AppHomeRoute
-  '/api/geolocate': typeof ApiGeolocateRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
 }
@@ -134,7 +125,6 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/earnings'
     | '/home'
-    | '/api/geolocate'
     | '/auth/$role'
     | '/onboarding/$role'
   fileRoutesByTo: FileRoutesByTo
@@ -147,7 +137,6 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/earnings'
     | '/home'
-    | '/api/geolocate'
     | '/auth/$role'
     | '/onboarding/$role'
   id:
@@ -161,7 +150,6 @@ export interface FileRouteTypes {
     | '/_app/coverage'
     | '/_app/earnings'
     | '/_app/home'
-    | '/api/geolocate'
     | '/auth/$role'
     | '/onboarding/$role'
   fileRoutesById: FileRoutesById
@@ -172,7 +160,6 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoleRoute: typeof RoleRoute
-  ApiGeolocateRoute: typeof ApiGeolocateRoute
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
 }
@@ -228,13 +215,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRoleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/geolocate': {
-      id: '/api/geolocate'
-      path: '/api/geolocate'
-      fullPath: '/api/geolocate'
-      preLoaderRoute: typeof ApiGeolocateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app/home': {
       id: '/_app/home'
       path: '/home'
@@ -288,10 +268,19 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RoleRoute: RoleRoute,
-  ApiGeolocateRoute: ApiGeolocateRoute,
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
