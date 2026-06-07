@@ -9,7 +9,6 @@ import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
 import { SimClockPanel } from "@/components/SimClockPanel";
 import { clearRole, getRole, hasRole, setRole } from "@/lib/role";
-import { supabase } from "@/integrations/supabase/client";
 import {
   effectiveOnboardedRole,
   fetchMyProfile,
