@@ -42,7 +42,7 @@ function toPayout(h: HistoryItem, now: number): Payout {
   };
 }
 
-function EarningsScreen() {
+export function EarningsScreen() {
   const navigate = useNavigate();
   const { history } = useDispatch();
   const isDoctor = getRole() === "cover";

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { clearRole, getRole, setRole, type Role } from "@/lib/role";
+import { clearRole, getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
 import {
   getCachedOnboardingStatus,
   hasCompletedOnboarding,
@@ -36,7 +36,7 @@ function deriveInitials(name: string, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
-function AccountScreen() {
+export function AccountScreen() {
   const navigate = useNavigate();
   const [role, setLocalRole] = useState<Role>(() => getRole());
   const [switching, setSwitching] = useState(false);
@@ -45,9 +45,7 @@ function AccountScreen() {
   const verification = useVerificationStatus();
   const { profile } = useMyProfile();
 
-  useEffect(() => {
-    setLocalRole(getRole());
-  }, []);
+  useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
 
   const isDoctor = role === "cover";
   const identity = useMemo<Identity>(() => {

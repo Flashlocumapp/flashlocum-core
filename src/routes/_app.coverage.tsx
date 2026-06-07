@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { getRole, type Role } from "@/lib/role";
+import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
@@ -156,10 +156,10 @@ const TABS = [
 type TabId = typeof TABS[number]["id"];
 
 
-function CoverageScreen() {
+export function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
   const [role, setLocalRole] = useState<Role>(() => getRole());
-  useEffect(() => setLocalRole(getRole()), []);
+  useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
 
   return role === "cover" ? (
     <DoctorCoverage tab={tab} setTab={setTab} />
