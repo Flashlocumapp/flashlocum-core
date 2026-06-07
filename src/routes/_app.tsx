@@ -23,8 +23,6 @@ import { CoverageScreen } from "@/features/app/CoverageScreen";
 import { EarningsScreen } from "@/features/app/EarningsScreen";
 import { AccountScreen } from "@/features/app/AccountScreen";
 
-
-
 export const Route = createFileRoute("/_app")({
   component: AppShell,
 });
@@ -58,7 +56,8 @@ function AppShell() {
     if (!role) {
       const cached = getCachedProfile();
       const cachedRole =
-        cached?.id === data.session.user.id && (cached.role === "cover" || cached.role === "request")
+        cached?.id === data.session.user.id &&
+        (cached.role === "cover" || cached.role === "request")
           ? cached.role
           : null;
       const cachedOnboardedRole =
@@ -189,13 +188,7 @@ function AppShell() {
   );
 }
 
-function PersistentTabSurface({
-  active,
-  children,
-}: {
-  active: boolean;
-  children: ReactNode;
-}) {
+function PersistentTabSurface({ active, children }: { active: boolean; children: ReactNode }) {
   return (
     <div
       aria-hidden={!active}
@@ -209,4 +202,3 @@ function PersistentTabSurface({
     </div>
   );
 }
-
