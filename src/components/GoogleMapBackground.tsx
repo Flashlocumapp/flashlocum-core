@@ -87,6 +87,8 @@ function requesterDotIcon(): google.maps.Icon {
 let cachedUserCenter: Coords | null = null;
 let cachedAccuracy: number | null = null;
 
+const MAX_ACCEPTED_ACCURACY_METERS = 5_000;
+
 // Coarse great-circle distance in metres. Good enough for drift filtering.
 function distanceMeters(a: Coords, b: Coords): number {
   const R = 6371000;
@@ -120,6 +122,7 @@ export function GoogleMapBackground({
   const placeMarkerObjs = useRef<google.maps.Marker[]>([]);
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [userCenter, setUserCenterState] = useState<Coords | null>(cachedUserCenter);
 
   // Accept a new geolocation sample only if it's reasonably accurate AND
@@ -129,9 +132,13 @@ export function GoogleMapBackground({
   const acceptSample = (coords: GeolocationCoordinates) => {
     const next: Coords = { lat: coords.latitude, lng: coords.longitude };
     const acc = coords.accuracy ?? Number.POSITIVE_INFINITY;
-    // Always accept the first fix so the blue dot appears immediately,
-    // even if the initial sample is a coarse IP-based location. Subsequent
-    // samples are filtered to prevent jumpy drift between cell towers.
+    // Only browser-provided location is allowed to drive the requester/doctor
+    // position. Coarse IP/cell-tower fixes are what caused the Lagos Island ↔
+    // Ikeja jumps, so never treat those as the user's exact map location.
+    if (acc > MAX_ACCEPTED_ACCURACY_METERS) {
+      console.warn("[map] ignoring coarse geolocation sample", Math.round(acc));
+      return;
+    }
     if (cachedUserCenter && cachedAccuracy != null) {
       // Reject samples noticeably worse than what we already have.
       if (acc > 2000 && acc > cachedAccuracy * 1.5) return;
@@ -150,14 +157,12 @@ export function GoogleMapBackground({
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       console.warn("[map] navigator.geolocation unavailable");
-      ipFallback();
       return;
     }
 
     let gotFix = false;
     const onErr = (err: GeolocationPositionError) => {
       console.warn("[map] geolocation error", err.code, err.message);
-      if (!gotFix) ipFallback();
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -191,38 +196,11 @@ export function GoogleMapBackground({
       );
     }, 4_000);
 
-    // Final safety net: if nothing came back at all, fall back to IP.
-    const ipTimer = window.setTimeout(() => {
-      if (!gotFix) ipFallback();
-    }, 12_000);
-
     return () => {
       navigator.geolocation.clearWatch(watchId);
       window.clearTimeout(lowAccTimer);
-      window.clearTimeout(ipTimer);
     };
   }, []);
-
-  // Last-resort: ask the Google Geolocation API (via the connector gateway)
-  // for an IP-based location. Better than leaving the user pinned to Lagos
-  // fallback when the browser blocks or fails geolocation.
-  const ipFallback = async () => {
-    if (cachedUserCenter) return;
-    try {
-      const res = await fetch("/api/geolocate", { method: "POST" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { lat?: number; lng?: number; accuracy?: number };
-      if (typeof data.lat === "number" && typeof data.lng === "number") {
-        acceptSample({
-          latitude: data.lat,
-          longitude: data.lng,
-          accuracy: data.accuracy ?? 50_000,
-        } as GeolocationCoordinates);
-      }
-    } catch (e) {
-      console.warn("[map] ip geolocate failed", e);
-    }
-  };
 
   // Init map.
   useEffect(() => {
@@ -240,6 +218,7 @@ export function GoogleMapBackground({
           styles: LIGHT_STYLE,
           backgroundColor: "#d1d5db",
         });
+        setMapReady(true);
       })
       .catch(() => setFailed(true));
     return () => {
@@ -256,7 +235,7 @@ export function GoogleMapBackground({
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
-  }, [center, userCenter]);
+  }, [center, userCenter, mapReady]);
 
   // When this surface becomes the active tab, snap the viewport back to the
   // user's location. Users expect "home" to recenter on them after they've
@@ -266,7 +245,7 @@ export function GoogleMapBackground({
     const c = center ?? userCenter;
     if (!c) return;
     mapRef.current.panTo(c);
-  }, [active, center, userCenter]);
+  }, [active, center, userCenter, mapReady]);
 
 
   // Requester "you are here" dot — always anchored to real geolocation.
@@ -289,7 +268,7 @@ export function GoogleMapBackground({
     } else {
       selfMarker.current.setPosition(userCenter);
     }
-  }, [userCenter, showSelf]);
+  }, [userCenter, showSelf, mapReady]);
 
   // Render available-doctor presence markers. Marker.top/left (0..1) is used
   // as a pseudo-spread around the current center until real coordinates flow
@@ -315,7 +294,7 @@ export function GoogleMapBackground({
       });
       markerObjs.current.push(marker);
     });
-  }, [markers, center, userCenter]);
+  }, [markers, center, userCenter, mapReady]);
 
   // Hospital / place markers are intentionally NOT rendered on the map.
   // Hospitals exist as data context (search, selection, dispatch), not as
