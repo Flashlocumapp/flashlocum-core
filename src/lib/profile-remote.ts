@@ -89,6 +89,7 @@ function writePersisted(p: ProfileRow | null) {
   if (typeof window === "undefined") return;
   try {
     if (!p) {
+      persistedCache = null;
       window.localStorage.removeItem(LS_KEY);
       return;
     }
@@ -134,14 +135,22 @@ if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((_event, session) => {
     if (!session) {
       cachedProfile = undefined;
-      cachedOnboarding.cover = undefined;
-      cachedOnboarding.request = undefined;
-      writePersisted(null);
+      // Keep the non-sensitive onboarding/verification seed across explicit
+      // logout so same-user re-login after long inactivity can paint the app
+      // shell immediately. A different-user sign-in below clears it by uid.
       if (profileChannel) {
         supabase.removeChannel(profileChannel);
         profileChannel = null;
         profileChannelUserId = null;
       }
+      profileListeners.forEach((l) => l(null));
+      return;
+    }
+    if (persistedCache && persistedCache.uid !== session.user.id) {
+      cachedProfile = undefined;
+      cachedOnboarding.cover = undefined;
+      cachedOnboarding.request = undefined;
+      writePersisted(null);
       profileListeners.forEach((l) => l(null));
       return;
     }
