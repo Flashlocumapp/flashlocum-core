@@ -14,6 +14,7 @@ import {
   effectiveOnboardedRole,
   fetchMyProfile,
   getCachedOnboardingStatus,
+  getCachedProfile,
   isAccountOnboardedProfile,
   touchLastSeen,
 } from "@/lib/profile-remote";
@@ -43,7 +44,7 @@ function AppShell() {
 
   const check = async () => {
     const { data } = await supabase.auth.getSession();
-    if (!data.session || !hasRole()) {
+    if (!data.session) {
       clearRole();
       navigate({ to: "/role" });
       return;
@@ -53,7 +54,32 @@ function AppShell() {
       navigate({ to: "/auth/$role", params: { role } });
       return;
     }
-    const role = getRole();
+    let role = hasRole() ? getRole() : null;
+    if (!role) {
+      const cached = getCachedProfile();
+      const cachedRole = cached?.role === "cover" || cached?.role === "request" ? cached.role : null;
+      const cachedOnboardedRole =
+        cachedRole ??
+        (getCachedOnboardingStatus("cover") === true
+          ? "cover"
+          : getCachedOnboardingStatus("request") === true
+            ? "request"
+            : null);
+      if (cachedOnboardedRole) {
+        setRole(cachedOnboardedRole);
+        role = cachedOnboardedRole;
+      }
+    }
+    if (!role) {
+      const profile = await fetchMyProfile();
+      const eff = effectiveOnboardedRole(profile, "request");
+      if (!eff) {
+        navigate({ to: "/role" });
+        return;
+      }
+      setRole(eff);
+      role = eff;
+    }
     // Backend is the source of truth for onboarding completion. Enforce
     // here so Back-button or direct URL access cannot bypass onboarding.
     const cachedOnboarded = getCachedOnboardingStatus(role);
