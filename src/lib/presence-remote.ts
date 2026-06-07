@@ -17,6 +17,13 @@ export type PresenceRow = {
   last_seen: string;
 };
 
+type RealtimePayload<T> = {
+  eventType?: string;
+  event?: string;
+  new?: T;
+  old?: Partial<T>;
+};
+
 const TABLE = "doctor_presence";
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -72,12 +79,12 @@ async function initialFetch() {
   }
   if (!approvedRes.error) {
     approvedIds.clear();
-    for (const p of approvedRes.data ?? []) approvedIds.add((p as any).id);
+    for (const p of approvedRes.data ?? []) approvedIds.add(p.id);
   }
   emit();
 }
 
-function applyPresencePayload(payload: any) {
+function applyPresencePayload(payload: RealtimePayload<PresenceRow>) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
     const id = payload.old?.user_id;
@@ -89,7 +96,9 @@ function applyPresencePayload(payload: any) {
   emit();
 }
 
-function applyProfilePayload(payload: any) {
+function applyProfilePayload(
+  payload: RealtimePayload<{ id: string; verification_status: string }>,
+) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
     const id = payload.old?.id;
@@ -110,9 +119,7 @@ function applyProfilePayload(payload: any) {
   emit();
 }
 
-export function subscribePresence(
-  onSnapshot: (rows: PresenceRow[]) => void,
-): () => void {
+export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): () => void {
   snapshotListeners.add(onSnapshot);
   activeSubscribers++;
   // Emit current cache synchronously so subscriber gets instant data.
@@ -122,20 +129,16 @@ export function subscribePresence(
   if (!channel) {
     channel = supabase
       .channel("doctor_presence_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: TABLE },
-        (payload) => applyPresencePayload(payload),
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) =>
+        applyPresencePayload(payload),
       )
       .subscribe();
   }
   if (!profilesChannel) {
     profilesChannel = supabase
       .channel("profiles_verification_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        (payload) => applyProfilePayload(payload),
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload) =>
+        applyProfilePayload(payload),
       )
       .subscribe();
   }
@@ -195,9 +198,7 @@ export async function upsertMyPresence(fields: {
   });
   emit();
 
-  const { error } = await supabase
-    .from(TABLE)
-    .upsert(row, { onConflict: "user_id" });
+  const { error } = await supabase.from(TABLE).upsert(row, { onConflict: "user_id" });
 
   if (error) console.warn("[presence-remote] upsert error:", error.message);
 }
