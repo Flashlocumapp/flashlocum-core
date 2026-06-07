@@ -28,8 +28,8 @@ import {
 } from "@/lib/google-maps";
 
 
-export function RequesterHome() {
-  return <HomeScreen />;
+export function RequesterHome({ active = true }: { active?: boolean }) {
+  return <HomeScreen active={active} />;
 }
 
 type CoverageId = "standard" | "24h" | "weekend" | "home";
@@ -160,7 +160,7 @@ function compressedSummary(coverage: CoverageId, draft: Draft, days: number): st
 
 /* ---------------------- Home ---------------------- */
 
-function HomeScreen() {
+function HomeScreen({ active }: { active: boolean }) {
   const [stage, setStage] = useState<Stage>("collapsed");
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState<Recent | null>(null);
@@ -180,9 +180,9 @@ function HomeScreen() {
 
   // Immersive flow — hide bottom tabs once the requester engages the sheet.
   useEffect(() => {
-    setImmersive(stage !== "collapsed");
+    setImmersive(active && stage !== "collapsed");
     return () => setImmersive(false);
-  }, [stage]);
+  }, [active, stage]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
