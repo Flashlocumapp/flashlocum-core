@@ -84,17 +84,34 @@ function requesterDotIcon(): google.maps.Icon {
 // already on screen the moment Home re-renders — no second-long wait while
 // geolocation re-resolves.
 let cachedUserCenter: Coords | null = null;
+let cachedAccuracy: number | null = null;
+
+// Coarse great-circle distance in metres. Good enough for drift filtering.
+function distanceMeters(a: Coords, b: Coords): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
 
 export function GoogleMapBackground({
   markers,
   center,
   placeMarkers,
   showSelf = true,
+  active = true,
 }: {
   markers?: Marker[];
   center?: Coords | null;
   placeMarkers?: PlaceMapMarker[];
   showSelf?: boolean;
+  active?: boolean;
 } = {}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -103,26 +120,43 @@ export function GoogleMapBackground({
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
   const [userCenter, setUserCenterState] = useState<Coords | null>(cachedUserCenter);
-  const setUserCenter = (c: Coords) => {
-    cachedUserCenter = c;
-    setUserCenterState(c);
-  };
 
+  // Accept a new geolocation sample only if it's reasonably accurate AND
+  // not a wild jump from the last known fix. IP-based fallbacks routinely
+  // hop between Ikeja / Lagos Island with accuracy in the kilometres —
+  // filtering those out keeps the blue dot stable.
+  const acceptSample = (coords: GeolocationCoordinates) => {
+    const next: Coords = { lat: coords.latitude, lng: coords.longitude };
+    const acc = coords.accuracy ?? Number.POSITIVE_INFINITY;
+    // Reject samples worse than ~2km when we already have something better.
+    if (cachedUserCenter && cachedAccuracy != null) {
+      if (acc > 2000 && acc > cachedAccuracy * 1.5) return;
+      // Reject a large jump unless the new fix is clearly more accurate.
+      const jump = distanceMeters(cachedUserCenter, next);
+      if (jump > 3000 && acc >= cachedAccuracy) return;
+    } else if (acc > 5000) {
+      // Even on first fix, ignore obviously coarse IP-based locations.
+      return;
+    }
+    cachedUserCenter = next;
+    cachedAccuracy = acc;
+    setUserCenterState(next);
+  };
 
   // Geolocate on mount and keep watching, so the requester "you are here"
   // dot is on screen as quickly as possible and stays accurate as the user
-  // moves. Best-effort; silently no-op on permission denial.
+  // moves. High accuracy + short cache window prevents drift between cells.
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => acceptSample(pos.coords),
       () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 },
     );
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => acceptSample(pos.coords),
       () => {},
-      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 60_000 },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 15_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
@@ -160,6 +194,17 @@ export function GoogleMapBackground({
     if (!c) return;
     mapRef.current.panTo(c);
   }, [center, userCenter]);
+
+  // When this surface becomes the active tab, snap the viewport back to the
+  // user's location. Users expect "home" to recenter on them after they've
+  // panned away — switching tabs is the natural reset gesture.
+  useEffect(() => {
+    if (!active || !mapRef.current) return;
+    const c = center ?? userCenter;
+    if (!c) return;
+    mapRef.current.panTo(c);
+  }, [active, center, userCenter]);
+
 
   // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
