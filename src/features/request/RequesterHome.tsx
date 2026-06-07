@@ -295,7 +295,7 @@ function HomeScreen({ active }: { active: boolean }) {
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
+      <GoogleMapBackground active={active} markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
