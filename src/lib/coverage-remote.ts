@@ -203,7 +203,9 @@ let channel: ReturnType<typeof supabase.channel> | null = null;
 let invalidationChannel: ReturnType<typeof supabase.channel> | null = null;
 const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
-let cachedSnapshot: NetRequest[] = readPersistedSnapshot();
+const initialPersistedSnapshot = readPersistedSnapshot();
+let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
+let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function fetchAll(): Promise<NetRequest[]> {
@@ -220,6 +222,7 @@ async function fetchAll(): Promise<NetRequest[]> {
 
 async function refreshSnapshot() {
   cachedSnapshot = await fetchAll();
+  cachedSnapshotUserId = activeCacheUserId();
   writePersistedSnapshot(cachedSnapshot);
   snapshotListeners.forEach((fn) => fn(cachedSnapshot));
 }
@@ -262,9 +265,15 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   // Paint the last known operational state immediately. The async backend
   // snapshot reconciles afterward, but Coverage never flashes through an
   // empty/loading state after long inactivity or a fresh sign-in.
+  const uid = activeCacheUserId();
   const persisted = readPersistedSnapshot();
-  if (persisted.length > 0) cachedSnapshot = persisted;
-  if (cachedSnapshot.length > 0) opts.onSnapshot(cachedSnapshot);
+  if (persisted.length > 0) {
+    cachedSnapshot = persisted;
+    cachedSnapshotUserId = uid;
+  }
+  if (uid && cachedSnapshotUserId === uid && cachedSnapshot.length > 0) {
+    opts.onSnapshot(cachedSnapshot);
+  }
 
   // Always re-fetch on every new subscription so a freshly-logged-in user
   // immediately sees their authorized rows (RLS scope changes by auth state).
