@@ -39,17 +39,19 @@ export function AccountScreen() {
   const [profileOpen, setProfileOpen] = useState(false);
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
-  const { profile } = useMyProfile();
+  const { profile, loading: profileLoading } = useMyProfile();
 
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
 
   const isDoctor = role === "cover";
   const identity = useMemo<Identity>(() => {
-    const baseName = profile?.full_name || authIdentity.name || (isDoctor ? "Doctor" : "Requester");
-    const name = isDoctor && baseName && !/^dr\.?\s/i.test(baseName) ? `Dr. ${baseName}` : baseName;
+    const baseName = profile?.full_name || authIdentity.name;
+    const fallback = profileLoading ? "Loading…" : isDoctor ? "Doctor" : "Requester";
+    const rawName = baseName || fallback;
+    const name = isDoctor && rawName !== "Loading…" && !/^dr\.?\s/i.test(rawName) ? `Dr. ${rawName}` : rawName;
     const email = authIdentity.email || "—";
     return { name, email, initials: deriveInitials(name, email) };
-  }, [authIdentity, isDoctor, profile?.full_name]);
+  }, [authIdentity, isDoctor, profile?.full_name, profileLoading]);
 
   const switchRole = async () => {
     if (switching) return;

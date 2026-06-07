@@ -137,8 +137,8 @@ function rememberProfile(profile: ProfileRow | null) {
 }
 
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (!session && event === "SIGNED_OUT") {
       cachedProfile = undefined;
       // Keep the non-sensitive onboarding/verification seed across explicit
       // logout so same-user re-login after long inactivity can paint the app
@@ -151,6 +151,7 @@ if (typeof window !== "undefined") {
       profileListeners.forEach((l) => l(null));
       return;
     }
+    if (!session) return;
     if (persistedCache && persistedCache.uid !== session.user.id) {
       cachedProfile = undefined;
       cachedOnboarding.cover = undefined;
