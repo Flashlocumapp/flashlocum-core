@@ -96,10 +96,15 @@ export function ensureAuthReady(): Promise<AuthReadySnapshot> {
     .then(async ({ data }) => {
       const session = data.session ?? null;
       if (!session) {
+        if (snapshot.session) return snapshot;
         applySession(null, "HYDRATED", true, null);
         return snapshot;
       }
+      const tokenAtRead = session.access_token;
       const { data: userData, error } = await supabase.auth.getUser();
+      if (snapshot.session && snapshot.session.access_token !== tokenAtRead && snapshot.verifiedAt) {
+        return snapshot;
+      }
       if (error || !userData.user) {
         applySession(null, "HYDRATE_INVALID", true, null);
         void clearInvalidLocalSession();
