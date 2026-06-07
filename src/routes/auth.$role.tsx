@@ -4,6 +4,7 @@ import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { fetchMyProfile } from "@/lib/profile-remote";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
@@ -94,7 +95,7 @@ function AuthScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const offAuth = subscribeAuthState(({ event, session }) => {
       logAuthDebug("auth-state-change", {
         event,
         hasSession: Boolean(session),
@@ -108,8 +109,7 @@ function AuthScreen() {
       /access_token=|refresh_token=|type=(signup|recovery|magiclink|invite)/.test(hash) ||
       /[?&]code=/.test(search);
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const session = data.session;
+      const { session } = await ensureAuthReady();
       if (!session?.user.email_confirmed_at) return;
       if (cancelled) return;
       if (arrivedFromAuthRedirect) {
@@ -132,7 +132,7 @@ function AuthScreen() {
     })();
     return () => {
       cancelled = true;
-      authListener.subscription.unsubscribe();
+      offAuth();
     };
   }, [proceed, normalizedRole]);
 
