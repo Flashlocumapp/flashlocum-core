@@ -58,6 +58,7 @@ export type AdminUserRow = {
 };
 
 let cachedProfile: ProfileRow | null | undefined;
+let cachedProfileIsPersistedSeed = false;
 const cachedOnboarding: Partial<Record<Role, boolean>> = {};
 
 // ---- localStorage persistence ----
@@ -70,6 +71,7 @@ type PersistedShape = {
   cover: boolean;
   request: boolean;
   verification?: VerificationStatus | null;
+  profile?: ProfileRow | null;
 };
 
 function readPersisted(): PersistedShape | null {
@@ -79,6 +81,7 @@ function readPersisted(): PersistedShape | null {
     if (!raw) return null;
     const v = JSON.parse(raw) as PersistedShape;
     if (!v || typeof v.uid !== "string") return null;
+    if (v.profile && v.profile.id !== v.uid) v.profile = null;
     return v;
   } catch {
     return null;
@@ -98,6 +101,27 @@ function writePersisted(p: ProfileRow | null) {
       cover: !!p.onboarded_cover_at,
       request: !!p.onboarded_request_at,
       verification: p.verification_status ?? null,
+      profile: {
+        id: p.id,
+        role: p.role,
+        full_name: p.full_name,
+        phone: p.phone,
+        gender: p.gender,
+        mdcn: null,
+        license_name: null,
+        years_experience: null,
+        bank_name: null,
+        bank_account: null,
+        selfie_url: null,
+        onboarded_at: p.onboarded_at,
+        onboarded_cover_at: p.onboarded_cover_at,
+        onboarded_request_at: p.onboarded_request_at,
+        verification_status: p.verification_status,
+        last_seen_at: p.last_seen_at,
+        location: null,
+        verification_receipt_url: null,
+        created_at: p.created_at,
+      },
     };
     persistedCache = payload;
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
@@ -112,6 +136,10 @@ let persistedCache = readPersisted();
 if (persistedCache) {
   cachedOnboarding.cover = persistedCache.cover;
   cachedOnboarding.request = persistedCache.request;
+  if (persistedCache.profile) {
+    cachedProfile = persistedCache.profile;
+    cachedProfileIsPersistedSeed = true;
+  }
 }
 
 export function getCachedOnboardingStatus(role: Role): boolean | null {
@@ -129,6 +157,7 @@ export function getCachedProfileUserId(): string | null {
 
 function rememberProfile(profile: ProfileRow | null) {
   cachedProfile = profile;
+  cachedProfileIsPersistedSeed = false;
   if (profile) {
     cachedOnboarding.cover = !!profile.onboarded_cover_at;
     cachedOnboarding.request = !!profile.onboarded_request_at;
@@ -140,6 +169,7 @@ if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((event, session) => {
     if (!session && event === "SIGNED_OUT") {
       cachedProfile = undefined;
+      cachedProfileIsPersistedSeed = false;
       // Keep the non-sensitive onboarding/verification seed across explicit
       // logout so same-user re-login after long inactivity can paint the app
       // shell immediately. A different-user sign-in below clears it by uid.
@@ -154,6 +184,7 @@ if (typeof window !== "undefined") {
     if (!session) return;
     if (persistedCache && persistedCache.uid !== session.user.id) {
       cachedProfile = undefined;
+      cachedProfileIsPersistedSeed = false;
       cachedOnboarding.cover = undefined;
       cachedOnboarding.request = undefined;
       writePersisted(null);
@@ -165,6 +196,7 @@ if (typeof window !== "undefined") {
     // white screen during the brief moment between sign-in events).
     if (cachedProfile && cachedProfile.id !== session.user.id) {
       cachedProfile = undefined;
+      cachedProfileIsPersistedSeed = false;
       cachedOnboarding.cover = undefined;
       cachedOnboarding.request = undefined;
       if (profileChannel) {
@@ -193,6 +225,14 @@ export async function fetchMyProfile(): Promise<ProfileRow | null> {
     return null;
   }
   const profile = (data as ProfileRow | null) ?? null;
+  if (profile && !profile.full_name) {
+    const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+    const fullName = meta.full_name || meta.name || null;
+    if (fullName) {
+      profile.full_name = fullName;
+      void supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+    }
+  }
   rememberProfile(profile);
   return profile;
 }
@@ -229,7 +269,7 @@ export function getCachedProfile(): ProfileRow | null | undefined {
 
 /** Upsert profile fields for the current user. */
 export async function upsertMyProfile(
-  fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string }
+  fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string },
 ): Promise<void> {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -288,13 +328,15 @@ export function useMyProfile(): {
   refresh: () => Promise<void>;
 } {
   const [profile, setProfile] = useState<ProfileRow | null>(cachedProfile ?? null);
-  const [loading, setLoading] = useState(cachedProfile === undefined);
+  const [loading, setLoading] = useState(
+    cachedProfile === undefined || cachedProfileIsPersistedSeed,
+  );
 
   useEffect(() => {
     let cancelled = false;
     profileListeners.add(setProfile);
     (async () => {
-      if (cachedProfile === undefined) {
+      if (cachedProfile === undefined || cachedProfileIsPersistedSeed) {
         const p = await fetchMyProfile();
         if (cancelled) return;
         setProfile(p);
@@ -322,7 +364,6 @@ export function useMyProfile(): {
   };
 }
 
-
 /** Mark the current user as onboarded for the given capability.
  *  Capabilities track independently — completing one does NOT auto-complete the other. */
 export async function markOnboardedRemote(
@@ -332,7 +373,8 @@ export async function markOnboardedRemote(
   const stamp = new Date().toISOString();
   const capabilityStamp =
     role === "cover" ? { onboarded_cover_at: stamp } : { onboarded_request_at: stamp };
-  const verificationReset = role === "cover" ? { verification_status: "pending" as VerificationStatus } : {};
+  const verificationReset =
+    role === "cover" ? { verification_status: "pending" as VerificationStatus } : {};
   await upsertMyProfile({
     ...fields,
     role,
@@ -354,11 +396,7 @@ export async function fetchVerificationStatus(): Promise<VerificationStatus> {
  *  (admin, the doctor themself, or a requester whose request they accepted). */
 export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null> {
   if (!id) return null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
   if (error) {
     console.warn("fetchDoctorProfile error", error);
     return null;

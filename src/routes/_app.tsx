@@ -14,6 +14,7 @@ import {
   effectiveOnboardedRole,
   fetchMyProfile,
   getCachedOnboardingStatus,
+  getCachedProfile,
   isAccountOnboardedProfile,
   touchLastSeen,
 } from "@/lib/profile-remote";
@@ -21,8 +22,6 @@ import { HomeRouter } from "@/features/app/HomeRouter";
 import { CoverageScreen } from "@/features/app/CoverageScreen";
 import { EarningsScreen } from "@/features/app/EarningsScreen";
 import { AccountScreen } from "@/features/app/AccountScreen";
-
-
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -43,7 +42,7 @@ function AppShell() {
 
   const check = async () => {
     const { data } = await supabase.auth.getSession();
-    if (!data.session || !hasRole()) {
+    if (!data.session) {
       clearRole();
       navigate({ to: "/role" });
       return;
@@ -53,7 +52,36 @@ function AppShell() {
       navigate({ to: "/auth/$role", params: { role } });
       return;
     }
-    const role = getRole();
+    let role = hasRole() ? getRole() : null;
+    if (!role) {
+      const cached = getCachedProfile();
+      const cachedRole =
+        cached?.id === data.session.user.id &&
+        (cached.role === "cover" || cached.role === "request")
+          ? cached.role
+          : null;
+      const cachedOnboardedRole =
+        cachedRole ??
+        (cached?.id === data.session.user.id && getCachedOnboardingStatus("cover") === true
+          ? "cover"
+          : cached?.id === data.session.user.id && getCachedOnboardingStatus("request") === true
+            ? "request"
+            : null);
+      if (cachedOnboardedRole) {
+        setRole(cachedOnboardedRole);
+        role = cachedOnboardedRole;
+      }
+    }
+    if (!role) {
+      const profile = await fetchMyProfile();
+      const eff = effectiveOnboardedRole(profile, "request");
+      if (!eff) {
+        navigate({ to: "/role" });
+        return;
+      }
+      setRole(eff);
+      role = eff;
+    }
     // Backend is the source of truth for onboarding completion. Enforce
     // here so Back-button or direct URL access cannot bypass onboarding.
     const cachedOnboarded = getCachedOnboardingStatus(role);
@@ -91,8 +119,11 @@ function AppShell() {
       if (cancelled) return;
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Cold starts can briefly emit a no-session initialization/refresh state
+      // before storage restoration settles. Only an explicit sign-out should
+      // clear the operational role and bounce the user out of the app shell.
+      if (event === "SIGNED_OUT" && !session) {
         clearRole();
         navigate({ to: "/role" });
       }
@@ -157,13 +188,7 @@ function AppShell() {
   );
 }
 
-function PersistentTabSurface({
-  active,
-  children,
-}: {
-  active: boolean;
-  children: ReactNode;
-}) {
+function PersistentTabSurface({ active, children }: { active: boolean; children: ReactNode }) {
   return (
     <div
       aria-hidden={!active}
@@ -177,4 +202,3 @@ function PersistentTabSurface({
     </div>
   );
 }
-
