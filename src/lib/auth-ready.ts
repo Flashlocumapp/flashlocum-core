@@ -81,7 +81,6 @@ export function getAuthSnapshot(): AuthReadySnapshot {
 export function ensureAuthReady(): Promise<AuthReadySnapshot> {
   if (typeof window === "undefined") return Promise.resolve(snapshot);
   ensureSubscribed();
-  if (!snapshot.session && snapshot.ready) return Promise.resolve(snapshot);
   if (
     snapshot.ready &&
     snapshot.session &&
