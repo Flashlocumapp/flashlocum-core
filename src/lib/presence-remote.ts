@@ -96,9 +96,7 @@ function applyPresencePayload(payload: RealtimePayload) {
   emit();
 }
 
-function applyProfilePayload(
-  payload: RealtimePayload,
-) {
+function applyProfilePayload(payload: RealtimePayload) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
     const id = (payload.old as { id?: string } | undefined)?.id;
