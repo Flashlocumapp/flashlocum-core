@@ -87,7 +87,7 @@ function requesterDotIcon(): google.maps.Icon {
 let cachedUserCenter: Coords | null = null;
 let cachedAccuracy: number | null = null;
 
-const MAX_ACCEPTED_ACCURACY_METERS = 5_000;
+const MAX_ACCEPTED_ACCURACY_METERS = 1_000;
 
 // Coarse great-circle distance in metres. Good enough for drift filtering.
 function distanceMeters(a: Coords, b: Coords): number {
