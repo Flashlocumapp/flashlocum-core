@@ -58,12 +58,10 @@ function AuthScreen() {
     // cannot sign in on this surface — they must create a new account
     // (or unlock the role via the in-app role-switch flow once signed
     // into their original surface).
-    const onboardedThis = normalizedRole === "cover"
-      ? !!profile?.onboarded_cover_at
-      : !!profile?.onboarded_request_at;
-    const onboardedOther = normalizedRole === "cover"
-      ? !!profile?.onboarded_request_at
-      : !!profile?.onboarded_cover_at;
+    const onboardedThis =
+      normalizedRole === "cover" ? !!profile?.onboarded_cover_at : !!profile?.onboarded_request_at;
+    const onboardedOther =
+      normalizedRole === "cover" ? !!profile?.onboarded_request_at : !!profile?.onboarded_cover_at;
 
     if (onboardedThis) {
       setRole(normalizedRole);
