@@ -17,7 +17,36 @@ export type DoctorIdentity = {
   loaded: boolean;
 };
 
-const cache = new Map<string, DoctorIdentity>();
+const LS_KEY = "fl:doctor-identity-cache:v1";
+
+function readIdentityCache(): Map<string, DoctorIdentity> {
+  const out = new Map<string, DoctorIdentity>();
+  if (typeof window === "undefined") return out;
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return out;
+    const rows = JSON.parse(raw) as DoctorIdentity[];
+    if (!Array.isArray(rows)) return out;
+    for (const row of rows) {
+      if (row?.id && row.loaded) out.set(row.id, row);
+    }
+  } catch {
+    /* ignore malformed / privacy-mode storage */
+  }
+  return out;
+}
+
+function writeIdentityCache() {
+  if (typeof window === "undefined") return;
+  try {
+    const rows = Array.from(cache.values()).filter((row) => row.loaded).slice(-60);
+    window.localStorage.setItem(LS_KEY, JSON.stringify(rows));
+  } catch {
+    /* ignore quota / privacy-mode storage */
+  }
+}
+
+const cache = readIdentityCache();
 const inflight = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
 
@@ -97,6 +126,7 @@ function loadInto(sessionId: string) {
     .then((row) => {
       if (row) {
         cache.set(sessionId, identityFromProfile(row));
+        writeIdentityCache();
         notify();
       }
     })
