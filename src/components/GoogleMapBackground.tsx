@@ -148,19 +148,81 @@ export function GoogleMapBackground({
   // dot is on screen as quickly as possible and stays accurate as the user
   // moves. High accuracy + short cache window prevents drift between cells.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      console.warn("[map] navigator.geolocation unavailable");
+      ipFallback();
+      return;
+    }
+
+    let gotFix = false;
+    const onErr = (err: GeolocationPositionError) => {
+      console.warn("[map] geolocation error", err.code, err.message);
+      if (!gotFix) ipFallback();
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => acceptSample(pos.coords),
-      () => {},
+      (pos) => {
+        gotFix = true;
+        acceptSample(pos.coords);
+      },
+      onErr,
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 },
     );
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => acceptSample(pos.coords),
-      () => {},
+      (pos) => {
+        gotFix = true;
+        acceptSample(pos.coords);
+      },
+      onErr,
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 15_000 },
     );
-    return () => navigator.geolocation.clearWatch(watchId);
+
+    // If high-accuracy fails or takes too long, also try a low-accuracy
+    // fix in parallel — some devices/browsers refuse high-accuracy outright.
+    const lowAccTimer = window.setTimeout(() => {
+      if (gotFix) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          gotFix = true;
+          acceptSample(pos.coords);
+        },
+        onErr,
+        { enableHighAccuracy: false, timeout: 15_000, maximumAge: 60_000 },
+      );
+    }, 4_000);
+
+    // Final safety net: if nothing came back at all, fall back to IP.
+    const ipTimer = window.setTimeout(() => {
+      if (!gotFix) ipFallback();
+    }, 12_000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearTimeout(lowAccTimer);
+      window.clearTimeout(ipTimer);
+    };
   }, []);
+
+  // Last-resort: ask the Google Geolocation API (via the connector gateway)
+  // for an IP-based location. Better than leaving the user pinned to Lagos
+  // fallback when the browser blocks or fails geolocation.
+  const ipFallback = async () => {
+    if (cachedUserCenter) return;
+    try {
+      const res = await fetch("/api/geolocate", { method: "POST" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { lat?: number; lng?: number; accuracy?: number };
+      if (typeof data.lat === "number" && typeof data.lng === "number") {
+        acceptSample({
+          latitude: data.lat,
+          longitude: data.lng,
+          accuracy: data.accuracy ?? 50_000,
+        } as GeolocationCoordinates);
+      }
+    } catch (e) {
+      console.warn("[map] ip geolocate failed", e);
+    }
+  };
 
   // Init map.
   useEffect(() => {
