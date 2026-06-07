@@ -4,7 +4,7 @@ import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { fetchMyProfile } from "@/lib/profile-remote";
-import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
+import { adoptVerifiedSession, ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
@@ -195,6 +195,7 @@ function AuthScreen() {
           return;
         }
         if (data.session?.user.email_confirmed_at) {
+          adoptVerifiedSession(data.session);
           await proceed();
           return;
         }
@@ -215,6 +216,7 @@ function AuthScreen() {
           setView("verify");
           return;
         }
+        adoptVerifiedSession(data.session);
         await proceed();
       }
     } catch (err) {
@@ -256,6 +258,7 @@ function AuthScreen() {
         emailVerified: Boolean(data.user?.email_confirmed_at),
       });
       if (data.session) {
+        adoptVerifiedSession(data.session);
         await proceed();
       } else {
         setError("Verification failed. Please try again.");
@@ -276,6 +279,8 @@ function AuthScreen() {
       });
       if (result.error) throw result.error;
       if (result.redirected) return;
+      const auth = await ensureAuthReady();
+      adoptVerifiedSession(auth.session, "SIGNED_IN");
       await proceed();
     } catch (err) {
       setError((err as Error).message || "Google sign-in failed. Try again.");

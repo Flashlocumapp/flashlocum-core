@@ -21,7 +21,7 @@ import { HomeRouter } from "@/features/app/HomeRouter";
 import { CoverageScreen } from "@/features/app/CoverageScreen";
 import { EarningsScreen } from "@/features/app/EarningsScreen";
 import { AccountScreen } from "@/features/app/AccountScreen";
-import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
+import { ensureAuthReady, getAuthSnapshot, subscribeAuthState } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -37,17 +37,21 @@ function AppShell() {
   // redirects on hard failures (no session, missing onboarding, etc.).
   const [ready, setReady] = useState(() => {
     if (typeof window === "undefined" || !hasRole()) return false;
-    return getCachedOnboardingStatus(getRole()) === true;
+    const auth = getAuthSnapshot();
+    return auth.ready && !!auth.verifiedAt && !!auth.session && getCachedOnboardingStatus(getRole()) === true;
   });
 
-  const check = async () => {
+  const check = async (isCurrent: () => boolean = () => true) => {
     const auth = await ensureAuthReady();
+    if (!isCurrent()) return;
     if (!auth.session) {
+      setReady(false);
       clearRole();
       navigate({ to: "/role" });
       return;
     }
     if (!auth.user?.email_confirmed_at) {
+      setReady(false);
       const role = getRole() ?? "request";
       navigate({ to: "/auth/$role", params: { role } });
       return;
@@ -73,8 +77,10 @@ function AppShell() {
     }
     if (!role) {
       const profile = await fetchMyProfile();
+      if (!isCurrent()) return;
       const eff = effectiveOnboardedRole(profile, "request");
       if (!eff) {
+        setReady(false);
         navigate({ to: "/role" });
         return;
       }
@@ -87,6 +93,7 @@ function AppShell() {
     let onboarded = cachedOnboarded === true;
     if (!onboarded) {
       const profile = await fetchMyProfile();
+      if (!isCurrent()) return;
       // Account-wide: if any role is onboarded, the account counts as
       // onboarded. Switch the active role to one the user has actually
       // onboarded for so the app shell renders the right surface instead
@@ -98,6 +105,7 @@ function AppShell() {
       }
     }
     if (!onboarded) {
+      setReady(false);
       const fromRole = getRole();
       navigate({
         to: "/onboarding/$role",
@@ -108,14 +116,14 @@ function AppShell() {
     }
     if (getRole() === "cover") ensureDoctorSession(false);
     void touchLastSeen(true);
+    if (!isCurrent()) return;
     setReady(true);
   };
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await check();
-      if (cancelled) return;
+      await check(() => !cancelled);
     })();
 
     const offAuth = subscribeAuthState(({ event, session }) => {
@@ -123,6 +131,7 @@ function AppShell() {
       // before storage restoration settles. Only an explicit sign-out should
       // clear the operational role and bounce the user out of the app shell.
       if (event === "SIGNED_OUT" && !session) {
+        setReady(false);
         clearRole();
         navigate({ to: "/role" });
       }
