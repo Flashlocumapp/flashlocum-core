@@ -8,6 +8,7 @@ export type AuthReadySnapshot = {
   user: User | null;
   userId: string | null;
   event: string | null;
+  verifiedAt: number | null;
 };
 
 const emptySnapshot: AuthReadySnapshot = {
@@ -16,26 +17,38 @@ const emptySnapshot: AuthReadySnapshot = {
   user: null,
   userId: null,
   event: null,
+  verifiedAt: null,
 };
 
 let snapshot: AuthReadySnapshot = emptySnapshot;
 let hydration: Promise<AuthReadySnapshot> | null = null;
 let subscribed = false;
 const listeners = new Set<(snapshot: AuthReadySnapshot) => void>();
+const VALIDATION_TTL_MS = 30_000;
 
 function notify() {
   listeners.forEach((listener) => listener(snapshot));
 }
 
-function applySession(session: Session | null, event: string, ready = true) {
+function applySession(session: Session | null, event: string, ready = true, verifiedUser?: User | null) {
+  const user = verifiedUser ?? session?.user ?? null;
   snapshot = {
     ready,
     session,
-    user: session?.user ?? null,
-    userId: session?.user?.id ?? null,
+    user,
+    userId: user?.id ?? null,
     event,
+    verifiedAt: session && verifiedUser ? Date.now() : null,
   };
   notify();
+}
+
+async function clearInvalidLocalSession() {
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch {
+    /* local cleanup is best-effort */
+  }
 }
 
 function ensureSubscribed() {
@@ -52,10 +65,12 @@ function ensureSubscribed() {
         user: session?.user ?? null,
         userId: session?.user?.id ?? null,
         event,
+        verifiedAt: null,
       };
       return;
     }
-    applySession(session, event, true);
+    const trusted = event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED";
+    applySession(session, event, true, trusted ? (session?.user ?? null) : undefined);
   });
 }
 
@@ -66,13 +81,32 @@ export function getAuthSnapshot(): AuthReadySnapshot {
 export function ensureAuthReady(): Promise<AuthReadySnapshot> {
   if (typeof window === "undefined") return Promise.resolve(snapshot);
   ensureSubscribed();
-  if (snapshot.ready && snapshot.session) return Promise.resolve(snapshot);
+  if (!snapshot.session && snapshot.ready) return Promise.resolve(snapshot);
+  if (
+    snapshot.ready &&
+    snapshot.session &&
+    snapshot.verifiedAt &&
+    Date.now() - snapshot.verifiedAt < VALIDATION_TTL_MS
+  ) {
+    return Promise.resolve(snapshot);
+  }
   if (hydration) return hydration;
 
   hydration = supabase.auth
     .getSession()
-    .then(({ data }) => {
-      applySession(data.session ?? null, "HYDRATED", true);
+    .then(async ({ data }) => {
+      const session = data.session ?? null;
+      if (!session) {
+        applySession(null, "HYDRATED", true, null);
+        return snapshot;
+      }
+      const { data: userData, error } = await supabase.auth.getUser();
+      if (error || !userData.user) {
+        applySession(null, "HYDRATE_INVALID", true, null);
+        void clearInvalidLocalSession();
+        return snapshot;
+      }
+      applySession(session, "HYDRATED", true, userData.user);
       return snapshot;
     })
     .catch(() => {
