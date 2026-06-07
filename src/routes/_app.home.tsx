@@ -8,9 +8,9 @@ export const Route = createFileRoute("/_app/home")({
   component: HomeRouter,
 });
 
-export function HomeRouter() {
+export function HomeRouter({ active = true }: { active?: boolean }) {
   // Role is synchronous session state; seed immediately to avoid a blank frame.
   const [role, setLocalRole] = useState<Role>(() => getRole());
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
-  return role === "cover" ? <CoverHome /> : <RequesterHome />;
+  return role === "cover" ? <CoverHome active={active} /> : <RequesterHome active={active} />;
 }
