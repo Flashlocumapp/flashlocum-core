@@ -303,7 +303,7 @@ export function useMyProfile(): {
     let cancelled = false;
     profileListeners.add(setProfile);
     (async () => {
-      if (cachedProfile === undefined) {
+      if (cachedProfile === undefined || cachedProfileIsPersistedSeed) {
         const p = await fetchMyProfile();
         if (cancelled) return;
         setProfile(p);
