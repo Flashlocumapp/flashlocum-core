@@ -91,8 +91,11 @@ function AppShell() {
       if (cancelled) return;
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Cold starts can briefly emit a no-session initialization/refresh state
+      // before storage restoration settles. Only an explicit sign-out should
+      // clear the operational role and bounce the user out of the app shell.
+      if (event === "SIGNED_OUT" && !session) {
         clearRole();
         navigate({ to: "/role" });
       }
