@@ -78,6 +78,10 @@ export function getAuthSnapshot(): AuthReadySnapshot {
   return snapshot;
 }
 
+export function adoptVerifiedSession(session: Session | null, event = "SIGNED_IN") {
+  applySession(session, event, true, session?.user ?? null);
+}
+
 export function ensureAuthReady(): Promise<AuthReadySnapshot> {
   if (typeof window === "undefined") return Promise.resolve(snapshot);
   ensureSubscribed();
