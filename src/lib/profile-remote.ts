@@ -70,6 +70,7 @@ type PersistedShape = {
   cover: boolean;
   request: boolean;
   verification?: VerificationStatus | null;
+  profile?: ProfileRow | null;
 };
 
 function readPersisted(): PersistedShape | null {
@@ -98,6 +99,7 @@ function writePersisted(p: ProfileRow | null) {
       cover: !!p.onboarded_cover_at,
       request: !!p.onboarded_request_at,
       verification: p.verification_status ?? null,
+      profile: p,
     };
     persistedCache = payload;
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
@@ -112,6 +114,7 @@ let persistedCache = readPersisted();
 if (persistedCache) {
   cachedOnboarding.cover = persistedCache.cover;
   cachedOnboarding.request = persistedCache.request;
+  cachedProfile = persistedCache.profile ?? undefined;
 }
 
 export function getCachedOnboardingStatus(role: Role): boolean | null {
@@ -137,8 +140,8 @@ function rememberProfile(profile: ProfileRow | null) {
 }
 
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (!session && event === "SIGNED_OUT") {
       cachedProfile = undefined;
       // Keep the non-sensitive onboarding/verification seed across explicit
       // logout so same-user re-login after long inactivity can paint the app
@@ -151,6 +154,7 @@ if (typeof window !== "undefined") {
       profileListeners.forEach((l) => l(null));
       return;
     }
+    if (!session) return;
     if (persistedCache && persistedCache.uid !== session.user.id) {
       cachedProfile = undefined;
       cachedOnboarding.cover = undefined;

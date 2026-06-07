@@ -11,9 +11,38 @@ import {
 // UI does NOT flash "Pending" while the backend re-fetches on remount.
 let cached: VerificationStatus | null = getCachedVerificationStatus();
 const listeners = new Set<(s: VerificationStatus) => void>();
+let verificationChannelUserId: string | null = null;
+let verificationChannel: ReturnType<typeof supabase.channel> | null = null;
+
 function setCached(next: VerificationStatus) {
   cached = next;
   listeners.forEach((l) => l(next));
+}
+
+function ensureVerificationChannel(userId: string) {
+  if (verificationChannelUserId === userId && verificationChannel) return;
+  if (verificationChannel) {
+    supabase.removeChannel(verificationChannel);
+    verificationChannel = null;
+  }
+  verificationChannelUserId = userId;
+  verificationChannel = supabase
+    .channel(`profile-verification-${userId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "profiles",
+        filter: `id=eq.${userId}`,
+      },
+      (payload) => {
+        const next = (payload.new as { verification_status?: VerificationStatus })
+          ?.verification_status;
+        if (next) setCached(next);
+      },
+    )
+    .subscribe();
 }
 
 /**
@@ -49,7 +78,6 @@ export function useVerificationStatus(): VerificationStatus | null {
     let cancelled = false;
     const wrapped = (s: VerificationStatus) => setStatus(s);
     listeners.add(wrapped);
-    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     (async () => {
       if (!cached) {
@@ -62,29 +90,12 @@ export function useVerificationStatus(): VerificationStatus | null {
 
       const { data: u } = await supabase.auth.getUser();
       if (!u.user || cancelled) return;
-      channel = supabase
-        .channel(`profile-verification-${u.user.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "profiles",
-            filter: `id=eq.${u.user.id}`,
-          },
-          (payload) => {
-            const next = (payload.new as { verification_status?: VerificationStatus })
-              ?.verification_status;
-            if (next) setCached(next);
-          },
-        )
-        .subscribe();
+      ensureVerificationChannel(u.user.id);
     })();
 
     return () => {
       cancelled = true;
       listeners.delete(wrapped);
-      if (channel) supabase.removeChannel(channel);
     };
   }, []);
 
