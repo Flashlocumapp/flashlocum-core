@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
 import {
@@ -19,10 +19,6 @@ function verificationLabel(s: string): string {
   if (s === "suspended") return "Suspended";
   return "Pending Approval";
 }
-
-export const Route = createFileRoute("/_app/account")({
-  component: AccountScreen,
-});
 
 type Identity = { name: string; email: string; initials: string };
 

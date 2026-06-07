@@ -1,4 +1,3 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
@@ -41,10 +40,6 @@ import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
 
 
-
-export const Route = createFileRoute("/_app/coverage")({
-  component: CoverageScreen,
-});
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";

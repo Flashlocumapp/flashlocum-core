@@ -1,12 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { getRole } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
-
-export const Route = createFileRoute("/_app/earnings")({
-  component: EarningsScreen,
-});
 
 // Doctor net payout = total paid − FlashLocum service fee (15%).
 const FEE_PCT = 15;

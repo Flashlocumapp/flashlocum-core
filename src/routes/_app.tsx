@@ -17,10 +17,10 @@ import {
   isAccountOnboardedProfile,
   touchLastSeen,
 } from "@/lib/profile-remote";
-import { HomeRouter } from "@/routes/_app.home";
-import { CoverageScreen } from "@/routes/_app.coverage";
-import { EarningsScreen } from "@/routes/_app.earnings";
-import { AccountScreen } from "@/routes/_app.account";
+import { HomeRouter } from "@/features/app/HomeRouter";
+import { CoverageScreen } from "@/features/app/CoverageScreen";
+import { EarningsScreen } from "@/features/app/EarningsScreen";
+import { AccountScreen } from "@/features/app/AccountScreen";
 
 
 
