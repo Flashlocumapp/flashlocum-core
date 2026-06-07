@@ -274,8 +274,23 @@ export function GoogleMapBackground({
   }
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: "#f3ede0" }}>
+    <div className="absolute inset-0 overflow-hidden" style={{ background: "#d1d5db" }}>
       <div ref={ref} className="absolute inset-0 h-full w-full" />
+      {/* Hide Google Maps attribution / terms / report links */}
+      <style>{`
+        .gm-style-cc,
+        .gm-style > div > a,
+        .gmnoprint a[href*="google.com"],
+        .gm-style > div > div > span,
+        .gm-style .gm-style-cc a,
+        a[href*="maps.google.com"],
+        a[href*="www.google.com/intl"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+      `}</style>
       {/* Subtle bottom fade so floating UI reads against the map */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
