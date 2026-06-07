@@ -18,7 +18,7 @@ import { pushToast } from "@/lib/notifications";
  * CoverHome — doctor home tab.
  * Fullscreen map · top Online/Offline pill · lower floating tiles.
  */
-export function CoverHome() {
+export function CoverHome({ active = true }: { active?: boolean }) {
   const { online, upcoming } = useDispatch();
   const verification = useVerificationStatus();
   const approved = verification === "approved";
@@ -36,8 +36,8 @@ export function CoverHome() {
 
   // Hard-revoke online state if verification is lost (suspension, rejection).
   useEffect(() => {
-    if (!approved && online) setOnline(false);
-  }, [approved, online]);
+    if (active && !approved && online) setOnline(false);
+  }, [active, approved, online]);
 
   const handleToggleOnline = () => {
     if (!approved) {

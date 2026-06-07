@@ -42,15 +42,15 @@ function toPayout(h: HistoryItem, now: number): Payout {
   };
 }
 
-export function EarningsScreen() {
+export function EarningsScreen({ active = true }: { active?: boolean }) {
   const navigate = useNavigate();
   const { history } = useDispatch();
   const isDoctor = getRole() === "cover";
   useEffect(() => {
-    if (!isDoctor) {
+    if (active && !isDoctor) {
       navigate({ to: "/home" });
     }
-  }, [isDoctor, navigate]);
+  }, [active, isDoctor, navigate]);
 
   const payouts = useMemo<Payout[]>(() => {
     const now = Date.now();
