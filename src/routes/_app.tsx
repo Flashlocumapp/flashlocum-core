@@ -1,5 +1,5 @@
 import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -162,7 +162,7 @@ function PersistentTabSurface({
   children,
 }: {
   active: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div
