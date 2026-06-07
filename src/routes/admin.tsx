@@ -14,6 +14,7 @@ import {
   type VerificationStatus,
 } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
+import { ensureAuthReady } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/admin")({
   component: AdminScreen,
@@ -56,8 +57,8 @@ function AdminScreen() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      const auth = await ensureAuthReady();
+      if (!auth.session) {
         setState("unauth");
         return;
       }

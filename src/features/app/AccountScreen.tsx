@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { clearRole, getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
 import {
@@ -12,6 +13,7 @@ import { useVerificationStatus } from "@/lib/verification";
 import { useAuthIdentity } from "@/lib/identity";
 import { supabase } from "@/integrations/supabase/client";
 import { pushToast } from "@/lib/notifications";
+import { unregisterDoctor } from "@/lib/network";
 
 function verificationLabel(s: string): string {
   if (s === "approved") return "Verified";
@@ -34,6 +36,7 @@ function deriveInitials(name: string, email: string): string {
 
 export function AccountScreen() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [role, setLocalRole] = useState<Role>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -180,9 +183,12 @@ export function AccountScreen() {
             <NavRow
               title="Sign Out"
               onClick={async () => {
-                await supabase.auth.signOut();
+                await queryClient.cancelQueries();
+                unregisterDoctor();
+                queryClient.clear();
                 clearRole();
-                navigate({ to: "/role" });
+                await supabase.auth.signOut();
+                navigate({ to: "/role", replace: true });
               }}
               tone="muted"
               last

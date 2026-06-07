@@ -9,6 +9,7 @@
 // in network.ts. Only the request lifecycle is backend-driven.
 
 import { supabase } from "@/integrations/supabase/client";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
 
@@ -161,8 +162,8 @@ export function getCurrentUserIdSync(): string | null {
 export async function primeUserId(): Promise<string | null> {
   if (userIdResolved) return cachedUserId;
   try {
-    const { data } = await supabase.auth.getUser();
-    cachedUserId = data.user?.id ?? null;
+    const auth = await ensureAuthReady();
+    cachedUserId = auth.userId;
   } catch {
     cachedUserId = null;
   }
@@ -179,8 +180,8 @@ export function onUserIdChange(fn: (id: string | null) => void): () => void {
 
 // Keep the cached id in sync with auth events (sign-in, sign-out, refresh).
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((_event, session) => {
-    cachedUserId = session?.user?.id ?? null;
+  subscribeAuthState(({ userId }) => {
+    cachedUserId = userId;
     userIdResolved = true;
     userListeners.forEach((fn) => fn(cachedUserId));
   });
@@ -205,23 +206,28 @@ const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
 const initialPersistedSnapshot = readPersistedSnapshot();
 let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
-let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
+let cachedSnapshotUserId: string | null =
+  initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function fetchAll(): Promise<NetRequest[]> {
+async function fetchAll(): Promise<NetRequest[] | null> {
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
     .order("created_at", { ascending: true });
   if (error) {
     console.warn("[coverage-remote] fetch error:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []).map((r) => rowToNet(r as Row));
 }
 
 async function refreshSnapshot() {
-  cachedSnapshot = await fetchAll();
+  const auth = await ensureAuthReady();
+  if (!auth.userId) return;
+  const rows = await fetchAll();
+  if (!rows) return;
+  cachedSnapshot = rows;
   cachedSnapshotUserId = activeCacheUserId();
   writePersistedSnapshot(cachedSnapshot);
   snapshotListeners.forEach((fn) => fn(cachedSnapshot));
@@ -275,33 +281,31 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     opts.onSnapshot(cachedSnapshot);
   }
 
-  // Always re-fetch on every new subscription so a freshly-logged-in user
-  // immediately sees their authorized rows (RLS scope changes by auth state).
-  refreshSnapshot();
+  // Fetch only after auth storage is hydrated. A cold-start null session would
+  // return an empty RLS scope and briefly wipe the cached operational state.
+  void ensureAuthReady().then((auth) => {
+    if (auth.userId) void refreshSnapshot();
+  });
 
   if (!channel) {
     channel = supabase
       .channel("coverage_requests_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: TABLE },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const row = rowToNet(payload.new as Row);
-            eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
-            refreshSnapshot();
-          } else if (payload.eventType === "UPDATE") {
-            const row = rowToNet(payload.new as Row);
-            const old = payload.old ? rowToNet(payload.old as Row) : null;
-            eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
-            refreshSnapshot();
-          } else if (payload.eventType === "DELETE") {
-            const id = (payload.old as Row | undefined)?.id;
-            if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
-            refreshSnapshot();
-          }
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const row = rowToNet(payload.new as Row);
+          eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
+          refreshSnapshot();
+        } else if (payload.eventType === "UPDATE") {
+          const row = rowToNet(payload.new as Row);
+          const old = payload.old ? rowToNet(payload.old as Row) : null;
+          eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
+          refreshSnapshot();
+        } else if (payload.eventType === "DELETE") {
+          const id = (payload.old as Row | undefined)?.id;
+          if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+          refreshSnapshot();
+        }
+      })
       .subscribe();
   }
 
@@ -319,8 +323,8 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   }
 
   // Re-fetch whenever auth changes so a sign-in/out picks up the new RLS scope.
-  const offAuth = onUserIdChange(() => {
-    refreshSnapshot();
+  const offAuth = onUserIdChange((id) => {
+    if (id) void refreshSnapshot();
   });
 
   return () => {
@@ -377,10 +381,7 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
   emitInvalidate(req.id);
 }
 
-export async function remoteUpdateRequest(
-  id: string,
-  patch: Partial<NetRequest>,
-): Promise<void> {
+export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>): Promise<void> {
   const dbPatch = netPatchToRow(patch);
   if (Object.keys(dbPatch).length === 0) return;
   const { error } = await supabase.from(TABLE).update(dbPatch).eq("id", id);
@@ -395,10 +396,7 @@ export async function remoteUpdateRequest(
  * Atomic claim — only succeeds if the row is still searching & unclaimed.
  * Returns true on success, false if another doctor won the race.
  */
-export async function remoteClaimRequest(
-  id: string,
-  doctorUserId: string,
-): Promise<boolean> {
+export async function remoteClaimRequest(id: string, doctorUserId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from(TABLE)
     .update({ status: "accepted", accepted_by: doctorUserId })

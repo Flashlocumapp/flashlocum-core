@@ -6,6 +6,7 @@ import {
   getCachedVerificationStatus,
   type VerificationStatus,
 } from "@/lib/profile-remote";
+import { ensureAuthReady } from "@/lib/auth-ready";
 
 // Module-level cache — keeps last-known status across tab switches so the
 // UI does NOT flash "Pending" while the backend re-fetches on remount.
@@ -88,9 +89,9 @@ export function useVerificationStatus(): VerificationStatus | null {
       if (cancelled) return;
       if (s !== cached) setCached(s);
 
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user || cancelled) return;
-      ensureVerificationChannel(u.user.id);
+      const auth = await ensureAuthReady();
+      if (!auth.userId || cancelled) return;
+      ensureVerificationChannel(auth.userId);
     })();
 
     return () => {

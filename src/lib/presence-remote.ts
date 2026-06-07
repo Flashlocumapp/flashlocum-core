@@ -7,6 +7,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { onUserIdChange, getCurrentUserIdSync } from "./coverage-remote";
+import { ensureAuthReady } from "@/lib/auth-ready";
 
 export type PresenceRow = {
   user_id: string;
@@ -14,6 +15,13 @@ export type PresenceRow = {
   top: number;
   left: number;
   last_seen: string;
+};
+
+type RealtimePayload = {
+  eventType?: string;
+  event?: string;
+  new?: unknown;
+  old?: unknown;
 };
 
 const TABLE = "doctor_presence";
@@ -55,6 +63,8 @@ function emit() {
 }
 
 async function initialFetch() {
+  const auth = await ensureAuthReady();
+  if (!auth.userId) return;
   const [presenceRes, approvedRes] = await Promise.all([
     supabase.from(TABLE).select("user_id, online, top, left, last_seen"),
     supabase.from("profiles").select("id").eq("verification_status", "approved"),
@@ -69,15 +79,15 @@ async function initialFetch() {
   }
   if (!approvedRes.error) {
     approvedIds.clear();
-    for (const p of approvedRes.data ?? []) approvedIds.add((p as any).id);
+    for (const p of approvedRes.data ?? []) approvedIds.add(p.id);
   }
   emit();
 }
 
-function applyPresencePayload(payload: any) {
+function applyPresencePayload(payload: RealtimePayload) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
-    const id = payload.old?.user_id;
+    const id = (payload.old as Partial<PresenceRow> | undefined)?.user_id;
     if (id) rawRows.delete(id);
   } else {
     const row = payload.new as PresenceRow | undefined;
@@ -86,10 +96,10 @@ function applyPresencePayload(payload: any) {
   emit();
 }
 
-function applyProfilePayload(payload: any) {
+function applyProfilePayload(payload: RealtimePayload) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
-    const id = payload.old?.id;
+    const id = (payload.old as { id?: string } | undefined)?.id;
     if (id) {
       approvedIds.delete(id);
       rawRows.delete(id);
@@ -107,9 +117,7 @@ function applyProfilePayload(payload: any) {
   emit();
 }
 
-export function subscribePresence(
-  onSnapshot: (rows: PresenceRow[]) => void,
-): () => void {
+export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): () => void {
   snapshotListeners.add(onSnapshot);
   activeSubscribers++;
   // Emit current cache synchronously so subscriber gets instant data.
@@ -119,26 +127,22 @@ export function subscribePresence(
   if (!channel) {
     channel = supabase
       .channel("doctor_presence_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: TABLE },
-        (payload) => applyPresencePayload(payload),
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) =>
+        applyPresencePayload(payload),
       )
       .subscribe();
   }
   if (!profilesChannel) {
     profilesChannel = supabase
       .channel("profiles_verification_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        (payload) => applyProfilePayload(payload),
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload) =>
+        applyProfilePayload(payload),
       )
       .subscribe();
   }
 
-  const offAuth = onUserIdChange(() => {
-    void initialFetch();
+  const offAuth = onUserIdChange((id) => {
+    if (id) void initialFetch();
   });
 
   return () => {
@@ -192,9 +196,7 @@ export async function upsertMyPresence(fields: {
   });
   emit();
 
-  const { error } = await supabase
-    .from(TABLE)
-    .upsert(row, { onConflict: "user_id" });
+  const { error } = await supabase.from(TABLE).upsert(row, { onConflict: "user_id" });
 
   if (error) console.warn("[presence-remote] upsert error:", error.message);
 }
