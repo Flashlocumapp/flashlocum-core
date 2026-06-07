@@ -209,20 +209,22 @@ let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
 let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function fetchAll(): Promise<NetRequest[]> {
+async function fetchAll(): Promise<NetRequest[] | null> {
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
     .order("created_at", { ascending: true });
   if (error) {
     console.warn("[coverage-remote] fetch error:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []).map((r) => rowToNet(r as Row));
 }
 
 async function refreshSnapshot() {
-  cachedSnapshot = await fetchAll();
+  const rows = await fetchAll();
+  if (!rows) return;
+  cachedSnapshot = rows;
   cachedSnapshotUserId = activeCacheUserId();
   writePersistedSnapshot(cachedSnapshot);
   snapshotListeners.forEach((fn) => fn(cachedSnapshot));
