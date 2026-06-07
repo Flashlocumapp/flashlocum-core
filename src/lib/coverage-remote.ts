@@ -9,6 +9,7 @@
 // in network.ts. Only the request lifecycle is backend-driven.
 
 import { supabase } from "@/integrations/supabase/client";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
 
@@ -161,8 +162,8 @@ export function getCurrentUserIdSync(): string | null {
 export async function primeUserId(): Promise<string | null> {
   if (userIdResolved) return cachedUserId;
   try {
-    const { data } = await supabase.auth.getUser();
-    cachedUserId = data.user?.id ?? null;
+    const auth = await ensureAuthReady();
+    cachedUserId = auth.userId;
   } catch {
     cachedUserId = null;
   }
@@ -179,8 +180,8 @@ export function onUserIdChange(fn: (id: string | null) => void): () => void {
 
 // Keep the cached id in sync with auth events (sign-in, sign-out, refresh).
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((_event, session) => {
-    cachedUserId = session?.user?.id ?? null;
+  subscribeAuthState(({ userId }) => {
+    cachedUserId = userId;
     userIdResolved = true;
     userListeners.forEach((fn) => fn(cachedUserId));
   });
@@ -275,9 +276,11 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     opts.onSnapshot(cachedSnapshot);
   }
 
-  // Always re-fetch on every new subscription so a freshly-logged-in user
-  // immediately sees their authorized rows (RLS scope changes by auth state).
-  refreshSnapshot();
+  // Fetch only after auth storage is hydrated. A cold-start null session would
+  // return an empty RLS scope and briefly wipe the cached operational state.
+  void ensureAuthReady().then((auth) => {
+    if (auth.userId) void refreshSnapshot();
+  });
 
   if (!channel) {
     channel = supabase
@@ -319,8 +322,8 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   }
 
   // Re-fetch whenever auth changes so a sign-in/out picks up the new RLS scope.
-  const offAuth = onUserIdChange(() => {
-    refreshSnapshot();
+  const offAuth = onUserIdChange((id) => {
+    if (id) void refreshSnapshot();
   });
 
   return () => {
