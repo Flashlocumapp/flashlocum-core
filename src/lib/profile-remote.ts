@@ -70,7 +70,6 @@ type PersistedShape = {
   cover: boolean;
   request: boolean;
   verification?: VerificationStatus | null;
-  profile?: ProfileRow | null;
 };
 
 function readPersisted(): PersistedShape | null {
@@ -99,7 +98,6 @@ function writePersisted(p: ProfileRow | null) {
       cover: !!p.onboarded_cover_at,
       request: !!p.onboarded_request_at,
       verification: p.verification_status ?? null,
-      profile: p,
     };
     persistedCache = payload;
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
@@ -114,7 +112,6 @@ let persistedCache = readPersisted();
 if (persistedCache) {
   cachedOnboarding.cover = persistedCache.cover;
   cachedOnboarding.request = persistedCache.request;
-  cachedProfile = persistedCache.profile ?? undefined;
 }
 
 export function getCachedOnboardingStatus(role: Role): boolean | null {
