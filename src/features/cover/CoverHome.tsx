@@ -60,7 +60,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
     <section className="relative h-full w-full overflow-hidden">
       <GoogleMapBackground
         active={active}
-        showSelf
+        showSelf={online && approved}
         selfMarkerKind="doctor"
         markers={[]}
       />
