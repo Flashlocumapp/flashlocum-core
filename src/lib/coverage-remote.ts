@@ -206,7 +206,9 @@ const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
 const initialPersistedSnapshot = readPersistedSnapshot();
 let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
-let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
+let cachedSnapshotUserId: string | null = initialPersistedSnapshot.length > 0
+  ? activeCacheUserId()
+  : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function fetchAll(): Promise<NetRequest[] | null> {
@@ -287,26 +289,22 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   if (!channel) {
     channel = supabase
       .channel("coverage_requests_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: TABLE },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const row = rowToNet(payload.new as Row);
-            eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
-            refreshSnapshot();
-          } else if (payload.eventType === "UPDATE") {
-            const row = rowToNet(payload.new as Row);
-            const old = payload.old ? rowToNet(payload.old as Row) : null;
-            eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
-            refreshSnapshot();
-          } else if (payload.eventType === "DELETE") {
-            const id = (payload.old as Row | undefined)?.id;
-            if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
-            refreshSnapshot();
-          }
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const row = rowToNet(payload.new as Row);
+          eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
+          refreshSnapshot();
+        } else if (payload.eventType === "UPDATE") {
+          const row = rowToNet(payload.new as Row);
+          const old = payload.old ? rowToNet(payload.old as Row) : null;
+          eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
+          refreshSnapshot();
+        } else if (payload.eventType === "DELETE") {
+          const id = (payload.old as Row | undefined)?.id;
+          if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+          refreshSnapshot();
+        }
+      })
       .subscribe();
   }
 
@@ -382,10 +380,7 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
   emitInvalidate(req.id);
 }
 
-export async function remoteUpdateRequest(
-  id: string,
-  patch: Partial<NetRequest>,
-): Promise<void> {
+export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>): Promise<void> {
   const dbPatch = netPatchToRow(patch);
   if (Object.keys(dbPatch).length === 0) return;
   const { error } = await supabase.from(TABLE).update(dbPatch).eq("id", id);
@@ -400,10 +395,7 @@ export async function remoteUpdateRequest(
  * Atomic claim — only succeeds if the row is still searching & unclaimed.
  * Returns true on success, false if another doctor won the race.
  */
-export async function remoteClaimRequest(
-  id: string,
-  doctorUserId: string,
-): Promise<boolean> {
+export async function remoteClaimRequest(id: string, doctorUserId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from(TABLE)
     .update({ status: "accepted", accepted_by: doctorUserId })
