@@ -17,11 +17,11 @@ export type PresenceRow = {
   last_seen: string;
 };
 
-type RealtimePayload<T> = {
+type RealtimePayload = {
   eventType?: string;
   event?: string;
-  new?: T;
-  old?: Partial<T>;
+  new?: unknown;
+  old?: unknown;
 };
 
 const TABLE = "doctor_presence";
@@ -84,10 +84,10 @@ async function initialFetch() {
   emit();
 }
 
-function applyPresencePayload(payload: RealtimePayload<PresenceRow>) {
+function applyPresencePayload(payload: RealtimePayload) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
-    const id = payload.old?.user_id;
+    const id = (payload.old as Partial<PresenceRow> | undefined)?.user_id;
     if (id) rawRows.delete(id);
   } else {
     const row = payload.new as PresenceRow | undefined;
@@ -97,11 +97,11 @@ function applyPresencePayload(payload: RealtimePayload<PresenceRow>) {
 }
 
 function applyProfilePayload(
-  payload: RealtimePayload<{ id: string; verification_status: string }>,
+  payload: RealtimePayload,
 ) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
-    const id = payload.old?.id;
+    const id = (payload.old as { id?: string } | undefined)?.id;
     if (id) {
       approvedIds.delete(id);
       rawRows.delete(id);
