@@ -100,7 +100,7 @@ export function ensureAuthReady(): Promise<AuthReadySnapshot> {
     .then(async ({ data }) => {
       const session = data.session ?? null;
       if (!session) {
-        if (snapshot.session) return snapshot;
+        if (snapshot.session && snapshot.verifiedAt) return snapshot;
         applySession(null, "HYDRATED", true, null);
         return snapshot;
       }
