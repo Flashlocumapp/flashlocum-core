@@ -9,6 +9,7 @@
 // in network.ts. Only the request lifecycle is backend-driven.
 
 import { supabase } from "@/integrations/supabase/client";
+import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
 
 type Row = {
@@ -41,6 +42,40 @@ type Row = {
 };
 
 const TABLE = "coverage_requests";
+const LS_KEY = "fl:coverage-cache:v1";
+
+type PersistedCoverage = { uid: string; rows: NetRequest[]; savedAt: number };
+
+function activeCacheUserId(): string | null {
+  return cachedUserId ?? getCachedProfileUserId();
+}
+
+function readPersistedSnapshot(): NetRequest[] {
+  if (typeof window === "undefined") return [];
+  const uid = activeCacheUserId();
+  if (!uid) return [];
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return [];
+    const payload = JSON.parse(raw) as PersistedCoverage;
+    if (!payload || payload.uid !== uid || !Array.isArray(payload.rows)) return [];
+    return payload.rows;
+  } catch {
+    return [];
+  }
+}
+
+function writePersistedSnapshot(rows: NetRequest[]) {
+  if (typeof window === "undefined") return;
+  const uid = activeCacheUserId();
+  if (!uid) return;
+  try {
+    const payload: PersistedCoverage = { uid, rows, savedAt: Date.now() };
+    window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore quota / privacy-mode errors */
+  }
+}
 
 const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   searching: "broadcasting",
