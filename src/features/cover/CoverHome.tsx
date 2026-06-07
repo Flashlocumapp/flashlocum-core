@@ -62,9 +62,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
         active={active}
         showSelf
         selfMarkerKind="doctor"
-        markers={
-          online && approved ? [{ top: 0.5, left: 0.5, key: "self" }] : []
-        }
+        markers={[]}
       />
 
       {/* top primary Online/Offline pill */}
