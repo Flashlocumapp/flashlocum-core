@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 export type AuthIdentity = { name: string; email: string };
 
@@ -33,15 +34,17 @@ function setCached(next: AuthIdentity) {
 }
 
 async function refresh() {
+  const auth = await ensureAuthReady();
+  if (!auth.user) return;
   const { data } = await supabase.auth.getUser();
-  const u = data.user;
+  const u = data.user ?? auth.user;
   if (!u) return;
   const meta = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
   setCached({ name: meta.full_name || meta.name || "", email: u.email ?? "" });
 }
 
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((event, session) => {
+  subscribeAuthState(({ event, session }) => {
     if (!session && event === "SIGNED_OUT") {
       cached = null;
       window.localStorage.removeItem(LS_KEY);
