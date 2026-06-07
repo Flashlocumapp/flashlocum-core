@@ -128,15 +128,15 @@ export function GoogleMapBackground({
   const acceptSample = (coords: GeolocationCoordinates) => {
     const next: Coords = { lat: coords.latitude, lng: coords.longitude };
     const acc = coords.accuracy ?? Number.POSITIVE_INFINITY;
-    // Reject samples worse than ~2km when we already have something better.
+    // Always accept the first fix so the blue dot appears immediately,
+    // even if the initial sample is a coarse IP-based location. Subsequent
+    // samples are filtered to prevent jumpy drift between cell towers.
     if (cachedUserCenter && cachedAccuracy != null) {
+      // Reject samples noticeably worse than what we already have.
       if (acc > 2000 && acc > cachedAccuracy * 1.5) return;
       // Reject a large jump unless the new fix is clearly more accurate.
       const jump = distanceMeters(cachedUserCenter, next);
       if (jump > 3000 && acc >= cachedAccuracy) return;
-    } else if (acc > 5000) {
-      // Even on first fix, ignore obviously coarse IP-based locations.
-      return;
     }
     cachedUserCenter = next;
     cachedAccuracy = acc;
