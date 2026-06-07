@@ -213,7 +213,6 @@ if (typeof window !== "undefined") {
 /** Fetch the current user's profile row, or null if it doesn't exist. */
 export async function fetchMyProfile(): Promise<ProfileRow | null> {
   const auth = await ensureAuthReady();
-  if (!auth.user) return null;
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user ?? auth.user;
   if (!user) return null;
@@ -275,7 +274,6 @@ export async function upsertMyProfile(
   fields: Partial<Omit<ProfileRow, "id">> & { role?: Role | string },
 ): Promise<void> {
   const auth = await ensureAuthReady();
-  if (!auth.user) throw new Error("Not authenticated");
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user ?? auth.user;
   if (!user) throw new Error("Not authenticated");
