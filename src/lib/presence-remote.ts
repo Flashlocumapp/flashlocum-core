@@ -7,6 +7,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { onUserIdChange, getCurrentUserIdSync } from "./coverage-remote";
+import { ensureAuthReady } from "@/lib/auth-ready";
 
 export type PresenceRow = {
   user_id: string;
@@ -55,6 +56,8 @@ function emit() {
 }
 
 async function initialFetch() {
+  const auth = await ensureAuthReady();
+  if (!auth.userId) return;
   const [presenceRes, approvedRes] = await Promise.all([
     supabase.from(TABLE).select("user_id, online, top, left, last_seen"),
     supabase.from("profiles").select("id").eq("verification_status", "approved"),
@@ -137,8 +140,8 @@ export function subscribePresence(
       .subscribe();
   }
 
-  const offAuth = onUserIdChange(() => {
-    void initialFetch();
+  const offAuth = onUserIdChange((id) => {
+    if (id) void initialFetch();
   });
 
   return () => {
