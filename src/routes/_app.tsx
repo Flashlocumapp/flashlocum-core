@@ -22,6 +22,7 @@ import { HomeRouter } from "@/features/app/HomeRouter";
 import { CoverageScreen } from "@/features/app/CoverageScreen";
 import { EarningsScreen } from "@/features/app/EarningsScreen";
 import { AccountScreen } from "@/features/app/AccountScreen";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/_app")({
   component: AppShell,
@@ -41,13 +42,13 @@ function AppShell() {
   });
 
   const check = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
+    const auth = await ensureAuthReady();
+    if (!auth.session) {
       clearRole();
       navigate({ to: "/role" });
       return;
     }
-    if (!data.session.user.email_confirmed_at) {
+    if (!auth.user?.email_confirmed_at) {
       const role = getRole() ?? "request";
       navigate({ to: "/auth/$role", params: { role } });
       return;
@@ -56,15 +57,15 @@ function AppShell() {
     if (!role) {
       const cached = getCachedProfile();
       const cachedRole =
-        cached?.id === data.session.user.id &&
+        cached?.id === auth.user.id &&
         (cached.role === "cover" || cached.role === "request")
           ? cached.role
           : null;
       const cachedOnboardedRole =
         cachedRole ??
-        (cached?.id === data.session.user.id && getCachedOnboardingStatus("cover") === true
+        (cached?.id === auth.user.id && getCachedOnboardingStatus("cover") === true
           ? "cover"
-          : cached?.id === data.session.user.id && getCachedOnboardingStatus("request") === true
+          : cached?.id === auth.user.id && getCachedOnboardingStatus("request") === true
             ? "request"
             : null);
       if (cachedOnboardedRole) {
@@ -119,7 +120,7 @@ function AppShell() {
       if (cancelled) return;
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+    const offAuth = subscribeAuthState(({ event, session }) => {
       // Cold starts can briefly emit a no-session initialization/refresh state
       // before storage restoration settles. Only an explicit sign-out should
       // clear the operational role and bounce the user out of the app shell.
@@ -137,7 +138,7 @@ function AppShell() {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
-      sub.subscription.unsubscribe();
+      offAuth();
       window.clearInterval(heartbeat);
       document.removeEventListener("visibilitychange", onVisible);
     };
