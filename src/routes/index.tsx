@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
+import { ensureAuthReady } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/")({
   component: Entry,
@@ -15,9 +16,10 @@ function Entry() {
       {!done ? (
         <SplashScreen
           key="splash"
-          onDone={() => {
+          onDone={async () => {
             setDone(true);
-            navigate({ to: "/role" });
+            const auth = await ensureAuthReady();
+            navigate({ to: auth.session?.user.email_confirmed_at ? "/home" : "/role" });
           }}
         />
       ) : null}
