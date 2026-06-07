@@ -176,7 +176,7 @@ export function GoogleMapBackground({
           gestureHandling: "greedy",
           clickableIcons: false,
           styles: LIGHT_STYLE,
-          backgroundColor: "#f1f3f4",
+          backgroundColor: "#d1d5db",
         });
       })
       .catch(() => setFailed(true));
