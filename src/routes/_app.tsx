@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
