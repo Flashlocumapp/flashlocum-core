@@ -9,6 +9,24 @@ import { hasMapsKey, loadMapsApi } from "@/lib/google-maps";
 type Coords = { lat: number; lng: number };
 export type PlaceMapMarker = Coords & { key: string; title?: string };
 
+// Lagos is FlashLocum's only operating market at launch. The map is hard-
+// restricted to these bounds so the user can't pan/zoom out of Lagos State.
+const LAGOS_BOUNDS_LITERAL: google.maps.LatLngBoundsLiteral = {
+  south: 6.35,
+  west: 2.70,
+  north: 6.80,
+  east: 4.40,
+};
+
+function inLagos(c: Coords): boolean {
+  return (
+    c.lat >= LAGOS_BOUNDS_LITERAL.south &&
+    c.lat <= LAGOS_BOUNDS_LITERAL.north &&
+    c.lng >= LAGOS_BOUNDS_LITERAL.west &&
+    c.lng <= LAGOS_BOUNDS_LITERAL.east
+  );
+}
+
 // Lagos as a sensible fallback center for FlashLocum's launch market.
 const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };
 
