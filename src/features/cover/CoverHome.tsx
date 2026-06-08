@@ -33,6 +33,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
   const isActive = !!focus?.active;
 
   // Shared doctor rating — same source used in every requester view.
+  const myRating = useRating(doctorEntityId(getSessionId()));
   const myReliability = useReliability(doctorEntityId(getSessionId()));
   const acceptance = myReliability.score;
 
