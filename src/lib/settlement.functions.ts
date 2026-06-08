@@ -41,12 +41,14 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: doctor, error: docErr } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, bank_name, bank_account, monnify_sub_account_code")
+      .select("id, full_name, bank_name, bank_account, bank_account_name, monnify_sub_account_code")
       .eq("id", reqRow.accepted_by)
       .maybeSingle();
     if (docErr || !doctor) throw new Error("Doctor profile unavailable");
-    if (!doctor.bank_name || !doctor.bank_account) {
-      throw new Error("This doctor has not completed payout setup yet");
+    if (!doctor.bank_name || !doctor.bank_account || !doctor.bank_account_name) {
+      throw new Error(
+        "The assigned doctor hasn't finished setting up a verified payout account yet. Please ask them to complete it before paying.",
+      );
     }
 
     // 3. Requester identity (for the Monnify checkout customer fields).
@@ -68,13 +70,29 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     if (!subAccountCode) {
       const { createSubAccount } = await import("./monnify/sub-accounts.server");
       const { DOCTOR_SPLIT_PERCENTAGE } = await import("./monnify/checkout.server");
-      const created = await createSubAccount({
-        bankName: doctor.bank_name,
-        bankAccount: doctor.bank_account,
-        email: doctorEmail,
-        splitPercentageToDoctor: DOCTOR_SPLIT_PERCENTAGE,
-      });
-      subAccountCode = created.subAccountCode;
+      try {
+        const created = await createSubAccount({
+          bankName: doctor.bank_name,
+          bankAccount: doctor.bank_account,
+          email: doctorEmail,
+          splitPercentageToDoctor: DOCTOR_SPLIT_PERCENTAGE,
+        });
+        subAccountCode = created.subAccountCode;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn("[settlement] createSubAccount failed:", msg);
+        if (/invalid account details/i.test(msg)) {
+          throw new Error(
+            "The doctor's bank account couldn't be verified by our payment provider. Please ask them to re-enter their payout details and try again.",
+          );
+        }
+        if (/could not resolve/i.test(msg)) {
+          throw new Error(
+            "The doctor's bank name isn't recognised by our payment provider. Please ask them to re-select their bank from the list.",
+          );
+        }
+        throw new Error("Couldn't set up the payout split right now. Please try again in a moment.");
+      }
       await supabaseAdmin
         .from("profiles")
         .update({ monnify_sub_account_code: subAccountCode })
