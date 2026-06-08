@@ -281,7 +281,9 @@ export function GoogleMapBackground({
   // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
     if (!mapRef.current) return;
-    if (!userCenter || !showSelf) {
+    // Don't drop the "you are here" pin outside Lagos — FlashLocum only
+    // operates inside Lagos State, so the pin would be misleading.
+    if (!userCenter || !showSelf || !inLagos(userCenter)) {
       selfMarker.current?.setMap(null);
       selfMarker.current = null;
       return;
