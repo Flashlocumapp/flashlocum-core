@@ -690,6 +690,8 @@ function RequestCard({
             <span className="truncate">{identity.mdcn}</span>
             <span>·</span>
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
+            <span>·</span>
+            <ReliabilityPill entityId={item.doctorRatingId} inline />
           </div>
           <div
             className="mt-0.5 truncate text-[12.5px]"
