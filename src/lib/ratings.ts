@@ -55,12 +55,13 @@ if (typeof window !== "undefined") {
 export type RatingView = {
   score: number; // displayed value, e.g. 4.8 or 5.0
   verified: boolean; // retained for compatibility; never rendered as text
+  provisional: boolean; // true when fewer than 10 ratings exist
 };
 
 export function getRating(entityId: string): RatingView {
   const b = load().entities[entityId];
-  if (!b || b.count < VERIFY_THRESHOLD) return { score: 5.0, verified: true };
-  return { score: round1(b.sum / b.count), verified: false };
+  if (!b || b.count < VERIFY_THRESHOLD) return { score: 5.0, verified: true, provisional: true };
+  return { score: round1(b.sum / b.count), verified: false, provisional: false };
 }
 
 export function recordRating(entityId: string, value: number) {
