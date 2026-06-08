@@ -521,6 +521,8 @@ function RequesterDetailSheet({
                 <span>{identity.mdcn}</span>
                 <span>·</span>
                 <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
+                <span>·</span>
+                <ReliabilityPill entityId={item.doctorRatingId} inline />
               </div>
             </div>
           </div>
