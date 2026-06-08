@@ -87,7 +87,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
           <CoverageTile coverage={approved ? focus : null} active={isActive && approved} />
           <div className="grid grid-cols-2 gap-2.5">
             <ScoreTile score={myRating.score} />
-            <AcceptanceTile rate={acceptance} />
+            <ReliabilityTile display={myReliability.display} />
           </div>
         </div>
       </section>
