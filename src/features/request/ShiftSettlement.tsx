@@ -238,17 +238,41 @@ export function ShiftSettlement({
     setPayError(null);
     setPayState("starting");
     try {
-      const { checkoutUrl } = await beginCheckout({
+      const params = await beginCheckout({
         data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
       });
-      window.open(checkoutUrl, "_blank", "noopener");
+      await loadMonnifySdk();
+      const MonnifySDK = (window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK;
+      if (!MonnifySDK) throw new Error("Payment widget failed to load. Please try again.");
       setPayState("waiting");
+      MonnifySDK.initialize({
+        amount: params.amount,
+        currency: params.currency,
+        reference: params.paymentReference,
+        customerFullName: params.customerName,
+        customerEmail: params.customerEmail,
+        apiKey: params.apiKey,
+        contractCode: params.contractCode,
+        paymentDescription: params.paymentDescription,
+        isTestMode: true,
+        incomeSplitConfig: params.incomeSplitConfig,
+        onLoadStart: () => {},
+        onLoadComplete: () => {},
+        onComplete: () => {
+          // Webhook will flip payment_status → paid; the poll picks it up.
+          autoConfirmAt.current = simNow() + 500;
+        },
+        onClose: () => {
+          setPayState("idle");
+        },
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
       setPayState("error");
     }
   };
+
 
   // Poll the row for paid status; flip to confirmed when webhook lands.
   useEffect(() => {
