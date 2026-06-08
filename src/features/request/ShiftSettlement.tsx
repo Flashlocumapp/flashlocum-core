@@ -556,26 +556,29 @@ function SettlementPane({
 
 
 
-        {/* Account block — operational center of gravity */}
-        <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
-          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Transfer To
+        {/* Account block — only shown for legacy demo flow (no Monnify). */}
+        {!onPayWithMonnify && (
+          <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
+            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Transfer To
+            </div>
+            <div className="mt-2 text-[15px] font-medium">{ACCOUNT.bank}</div>
+            <div className="mt-1 text-[30px] font-semibold leading-none tracking-[0.06em] tabular-nums">
+              {ACCOUNT.number}
+            </div>
+            <button
+              onClick={onCopy}
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-[12.5px] font-medium text-foreground/80 active:opacity-80"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+              Copy account number
+            </button>
           </div>
-          <div className="mt-2 text-[15px] font-medium">{ACCOUNT.bank}</div>
-          <div className="mt-1 text-[30px] font-semibold leading-none tracking-[0.06em] tabular-nums">
-            {ACCOUNT.number}
-          </div>
-          <button
-            onClick={onCopy}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-[12.5px] font-medium text-foreground/80 active:opacity-80"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
-              <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            </svg>
-            Copy account number
-          </button>
-        </div>
+        )}
+
 
         {/* Countdown / grace */}
         <div className="mt-5 flex items-center justify-between rounded-xl px-1 py-1">
