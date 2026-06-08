@@ -353,6 +353,7 @@ export function ShiftSettlement({
             onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
             payState={payState}
             payError={payError}
+            account={account}
           />
         )}
         {phase === "overtime" && (
@@ -369,6 +370,7 @@ export function ShiftSettlement({
             onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
             payState={payState}
             payError={payError}
+            account={account}
           />
         )}
         {phase === "confirmed" && (
