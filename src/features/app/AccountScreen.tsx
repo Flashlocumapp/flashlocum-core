@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { clearRole, getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
+import { getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
 import {
   getCachedOnboardingStatus,
   hasCompletedOnboarding,
@@ -188,7 +188,6 @@ export function AccountScreen() {
                 await queryClient.cancelQueries();
                 unregisterDoctor();
                 queryClient.clear();
-                clearRole();
                 await supabase.auth.signOut();
                 navigate({ to: "/role", replace: true });
               }}
