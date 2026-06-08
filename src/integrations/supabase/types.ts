@@ -157,6 +157,7 @@ export type Database = {
           location: string | null
           mdcn: string | null
           monnify_sub_account_code: string | null
+          nysc_name: string | null
           onboarded_at: string | null
           onboarded_cover_at: string | null
           onboarded_request_at: string | null
@@ -181,6 +182,7 @@ export type Database = {
           location?: string | null
           mdcn?: string | null
           monnify_sub_account_code?: string | null
+          nysc_name?: string | null
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
@@ -205,6 +207,7 @@ export type Database = {
           location?: string | null
           mdcn?: string | null
           monnify_sub_account_code?: string | null
+          nysc_name?: string | null
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
