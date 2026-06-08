@@ -16,6 +16,7 @@ export type ProfileRow = {
   years_experience: string | null;
   bank_name: string | null;
   bank_account: string | null;
+  bank_account_name: string | null;
   selfie_url: string | null;
   onboarded_at: string | null;
   onboarded_cover_at: string | null;
@@ -113,6 +114,7 @@ function writePersisted(p: ProfileRow | null) {
         years_experience: null,
         bank_name: null,
         bank_account: null,
+        bank_account_name: null,
         selfie_url: null,
         onboarded_at: p.onboarded_at,
         onboarded_cover_at: p.onboarded_cover_at,

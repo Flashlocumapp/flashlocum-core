@@ -14,6 +14,7 @@ import { useAuthIdentity } from "@/lib/identity";
 import { supabase } from "@/integrations/supabase/client";
 import { pushToast } from "@/lib/notifications";
 import { unregisterDoctor } from "@/lib/network";
+import { BankPayoutFields } from "@/components/BankPayoutFields";
 
 function verificationLabel(s: string): string {
   if (s === "approved") return "Verified";
@@ -162,7 +163,7 @@ export function AccountScreen() {
               <DetailRow label="Account Number" value={profile?.bank_account || "—"} />
               <DetailRow
                 label="Account Name"
-                value={profile?.bank_name ? identity.name : "—"}
+                value={profile?.bank_account_name || "—"}
                 last
               />
             </ListGroup>
@@ -291,7 +292,9 @@ function ProfileSheet({
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [gender, setGender] = useState(profile?.gender ?? "");
   const [bankName, setBankName] = useState(profile?.bank_name ?? "");
+  const [bankCode, setBankCode] = useState<string | undefined>(undefined);
   const [bankAccount, setBankAccount] = useState(profile?.bank_account ?? "");
+  const [bankAccountName, setBankAccountName] = useState(profile?.bank_account_name ?? "");
   const [saving, setSaving] = useState(false);
   const verification = useVerificationStatus();
 
@@ -304,6 +307,7 @@ function ProfileSheet({
             phone: phone || null,
             bank_name: bankName || null,
             bank_account: bankAccount || null,
+            bank_account_name: bankAccountName || null,
           }
         : {
             phone: phone || null,
@@ -364,17 +368,17 @@ function ProfileSheet({
                 type="tel"
               />
               <ReadField label="MDCN Number" value={profile?.mdcn || "—"} />
-              <EditField
-                label="Bank Name"
-                value={bankName}
-                onChange={setBankName}
-                placeholder="GTBank"
-              />
-              <EditField
-                label="Account Number"
-                value={bankAccount}
-                onChange={setBankAccount}
-                placeholder="0123456789"
+              <BankPayoutFields
+                bankName={bankName}
+                bankCode={bankCode}
+                bankAccount={bankAccount}
+                bankAccountName={bankAccountName}
+                onChange={(patch) => {
+                  if (patch.bankName !== undefined) setBankName(patch.bankName);
+                  if (patch.bankCode !== undefined) setBankCode(patch.bankCode);
+                  if (patch.bankAccount !== undefined) setBankAccount(patch.bankAccount);
+                  if (patch.bankAccountName !== undefined) setBankAccountName(patch.bankAccountName);
+                }}
               />
               {verification && (
                 <ReadField

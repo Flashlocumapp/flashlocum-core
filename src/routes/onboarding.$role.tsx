@@ -9,6 +9,7 @@ import {
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { markOnboardedRemote } from "@/lib/profile-remote";
+import { BankPayoutFields } from "@/components/BankPayoutFields";
 
 type OnboardingSearch = {
   from?: "auth" | "switch";
@@ -59,6 +60,7 @@ function OnboardingScreen() {
           selfie_url: doctor.selfie ?? null,
           bank_name: doctor.bankName ?? null,
           bank_account: doctor.bankAccount ?? null,
+          bank_account_name: doctor.bankAccountName ?? null,
         }
       : {
           phone: requester.phone ?? null,
@@ -74,7 +76,8 @@ function OnboardingScreen() {
     !!doctor.mdcn?.trim() &&
     !!doctor.license?.trim() &&
     !!doctor.bankName?.trim() &&
-    !!doctor.bankAccount?.trim();
+    !!doctor.bankAccount?.trim() &&
+    !!doctor.bankAccountName?.trim();
 
   const canContinue = isDoctor ? (step === 1 ? step1Valid : step2Valid) : step1Valid;
 
@@ -227,21 +230,14 @@ function OnboardingScreen() {
                 }}
               />
 
-              <Field
-                label="Bank name"
-                type="text"
-                placeholder="e.g. GTBank"
-                value={doctor.bankName ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
+              <BankPayoutFields
+                bankName={doctor.bankName}
+                bankCode={doctor.bankCode}
+                bankAccount={doctor.bankAccount}
+                bankAccountName={doctor.bankAccountName}
+                onChange={(patch) => setDoctor((p) => ({ ...p, ...patch }))}
               />
-              <Field
-                label="Account number"
-                type="text"
-                inputMode="numeric"
-                placeholder="0123456789"
-                value={doctor.bankAccount ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v.replace(/\D/g, "") }))}
-              />
+
             </>
           )}
         </div>
