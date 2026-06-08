@@ -319,6 +319,20 @@ export function ShiftSettlement({
     }
   };
 
+  // Auto-open Monnify transfer checkout the moment we land in settlement.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase !== "settlement") return;
+    if (autoOpenedRef.current) return;
+    if (payState !== "idle") return;
+    autoOpenedRef.current = true;
+    void startMonnifyCheckout();
+  }, [open, requestId, phase, payState]);
+  useEffect(() => {
+    if (!open) autoOpenedRef.current = false;
+  }, [open]);
+
 
   // Poll the row for paid status; flip to confirmed when webhook lands.
   useEffect(() => {
