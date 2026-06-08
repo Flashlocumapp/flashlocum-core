@@ -16,6 +16,7 @@ export type ProfileRow = {
   years_experience: string | null;
   bank_name: string | null;
   bank_account: string | null;
+  bank_account_name: string | null;
   selfie_url: string | null;
   onboarded_at: string | null;
   onboarded_cover_at: string | null;
