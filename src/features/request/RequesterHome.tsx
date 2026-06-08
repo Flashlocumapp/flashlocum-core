@@ -8,6 +8,7 @@ import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { pushToast } from "@/lib/notifications";
 import {
   onlineDoctors,
@@ -1312,6 +1313,8 @@ function DispatchOverlay({
                     <span>{acceptedMdcn}</span>
                     <span>·</span>
                     <RatingPill entityId={acceptedDoctorRatingId} role="doctor" inline />
+                    <span>·</span>
+                    <ReliabilityPill entityId={acceptedDoctorRatingId} inline />
                   </div>
                   <div className="mt-0.5 truncate text-[12.5px] text-foreground/70 tabular-nums">
                     {requestId && net.requests[requestId]

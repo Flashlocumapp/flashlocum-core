@@ -8,6 +8,7 @@ import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDeta
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import {
   cancelUpcoming,
   doctorEntityId,
@@ -520,6 +521,8 @@ function RequesterDetailSheet({
                 <span>{identity.mdcn}</span>
                 <span>·</span>
                 <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
+                <span>·</span>
+                <ReliabilityPill entityId={item.doctorRatingId} inline />
               </div>
             </div>
           </div>
@@ -687,6 +690,8 @@ function RequestCard({
             <span className="truncate">{identity.mdcn}</span>
             <span>·</span>
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
+            <span>·</span>
+            <ReliabilityPill entityId={item.doctorRatingId} inline />
           </div>
           <div
             className="mt-0.5 truncate text-[12.5px]"
@@ -1043,6 +1048,8 @@ function CoverCard({
             <span className="truncate">{item.area}</span>
             <span>·</span>
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+            <span>·</span>
+            <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
           </div>
         </div>
         {isActive && (
@@ -1185,7 +1192,10 @@ function DoctorCoverageDetail({
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="text-[20px] font-semibold tracking-tight">{item.hospital}</div>
-            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+            <div className="inline-flex items-center gap-2">
+              <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+              <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+            </div>
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 

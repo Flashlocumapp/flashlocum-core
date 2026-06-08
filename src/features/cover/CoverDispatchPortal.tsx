@@ -2,6 +2,7 @@ import { AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
@@ -110,7 +111,10 @@ function IncomingBody({ item }: { item: Coverage }) {
             New request
           </span>
         </div>
-        <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+        <div className="inline-flex items-center gap-2">
+          <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+          <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+        </div>
       </div>
 
       <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">{item.hospital}</div>
@@ -181,7 +185,10 @@ function AcceptedBody({ item }: { item: Coverage }) {
         <div className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: "var(--color-presence)" }}>
           Coverage confirmed
         </div>
-        <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+        <div className="inline-flex items-center gap-2">
+          <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+          <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+        </div>
       </div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight">{item.hospital}</div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>

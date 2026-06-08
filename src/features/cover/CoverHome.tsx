@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { fmtOpMeta } from "@/lib/format";
 import {
   doctorEntityId,
@@ -11,6 +12,7 @@ import {
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
 import { useRating } from "@/lib/ratings";
+import { useReliability } from "@/lib/reliability";
 import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
 
@@ -32,7 +34,8 @@ export function CoverHome({ active = true }: { active?: boolean }) {
 
   // Shared doctor rating — same source used in every requester view.
   const myRating = useRating(doctorEntityId(getSessionId()));
-  const acceptance = 96;
+  const myReliability = useReliability(doctorEntityId(getSessionId()));
+  const acceptance = myReliability.score;
 
   // Hard-revoke online state if verification is lost (suspension, rejection).
   useEffect(() => {
@@ -241,7 +244,10 @@ function CoverageTile({
             Live
           </span>
         ) : (
-          <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
+          <span className="inline-flex items-center gap-2">
+            <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
+            <ReliabilityPill entityId={hospitalEntityId(coverage.hospital)} inline />
+          </span>
         )}
       </div>
 
