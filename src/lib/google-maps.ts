@@ -70,8 +70,6 @@ export const LAGOS_BOUNDS = {
   sw: { lat: 6.35, lng: 2.70 },
   ne: { lat: 6.80, lng: 4.40 },
 } as const;
-const BIAS_CENTER = { lat: 6.5244, lng: 3.3792 };
-const SEARCH_RADIUS_M = 40_000;
 
 export function isInLagos(lat?: number | null, lng?: number | null): boolean {
   if (lat == null || lng == null) return false;
