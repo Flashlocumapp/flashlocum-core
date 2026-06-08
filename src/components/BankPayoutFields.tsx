@@ -71,11 +71,16 @@ export function BankPayoutFields({
     let cancelled = false;
     (async () => {
       try {
-        const { accountName } = await resolveName({
+        const result = await resolveName({
           data: { bankCode: code, accountNumber: acct },
         });
         if (cancelled) return;
-        onChange({ bankAccountName: accountName });
+        if (result.ok) {
+          onChange({ bankAccountName: result.accountName });
+        } else {
+          setError(result.error);
+          onChange({ bankAccountName: "" });
+        }
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Could not verify account");
