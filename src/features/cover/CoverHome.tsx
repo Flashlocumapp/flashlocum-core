@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { fmtOpMeta } from "@/lib/format";
 import {
   doctorEntityId,
