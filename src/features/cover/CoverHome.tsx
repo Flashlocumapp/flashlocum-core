@@ -35,8 +35,6 @@ export function CoverHome({ active = true }: { active?: boolean }) {
   // Shared doctor rating — same source used in every requester view.
   const myRating = useRating(doctorEntityId(getSessionId()));
   const myReliability = useReliability(doctorEntityId(getSessionId()));
-  void useRating; void useReliability;
-  const acceptance = myReliability.score;
 
   // Hard-revoke online state if verification is lost (suspension, rejection).
   useEffect(() => {
