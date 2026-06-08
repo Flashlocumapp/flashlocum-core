@@ -1192,7 +1192,10 @@ function DoctorCoverageDetail({
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="text-[20px] font-semibold tracking-tight">{item.hospital}</div>
-            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+            <div className="inline-flex items-center gap-2">
+              <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+              <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+            </div>
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
