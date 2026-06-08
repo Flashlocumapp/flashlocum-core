@@ -966,7 +966,7 @@ function CustomTransferPane({
           </>
         ) : null}
 
-        <div className="mt-auto pb-8">
+        <div className="mt-auto space-y-3 pb-8">
           <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
             {paymentTriggered ? (
               <>
@@ -980,8 +980,18 @@ function CustomTransferPane({
               </>
             ) : null}
           </div>
+          {onSimulate && account && !paymentTriggered && (
+            <button
+              onClick={onSimulate}
+              disabled={simulating}
+              className="h-11 w-full rounded-full border border-dashed border-foreground/30 text-[12.5px] font-medium text-muted-foreground active:opacity-80 disabled:opacity-50"
+            >
+              {simulating ? "Simulating…" : "Simulate payment (sandbox)"}
+            </button>
+          )}
         </div>
       </div>
+
     </motion.section>
   );
 }
