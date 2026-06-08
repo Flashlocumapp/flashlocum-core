@@ -909,6 +909,20 @@ function CustomTransferPane({
     }
   };
 
+  // 15-minute price-hold countdown. Anchored to when the account first
+  // appears so the timer stays in sync with the locked transfer amount.
+  const PRICE_HOLD_SEC = 15 * 60;
+  const tick = useSimClock(1000);
+  const startedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (account && startedAtRef.current == null) startedAtRef.current = simNow();
+    if (!account) startedAtRef.current = null;
+  }, [account]);
+  const remaining = startedAtRef.current
+    ? Math.max(0, PRICE_HOLD_SEC - Math.floor((tick - startedAtRef.current) / 1000))
+    : PRICE_HOLD_SEC;
+  const expired = startedAtRef.current != null && remaining === 0;
+
   return (
     <motion.section
       initial={{ opacity: 0 }}
