@@ -1048,6 +1048,8 @@ function CoverCard({
             <span className="truncate">{item.area}</span>
             <span>·</span>
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+            <span>·</span>
+            <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
           </div>
         </div>
         {isActive && (
