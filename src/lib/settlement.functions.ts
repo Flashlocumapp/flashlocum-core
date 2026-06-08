@@ -28,14 +28,8 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     if (reqRow.payment_status === "paid") {
       throw new Error("This settlement has already been paid");
     }
-    // Reuse an outstanding checkout link instead of creating a new one.
-    if (reqRow.payment_url && reqRow.payment_reference && reqRow.payment_status === "pending") {
-      return {
-        checkoutUrl: reqRow.payment_url,
-        paymentReference: reqRow.payment_reference,
-        reused: true as const,
-      };
-    }
+
+
 
     // 2. Load the doctor's profile (admin client; we already authorised via RLS above).
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
