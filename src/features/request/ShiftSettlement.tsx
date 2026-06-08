@@ -244,9 +244,11 @@ export function ShiftSettlement({
 
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
+  const simulatePay = useServerFn(simulateSettlementPayment);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
@@ -264,6 +266,20 @@ export function ShiftSettlement({
       setPayState("error");
     }
   };
+
+  const handleSimulate = async () => {
+    if (!requestId || simulating) return;
+    setSimulating(true);
+    try {
+      await simulatePay({ data: { requestId } });
+      autoConfirmAt.current = simNow() + 500;
+    } catch (e) {
+      setPayError(e instanceof Error ? e.message : "Simulation failed");
+    } finally {
+      setSimulating(false);
+    }
+  };
+
 
   // Auto-start the moment we land in settlement.
   const autoOpenedRef = useRef(false);
