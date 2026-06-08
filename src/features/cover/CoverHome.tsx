@@ -12,6 +12,7 @@ import {
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
 import { useRating } from "@/lib/ratings";
+import { useReliability } from "@/lib/reliability";
 import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
 
