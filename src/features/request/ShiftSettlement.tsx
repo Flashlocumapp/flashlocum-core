@@ -259,9 +259,13 @@ export function ShiftSettlement({
       shift.days,
     ).amount;
     setPhase("settlement");
-    if (Math.random() < 0.35) {
+    if (requestId) {
+      // Auto-open Monnify checkout immediately after End Shift.
+      setTimeout(() => { void startMonnifyCheckout(); }, 50);
+    } else if (Math.random() < 0.35) {
       autoConfirmAt.current = simNow() + (8 + Math.random() * 6) * 1000;
     }
+
   };
 
   const handleMadePayment = () => {
