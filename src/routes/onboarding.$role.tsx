@@ -81,7 +81,8 @@ function OnboardingScreen() {
     !!doctor.mdcn?.trim() &&
     !!doctor.license?.trim() &&
     !!doctor.bankName?.trim() &&
-    !!doctor.bankAccount?.trim();
+    !!doctor.bankAccount?.trim() &&
+    !!doctor.bankAccountName?.trim();
 
   const canContinue = isDoctor ? (step === 1 ? step1Valid : step2Valid) : step1Valid;
 
