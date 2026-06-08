@@ -105,10 +105,10 @@ export async function fetchHospitalSuggestions(
   if (!q) return [];
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
-  const locationBias: google.maps.CircleLiteral = {
-    center: origin ?? BIAS_CENTER,
-    radius: origin ? 50_000 : SEARCH_RADIUS_M,
-  };
+  void origin;
+  void BIAS_CENTER;
+  void SEARCH_RADIUS_M;
+
 
   const byId = new Map<string, PlaceSuggestion>();
 
