@@ -228,7 +228,51 @@ export function ShiftSettlement({
     autoConfirmAt.current = simNow() + 2500;
   };
 
+  // ---------------- Monnify split-payment ----------------
+  const beginCheckout = useServerFn(beginSettlementCheckout);
+  const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
+  const [payError, setPayError] = useState<string | null>(null);
 
+  const startMonnifyCheckout = async () => {
+    if (!requestId) return;
+    setPayError(null);
+    setPayState("starting");
+    try {
+      const { checkoutUrl } = await beginCheckout({
+        data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
+      });
+      window.open(checkoutUrl, "_blank", "noopener");
+      setPayState("waiting");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not start checkout";
+      setPayError(msg);
+      setPayState("error");
+    }
+  };
+
+  // Poll the row for paid status; flip to confirmed when webhook lands.
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase === "confirmed") return;
+    let cancelled = false;
+    const tickFn = async () => {
+      const { data } = await supabase
+        .from("coverage_requests")
+        .select("payment_status")
+        .eq("id", requestId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data?.payment_status === "paid" && autoConfirmAt.current == null) {
+        autoConfirmAt.current = simNow() + 500;
+      }
+    };
+    void tickFn();
+    const iv = setInterval(tickFn, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [open, requestId, phase, totalAmount]);
 
   const handleCopy = async () => {
     try {
