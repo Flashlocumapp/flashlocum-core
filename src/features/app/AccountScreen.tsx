@@ -368,17 +368,17 @@ function ProfileSheet({
                 type="tel"
               />
               <ReadField label="MDCN Number" value={profile?.mdcn || "—"} />
-              <EditField
-                label="Bank Name"
-                value={bankName}
-                onChange={setBankName}
-                placeholder="GTBank"
-              />
-              <EditField
-                label="Account Number"
-                value={bankAccount}
-                onChange={setBankAccount}
-                placeholder="0123456789"
+              <BankPayoutFields
+                bankName={bankName}
+                bankCode={bankCode}
+                bankAccount={bankAccount}
+                bankAccountName={bankAccountName}
+                onChange={(patch) => {
+                  if (patch.bankName !== undefined) setBankName(patch.bankName);
+                  if (patch.bankCode !== undefined) setBankCode(patch.bankCode);
+                  if (patch.bankAccount !== undefined) setBankAccount(patch.bankAccount);
+                  if (patch.bankAccountName !== undefined) setBankAccountName(patch.bankAccountName);
+                }}
               />
               {verification && (
                 <ReadField
