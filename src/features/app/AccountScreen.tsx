@@ -14,6 +14,7 @@ import { useAuthIdentity } from "@/lib/identity";
 import { supabase } from "@/integrations/supabase/client";
 import { pushToast } from "@/lib/notifications";
 import { unregisterDoctor } from "@/lib/network";
+import { BankPayoutFields } from "@/components/BankPayoutFields";
 
 function verificationLabel(s: string): string {
   if (s === "approved") return "Verified";
