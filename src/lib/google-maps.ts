@@ -151,39 +151,14 @@ export async function fetchHospitalSuggestions(
     // Autocomplete below still gives the user selectable live Google Places results.
   }
 
-  try {
-    const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-      input: q,
-      sessionToken: sessionToken!,
-      includedRegionCodes: ["ng"],
-      region: "NG",
-      language: "en",
-      locationRestriction: new g.maps.LatLngBounds(
-        { lat: LAGOS_BOUNDS.sw.lat, lng: LAGOS_BOUNDS.sw.lng },
-        { lat: LAGOS_BOUNDS.ne.lat, lng: LAGOS_BOUNDS.ne.lng },
-      ),
-    });
-
-    suggestions
-      .map((s) => s.placePrediction)
-      .filter((p): p is NonNullable<typeof p> => !!p)
-      .forEach((p) => {
-        const primary = p.mainText?.toString() ?? p.text.toString();
-        const secondary = p.secondaryText?.toString() ?? "";
-        // Autocomplete predictions don't carry coords — guard with a Lagos
-        // text check so non-Lagos addresses that slip past the bounds bias
-        // (locationRestriction is best-effort for autocomplete) are dropped.
-        // Place results above carry coords and are filtered strictly.
-        if (!byId.has(p.placeId) && !looksLikeLagosText(secondary)) return;
-        addSuggestion({
-          placeId: p.placeId,
-          primary,
-          secondary,
-        });
-      });
-  } catch {
-    // Keep text-search results if autocomplete is unavailable for a query.
-  }
+  // Autocomplete predictions are intentionally NOT used as a fallback here.
+  // Autocomplete's `locationRestriction` is best-effort and routinely leaks
+  // results from neighbouring states (Ogun, Oyo) because predictions don't
+  // carry coordinates we can verify. Place.searchByText above uses a strict
+  // rectangular `locationRestriction` and every returned place is
+  // coordinate-checked against `isInLagos`, so results are guaranteed Lagos.
+  void g;
+  void looksLikeLagosText;
 
   if (signal?.aborted) return [];
   return Array.from(byId.values()).slice(0, 8);
