@@ -235,21 +235,14 @@ function OnboardingScreen() {
                 }}
               />
 
-              <Field
-                label="Bank name"
-                type="text"
-                placeholder="e.g. GTBank"
-                value={doctor.bankName ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankName: v }))}
+              <BankPayoutFields
+                bankName={doctor.bankName}
+                bankCode={doctor.bankCode}
+                bankAccount={doctor.bankAccount}
+                bankAccountName={doctor.bankAccountName}
+                onChange={(patch) => setDoctor((p) => ({ ...p, ...patch }))}
               />
-              <Field
-                label="Account number"
-                type="text"
-                inputMode="numeric"
-                placeholder="0123456789"
-                value={doctor.bankAccount ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, bankAccount: v.replace(/\D/g, "") }))}
-              />
+
             </>
           )}
         </div>
