@@ -9,6 +9,7 @@ import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet"
 import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
+import { TrustInfoPopover } from "@/components/TrustInfoPopover";
 import { pushToast } from "@/lib/notifications";
 import { hospitalEntityId } from "@/features/cover/dispatch";
 import {
@@ -323,6 +324,7 @@ function HomeScreen({ active }: { active: boolean }) {
                 style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
               />
               <ReliabilityPill entityId={selfEntityId} inline />
+              <TrustInfoPopover align="end" className="ml-0.5" />
             </div>
           </div>
         </header>

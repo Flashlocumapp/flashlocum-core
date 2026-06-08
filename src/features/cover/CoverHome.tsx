@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
+import { TrustInfoPopover } from "@/components/TrustInfoPopover";
 import { fmtOpMeta } from "@/lib/format";
 import {
   doctorEntityId,
@@ -283,8 +284,11 @@ function ScoreTile({ score }: { score: number }) {
         boxShadow: "0 6px 20px -10px rgba(0,0,0,0.14)",
       }}
     >
-      <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        Score
+      <div className="flex items-center gap-1.5">
+        <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Ratings
+        </div>
+        <TrustInfoPopover align="start" />
       </div>
       <div className="mt-0.5 flex items-baseline gap-1">
         <span className="text-[18px] font-semibold tabular-nums tracking-tight">
