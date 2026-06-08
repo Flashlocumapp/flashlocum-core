@@ -544,6 +544,36 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
 }) {
+  // Monnify flow: render nothing behind the popup. The SDK overlays its own
+  // transfer checkout the moment settlement is reached.
+  if (onPayWithMonnify) {
+    return (
+      <motion.section
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="relative flex h-full w-full flex-col items-center justify-center bg-background safe-top"
+      >
+        {payError ? (
+          <div className="mx-6 max-w-sm text-center">
+            <p className="text-[13px] text-destructive">{payError}</p>
+            <button
+              onClick={onPayWithMonnify}
+              className="mt-4 h-12 rounded-full bg-primary px-6 text-[14px] font-semibold text-primary-foreground"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span className="text-[12.5px]">Opening secure transfer…</span>
+          </div>
+        )}
+      </motion.section>
+    );
+  }
+
   const remaining = phase === "settlement"
     ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
     : Math.max(0, GRACE_TOTAL - elapsed);
@@ -567,34 +597,26 @@ function SettlementPane({
           {fmtNaira(amount)}
         </div>
 
-
-
-
-        {/* Account block — only shown for legacy demo flow (no Monnify). */}
-        {!onPayWithMonnify && (
-          <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
-            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Transfer To
-            </div>
-            <div className="mt-2 text-[15px] font-medium">{ACCOUNT.bank}</div>
-            <div className="mt-1 text-[30px] font-semibold leading-none tracking-[0.06em] tabular-nums">
-              {ACCOUNT.number}
-            </div>
-            <button
-              onClick={onCopy}
-              className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-[12.5px] font-medium text-foreground/80 active:opacity-80"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
-                <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-              </svg>
-              Copy account number
-            </button>
+        <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Transfer To
           </div>
-        )}
+          <div className="mt-2 text-[15px] font-medium">{ACCOUNT.bank}</div>
+          <div className="mt-1 text-[30px] font-semibold leading-none tracking-[0.06em] tabular-nums">
+            {ACCOUNT.number}
+          </div>
+          <button
+            onClick={onCopy}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-[12.5px] font-medium text-foreground/80 active:opacity-80"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+            Copy account number
+          </button>
+        </div>
 
-
-        {/* Countdown / grace */}
         <div className="mt-5 flex items-center justify-between rounded-xl px-1 py-1">
           <span className="text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
             {phase === "settlement" ? "Time remaining" : "Grace period"}
@@ -613,39 +635,13 @@ function SettlementPane({
         )}
 
         <div className="mt-auto space-y-2 pb-8">
-          {onPayWithMonnify ? (
-            <>
-              <button
-                disabled={payState === "starting" || payState === "waiting" || paymentTriggered}
-                onClick={onPayWithMonnify}
-                className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
-              >
-                {payState === "starting"
-                  ? "Opening Monnify…"
-                  : payState === "waiting"
-                    ? "Waiting for payment…"
-                    : paymentTriggered
-                      ? "Verifying payment…"
-                      : `Pay ${fmtNaira(amount)} with Monnify`}
-              </button>
-              {payError && (
-                <p className="text-center text-[12px] text-destructive">{payError}</p>
-              )}
-              {payState === "waiting" && (
-                <p className="text-center text-[11.5px] text-muted-foreground">
-                  Complete the transfer in the Monnify tab. This page updates automatically.
-                </p>
-              )}
-            </>
-          ) : (
-            <button
-              disabled={paymentTriggered}
-              onClick={onMadePayment}
-              className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
-            >
-              {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
-            </button>
-          )}
+          <button
+            disabled={paymentTriggered}
+            onClick={onMadePayment}
+            className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+          >
+            {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
+          </button>
         </div>
       </div>
     </motion.section>
