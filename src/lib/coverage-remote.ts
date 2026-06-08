@@ -426,19 +426,19 @@ export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>
  * Atomic claim — only succeeds if the row is still searching & unclaimed.
  * Returns true on success, false if another doctor won the race.
  */
-export async function remoteClaimRequest(id: string, doctorUserId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({ status: "accepted", accepted_by: doctorUserId })
-    .eq("id", id)
-    .eq("status", "searching")
-    .is("accepted_by", null)
-    .select("id");
+export async function remoteClaimRequest(id: string, _doctorUserId: string): Promise<boolean> {
+  void _doctorUserId;
+  // Claim runs through a SECURITY DEFINER RPC so approved doctors never have
+  // direct UPDATE access to searching rows (which would expose phone via the
+  // policy's USING clause).
+  const { data, error } = await supabase.rpc("claim_coverage_request", {
+    _request_id: id,
+  });
   if (error) {
     console.warn("[coverage-remote] claim error:", error.message);
     return false;
   }
-  const won = (data?.length ?? 0) > 0;
+  const won = !!data;
   if (won) emitInvalidate(id);
   return won;
 }
