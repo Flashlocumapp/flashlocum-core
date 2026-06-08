@@ -485,6 +485,7 @@ function SettlementPane({
   onPayWithMonnify,
   payState,
   payError,
+  account,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
