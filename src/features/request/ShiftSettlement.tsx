@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { simNow, useSimClock } from "@/lib/clock";
 import {
@@ -7,6 +8,8 @@ import {
   billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
+import { beginSettlementCheckout } from "@/lib/settlement.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
@@ -70,6 +73,7 @@ export function ShiftSettlement({
   shift = SAMPLE,
   initialPhase = "active",
   onConfirmed,
+  requestId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -77,6 +81,9 @@ export function ShiftSettlement({
   initialPhase?: Phase;
   onConfirmed?: () => void;
   onRebook?: () => void;
+  /** When provided, settlement uses Monnify hosted checkout instead of the
+   *  static demo bank-transfer block. */
+  requestId?: string;
 }) {
   const [phase, setPhase] = useState<Phase>(initialPhase);
   // Anchor timestamps drive every elapsed/overtime computation so that a
@@ -221,7 +228,51 @@ export function ShiftSettlement({
     autoConfirmAt.current = simNow() + 2500;
   };
 
+  // ---------------- Monnify split-payment ----------------
+  const beginCheckout = useServerFn(beginSettlementCheckout);
+  const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
+  const [payError, setPayError] = useState<string | null>(null);
 
+  const startMonnifyCheckout = async () => {
+    if (!requestId) return;
+    setPayError(null);
+    setPayState("starting");
+    try {
+      const { checkoutUrl } = await beginCheckout({
+        data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
+      });
+      window.open(checkoutUrl, "_blank", "noopener");
+      setPayState("waiting");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not start checkout";
+      setPayError(msg);
+      setPayState("error");
+    }
+  };
+
+  // Poll the row for paid status; flip to confirmed when webhook lands.
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase === "confirmed") return;
+    let cancelled = false;
+    const tickFn = async () => {
+      const { data } = await supabase
+        .from("coverage_requests")
+        .select("payment_status")
+        .eq("id", requestId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data?.payment_status === "paid" && autoConfirmAt.current == null) {
+        autoConfirmAt.current = simNow() + 500;
+      }
+    };
+    void tickFn();
+    const iv = setInterval(tickFn, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [open, requestId, phase, totalAmount]);
 
   const handleCopy = async () => {
     try {
@@ -263,6 +314,9 @@ export function ShiftSettlement({
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
+            onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
+            payState={payState}
+            payError={payError}
           />
         )}
         {phase === "overtime" && (
@@ -276,6 +330,9 @@ export function ShiftSettlement({
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
+            onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
+            payState={payState}
+            payError={payError}
           />
         )}
         {phase === "confirmed" && (
@@ -387,6 +444,9 @@ function SettlementPane({
   onCopy,
   onMadePayment,
   paymentTriggered,
+  onPayWithMonnify,
+  payState,
+  payError,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -396,6 +456,9 @@ function SettlementPane({
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
+  onPayWithMonnify?: () => void;
+  payState: "idle" | "starting" | "waiting" | "error";
+  payError: string | null;
 }) {
   const remaining = phase === "settlement"
     ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
@@ -462,14 +525,40 @@ function SettlementPane({
           </p>
         )}
 
-        <div className="mt-auto pb-8">
-          <button
-            disabled={paymentTriggered}
-            onClick={onMadePayment}
-            className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
-          >
-            {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
-          </button>
+        <div className="mt-auto space-y-2 pb-8">
+          {onPayWithMonnify ? (
+            <>
+              <button
+                disabled={payState === "starting" || payState === "waiting" || paymentTriggered}
+                onClick={onPayWithMonnify}
+                className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+              >
+                {payState === "starting"
+                  ? "Opening Monnify…"
+                  : payState === "waiting"
+                    ? "Waiting for payment…"
+                    : paymentTriggered
+                      ? "Verifying payment…"
+                      : `Pay ${fmtNaira(amount)} with Monnify`}
+              </button>
+              {payError && (
+                <p className="text-center text-[12px] text-destructive">{payError}</p>
+              )}
+              {payState === "waiting" && (
+                <p className="text-center text-[11.5px] text-muted-foreground">
+                  Complete the transfer in the Monnify tab. This page updates automatically.
+                </p>
+              )}
+            </>
+          ) : (
+            <button
+              disabled={paymentTriggered}
+              onClick={onMadePayment}
+              className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+            >
+              {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
+            </button>
+          )}
         </div>
       </div>
     </motion.section>
@@ -487,6 +576,9 @@ function OvertimePane({
   onCopy,
   onMadePayment,
   paymentTriggered,
+  onPayWithMonnify,
+  payState,
+  payError,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -496,6 +588,9 @@ function OvertimePane({
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
+  onPayWithMonnify?: () => void;
+  payState: "idle" | "starting" | "waiting" | "error";
+  payError: string | null;
 }) {
   void shift;
   const billedMin = extensionMin;
@@ -554,14 +649,35 @@ function OvertimePane({
           Billed in 15-min half-blocks · {fmtClock(overtimeSec)} elapsed
         </p>
 
-        <div className="mt-auto pb-8">
-          <button
-            disabled={paymentTriggered}
-            onClick={onMadePayment}
-            className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
-          >
-            {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
-          </button>
+        <div className="mt-auto space-y-2 pb-8">
+          {onPayWithMonnify ? (
+            <>
+              <button
+                disabled={payState === "starting" || payState === "waiting" || paymentTriggered}
+                onClick={onPayWithMonnify}
+                className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+              >
+                {payState === "starting"
+                  ? "Opening Monnify…"
+                  : payState === "waiting"
+                    ? "Waiting for payment…"
+                    : paymentTriggered
+                      ? "Verifying payment…"
+                      : `Pay ${fmtNaira(total)} with Monnify`}
+              </button>
+              {payError && (
+                <p className="text-center text-[12px] text-destructive">{payError}</p>
+              )}
+            </>
+          ) : (
+            <button
+              disabled={paymentTriggered}
+              onClick={onMadePayment}
+              className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+            >
+              {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
+            </button>
+          )}
         </div>
       </div>
     </motion.section>

@@ -34,6 +34,11 @@ export type Database = {
           hospital: string
           id: string
           note: string | null
+          paid_at: string | null
+          payment_provider: string | null
+          payment_reference: string | null
+          payment_status: string | null
+          payment_url: string | null
           phone: string
           requester_id: string
           settled_amount: number | null
@@ -62,6 +67,11 @@ export type Database = {
           hospital: string
           id?: string
           note?: string | null
+          paid_at?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          payment_status?: string | null
+          payment_url?: string | null
           phone?: string
           requester_id: string
           settled_amount?: number | null
@@ -90,6 +100,11 @@ export type Database = {
           hospital?: string
           id?: string
           note?: string | null
+          paid_at?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          payment_status?: string | null
+          payment_url?: string | null
           phone?: string
           requester_id?: string
           settled_amount?: number | null
@@ -140,6 +155,7 @@ export type Database = {
           license_name: string | null
           location: string | null
           mdcn: string | null
+          monnify_sub_account_code: string | null
           onboarded_at: string | null
           onboarded_cover_at: string | null
           onboarded_request_at: string | null
@@ -162,6 +178,7 @@ export type Database = {
           license_name?: string | null
           location?: string | null
           mdcn?: string | null
+          monnify_sub_account_code?: string | null
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
@@ -184,6 +201,7 @@ export type Database = {
           license_name?: string | null
           location?: string | null
           mdcn?: string | null
+          monnify_sub_account_code?: string | null
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
@@ -275,6 +293,10 @@ export type Database = {
           id: string
           phone: string
         }[]
+      }
+      mark_settlement_paid: {
+        Args: { _amount: number; _payment_reference: string }
+        Returns: boolean
       }
       touch_last_seen: { Args: never; Returns: undefined }
     }

@@ -1,78 +1,71 @@
+## Monnify Split Payment Integration
 
-## Context
+### How it will work (end-to-end)
 
-Today, both Cover & Earn and Request Coverage share an in-memory simulated network (`src/lib/network.ts`, ~640 lines) that lives in `localStorage` + `BroadcastChannel`. All coverage state (requests, doctors, accept/decline, pause/resume, history) flows through it. `src/features/cover/dispatch.ts`, `src/features/request/RequesterHome.tsx` (1304 lines), `src/routes/_app.coverage.tsx` (1382 lines), and `ShiftSettlement.tsx` all read from this store.
+1. Doctor ends a shift → Settlement screen shows the amount.
+2. Requester taps **Pay with Monnify** → app calls a server function that:
+   - Looks up the assigned doctor's bank details (`bank_name`, `bank_account`).
+   - If the doctor doesn't yet have a Monnify sub-account, creates one via Monnify's `/api/v1/sub-accounts` and stores its `subAccountCode` on the doctor's profile.
+   - Initializes a Monnify transaction with an `incomeSplitConfig` → **85% to the doctor's sub-account, 15% (remainder) stays with FlashLocum's main wallet**.
+   - Returns the Monnify hosted-checkout URL.
+3. Requester is redirected to Monnify, pays, and is returned to the app.
+4. Monnify hits our webhook (`/api/public/monnify-webhook`) with the result; webhook verifies the HMAC signature, marks the `coverage_request` as paid, and triggers the existing "Settlement confirmed" UI on the next poll.
 
-The request is to replace that simulated state with a real Supabase backend, while keeping all current UI intact.
+### Database changes (one migration)
 
-## Approach (2 phases)
+- **profiles**: add `monnify_sub_account_code TEXT` (nullable).
+- **coverage_requests**: add
+  - `payment_provider TEXT` (default `null`)
+  - `payment_reference TEXT` (Monnify `paymentReference`)
+  - `payment_status TEXT` (`pending` | `paid` | `failed`)
+  - `payment_url TEXT` (last-issued checkout link, for resume)
+  - `paid_at TIMESTAMPTZ`
+- New SECURITY DEFINER RPC `mark_settlement_paid(_payment_reference, _amount)` — called by the webhook (which runs as service role anyway, but the RPC keeps the update atomic and idempotent).
 
-### Phase 1 — Backend-driven coverage requests
+### Server code (TanStack `createServerFn` + one server route)
 
-**New table: `coverage_requests`**
-- id (uuid)
-- requester_id (uuid → auth.users.id)
-- hospital, area, coverage_type (text)
-- day, start_time, end_time (text — preserve current "Mon", "8:00 AM" display format)
-- start_ts, end_ts (timestamptz — absolute window for conflict detection)
-- duration_hrs (numeric)
-- amount (int), fee_pct (int)
-- phone, note (text)
-- accommodation (text, nullable) — new per spec
-- status (enum: searching, accepted, active, paused, completed, cancelled)
-- accepted_by (uuid → auth.users.id, nullable)
-- started_at, accumulated_ms, settled_amount, days, day_index, cancelled_by
-- created_at, updated_at
+```
+src/lib/monnify/
+├── client.server.ts        # auth (Basic → access_token, cached), low-level fetch helpers
+├── sub-accounts.server.ts  # ensureSubAccountForDoctor()
+├── checkout.server.ts      # initiateSettlementCheckout()
+└── webhook.server.ts       # verifyMonnifySignature(), handleEvent()
 
-Status name change: "broadcasting" → **"searching"** (per spec "Initial status: Searching").
+src/lib/settlement.functions.ts
+└── beginSettlementCheckout  # createServerFn, requireSupabaseAuth
+                              # input: { requestId }
+                              # returns: { checkoutUrl, paymentReference }
 
-**RLS**
-- Requesters: select/insert/update/delete their own rows (`requester_id = auth.uid()`)
-- Doctors (any approved doctor): select rows with `status = 'searching'` OR `accepted_by = auth.uid()`; update only when `accepted_by = auth.uid()` (for accept/pause/resume/complete from doctor side) and the initial accept transition
-- Service role: full access
+src/routes/api/public/monnify-webhook.ts
+└── POST handler             # verifies monnify-signature header (HMAC-SHA512 of raw body
+                              # using MONNIFY_SECRET_KEY), then calls mark_settlement_paid
+                              # via supabaseAdmin RPC.
+```
 
-**Realtime**: enable `REPLICA IDENTITY FULL` and add to `supabase_realtime` so both sides see updates instantly.
+Secrets used (all already saved): `MONNIFY_API_KEY`, `MONNIFY_SECRET_KEY`, `MONNIFY_CONTRACT_CODE`, `MONNIFY_BASE_URL`.
 
-**Code wiring**
-- New `src/lib/coverage-remote.ts`: typed CRUD + a `useCoverageRequests()` hook that subscribes via Supabase Realtime and returns `{ mine, searching, accepted }` filtered by current user + role.
-- Rewrite `src/lib/network.ts` internals to delegate to `coverage-remote.ts` while keeping the existing exported function signatures (`acceptRequest`, `cancelRequest`, `completeRequest`, `broadcastingRequests`, `useNetwork`, `subscribeNetwork`, etc.). This avoids touching the 5000+ lines of consumer code.
-  - Doctor presence (`doctors[sid]`, declined list, online flag) stays client-side (per-session) — not required by the spec to be backend.
-  - All request CRUD goes through Supabase.
-- `RequesterHome` "Create coverage" path writes to Supabase; the Home / Upcoming / Active / History sections read the same hook.
-- Coverage tab (`_app.coverage.tsx`) reads from the same hook.
+### Frontend changes
 
-### Phase 2 — Doctor acceptance backend
+- `src/features/request/ShiftSettlement.tsx` — replace the static "Providus Bank / 0123456789 + I've Made Payment" block with a single **Pay with Monnify** button. On click:
+  - call `beginSettlementCheckout({ requestId })`,
+  - open the returned `checkoutUrl` in a new tab,
+  - poll `coverage_requests.payment_status` every 3 s (or use the existing realtime subscription) → when `paid`, transition to the existing `confirmed` pane.
+- Keep the manual "I've Made Payment" fallback hidden behind a small "Paid offline?" link for now (admin-only marking later).
 
-- `acceptRequest(id)` becomes a Supabase UPDATE: set `accepted_by = auth.uid()`, `status = 'accepted'`, guarded by `WHERE status = 'searching' AND accepted_by IS NULL`. Returns ok if 1 row affected (atomic claim — wins the race naturally).
-- Pause/resume/complete/cancel also flow through Supabase updates.
-- Realtime broadcasts back to both sides:
-  - Requester sees `accepted_by` populated → "Doctor Accepted"
-  - Doctor sees their row appear in `accepted` → "Coverage Confirmed"
+### Doctor onboarding note
 
-## Scope guardrails
+The doctor must have `bank_name` + `bank_account` on their profile before a requester can pay them — those are already collected during cover onboarding. If missing at checkout time, `beginSettlementCheckout` throws a friendly error: *"This doctor hasn't completed payout setup yet."*
 
-- **No UI changes** — only data source swap.
-- **No new screens**, no redesign of cards, settlement, ratings, or onboarding.
-- Doctor presence/online/declined remains local (not in spec, and changing it would ripple into the map/dispatch UI).
-- Settlement transparency, ratings, payment overlay — already present, untouched.
+### What I will NOT touch
 
-## Files
+- Pricing logic, timers, overtime math — untouched.
+- `RatingOverlay`, confirmation pane — untouched (just reached via the new webhook trigger instead of the simulated timer).
+- Existing simulated "I've Made Payment" demo flow stays as an admin/test fallback.
 
-**New**
-- `supabase/migrations/<ts>_coverage_requests.sql`
-- `src/lib/coverage-remote.ts`
+### Test plan
 
-**Edited**
-- `src/lib/network.ts` — replace request store internals with Supabase calls; keep exported API stable; add realtime subscription on mount.
-- `src/features/cover/dispatch.ts` — minor (status name `broadcasting` → `searching` if needed; keep behavior).
-- `src/features/request/RequesterHome.tsx` — replace local request-create call site with the new remote create; remove hardcoded sample requests if any.
-- `src/routes/_app.coverage.tsx` — confirm it reads via the hook (already does via `useNetwork` / `useDispatch`).
+1. Run a sandbox shift end-to-end with a test doctor whose bank fields are set; confirm a sub-account is created (logged), checkout URL returned, and after sandbox payment the webhook flips `payment_status = paid`.
+2. Replay the webhook with a tampered body → must return 401.
+3. Replay the same valid webhook twice → second call is a no-op (idempotent on `payment_reference`).
 
-## Risks
-
-- `network.ts` is large and shared. Wrapping its API around an async backend means turning some sync calls (`acceptRequest`) into fire-and-forget that resolves via the realtime subscription. Plan: keep sync call signature, kick off async update, optimistic local update, reconcile on realtime event.
-- Conflict detection (1-hour buffer, max 3 shifts) stays client-side as a pre-check; the DB UPDATE-with-WHERE is the authoritative claim.
-
-## After approval
-
-I'll write the migration first (for your approval), then wire `coverage-remote.ts` + rewire `network.ts` internals, then verify both flows in the preview.
+Approve and I'll ship it.
