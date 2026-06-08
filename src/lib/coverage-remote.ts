@@ -232,7 +232,20 @@ async function fetchAll(): Promise<NetRequest[] | null> {
     console.warn("[coverage-remote] fetch error:", error.message);
     return null;
   }
-  return (data ?? []).map((r) => rowToNet(r as Row));
+  // Phone is column-restricted in RLS: only the requester or the accepted
+  // doctor can read it, via a SECURITY DEFINER RPC.
+  const phoneMap = new Map<string, string>();
+  const { data: phones, error: phoneErr } = await supabase.rpc("list_my_request_phones");
+  if (!phoneErr && Array.isArray(phones)) {
+    for (const p of phones as Array<{ id: string; phone: string | null }>) {
+      if (p?.id) phoneMap.set(p.id, p.phone ?? "");
+    }
+  }
+  return (data ?? []).map((r) => {
+    const row = r as Row;
+    const net = rowToNet({ ...row, phone: phoneMap.get(row.id) ?? "" });
+    return net;
+  });
 }
 
 async function refreshSnapshot() {
