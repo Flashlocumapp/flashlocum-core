@@ -69,7 +69,7 @@ export function TrustInfoPopover({
       {open && (
         <div
           role="dialog"
-          className={`absolute top-full mt-2 z-50 w-64 rounded-2xl px-3.5 py-3 text-left ${alignClass}`}
+          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} z-50 w-64 rounded-2xl px-3.5 py-3 text-left ${alignClass}`}
           style={{
             background: "var(--color-surface-elevated)",
             border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
