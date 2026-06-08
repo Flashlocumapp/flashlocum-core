@@ -603,6 +603,7 @@ function OvertimePane({
   onPayWithMonnify,
   payState,
   payError,
+  account,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -615,7 +616,20 @@ function OvertimePane({
   onPayWithMonnify?: () => void;
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
+  account: TransferAccount | null;
 }) {
+  if (onPayWithMonnify) {
+    return (
+      <CustomTransferPane
+        amount={total}
+        account={account}
+        payState={payState}
+        payError={payError}
+        paymentTriggered={paymentTriggered}
+        onRetry={onPayWithMonnify}
+      />
+    );
+  }
   void shift;
   const billedMin = extensionMin;
   const extra = extensionAmount;
