@@ -321,7 +321,7 @@ export function GoogleMapBackground({
   }
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: "#d1d5db" }}>
+    <div className="absolute inset-0 overflow-hidden" style={{ background: "#aab2bd" }}>
       <div ref={ref} className="absolute inset-0 h-full w-full" />
       {/* Hide Google Maps attribution / terms / report links */}
       <style>{`
