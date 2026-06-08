@@ -19,7 +19,7 @@ export function RatingOverlay({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="absolute inset-0 z-50 flex items-end"
+          className="fixed inset-0 z-[80] flex items-end"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
