@@ -242,46 +242,22 @@ export function ShiftSettlement({
     autoConfirmAt.current = simNow() + 2500;
   };
 
-  // ---------------- Monnify split-payment ----------------
+  // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
+  const [account, setAccount] = useState<TransferAccount | null>(null);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
     setPayError(null);
     setPayState("starting");
     try {
-      const params = await beginCheckout({
+      const result = await beginCheckout({
         data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
       });
-      await loadMonnifySdk();
-      const MonnifySDK = (window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK;
-      if (!MonnifySDK) throw new Error("Payment widget failed to load. Please try again.");
+      setAccount(result);
       setPayState("waiting");
-      MonnifySDK.initialize({
-        amount: params.amount,
-        currency: params.currency,
-        reference: params.paymentReference,
-        customerFullName: params.customerName,
-        customerEmail: params.customerEmail,
-        apiKey: params.apiKey,
-        contractCode: params.contractCode,
-        paymentDescription: params.paymentDescription,
-        isTestMode: true,
-        paymentMethods: ["ACCOUNT_TRANSFER"],
-        incomeSplitConfig: params.incomeSplitConfig,
-
-        onLoadStart: () => {},
-        onLoadComplete: () => {},
-        onComplete: () => {
-          // Webhook will flip payment_status → paid; the poll picks it up.
-          autoConfirmAt.current = simNow() + 500;
-        },
-        onClose: () => {
-          setPayState("idle");
-        },
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
@@ -289,7 +265,7 @@ export function ShiftSettlement({
     }
   };
 
-  // Auto-open Monnify transfer checkout the moment we land in settlement.
+  // Auto-start the moment we land in settlement.
   const autoOpenedRef = useRef(false);
   useEffect(() => {
     if (!open || !requestId) return;
@@ -300,8 +276,14 @@ export function ShiftSettlement({
     void startMonnifyCheckout();
   }, [open, requestId, phase, payState]);
   useEffect(() => {
-    if (!open) autoOpenedRef.current = false;
+    if (!open) {
+      autoOpenedRef.current = false;
+      setAccount(null);
+      setPayState("idle");
+      setPayError(null);
+    }
   }, [open]);
+
 
 
   // Poll the row for paid status; flip to confirmed when webhook lands.
