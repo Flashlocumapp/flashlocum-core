@@ -295,9 +295,39 @@ function HomeScreen({ active }: { active: boolean }) {
         .filter((s) => s.lat != null && s.lng != null)
         .map((s) => ({ key: s.placeId, title: s.primary, lat: s.lat!, lng: s.lng! }));
 
+  // Requester's own trust scope — use most recent hospital they booked for
+  // (doctors' ratings & reliability accumulate against that hospital name).
+  const selfHospitalName = location?.name ?? recents[0]?.name ?? null;
+  const selfEntityId = selfHospitalName ? hospitalEntityId(selfHospitalName) : null;
+
   return (
     <section className="relative h-full w-full overflow-hidden">
       <GoogleMapBackground active={active} markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
+
+      {/* Top floating trust card — calm rating + reliability for the requester */}
+      {stage === "collapsed" && (
+        <header className="absolute inset-x-0 top-0 z-30 safe-top pointer-events-none">
+          <div className="mx-auto flex max-w-md justify-center px-4 pt-3">
+            <div
+              className="pointer-events-auto inline-flex items-center gap-3 rounded-full px-4 py-2 shadow-[0_4px_18px_-4px_rgba(0,0,0,0.18)]"
+              style={{
+                background: "var(--color-surface-elevated)",
+                border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
+              }}
+            >
+              <RatingPill entityId={selfEntityId} role="requester" inline />
+              <span
+                aria-hidden
+                className="h-3 w-px"
+                style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
+              />
+              <ReliabilityPill entityId={selfEntityId} inline />
+            </div>
+          </div>
+        </header>
+      )}
+
+
 
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
