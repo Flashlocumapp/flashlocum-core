@@ -78,6 +78,18 @@ function writePersistedSnapshot(rows: NetRequest[]) {
   }
 }
 
+function clearPersistedSnapshot() {
+  if (typeof window === "undefined") return;
+  cachedSnapshot = [];
+  cachedSnapshotUserId = null;
+  try {
+    window.localStorage.removeItem(LS_KEY);
+  } catch {
+    /* ignore storage errors */
+  }
+  snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+}
+
 const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   searching: "broadcasting",
   accepted: "accepted",
@@ -180,7 +192,8 @@ export function onUserIdChange(fn: (id: string | null) => void): () => void {
 
 // Keep the cached id in sync with auth events (sign-in, sign-out, refresh).
 if (typeof window !== "undefined") {
-  subscribeAuthState(({ userId }) => {
+  subscribeAuthState(({ event, userId }) => {
+    if (event === "SIGNED_OUT") clearPersistedSnapshot();
     cachedUserId = userId;
     userIdResolved = true;
     userListeners.forEach((fn) => fn(cachedUserId));

@@ -338,8 +338,6 @@ function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> 
 }
 
 
-if (typeof window !== "undefined") init();
-
 export function useNetwork() {
   const [s, setS] = useState<NetState>(state);
   useEffect(() => {
