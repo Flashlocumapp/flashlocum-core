@@ -324,6 +324,7 @@ function HomeScreen({ active }: { active: boolean }) {
                 style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
               />
               <ReliabilityPill entityId={selfEntityId} inline />
+              <TrustInfoPopover align="end" className="ml-0.5" />
             </div>
           </div>
         </header>
