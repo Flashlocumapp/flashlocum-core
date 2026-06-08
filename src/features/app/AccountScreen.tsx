@@ -162,7 +162,7 @@ export function AccountScreen() {
               <DetailRow label="Account Number" value={profile?.bank_account || "—"} />
               <DetailRow
                 label="Account Name"
-                value={profile?.bank_name ? identity.name : "—"}
+                value={profile?.bank_account_name || "—"}
                 last
               />
             </ListGroup>
