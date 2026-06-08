@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { simNow, useSimClock } from "@/lib/clock";
 import {
@@ -7,6 +8,8 @@ import {
   billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
+import { beginSettlementCheckout } from "@/lib/settlement.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
