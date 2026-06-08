@@ -120,7 +120,7 @@ function AppShell() {
       {/* Persistent backdrop — matches map ground colour so any one-frame
           gap between unmounting tab A and mounting tab B never paints white. */}
       <div
-        className="pointer-events-absolute absolute inset-x-0 top-0"
+        className="pointer-events-none absolute inset-x-0 top-0"
         style={{ bottom: `var(--tab-bar-h)`, background: "var(--color-map)" }}
         aria-hidden
       />
