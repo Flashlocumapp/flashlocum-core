@@ -27,6 +27,7 @@ import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
   fetchHospitalSuggestions,
   fetchPlaceDetails,
+  isInLagos,
   type PlaceSuggestion,
 } from "@/lib/google-maps";
 import { rememberRecentLocation, useRecentLocations } from "@/lib/recent-locations";
