@@ -31,14 +31,12 @@ export function CoverDispatchPortal() {
 
 function CoverDispatchOverlays() {
   const { incoming, accepted, pendingRating } = useDispatch();
-  const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);
+  const [ratingDismissed, setRatingDismissed] = useState<string | null>(null);
 
   if (!incoming && !accepted && !pendingRating) return null;
 
-  const showSummary =
-    !!pendingRating && !incoming && !accepted && summaryAckedId !== pendingRating.requestId;
-  const showRating =
-    !!pendingRating && !incoming && !accepted && summaryAckedId === pendingRating.requestId;
+  const showSummary = !!pendingRating && !incoming && !accepted;
+  const showRating = showSummary && ratingDismissed !== pendingRating!.requestId;
 
   return (
     <div className="absolute inset-0 z-50">
@@ -72,7 +70,8 @@ function CoverDispatchOverlays() {
         total={pendingRating?.total ?? 0}
         feePct={pendingRating?.feePct ?? 15}
         onAcknowledge={() => {
-          if (pendingRating) setSummaryAckedId(pendingRating.requestId);
+          dismissPendingRating();
+          setRatingDismissed(null);
         }}
       />
 
@@ -80,16 +79,14 @@ function CoverDispatchOverlays() {
         open={showRating}
         doctor={pendingRating?.hospital ?? ""}
         onDismiss={() => {
-          dismissPendingRating();
-          setSummaryAckedId(null);
+          if (pendingRating) setRatingDismissed(pendingRating.requestId);
         }}
         onSubmit={(rating) => {
           if (rating > 0 && pendingRating) {
             recordRating(pendingRating.hospitalId, rating);
             recordHistoryRating(pendingRating.requestId, rating);
           }
-          dismissPendingRating();
-          setSummaryAckedId(null);
+          if (pendingRating) setRatingDismissed(pendingRating.requestId);
         }}
       />
     </div>
