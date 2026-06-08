@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
@@ -93,6 +93,7 @@ export const Route = createFileRoute("/_app")({
 
 function AppShell() {
   const immersive = useImmersive();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     const heartbeat = window.setInterval(() => {
@@ -110,14 +111,35 @@ function AppShell() {
 
   return (
     <div
-      className="fixed inset-0 overflow-hidden bg-background"
-      style={{ ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px` }}
+      className="fixed inset-0 overflow-hidden"
+      style={{
+        background: "var(--color-map)",
+        ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px`,
+      }}
     >
+      {/* Persistent backdrop — matches map ground colour so any one-frame
+          gap between unmounting tab A and mounting tab B never paints white. */}
       <div
-        className="absolute inset-x-0 top-0 bg-background"
+        className="pointer-events-none absolute inset-x-0 top-0"
+        style={{ bottom: `var(--tab-bar-h)`, background: "var(--color-map)" }}
+        aria-hidden
+      />
+      <div
+        className="absolute inset-x-0 top-0"
         style={{ bottom: `var(--tab-bar-h)` }}
       >
-        <Outlet />
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0"
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </div>
       <AnimatePresence>
         {!immersive && (
