@@ -295,7 +295,9 @@ export function ShiftSettlement({
         contractCode: params.contractCode,
         paymentDescription: params.paymentDescription,
         isTestMode: true,
+        paymentMethods: ["ACCOUNT_TRANSFER"],
         incomeSplitConfig: params.incomeSplitConfig,
+
         onLoadStart: () => {},
         onLoadComplete: () => {},
         onComplete: () => {
