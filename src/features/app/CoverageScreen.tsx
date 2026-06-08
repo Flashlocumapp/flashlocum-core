@@ -8,6 +8,7 @@ import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDeta
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import {
   cancelUpcoming,
   doctorEntityId,
