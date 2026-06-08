@@ -27,13 +27,14 @@ export function setRole(role: Role) {
   }
 }
 
-export function getRole(): Role {
-  if (typeof window === "undefined") return "request";
+export function getRole(): Role | null {
+  if (typeof window === "undefined") return null;
   try {
     const v = window.sessionStorage.getItem(KEY);
-    return v === "cover" ? "cover" : "request";
+    if (v === "cover" || v === "request") return v;
+    return null;
   } catch {
-    return "request";
+    return null;
   }
 }
 
