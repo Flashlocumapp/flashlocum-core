@@ -68,6 +68,7 @@ function CoverDispatchOverlays() {
       <PaymentSummaryOverlay
         open={showSummary}
         hospital={pendingRating?.hospital ?? ""}
+        coverage={pendingRating?.coverage}
         total={pendingRating?.total ?? 0}
         feePct={pendingRating?.feePct ?? 15}
         onAcknowledge={() => {

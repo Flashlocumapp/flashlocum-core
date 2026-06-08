@@ -5,19 +5,22 @@ function fmtNaira(n: number) {
 }
 
 /**
- * Doctor-facing payment summary, shown immediately after the requester
- * confirms payment. Displays Total · FlashLocum Fee · Amount To Doctor.
- * Acknowledging closes the sheet; the rating overlay is shown after.
+ * Doctor-facing "Payment received" confirmation — mirrors the requester's
+ * Settlement Confirmed page. Full-screen with a green check, summary card
+ * (Facility · Coverage · Total · Fee · Net), and a Continue action. The
+ * rating overlay sits on top of this view.
  */
 export function PaymentSummaryOverlay({
   open,
   hospital,
+  coverage,
   total,
   feePct,
   onAcknowledge,
 }: {
   open: boolean;
   hospital: string;
+  coverage?: string;
   total: number;
   feePct: number;
   onAcknowledge: () => void;
@@ -27,37 +30,50 @@ export function PaymentSummaryOverlay({
   const net = total - fee;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/55 px-4 pb-6 safe-bottom"
+    <motion.section
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="fixed inset-0 z-[70] flex flex-col bg-background safe-top"
     >
-      <motion.div
-        initial={{ y: 24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 280, damping: 32 }}
-        className="w-full max-w-md rounded-3xl bg-card p-5"
-        style={{ boxShadow: "0 -20px 60px -20px rgba(0,0,0,0.45)" }}
-      >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/20" />
-        <div
-          className="text-[11px] font-medium uppercase tracking-[0.16em]"
-          style={{ color: "var(--color-presence)" }}
+      <div className="flex h-12 w-full items-center justify-between px-4">
+        <button
+          onClick={onAcknowledge}
+          aria-label="Close"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-elevated"
         >
-          Payment received
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+        <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          FLASHLOCUM
+        </span>
+        <span className="h-9 w-9" />
+      </div>
+
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
+        <div
+          className="mt-2 flex h-12 w-12 items-center justify-center rounded-full"
+          style={{ background: "color-mix(in oklab, var(--color-presence) 18%, transparent)" }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M5 12.5l4 4 10-10"
+              stroke="var(--color-presence)"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
-        <h2 className="mt-1.5 text-[22px] font-semibold tracking-tight">
-          Payment summary
-        </h2>
-        <p className="mt-1 text-[13px] text-muted-foreground">
+        <h1 className="mt-4 text-[24px] font-semibold tracking-tight">Payment received</h1>
+        <p className="mt-1 text-[13.5px] text-muted-foreground">
           {hospital} confirmed payment for this coverage.
         </p>
 
-        <div
-          className="mt-5 overflow-hidden rounded-2xl"
-          style={{ background: "var(--color-surface-elevated)" }}
-        >
+        <div className="mt-6 rounded-2xl bg-surface-elevated p-5">
+          <Row label="Facility" value={hospital} />
+          {coverage && <Row label="Coverage" value={coverage} />}
           <Row label="Total Payment" value={fmtNaira(total)} />
           <Row label={`FlashLocum Fee (${feePct}%)`} value={"−" + fmtNaira(fee)} muted />
           <Row label="Amount To Doctor" value={fmtNaira(net)} strong />
@@ -67,14 +83,16 @@ export function PaymentSummaryOverlay({
           Funds are remitted to your registered account by 10PM today.
         </p>
 
-        <button
-          onClick={onAcknowledge}
-          className="mt-5 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90"
-        >
-          Continue
-        </button>
-      </motion.div>
-    </motion.div>
+        <div className="mt-auto space-y-2 pb-8">
+          <button
+            onClick={onAcknowledge}
+            className="h-13 w-full rounded-full bg-primary py-4 text-[14.5px] font-semibold text-primary-foreground active:opacity-90"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </motion.section>
   );
 }
 
@@ -90,18 +108,13 @@ function Row({
   muted?: boolean;
 }) {
   return (
-    <div
-      className="flex items-baseline justify-between px-4 py-3.5"
-      style={{
-        borderTop: "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
-      }}
-    >
+    <div className="flex items-center justify-between border-b border-border/50 py-2 last:border-0">
       <span
-        className="text-[13px]"
+        className="text-[12.5px]"
         style={{
           color: muted
-            ? "color-mix(in oklab, var(--color-foreground) 55%, transparent)"
-            : "color-mix(in oklab, var(--color-foreground) 70%, transparent)",
+            ? "color-mix(in oklab, var(--color-foreground) 50%, transparent)"
+            : "color-mix(in oklab, var(--color-foreground) 60%, transparent)",
         }}
       >
         {label}
@@ -109,8 +122,8 @@ function Row({
       <span
         className={
           strong
-            ? "text-[20px] font-semibold tabular-nums tracking-tight"
-            : "text-[15px] font-medium tabular-nums"
+            ? "text-[15px] font-semibold tabular-nums"
+            : "text-[13.5px] font-medium tabular-nums"
         }
       >
         {value}

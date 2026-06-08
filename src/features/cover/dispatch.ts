@@ -104,6 +104,7 @@ export type PendingRating = {
   requestId: string;
   hospitalId: string;
   hospital: string;
+  coverage: string;
   total: number;
   feePct: number;
 };
@@ -304,6 +305,7 @@ export function ensureDoctorSession(initialOnline = true) {
         requestId: r.id,
         hospitalId: hospitalEntityId(r.hospital),
         hospital: r.hospital,
+        coverage: r.coverage,
         total: r.settledAmount ?? r.amount,
         feePct: r.feePct,
       };
