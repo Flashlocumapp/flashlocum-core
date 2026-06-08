@@ -240,7 +240,23 @@ export type Database = {
         }[]
       }
       admin_overview_stats: { Args: never; Returns: Json }
+      claim_coverage_request: {
+        Args: { _request_id: string }
+        Returns: boolean
+      }
       claim_first_admin: { Args: never; Returns: boolean }
+      get_assigned_doctor_profile: {
+        Args: { _doctor: string }
+        Returns: {
+          full_name: string
+          gender: string
+          id: string
+          mdcn: string
+          selfie_url: string
+          verification_status: Database["public"]["Enums"]["verification_status"]
+          years_experience: string
+        }[]
+      }
       get_request_phone: { Args: { _request_id: string }; Returns: string }
       has_role: {
         Args: {

@@ -395,16 +395,25 @@ export async function fetchVerificationStatus(): Promise<VerificationStatus> {
   return p?.verification_status ?? "pending";
 }
 
-/** Fetch a specific doctor's profile by user id. RLS must allow the caller
- *  (admin, the doctor themself, or a requester whose request they accepted). */
+/** Fetch a doctor's profile by user id. Requesters get only safe display
+ *  fields via a SECURITY DEFINER RPC scoped to assignments they own; the
+ *  doctor themself and admins read full rows directly via RLS. */
 export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null> {
   if (!id) return null;
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+  const { data: direct } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (direct) return direct as ProfileRow;
+  // Fall back to the requester-safe RPC (returns only display fields).
+  const { data, error } = await supabase.rpc("get_assigned_doctor_profile", { _doctor: id });
   if (error) {
     console.warn("fetchDoctorProfile error", error);
     return null;
   }
-  return (data as ProfileRow | null) ?? null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as ProfileRow | undefined) ?? null;
 }
 
 /* ---------- Admin ---------- */
