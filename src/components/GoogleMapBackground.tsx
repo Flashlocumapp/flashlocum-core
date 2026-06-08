@@ -231,10 +231,17 @@ export function GoogleMapBackground({
     loadMapsApi()
       .then((g) => {
         if (cancelled || !ref.current || mapRef.current) return;
-        const initial = center ?? userCenter ?? FALLBACK_CENTER;
+        const rawInitial = center ?? userCenter ?? FALLBACK_CENTER;
+        const initial = inLagos(rawInitial) ? rawInitial : FALLBACK_CENTER;
         mapRef.current = new g.maps.Map(ref.current, {
           center: initial,
           zoom: 12,
+          minZoom: 10,
+          maxZoom: 18,
+          restriction: {
+            latLngBounds: LAGOS_BOUNDS_LITERAL,
+            strictBounds: true,
+          },
           disableDefaultUI: true,
           gestureHandling: "greedy",
           clickableIcons: false,
