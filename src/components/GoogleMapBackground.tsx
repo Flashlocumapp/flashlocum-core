@@ -14,29 +14,32 @@ const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };
 
 const BROWSER_KEY_PRESENT = hasMapsKey();
 
-// Softer, slightly darker basemap. Warm grey ground, muted water and
-// vegetation, calm roads — roughly 2-3 shades darker than the previous
-// version so the map recedes quietly behind the UI.
+// Darker, sharper basemap. Cooler graphite ground, crisp label contrast,
+// roads that read clearly without shouting. Tuned so type looks premium
+// against the surface instead of washing out into the grey.
 const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#d1d5db" }] },
+  { elementType: "geometry", stylers: [{ color: "#aab2bd" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#4b5563" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#d1d5db" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#11161d" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#e8ecf2" }, { weight: 2.5 }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#1f2937" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#0b1117" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.stroke", stylers: [{ color: "#e8ecf2" }, { weight: 3 }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#9db89a" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#3a6b3a" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#c4c9cf" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#e5e7eb" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#e5e7eb" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#9ca8bf" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#7a89a8" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#7fa07c" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#1f3a1f" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#9ea6b1" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#cfd4dc" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#cfd4dc" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#7e8aa3" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#4f5a72" }] },
   { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#7eb4cf" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3a6f85" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#4f8aa8" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#0b2a38" }] },
+  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#bcd6e4" }, { weight: 2 }] },
 ];
+
 
 
 // Stethoscope marker — used ONLY for online doctors available nearby.
