@@ -44,11 +44,16 @@ function OnboardingScreen() {
   // onboarding session starts from a clean slate and requires explicit input.
 
   const licenseRef = useRef<HTMLInputElement>(null);
+  const nyscRef = useRef<HTMLInputElement>(null);
 
   const persist = () => {
     if (isDoctor) saveProfile("cover", doctor);
     else saveProfile("request", requester);
   };
+
+  // Phone: digits only, must be 11 digits starting with 0 (NG mobile, e.g. 080XXXXXXXX).
+  const sanitizePhone = (v: string) => v.replace(/\D/g, "").slice(0, 11);
+  const isValidPhone = (v?: string) => !!v && /^0\d{10}$/.test(v);
 
   const remoteFields = () =>
     isDoctor
@@ -57,6 +62,7 @@ function OnboardingScreen() {
           gender: doctor.gender ?? null,
           mdcn: doctor.mdcn ?? null,
           license_name: doctor.license ?? null,
+          nysc_name: doctor.nysc ?? null,
           selfie_url: doctor.selfie ?? null,
           bank_name: doctor.bankName ?? null,
           bank_account: doctor.bankAccount ?? null,
@@ -68,13 +74,14 @@ function OnboardingScreen() {
         };
 
   const step1Valid = isDoctor
-    ? !!(doctor.phone?.trim() && doctor.gender?.trim())
-    : !!(requester.phone?.trim() && requester.gender?.trim());
+    ? !!(isValidPhone(doctor.phone) && doctor.gender?.trim())
+    : !!(isValidPhone(requester.phone) && requester.gender?.trim());
 
   const step2Valid =
     !!doctor.selfie &&
     !!doctor.mdcn?.trim() &&
     !!doctor.license?.trim() &&
+    !!doctor.nysc?.trim() &&
     !!doctor.bankName?.trim() &&
     !!doctor.bankAccount?.trim() &&
     !!doctor.bankAccountName?.trim();
