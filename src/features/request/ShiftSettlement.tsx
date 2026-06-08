@@ -828,3 +828,123 @@ function TopBar({ onClose }: { onClose?: () => void }) {
     </div>
   );
 }
+
+/* ---------------- Custom Transfer (Monnify-backed, in-app UI) ---------------- */
+
+function CustomTransferPane({
+  amount,
+  account,
+  payState,
+  payError,
+  paymentTriggered,
+  onRetry,
+}: {
+  amount: number;
+  account: TransferAccount | null;
+  payState: "idle" | "starting" | "waiting" | "error";
+  payError: string | null;
+  paymentTriggered: boolean;
+  onRetry: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <motion.section
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="relative flex h-full w-full flex-col safe-top"
+    >
+      <TopBar />
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Complete Coverage
+        </div>
+        <div className="mt-3 text-[13px] text-muted-foreground">Transfer Exactly</div>
+        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+          {fmtNaira(account?.amount ?? amount)}
+        </div>
+
+        {payState === "starting" || (!account && !payError) ? (
+          <div className="mt-10 flex flex-col items-center gap-3 text-muted-foreground">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span className="text-[12.5px]">Generating secure account…</span>
+          </div>
+        ) : payError ? (
+          <div className="mt-8 rounded-2xl bg-surface-elevated p-5 text-center">
+            <p className="text-[13px] text-destructive">{payError}</p>
+            <button
+              onClick={onRetry}
+              className="mt-4 h-11 rounded-full bg-primary px-6 text-[13.5px] font-semibold text-primary-foreground"
+            >
+              Try again
+            </button>
+          </div>
+        ) : account ? (
+          <>
+            <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Bank
+              </div>
+              <div className="mt-1 text-[15px] font-medium">{account.bankName}</div>
+
+              <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Account Number
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <div className="text-[26px] font-semibold leading-none tracking-[0.06em] tabular-nums">
+                  {account.accountNumber}
+                </div>
+                <button
+                  onClick={() => copy(account.accountNumber)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-[12px] font-medium text-foreground/80 active:opacity-80"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                    <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                  </svg>
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+
+              <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Account Name
+              </div>
+              <div className="mt-1 text-[14px] font-medium">{account.accountName}</div>
+            </div>
+
+            <p className="mt-4 text-[12px] text-muted-foreground">
+              Send the exact amount above from any Nigerian bank app. This page
+              updates automatically once payment is received.
+            </p>
+          </>
+        ) : null}
+
+        <div className="mt-auto pb-8">
+          <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
+            {paymentTriggered ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-foreground" />
+                Verifying payment…
+              </>
+            ) : payState === "waiting" ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-foreground" />
+                Waiting for transfer…
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </motion.section>
+  );
+}
