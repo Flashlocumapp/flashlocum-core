@@ -244,7 +244,10 @@ function CoverageTile({
             Live
           </span>
         ) : (
-          <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
+          <span className="inline-flex items-center gap-2">
+            <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
+            <ReliabilityPill entityId={hospitalEntityId(coverage.hospital)} inline />
+          </span>
         )}
       </div>
 
