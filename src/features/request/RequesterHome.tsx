@@ -26,6 +26,7 @@ import {
   fetchPlaceDetails,
   type PlaceSuggestion,
 } from "@/lib/google-maps";
+import { rememberRecentLocation, useRecentLocations } from "@/lib/recent-locations";
 
 
 export function RequesterHome({ active = true }: { active?: boolean }) {
