@@ -6,7 +6,7 @@ import {
   getCachedVerificationStatus,
   type VerificationStatus,
 } from "@/lib/profile-remote";
-import { ensureAuthReady } from "@/lib/auth-ready";
+import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 // Module-level cache — keeps last-known status across tab switches so the
 // UI does NOT flash "Pending" while the backend re-fetches on remount.
@@ -44,6 +44,18 @@ function ensureVerificationChannel(userId: string) {
       },
     )
     .subscribe();
+}
+
+if (typeof window !== "undefined") {
+  subscribeAuthState(({ event, session }) => {
+    if (event !== "SIGNED_OUT" || session) return;
+    cached = null;
+    if (verificationChannel) {
+      supabase.removeChannel(verificationChannel);
+      verificationChannel = null;
+      verificationChannelUserId = null;
+    }
+  });
 }
 
 /**
