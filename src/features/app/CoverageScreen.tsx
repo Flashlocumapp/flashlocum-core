@@ -409,6 +409,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         initialPhase="settlement"
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingId(null)}
+        requestId={settling?.id}
         shift={
           settling
             ? {
