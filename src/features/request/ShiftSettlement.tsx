@@ -631,6 +631,8 @@ function OvertimePane({
   payState,
   payError,
   account,
+  onSimulate,
+  simulating,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -644,6 +646,8 @@ function OvertimePane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }) {
   if (onPayWithMonnify) {
     return (
@@ -654,6 +658,8 @@ function OvertimePane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        onSimulate={onSimulate}
+        simulating={simulating}
       />
     );
   }
