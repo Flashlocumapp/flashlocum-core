@@ -988,6 +988,25 @@ function CustomTransferPane({
               <div className="mt-1 text-[14px] font-medium">{account.accountName}</div>
             </div>
 
+            <div className="mt-5 flex items-center justify-between rounded-2xl bg-secondary/40 px-4 py-3">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  {expired ? "Price hold expired" : "Price held for"}
+                </span>
+                <span className="mt-0.5 text-[11.5px] text-muted-foreground">
+                  {expired
+                    ? "Amount may increase if payment isn't made soon."
+                    : "Amount may increase if payment isn't made in time."}
+                </span>
+              </div>
+              <span
+                className="text-[18px] font-semibold tabular-nums"
+                style={{ color: remaining <= 60 ? "var(--color-destructive)" : "var(--color-foreground)" }}
+              >
+                {fmtClock(remaining)}
+              </span>
+            </div>
+
             <p className="mt-4 text-[12px] text-muted-foreground">
               Send the exact amount above from any Nigerian bank app. This page
               updates automatically once payment is received.
