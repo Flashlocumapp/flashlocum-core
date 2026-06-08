@@ -64,10 +64,28 @@ export type PlaceDetails = {
   lng: number;
 };
 
-// Lagos bias keeps results relevant to FlashLocum's launch market.
+// Lagos State bounds — FlashLocum is restricted to Lagos at launch.
+// Any pin, search result, or selection outside this box is rejected.
+export const LAGOS_BOUNDS = {
+  sw: { lat: 6.35, lng: 2.70 },
+  ne: { lat: 6.80, lng: 4.40 },
+} as const;
 const BIAS_CENTER = { lat: 6.5244, lng: 3.3792 };
-const SEARCH_RADIUS_M = 50_000;
-const SEARCH_BIAS: google.maps.CircleLiteral = { center: BIAS_CENTER, radius: SEARCH_RADIUS_M };
+const SEARCH_RADIUS_M = 40_000;
+
+export function isInLagos(lat?: number | null, lng?: number | null): boolean {
+  if (lat == null || lng == null) return false;
+  return (
+    lat >= LAGOS_BOUNDS.sw.lat &&
+    lat <= LAGOS_BOUNDS.ne.lat &&
+    lng >= LAGOS_BOUNDS.sw.lng &&
+    lng <= LAGOS_BOUNDS.ne.lng
+  );
+}
+
+function looksLikeLagosText(secondary: string): boolean {
+  return /\blagos\b/i.test(secondary);
+}
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
