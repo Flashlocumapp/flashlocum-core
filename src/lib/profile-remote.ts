@@ -114,6 +114,7 @@ function writePersisted(p: ProfileRow | null) {
         years_experience: null,
         bank_name: null,
         bank_account: null,
+        bank_account_name: null,
         selfie_url: null,
         onboarded_at: p.onboarded_at,
         onboarded_cover_at: p.onboarded_cover_at,
