@@ -11,45 +11,15 @@ import {
 import { beginSettlementCheckout } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
-type MonnifyInitArgs = {
+type TransferAccount = {
   amount: number;
-  currency: string;
-  reference: string;
-  customerFullName: string;
-  customerEmail: string;
-  apiKey: string;
-  contractCode: string;
-  paymentDescription: string;
-  isTestMode?: boolean;
-  paymentMethods?: string[];
-  incomeSplitConfig?: Array<{ subAccountCode: string; splitPercentage: number; feeBearer: boolean }>;
-  onLoadStart?: () => void;
-  onLoadComplete?: () => void;
-  onComplete?: (response: unknown) => void;
-  onClose?: (response: unknown) => void;
-
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  expiresOn: string | null;
+  paymentReference: string;
 };
-type MonnifySdk = { initialize: (args: MonnifyInitArgs) => void };
 
-const MONNIFY_SDK_URL = "https://sdk.monnify.com/plugin/monnify.js";
-let monnifySdkPromise: Promise<void> | null = null;
-function loadMonnifySdk(): Promise<void> {
-  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
-  if ((window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK) return Promise.resolve();
-  if (monnifySdkPromise) return monnifySdkPromise;
-  monnifySdkPromise = new Promise<void>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = MONNIFY_SDK_URL;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => {
-      monnifySdkPromise = null;
-      reject(new Error("Failed to load Monnify SDK"));
-    };
-    document.head.appendChild(s);
-  });
-  return monnifySdkPromise;
-}
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
