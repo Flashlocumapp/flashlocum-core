@@ -8,6 +8,7 @@ import { CancelFlow } from "@/components/CancelFlow";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
+import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { pushToast } from "@/lib/notifications";
 import {
   onlineDoctors,
