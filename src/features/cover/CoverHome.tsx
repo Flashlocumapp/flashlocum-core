@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
-import { InfoTooltip } from "@/components/InfoTooltip";
 import { fmtOpMeta } from "@/lib/format";
 import {
   doctorEntityId,
@@ -87,8 +86,8 @@ export function CoverHome({ active = true }: { active?: boolean }) {
         <div className="mx-auto flex max-w-md flex-col gap-2.5 px-4 pb-4">
           <CoverageTile coverage={approved ? focus : null} active={isActive && approved} />
           <div className="grid grid-cols-2 gap-2.5">
-            <ScoreTile score={myRating.score} provisional={myRating.provisional} />
-            <ReliabilityTile display={myReliability.display} provisional={myReliability.provisional} />
+            <ScoreTile score={myRating.score} />
+            <ReliabilityTile display={myReliability.display} />
           </div>
         </div>
       </section>
@@ -275,7 +274,7 @@ function CoverageTile({
 
 /* ------------------ Stats ------------------ */
 
-function ScoreTile({ score, provisional }: { score: number; provisional?: boolean }) {
+function ScoreTile({ score }: { score: number }) {
   return (
     <div
       className="rounded-2xl px-3.5 py-2.5"
@@ -284,13 +283,8 @@ function ScoreTile({ score, provisional }: { score: number; provisional?: boolea
         boxShadow: "0 6px 20px -10px rgba(0,0,0,0.14)",
       }}
     >
-      <div className="flex items-center gap-1">
-        <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Score
-        </div>
-        {provisional && (
-          <InfoTooltip text="Provisional — will be replaced with your real average after 10 shifts." />
-        )}
+      <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        Score
       </div>
       <div className="mt-0.5 flex items-baseline gap-1">
         <span className="text-[18px] font-semibold tabular-nums tracking-tight">
@@ -304,7 +298,7 @@ function ScoreTile({ score, provisional }: { score: number; provisional?: boolea
   );
 }
 
-function ReliabilityTile({ display, provisional }: { display: string; provisional?: boolean }) {
+function ReliabilityTile({ display }: { display: string }) {
   return (
     <div
       className="rounded-2xl px-3.5 py-2.5"
@@ -313,13 +307,8 @@ function ReliabilityTile({ display, provisional }: { display: string; provisiona
         boxShadow: "0 6px 20px -10px rgba(0,0,0,0.14)",
       }}
     >
-      <div className="flex items-center gap-1">
-        <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Reliability
-        </div>
-        {provisional && (
-          <InfoTooltip text="Provisional — will be replaced with your real average after 10 shifts." />
-        )}
+      <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        Reliability
       </div>
       <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
         {display}

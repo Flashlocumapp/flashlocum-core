@@ -9,10 +9,7 @@ import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet"
 import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
-import { InfoTooltip } from "@/components/InfoTooltip";
 import { pushToast } from "@/lib/notifications";
-import { useRating } from "@/lib/ratings";
-import { useReliability } from "@/lib/reliability";
 import { hospitalEntityId } from "@/features/cover/dispatch";
 import {
   onlineDoctors,
@@ -304,9 +301,6 @@ function HomeScreen({ active }: { active: boolean }) {
   const selfHospitalName = location?.name ?? recents[0]?.name ?? null;
   const selfEntityId = selfHospitalName ? hospitalEntityId(selfHospitalName) : null;
 
-  const selfRating = useRating(selfEntityId);
-  const selfReliability = useReliability(selfEntityId);
-
   return (
     <section className="relative h-full w-full overflow-hidden">
       <GoogleMapBackground active={active} markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
@@ -322,23 +316,13 @@ function HomeScreen({ active }: { active: boolean }) {
                 border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
               }}
             >
-              <span className="inline-flex items-center gap-1">
-                <RatingPill entityId={selfEntityId} role="requester" inline />
-                {selfRating.provisional && (
-                  <InfoTooltip text="Provisional — will be replaced with your real average after 10 shifts." />
-                )}
-              </span>
+              <RatingPill entityId={selfEntityId} role="requester" inline />
               <span
                 aria-hidden
                 className="h-3 w-px"
                 style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
               />
-              <span className="inline-flex items-center gap-1">
-                <ReliabilityPill entityId={selfEntityId} inline />
-                {selfReliability.provisional && (
-                  <InfoTooltip text="Provisional — will be replaced with your real average after 10 shifts." />
-                )}
-              </span>
+              <ReliabilityPill entityId={selfEntityId} inline />
             </div>
           </div>
         </header>
