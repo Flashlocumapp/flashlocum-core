@@ -519,6 +519,8 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
@@ -530,9 +532,12 @@ function SettlementPane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        onSimulate={onSimulate}
+        simulating={simulating}
       />
     );
   }
+
 
 
   const remaining = phase === "settlement"
