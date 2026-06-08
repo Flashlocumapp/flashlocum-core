@@ -8,7 +8,7 @@ import {
   billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
-import { beginSettlementCheckout } from "@/lib/settlement.functions";
+import { beginSettlementCheckout, simulateSettlementPayment } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type TransferAccount = {
