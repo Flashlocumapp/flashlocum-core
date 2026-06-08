@@ -65,6 +65,7 @@ function OnboardingScreen() {
           selfie_url: doctor.selfie ?? null,
           bank_name: doctor.bankName ?? null,
           bank_account: doctor.bankAccount ?? null,
+          bank_account_name: doctor.bankAccountName ?? null,
         }
       : {
           phone: requester.phone ?? null,
