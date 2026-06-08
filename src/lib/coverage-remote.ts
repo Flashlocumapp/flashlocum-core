@@ -232,7 +232,20 @@ async function fetchAll(): Promise<NetRequest[] | null> {
     console.warn("[coverage-remote] fetch error:", error.message);
     return null;
   }
-  return (data ?? []).map((r) => rowToNet(r as Row));
+  // Phone is column-restricted in RLS: only the requester or the accepted
+  // doctor can read it, via a SECURITY DEFINER RPC.
+  const phoneMap = new Map<string, string>();
+  const { data: phones, error: phoneErr } = await supabase.rpc("list_my_request_phones");
+  if (!phoneErr && Array.isArray(phones)) {
+    for (const p of phones as Array<{ id: string; phone: string | null }>) {
+      if (p?.id) phoneMap.set(p.id, p.phone ?? "");
+    }
+  }
+  return (data ?? []).map((r) => {
+    const row = r as Row;
+    const net = rowToNet({ ...row, phone: phoneMap.get(row.id) ?? "" });
+    return net;
+  });
 }
 
 async function refreshSnapshot() {
@@ -304,13 +317,17 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     channel = supabase
       .channel("coverage_requests_changes")
       .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) => {
+        // Strip phone from realtime payloads — the per-fetch RPC supplies it
+        // only to the requester and accepted doctor. refreshSnapshot() below
+        // re-fetches with the correct phone scope.
+        const strip = (r: Row | undefined) => (r ? { ...r, phone: "" } : r);
         if (payload.eventType === "INSERT") {
-          const row = rowToNet(payload.new as Row);
+          const row = rowToNet(strip(payload.new as Row) as Row);
           eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
           refreshSnapshot();
         } else if (payload.eventType === "UPDATE") {
-          const row = rowToNet(payload.new as Row);
-          const old = payload.old ? rowToNet(payload.old as Row) : null;
+          const row = rowToNet(strip(payload.new as Row) as Row);
+          const old = payload.old ? rowToNet(strip(payload.old as Row) as Row) : null;
           eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
           refreshSnapshot();
         } else if (payload.eventType === "DELETE") {

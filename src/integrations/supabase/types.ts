@@ -241,6 +241,7 @@ export type Database = {
       }
       admin_overview_stats: { Args: never; Returns: Json }
       claim_first_admin: { Args: never; Returns: boolean }
+      get_request_phone: { Args: { _request_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -251,6 +252,13 @@ export type Database = {
       is_assigned_doctor_of: {
         Args: { _doctor: string; _requester: string }
         Returns: boolean
+      }
+      list_my_request_phones: {
+        Args: never
+        Returns: {
+          id: string
+          phone: string
+        }[]
       }
       touch_last_seen: { Args: never; Returns: undefined }
     }
