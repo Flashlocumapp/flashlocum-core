@@ -94,9 +94,9 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     }
 
     // 6. Initiate transaction + resolve one-time virtual account for in-app UI.
-    const paymentReference = reqRow.payment_reference && reqRow.payment_status === "pending"
-      ? reqRow.payment_reference
-      : `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}`;
+    // Always mint a fresh reference — Monnify rejects duplicates (422).
+    const paymentReference = `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}`;
+
 
     const { initiateSplitTransaction, initBankTransferAccount } = await import(
       "./monnify/checkout.server"
