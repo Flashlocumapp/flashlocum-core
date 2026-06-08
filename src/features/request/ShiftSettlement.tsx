@@ -444,6 +444,9 @@ function SettlementPane({
   onCopy,
   onMadePayment,
   paymentTriggered,
+  onPayWithMonnify,
+  payState,
+  payError,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -453,6 +456,9 @@ function SettlementPane({
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
+  onPayWithMonnify?: () => void;
+  payState: "idle" | "starting" | "waiting" | "error";
+  payError: string | null;
 }) {
   const remaining = phase === "settlement"
     ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
