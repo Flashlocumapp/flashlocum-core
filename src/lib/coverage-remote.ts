@@ -317,13 +317,17 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     channel = supabase
       .channel("coverage_requests_changes")
       .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) => {
+        // Strip phone from realtime payloads — the per-fetch RPC supplies it
+        // only to the requester and accepted doctor. refreshSnapshot() below
+        // re-fetches with the correct phone scope.
+        const strip = (r: Row | undefined) => (r ? { ...r, phone: "" } : r);
         if (payload.eventType === "INSERT") {
-          const row = rowToNet(payload.new as Row);
+          const row = rowToNet(strip(payload.new as Row) as Row);
           eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
           refreshSnapshot();
         } else if (payload.eventType === "UPDATE") {
-          const row = rowToNet(payload.new as Row);
-          const old = payload.old ? rowToNet(payload.old as Row) : null;
+          const row = rowToNet(strip(payload.new as Row) as Row);
+          const old = payload.old ? rowToNet(strip(payload.old as Row) as Row) : null;
           eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
           refreshSnapshot();
         } else if (payload.eventType === "DELETE") {
