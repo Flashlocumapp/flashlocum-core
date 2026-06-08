@@ -31,8 +31,16 @@ export const resolveBankAccountName = createServerFn({ method: "POST" })
       accountNumber: data.accountNumber,
       bankCode: data.bankCode,
     });
-    const res = await monnifyFetch<{ accountName: string; accountNumber: string; bankCode: string }>(
-      `/api/v1/disbursements/account/validate?${params.toString()}`,
-    );
-    return { accountName: res.accountName };
+    try {
+      const res = await monnifyFetch<{ accountName: string; accountNumber: string; bankCode: string }>(
+        `/api/v1/disbursements/account/validate?${params.toString()}`,
+      );
+      return { accountName: res.accountName };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (/invalid account details|not found|404/i.test(msg)) {
+        throw new Error("Account not found. Check the number and selected bank.");
+      }
+      throw new Error("Couldn't verify account right now. Please try again.");
+    }
   });
