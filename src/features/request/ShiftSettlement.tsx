@@ -21,11 +21,13 @@ type MonnifyInitArgs = {
   contractCode: string;
   paymentDescription: string;
   isTestMode?: boolean;
+  paymentMethods?: string[];
   incomeSplitConfig?: Array<{ subAccountCode: string; splitPercentage: number; feeBearer: boolean }>;
   onLoadStart?: () => void;
   onLoadComplete?: () => void;
   onComplete?: (response: unknown) => void;
   onClose?: (response: unknown) => void;
+
 };
 type MonnifySdk = { initialize: (args: MonnifyInitArgs) => void };
 
