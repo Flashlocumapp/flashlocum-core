@@ -9,6 +9,24 @@ import { hasMapsKey, loadMapsApi } from "@/lib/google-maps";
 type Coords = { lat: number; lng: number };
 export type PlaceMapMarker = Coords & { key: string; title?: string };
 
+// Lagos is FlashLocum's only operating market at launch. The map is hard-
+// restricted to these bounds so the user can't pan/zoom out of Lagos State.
+const LAGOS_BOUNDS_LITERAL: google.maps.LatLngBoundsLiteral = {
+  south: 6.35,
+  west: 2.70,
+  north: 6.80,
+  east: 4.40,
+};
+
+function inLagos(c: Coords): boolean {
+  return (
+    c.lat >= LAGOS_BOUNDS_LITERAL.south &&
+    c.lat <= LAGOS_BOUNDS_LITERAL.north &&
+    c.lng >= LAGOS_BOUNDS_LITERAL.west &&
+    c.lng <= LAGOS_BOUNDS_LITERAL.east
+  );
+}
+
 // Lagos as a sensible fallback center for FlashLocum's launch market.
 const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };
 
@@ -213,10 +231,17 @@ export function GoogleMapBackground({
     loadMapsApi()
       .then((g) => {
         if (cancelled || !ref.current || mapRef.current) return;
-        const initial = center ?? userCenter ?? FALLBACK_CENTER;
+        const rawInitial = center ?? userCenter ?? FALLBACK_CENTER;
+        const initial = inLagos(rawInitial) ? rawInitial : FALLBACK_CENTER;
         mapRef.current = new g.maps.Map(ref.current, {
           center: initial,
           zoom: 12,
+          minZoom: 10,
+          maxZoom: 18,
+          restriction: {
+            latLngBounds: LAGOS_BOUNDS_LITERAL,
+            strictBounds: true,
+          },
           disableDefaultUI: true,
           gestureHandling: "greedy",
           clickableIcons: false,
@@ -239,7 +264,7 @@ export function GoogleMapBackground({
     if (!mapRef.current) return;
     const c = center ?? userCenter;
     if (!c) return;
-    mapRef.current.panTo(c);
+    mapRef.current.panTo(inLagos(c) ? c : FALLBACK_CENTER);
   }, [center, userCenter, mapReady]);
 
   // When this surface becomes the active tab, snap the viewport back to the
@@ -249,14 +274,16 @@ export function GoogleMapBackground({
     if (!active || !mapRef.current) return;
     const c = center ?? userCenter;
     if (!c) return;
-    mapRef.current.panTo(c);
+    mapRef.current.panTo(inLagos(c) ? c : FALLBACK_CENTER);
   }, [active, center, userCenter, mapReady]);
 
 
   // Requester "you are here" dot — always anchored to real geolocation.
   useEffect(() => {
     if (!mapRef.current) return;
-    if (!userCenter || !showSelf) {
+    // Don't drop the "you are here" pin outside Lagos — FlashLocum only
+    // operates inside Lagos State, so the pin would be misleading.
+    if (!userCenter || !showSelf || !inLagos(userCenter)) {
       selfMarker.current?.setMap(null);
       selfMarker.current = null;
       return;

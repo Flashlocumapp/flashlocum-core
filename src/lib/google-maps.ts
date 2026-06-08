@@ -64,10 +64,26 @@ export type PlaceDetails = {
   lng: number;
 };
 
-// Lagos bias keeps results relevant to FlashLocum's launch market.
-const BIAS_CENTER = { lat: 6.5244, lng: 3.3792 };
-const SEARCH_RADIUS_M = 50_000;
-const SEARCH_BIAS: google.maps.CircleLiteral = { center: BIAS_CENTER, radius: SEARCH_RADIUS_M };
+// Lagos State bounds — FlashLocum is restricted to Lagos at launch.
+// Any pin, search result, or selection outside this box is rejected.
+export const LAGOS_BOUNDS = {
+  sw: { lat: 6.35, lng: 2.70 },
+  ne: { lat: 6.80, lng: 4.40 },
+} as const;
+
+export function isInLagos(lat?: number | null, lng?: number | null): boolean {
+  if (lat == null || lng == null) return false;
+  return (
+    lat >= LAGOS_BOUNDS.sw.lat &&
+    lat <= LAGOS_BOUNDS.ne.lat &&
+    lng >= LAGOS_BOUNDS.sw.lng &&
+    lng <= LAGOS_BOUNDS.ne.lng
+  );
+}
+
+function looksLikeLagosText(secondary: string): boolean {
+  return /\blagos\b/i.test(secondary);
+}
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
@@ -87,10 +103,9 @@ export async function fetchHospitalSuggestions(
   if (!q) return [];
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
-  const locationBias: google.maps.CircleLiteral = {
-    center: origin ?? BIAS_CENTER,
-    radius: origin ? 50_000 : SEARCH_RADIUS_M,
-  };
+  void origin;
+
+
 
   const byId = new Map<string, PlaceSuggestion>();
 
@@ -99,11 +114,18 @@ export async function fetchHospitalSuggestions(
     byId.set(suggestion.placeId, { ...current, ...suggestion });
   };
 
+  const locationRestriction: google.maps.LatLngBoundsLiteral = {
+    south: LAGOS_BOUNDS.sw.lat,
+    west: LAGOS_BOUNDS.sw.lng,
+    north: LAGOS_BOUNDS.ne.lat,
+    east: LAGOS_BOUNDS.ne.lng,
+  };
+
   try {
     const { places } = await lib.Place.searchByText({
       textQuery: q,
       fields: ["id", "displayName", "formattedAddress", "location"],
-      locationBias,
+      locationRestriction,
       maxResultCount: 10,
       region: "NG",
       language: "en",
@@ -114,12 +136,15 @@ export async function fetchHospitalSuggestions(
       const id = place.id;
       const loc = place.location;
       if (!id || !loc) return;
+      const lat = loc.lat();
+      const lng = loc.lng();
+      if (!isInLagos(lat, lng)) return;
       addSuggestion({
         placeId: id,
         primary: place.displayName ?? q,
         secondary: place.formattedAddress ?? "",
-        lat: loc.lat(),
-        lng: loc.lng(),
+        lat,
+        lng,
       });
     });
   } catch {
@@ -133,17 +158,27 @@ export async function fetchHospitalSuggestions(
       includedRegionCodes: ["ng"],
       region: "NG",
       language: "en",
-      locationBias: new g.maps.Circle(locationBias),
+      locationRestriction: new g.maps.LatLngBounds(
+        { lat: LAGOS_BOUNDS.sw.lat, lng: LAGOS_BOUNDS.sw.lng },
+        { lat: LAGOS_BOUNDS.ne.lat, lng: LAGOS_BOUNDS.ne.lng },
+      ),
     });
 
     suggestions
       .map((s) => s.placePrediction)
       .filter((p): p is NonNullable<typeof p> => !!p)
       .forEach((p) => {
+        const primary = p.mainText?.toString() ?? p.text.toString();
+        const secondary = p.secondaryText?.toString() ?? "";
+        // Autocomplete predictions don't carry coords — guard with a Lagos
+        // text check so non-Lagos addresses that slip past the bounds bias
+        // (locationRestriction is best-effort for autocomplete) are dropped.
+        // Place results above carry coords and are filtered strictly.
+        if (!byId.has(p.placeId) && !looksLikeLagosText(secondary)) return;
         addSuggestion({
           placeId: p.placeId,
-          primary: p.mainText?.toString() ?? p.text.toString(),
-          secondary: p.secondaryText?.toString() ?? "",
+          primary,
+          secondary,
         });
       });
   } catch {

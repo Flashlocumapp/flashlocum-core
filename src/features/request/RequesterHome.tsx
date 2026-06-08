@@ -27,6 +27,7 @@ import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
   fetchHospitalSuggestions,
   fetchPlaceDetails,
+  isInLagos,
   type PlaceSuggestion,
 } from "@/lib/google-maps";
 import { rememberRecentLocation, useRecentLocations } from "@/lib/recent-locations";
@@ -248,6 +249,12 @@ function HomeScreen({ active }: { active: boolean }) {
   };
 
   const selectSuggestion = async (s: PlaceSuggestion) => {
+    // Hard-restrict to Lagos. If coords are present and out of bounds, reject
+    // immediately; otherwise resolve via Place Details and validate there.
+    if (s.lat != null && s.lng != null && !isInLagos(s.lat, s.lng)) {
+      pushToast({ tone: "warn", title: "FlashLocum is only available in Lagos right now." });
+      return;
+    }
     setQuery(s.primary);
     setSuggestions([]);
     if (s.lat != null && s.lng != null) {
@@ -263,6 +270,12 @@ function HomeScreen({ active }: { active: boolean }) {
     try {
       const details = await fetchPlaceDetails(s.placeId);
       if (!details) return;
+      if (!isInLagos(details.lat, details.lng)) {
+        setLocation(null);
+        setStage("search");
+        pushToast({ tone: "warn", title: "FlashLocum is only available in Lagos right now." });
+        return;
+      }
       setLocation({
         placeId: details.placeId,
         name: details.name || s.primary,
