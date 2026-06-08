@@ -314,6 +314,9 @@ export function ShiftSettlement({
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
+            onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
+            payState={payState}
+            payError={payError}
           />
         )}
         {phase === "overtime" && (
@@ -327,6 +330,9 @@ export function ShiftSettlement({
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
+            onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
+            payState={payState}
+            payError={payError}
           />
         )}
         {phase === "confirmed" && (
