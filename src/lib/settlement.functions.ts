@@ -93,15 +93,39 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
         .eq("id", doctor.id);
     }
 
-    // 6. Build SDK params for in-app inline checkout (no redirect).
+    // 6. Initiate transaction + resolve one-time virtual account for in-app UI.
     const paymentReference = reqRow.payment_reference && reqRow.payment_status === "pending"
       ? reqRow.payment_reference
       : `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}`;
 
-    const apiKey = process.env.MONNIFY_API_KEY;
-    const contractCode = process.env.MONNIFY_CONTRACT_CODE;
-    if (!apiKey || !contractCode) {
-      throw new Error("Monnify is not configured. Please contact support.");
+    const { initiateSplitTransaction, initBankTransferAccount } = await import(
+      "./monnify/checkout.server"
+    );
+
+    let txRef: string;
+    try {
+      const tx = await initiateSplitTransaction({
+        amount: data.amount,
+        paymentReference,
+        paymentDescription: `FlashLocum cover — ${reqRow.hospital}`,
+        customerEmail,
+        customerName,
+        doctorSubAccountCode: subAccountCode!,
+      });
+      txRef = tx.transactionReference;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[settlement] initiateSplitTransaction failed:", msg);
+      throw new Error("Couldn't start the payment. Please try again.");
+    }
+
+    let account;
+    try {
+      account = await initBankTransferAccount(txRef);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[settlement] initBankTransferAccount failed:", msg);
+      throw new Error("Couldn't generate a transfer account. Please try again.");
     }
 
     // 7. Persist reference + pending status.
@@ -115,24 +139,14 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
       })
       .eq("id", reqRow.id);
 
-    const { DOCTOR_SPLIT_PERCENTAGE } = await import("./monnify/checkout.server");
-
     return {
-      apiKey,
-      contractCode,
-      amount: data.amount,
-      paymentReference,
-      paymentDescription: `FlashLocum cover — ${reqRow.hospital}`,
-      customerEmail,
-      customerName,
-      currency: "NGN" as const,
-      incomeSplitConfig: [
-        {
-          subAccountCode,
-          splitPercentage: DOCTOR_SPLIT_PERCENTAGE,
-          feeBearer: true,
-        },
-      ],
+      amount: account.amount,
+      accountNumber: account.accountNumber,
+      accountName: account.accountName,
+      bankName: account.bankName,
+      expiresOn: account.expiresOn ?? null,
+      paymentReference: account.paymentReference,
     };
   });
+
 
