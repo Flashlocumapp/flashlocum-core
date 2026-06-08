@@ -37,7 +37,9 @@ import {
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
-  return getRole() === "cover" ? "doctor" : "requester";
+  const role = getRole();
+  if (!role) return "system";
+  return role === "cover" ? "doctor" : "requester";
 }
 
 const SCHEMA_VERSION = 3;

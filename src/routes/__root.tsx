@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { initLightMode } from "@/lib/theme";
 import { clearRole } from "@/lib/role";
 import { subscribeAuthState } from "@/lib/auth-ready";
+import { unregisterDoctor } from "@/lib/network";
 
 function NotFoundComponent() {
   return (
@@ -84,6 +85,7 @@ function RootComponent() {
     return subscribeAuthState(({ event, session }) => {
       if (event === "SIGNED_OUT" && !session) {
         sawSignOut = true;
+        unregisterDoctor();
         void queryClient.cancelQueries().finally(() => {
           queryClient.clear();
           clearRole();

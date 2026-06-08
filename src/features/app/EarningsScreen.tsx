@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
-import { getRole } from "@/lib/role";
+import { useEffect, useMemo, useState } from "react";
+import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
 
@@ -41,12 +41,14 @@ function toPayout(h: HistoryItem, now: number): Payout {
 export function EarningsScreen({ active = true }: { active?: boolean }) {
   const navigate = useNavigate();
   const { history } = useDispatch();
-  const isDoctor = getRole() === "cover";
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
+  useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
+  const isDoctor = role === "cover";
   useEffect(() => {
-    if (active && !isDoctor) {
+    if (active && role && !isDoctor) {
       navigate({ to: "/home" });
     }
-  }, [active, isDoctor, navigate]);
+  }, [active, isDoctor, navigate, role]);
 
   const payouts = useMemo<Payout[]>(() => {
     const now = Date.now();
@@ -64,7 +66,7 @@ export function EarningsScreen({ active = true }: { active?: boolean }) {
     return { thisMonth: month, pending: pend };
   }, [payouts]);
 
-  if (!isDoctor) return null;
+  if (!role || !isDoctor) return null;
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
