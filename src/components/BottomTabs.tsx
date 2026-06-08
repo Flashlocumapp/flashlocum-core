@@ -55,8 +55,9 @@ const COVER_TABS: Tab[] = [HOME, COVERAGE, EARNINGS, ACCOUNT];
 
 export function BottomTabs() {
   const { pathname } = useLocation();
-  const [role, setLocalRole] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
+  if (!role) return null;
   const tabs = role === "cover" ? COVER_TABS : REQUESTER_TABS;
 
   return (
