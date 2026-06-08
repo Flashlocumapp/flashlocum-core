@@ -150,3 +150,31 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
   });
 
 
+// --- Dev-only: simulate Monnify webhook for sandbox testing ---
+const SimInput = z.object({ requestId: z.string().uuid() });
+
+export const simulateSettlementPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => SimInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("coverage_requests")
+      .select("id, requester_id, payment_reference, payment_status, settled_amount")
+      .eq("id", data.requestId)
+      .maybeSingle();
+    if (error || !row) throw new Error("Coverage request not found");
+    if (row.requester_id !== userId) throw new Error("Not authorized");
+    if (!row.payment_reference) throw new Error("No active payment to simulate. Start checkout first.");
+    if (row.payment_status === "paid") return { ok: true, alreadyPaid: true };
+    const { error: rpcErr } = await supabaseAdmin.rpc("mark_settlement_paid", {
+      _payment_reference: row.payment_reference,
+      _amount: row.settled_amount ?? 0,
+    });
+    if (rpcErr) throw new Error(rpcErr.message);
+    return { ok: true, alreadyPaid: false };
+  });
+
+
+

@@ -8,7 +8,7 @@ import {
   billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
-import { beginSettlementCheckout } from "@/lib/settlement.functions";
+import { beginSettlementCheckout, simulateSettlementPayment } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type TransferAccount = {
@@ -244,9 +244,11 @@ export function ShiftSettlement({
 
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
+  const simulatePay = useServerFn(simulateSettlementPayment);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
@@ -264,6 +266,20 @@ export function ShiftSettlement({
       setPayState("error");
     }
   };
+
+  const handleSimulate = async () => {
+    if (!requestId || simulating) return;
+    setSimulating(true);
+    try {
+      await simulatePay({ data: { requestId } });
+      autoConfirmAt.current = simNow() + 500;
+    } catch (e) {
+      setPayError(e instanceof Error ? e.message : "Simulation failed");
+    } finally {
+      setSimulating(false);
+    }
+  };
+
 
   // Auto-start the moment we land in settlement.
   const autoOpenedRef = useRef(false);
@@ -354,6 +370,8 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
+            onSimulate={requestId ? handleSimulate : undefined}
+            simulating={simulating}
           />
         )}
         {phase === "overtime" && (
@@ -371,6 +389,8 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
+            onSimulate={requestId ? handleSimulate : undefined}
+            simulating={simulating}
           />
         )}
         {phase === "confirmed" && (
@@ -486,6 +506,8 @@ function SettlementPane({
   payState,
   payError,
   account,
+  onSimulate,
+  simulating,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -499,6 +521,8 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
@@ -510,9 +534,12 @@ function SettlementPane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        onSimulate={onSimulate}
+        simulating={simulating}
       />
     );
   }
+
 
 
   const remaining = phase === "settlement"
@@ -604,6 +631,8 @@ function OvertimePane({
   payState,
   payError,
   account,
+  onSimulate,
+  simulating,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -617,6 +646,8 @@ function OvertimePane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }) {
   if (onPayWithMonnify) {
     return (
@@ -627,6 +658,8 @@ function OvertimePane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        onSimulate={onSimulate}
+        simulating={simulating}
       />
     );
   }
@@ -838,6 +871,8 @@ function CustomTransferPane({
   payError,
   paymentTriggered,
   onRetry,
+  onSimulate,
+  simulating,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -845,6 +880,8 @@ function CustomTransferPane({
   payError: string | null;
   paymentTriggered: boolean;
   onRetry: () => void;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
@@ -929,7 +966,7 @@ function CustomTransferPane({
           </>
         ) : null}
 
-        <div className="mt-auto pb-8">
+        <div className="mt-auto space-y-3 pb-8">
           <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
             {paymentTriggered ? (
               <>
@@ -943,8 +980,18 @@ function CustomTransferPane({
               </>
             ) : null}
           </div>
+          {onSimulate && account && !paymentTriggered && (
+            <button
+              onClick={onSimulate}
+              disabled={simulating}
+              className="h-11 w-full rounded-full border border-dashed border-foreground/30 text-[12.5px] font-medium text-muted-foreground active:opacity-80 disabled:opacity-50"
+            >
+              {simulating ? "Simulating…" : "Simulate payment (sandbox)"}
+            </button>
+          )}
         </div>
       </div>
+
     </motion.section>
   );
 }
