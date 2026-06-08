@@ -99,33 +99,46 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
         .eq("id", doctor.id);
     }
 
-    // 6. Init Monnify checkout.
-    const paymentReference = `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}`;
-    const origin =
-      process.env.PUBLIC_APP_ORIGIN ??
-      process.env.VITE_PUBLIC_APP_ORIGIN ??
-      "https://app.flashlocum.com";
-    const { initiateSplitCheckout } = await import("./monnify/checkout.server");
-    const tx = await initiateSplitCheckout({
+    // 6. Build SDK params for in-app inline checkout (no redirect).
+    const paymentReference = reqRow.payment_reference && reqRow.payment_status === "pending"
+      ? reqRow.payment_reference
+      : `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}`;
+
+    const apiKey = process.env.MONNIFY_API_KEY;
+    const contractCode = process.env.MONNIFY_CONTRACT_CODE;
+    if (!apiKey || !contractCode) {
+      throw new Error("Monnify is not configured. Please contact support.");
+    }
+
+    // 7. Persist reference + pending status.
+    await supabaseAdmin
+      .from("coverage_requests")
+      .update({
+        payment_provider: "monnify",
+        payment_reference: paymentReference,
+        payment_status: "pending",
+        payment_url: null,
+      })
+      .eq("id", reqRow.id);
+
+    const { DOCTOR_SPLIT_PERCENTAGE } = await import("./monnify/checkout.server");
+
+    return {
+      apiKey,
+      contractCode,
       amount: data.amount,
       paymentReference,
       paymentDescription: `FlashLocum cover — ${reqRow.hospital}`,
       customerEmail,
       customerName,
-      redirectUrl: `${origin}/coverage`,
-      doctorSubAccountCode: subAccountCode,
-    });
-
-    // 7. Persist on the coverage request.
-    await supabaseAdmin
-      .from("coverage_requests")
-      .update({
-        payment_provider: "monnify",
-        payment_reference: tx.paymentReference,
-        payment_status: "pending",
-        payment_url: tx.checkoutUrl,
-      })
-      .eq("id", reqRow.id);
-
-    return { checkoutUrl: tx.checkoutUrl, paymentReference: tx.paymentReference, reused: false as const };
+      currency: "NGN" as const,
+      incomeSplitConfig: [
+        {
+          subAccountCode,
+          splitPercentage: DOCTOR_SPLIT_PERCENTAGE,
+          feeBearer: true,
+        },
+      ],
+    };
   });
+
