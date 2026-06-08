@@ -46,8 +46,6 @@ export function AccountScreen() {
 
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
 
-  if (!role) return null;
-
   const isDoctor = role === "cover";
   const identity = useMemo<Identity>(() => {
     const baseName = profile?.full_name || authIdentity.name;
@@ -100,6 +98,8 @@ export function AccountScreen() {
       { label: "Gender", value: profile?.gender || "—" },
     ];
   }, [isDoctor, profile, verification]);
+
+  if (!role) return null;
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
