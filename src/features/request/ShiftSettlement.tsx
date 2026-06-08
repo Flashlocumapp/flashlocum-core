@@ -184,9 +184,24 @@ export function ShiftSettlement({
   }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days]);
 
   const finalize = () => {
-    onConfirmed?.();
     onClose();
   };
+
+  // Fire onConfirmed exactly once the moment payment lands. This triggers the
+  // requester→network "complete" event immediately, so the doctor's rating
+  // card for the hospital appears as soon as payment is confirmed —
+  // independent of whether the requester has tapped Done or rated yet.
+  const confirmedFiredRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      confirmedFiredRef.current = false;
+      return;
+    }
+    if (phase === "confirmed" && !confirmedFiredRef.current) {
+      confirmedFiredRef.current = true;
+      onConfirmed?.();
+    }
+  }, [phase, open, onConfirmed]);
 
   // Passive payment detection — driven by simulated clock.
   useEffect(() => {
