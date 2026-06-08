@@ -146,6 +146,7 @@ export type Database = {
       profiles: {
         Row: {
           bank_account: string | null
+          bank_account_name: string | null
           bank_name: string | null
           created_at: string
           full_name: string | null
@@ -169,6 +170,7 @@ export type Database = {
         }
         Insert: {
           bank_account?: string | null
+          bank_account_name?: string | null
           bank_name?: string | null
           created_at?: string
           full_name?: string | null
@@ -192,6 +194,7 @@ export type Database = {
         }
         Update: {
           bank_account?: string | null
+          bank_account_name?: string | null
           bank_name?: string | null
           created_at?: string
           full_name?: string | null
