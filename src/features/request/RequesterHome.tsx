@@ -11,6 +11,8 @@ import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { pushToast } from "@/lib/notifications";
+import { useRating } from "@/lib/ratings";
+import { useReliability } from "@/lib/reliability";
 import { hospitalEntityId } from "@/features/cover/dispatch";
 import {
   onlineDoctors,
