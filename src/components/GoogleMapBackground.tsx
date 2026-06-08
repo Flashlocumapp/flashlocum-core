@@ -264,7 +264,7 @@ export function GoogleMapBackground({
     if (!mapRef.current) return;
     const c = center ?? userCenter;
     if (!c) return;
-    mapRef.current.panTo(c);
+    mapRef.current.panTo(inLagos(c) ? c : FALLBACK_CENTER);
   }, [center, userCenter, mapReady]);
 
   // When this surface becomes the active tab, snap the viewport back to the
@@ -274,7 +274,7 @@ export function GoogleMapBackground({
     if (!active || !mapRef.current) return;
     const c = center ?? userCenter;
     if (!c) return;
-    mapRef.current.panTo(c);
+    mapRef.current.panTo(inLagos(c) ? c : FALLBACK_CENTER);
   }, [active, center, userCenter, mapReady]);
 
 
