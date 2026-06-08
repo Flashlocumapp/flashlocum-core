@@ -178,9 +178,11 @@ function OnboardingScreen() {
               <Field
                 label="Phone number"
                 type="tel"
-                placeholder="+234 800 000 0000"
+                inputMode="numeric"
+                placeholder="080XXXXXXXX"
+                maxLength={11}
                 value={requester.phone ?? ""}
-                onChange={(v) => setRequester((p) => ({ ...p, phone: v }))}
+                onChange={(v) => setRequester((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
               <SelectField
                 label="Gender"
@@ -194,9 +196,11 @@ function OnboardingScreen() {
               <Field
                 label="Phone number"
                 type="tel"
-                placeholder="+234 800 000 0000"
+                inputMode="numeric"
+                placeholder="080XXXXXXXX"
+                maxLength={11}
                 value={doctor.phone ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, phone: v }))}
+                onChange={(v) => setDoctor((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
               <SelectField
                 label="Gender"
