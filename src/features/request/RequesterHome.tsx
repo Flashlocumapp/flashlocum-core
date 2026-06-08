@@ -304,6 +304,9 @@ function HomeScreen({ active }: { active: boolean }) {
   const selfHospitalName = location?.name ?? recents[0]?.name ?? null;
   const selfEntityId = selfHospitalName ? hospitalEntityId(selfHospitalName) : null;
 
+  const selfRating = useRating(selfEntityId);
+  const selfReliability = useReliability(selfEntityId);
+
   return (
     <section className="relative h-full w-full overflow-hidden">
       <GoogleMapBackground active={active} markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
@@ -319,13 +322,23 @@ function HomeScreen({ active }: { active: boolean }) {
                 border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
               }}
             >
-              <RatingPill entityId={selfEntityId} role="requester" inline />
+              <span className="inline-flex items-center gap-1">
+                <RatingPill entityId={selfEntityId} role="requester" inline />
+                {selfRating.provisional && (
+                  <InfoTooltip text="Provisional — will be replaced with your real average after 10 shifts." />
+                )}
+              </span>
               <span
                 aria-hidden
                 className="h-3 w-px"
                 style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
               />
-              <ReliabilityPill entityId={selfEntityId} inline />
+              <span className="inline-flex items-center gap-1">
+                <ReliabilityPill entityId={selfEntityId} inline />
+                {selfReliability.provisional && (
+                  <InfoTooltip text="Provisional — will be replaced with your real average after 10 shifts." />
+                )}
+              </span>
             </div>
           </div>
         </header>
