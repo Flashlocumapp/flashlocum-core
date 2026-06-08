@@ -104,6 +104,7 @@ export type PendingRating = {
   requestId: string;
   hospitalId: string;
   hospital: string;
+  coverage: string;
   total: number;
   feePct: number;
 };
