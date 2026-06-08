@@ -298,7 +298,7 @@ function ScoreTile({ score }: { score: number }) {
   );
 }
 
-function AcceptanceTile({ rate }: { rate: number }) {
+function ReliabilityTile({ display }: { display: string }) {
   return (
     <div
       className="rounded-2xl px-3.5 py-2.5"
@@ -308,10 +308,10 @@ function AcceptanceTile({ rate }: { rate: number }) {
       }}
     >
       <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        Acceptance
+        Reliability
       </div>
       <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
-        {rate}%
+        {display}
       </div>
     </div>
   );
