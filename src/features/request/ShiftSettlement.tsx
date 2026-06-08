@@ -506,6 +506,8 @@ function SettlementPane({
   payState,
   payError,
   account,
+  onSimulate,
+  simulating,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
