@@ -34,7 +34,6 @@ export async function initiateSplitCheckout(input: InitTxInput): Promise<InitTxR
     incomeSplitConfig: [
       {
         subAccountCode: input.doctorSubAccountCode,
-        feePercentage: 0,
         splitPercentage: DOCTOR_SPLIT_PERCENTAGE,
         feeBearer: true,
       },
