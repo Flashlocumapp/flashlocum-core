@@ -184,9 +184,24 @@ export function ShiftSettlement({
   }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days]);
 
   const finalize = () => {
-    onConfirmed?.();
     onClose();
   };
+
+  // Fire onConfirmed exactly once the moment payment lands. This triggers the
+  // requester→network "complete" event immediately, so the doctor's rating
+  // card for the hospital appears as soon as payment is confirmed —
+  // independent of whether the requester has tapped Done or rated yet.
+  const confirmedFiredRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      confirmedFiredRef.current = false;
+      return;
+    }
+    if (phase === "confirmed" && !confirmedFiredRef.current) {
+      confirmedFiredRef.current = true;
+      onConfirmed?.();
+    }
+  }, [phase, open, onConfirmed]);
 
   // Passive payment detection — driven by simulated clock.
   useEffect(() => {
@@ -894,6 +909,20 @@ function CustomTransferPane({
     }
   };
 
+  // 15-minute price-hold countdown. Anchored to when the account first
+  // appears so the timer stays in sync with the locked transfer amount.
+  const PRICE_HOLD_SEC = 15 * 60;
+  const tick = useSimClock(1000);
+  const startedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (account && startedAtRef.current == null) startedAtRef.current = simNow();
+    if (!account) startedAtRef.current = null;
+  }, [account]);
+  const remaining = startedAtRef.current
+    ? Math.max(0, PRICE_HOLD_SEC - Math.floor((tick - startedAtRef.current) / 1000))
+    : PRICE_HOLD_SEC;
+  const expired = startedAtRef.current != null && remaining === 0;
+
   return (
     <motion.section
       initial={{ opacity: 0 }}
@@ -957,6 +986,25 @@ function CustomTransferPane({
                 Account Name
               </div>
               <div className="mt-1 text-[14px] font-medium">{account.accountName}</div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between rounded-2xl bg-secondary/40 px-4 py-3">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  {expired ? "Price hold expired" : "Price held for"}
+                </span>
+                <span className="mt-0.5 text-[11.5px] text-muted-foreground">
+                  {expired
+                    ? "Amount may increase if payment isn't made soon."
+                    : "Amount may increase if payment isn't made in time."}
+                </span>
+              </div>
+              <span
+                className="text-[18px] font-semibold tabular-nums"
+                style={{ color: remaining <= 60 ? "var(--color-destructive)" : "var(--color-foreground)" }}
+              >
+                {fmtClock(remaining)}
+              </span>
             </div>
 
             <p className="mt-4 text-[12px] text-muted-foreground">
