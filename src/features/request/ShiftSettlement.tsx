@@ -649,14 +649,35 @@ function OvertimePane({
           Billed in 15-min half-blocks · {fmtClock(overtimeSec)} elapsed
         </p>
 
-        <div className="mt-auto pb-8">
-          <button
-            disabled={paymentTriggered}
-            onClick={onMadePayment}
-            className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
-          >
-            {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
-          </button>
+        <div className="mt-auto space-y-2 pb-8">
+          {onPayWithMonnify ? (
+            <>
+              <button
+                disabled={payState === "starting" || payState === "waiting" || paymentTriggered}
+                onClick={onPayWithMonnify}
+                className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+              >
+                {payState === "starting"
+                  ? "Opening Monnify…"
+                  : payState === "waiting"
+                    ? "Waiting for payment…"
+                    : paymentTriggered
+                      ? "Verifying payment…"
+                      : `Pay ${fmtNaira(total)} with Monnify`}
+              </button>
+              {payError && (
+                <p className="text-center text-[12px] text-destructive">{payError}</p>
+              )}
+            </>
+          ) : (
+            <button
+              disabled={paymentTriggered}
+              onClick={onMadePayment}
+              className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+            >
+              {paymentTriggered ? "Verifying payment…" : "I've Made Payment"}
+            </button>
+          )}
         </div>
       </div>
     </motion.section>
