@@ -871,6 +871,8 @@ function CustomTransferPane({
   payError,
   paymentTriggered,
   onRetry,
+  onSimulate,
+  simulating,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -878,6 +880,8 @@ function CustomTransferPane({
   payError: string | null;
   paymentTriggered: boolean;
   onRetry: () => void;
+  onSimulate?: () => void;
+  simulating?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
