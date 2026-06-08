@@ -104,8 +104,7 @@ export async function fetchHospitalSuggestions(
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
   void origin;
-  void BIAS_CENTER;
-  void SEARCH_RADIUS_M;
+
 
 
   const byId = new Map<string, PlaceSuggestion>();
