@@ -576,6 +576,9 @@ function OvertimePane({
   onCopy,
   onMadePayment,
   paymentTriggered,
+  onPayWithMonnify,
+  payState,
+  payError,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -585,6 +588,9 @@ function OvertimePane({
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
+  onPayWithMonnify?: () => void;
+  payState: "idle" | "starting" | "waiting" | "error";
+  payError: string | null;
 }) {
   void shift;
   const billedMin = extensionMin;
