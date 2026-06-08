@@ -26,6 +26,7 @@ import {
   fetchPlaceDetails,
   type PlaceSuggestion,
 } from "@/lib/google-maps";
+import { rememberRecentLocation, useRecentLocations } from "@/lib/recent-locations";
 
 
 export function RequesterHome({ active = true }: { active?: boolean }) {
@@ -235,7 +236,7 @@ function HomeScreen({ active }: { active: boolean }) {
     };
   }, [query, location?.name, searchOrigin]);
 
-  const recents: Recent[] = [];
+  const recents: Recent[] = useRecentLocations();
 
   const selectLocation = (r: Recent) => {
     setLocation(r);
@@ -1070,6 +1071,7 @@ function DispatchOverlay({
     });
     ownedIdRef.current = req.id;
     setRequestId(req.id);
+    if (location?.name) rememberRecentLocation(location);
     const t = window.setTimeout(() => setAmbient(true), 2800);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
