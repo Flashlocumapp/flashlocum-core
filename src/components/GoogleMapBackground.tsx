@@ -216,7 +216,7 @@ export function GoogleMapBackground({
         const initial = center ?? userCenter ?? FALLBACK_CENTER;
         mapRef.current = new g.maps.Map(ref.current, {
           center: initial,
-          zoom: 13,
+          zoom: 14,
           disableDefaultUI: true,
           gestureHandling: "greedy",
           clickableIcons: false,
