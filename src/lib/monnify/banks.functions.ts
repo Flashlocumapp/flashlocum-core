@@ -22,10 +22,14 @@ const ResolveSchema = z.object({
   accountNumber: z.string().regex(/^\d{10}$/u, "Account number must be 10 digits"),
 });
 
+export type ResolveBankAccountResult =
+  | { ok: true; accountName: string }
+  | { ok: false; error: string };
+
 export const resolveBankAccountName = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => ResolveSchema.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ResolveBankAccountResult> => {
     const { monnifyFetch } = await import("./client.server");
     const params = new URLSearchParams({
       accountNumber: data.accountNumber,
@@ -35,12 +39,13 @@ export const resolveBankAccountName = createServerFn({ method: "POST" })
       const res = await monnifyFetch<{ accountName: string; accountNumber: string; bankCode: string }>(
         `/api/v1/disbursements/account/validate?${params.toString()}`,
       );
-      return { accountName: res.accountName };
+      return { ok: true, accountName: res.accountName };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (/invalid account details|not found|404/i.test(msg)) {
-        throw new Error("Account not found. Check the number and selected bank.");
+        return { ok: false, error: "Account not found. Check the number and selected bank." };
       }
-      throw new Error("Couldn't verify account right now. Please try again.");
+      console.error("Monnify account validation error:", e);
+      return { ok: false, error: "Couldn't verify account right now. Please try again." };
     }
   });
