@@ -241,6 +241,25 @@ function OnboardingScreen() {
                 }}
               />
 
+              <UploadField
+                label="NYSC certificate upload"
+                hint={doctor.nysc ? doctor.nysc : "Tap to upload PDF or image"}
+                onPick={() => nyscRef.current?.click()}
+              />
+              <input
+                ref={nyscRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setDoctor((p) => ({ ...p, nysc: f.name }));
+                }}
+              />
+
+
+
               <BankPayoutFields
                 bankName={doctor.bankName}
                 bankCode={doctor.bankCode}
