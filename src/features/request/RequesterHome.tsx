@@ -10,6 +10,7 @@ import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { pushToast } from "@/lib/notifications";
+import { hospitalEntityId } from "@/features/cover/dispatch";
 import {
   onlineDoctors,
   pauseRequest,
