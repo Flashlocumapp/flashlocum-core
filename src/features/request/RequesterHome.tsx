@@ -236,7 +236,7 @@ function HomeScreen({ active }: { active: boolean }) {
     };
   }, [query, location?.name, searchOrigin]);
 
-  const recents: Recent[] = [];
+  const recents: Recent[] = useRecentLocations();
 
   const selectLocation = (r: Recent) => {
     setLocation(r);
