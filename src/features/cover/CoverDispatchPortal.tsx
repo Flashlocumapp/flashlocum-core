@@ -23,7 +23,7 @@ import {
 } from "@/features/cover/dispatch";
 
 export function CoverDispatchPortal() {
-  const [role, setLocalRole] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
   const { incoming, accepted, pendingRating } = useDispatch();
   const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);

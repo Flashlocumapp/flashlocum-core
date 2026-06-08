@@ -37,7 +37,7 @@ function deriveInitials(name: string, email: string): string {
 export function AccountScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [role, setLocalRole] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const authIdentity = useAuthIdentity();
@@ -45,6 +45,8 @@ export function AccountScreen() {
   const { profile, loading: profileLoading } = useMyProfile();
 
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
+
+  if (!role) return null;
 
   const isDoctor = role === "cover";
   const identity = useMemo<Identity>(() => {
