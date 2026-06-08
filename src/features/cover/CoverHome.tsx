@@ -35,7 +35,6 @@ export function CoverHome({ active = true }: { active?: boolean }) {
   // Shared doctor rating — same source used in every requester view.
   const myRating = useRating(doctorEntityId(getSessionId()));
   const myReliability = useReliability(doctorEntityId(getSessionId()));
-  const acceptance = myReliability.score;
 
   // Hard-revoke online state if verification is lost (suspension, rejection).
   useEffect(() => {
@@ -88,7 +87,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
           <CoverageTile coverage={approved ? focus : null} active={isActive && approved} />
           <div className="grid grid-cols-2 gap-2.5">
             <ScoreTile score={myRating.score} />
-            <AcceptanceTile rate={acceptance} />
+            <ReliabilityTile display={myReliability.display} />
           </div>
         </div>
       </section>
@@ -299,7 +298,7 @@ function ScoreTile({ score }: { score: number }) {
   );
 }
 
-function AcceptanceTile({ rate }: { rate: number }) {
+function ReliabilityTile({ display }: { display: string }) {
   return (
     <div
       className="rounded-2xl px-3.5 py-2.5"
@@ -309,10 +308,10 @@ function AcceptanceTile({ rate }: { rate: number }) {
       }}
     >
       <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        Acceptance
+        Reliability
       </div>
       <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
-        {rate}%
+        {display}
       </div>
     </div>
   );
