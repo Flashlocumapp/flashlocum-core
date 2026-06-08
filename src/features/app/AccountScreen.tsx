@@ -57,7 +57,7 @@ export function AccountScreen() {
   }, [authIdentity, isDoctor, profile?.full_name, profileLoading]);
 
   const switchRole = async () => {
-    if (switching) return;
+    if (switching || !role) return;
     const next: Role = isDoctor ? "request" : "cover";
     const prev: Role = role;
     setSwitching(true);
