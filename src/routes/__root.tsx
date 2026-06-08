@@ -11,6 +11,9 @@ import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { initLightMode } from "@/lib/theme";
+import { clearRole } from "@/lib/role";
+import { subscribeAuthState } from "@/lib/auth-ready";
+import { unregisterDoctor } from "@/lib/network";
 
 function NotFoundComponent() {
   return (
@@ -75,7 +78,27 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
   useEffect(() => { initLightMode(); }, []);
+  useEffect(() => {
+    let sawSignOut = false;
+    return subscribeAuthState(({ event, session }) => {
+      if (event === "SIGNED_OUT" && !session) {
+        sawSignOut = true;
+        unregisterDoctor();
+        void queryClient.cancelQueries().finally(() => {
+          queryClient.clear();
+          clearRole();
+          void router.invalidate();
+        });
+        return;
+      }
+      if (event === "SIGNED_IN" && session && sawSignOut) {
+        sawSignOut = false;
+        void router.invalidate();
+      }
+    });
+  }, [queryClient, router]);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />

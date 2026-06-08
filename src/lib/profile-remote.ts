@@ -171,9 +171,9 @@ if (typeof window !== "undefined") {
     if (!session && event === "SIGNED_OUT") {
       cachedProfile = undefined;
       cachedProfileIsPersistedSeed = false;
-      // Keep the non-sensitive onboarding/verification seed across explicit
-      // logout so same-user re-login after long inactivity can paint the app
-      // shell immediately. A different-user sign-in below clears it by uid.
+      cachedOnboarding.cover = undefined;
+      cachedOnboarding.request = undefined;
+      writePersisted(null);
       if (profileChannel) {
         supabase.removeChannel(profileChannel);
         profileChannel = null;

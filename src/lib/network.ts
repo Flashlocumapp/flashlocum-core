@@ -37,7 +37,9 @@ import {
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
-  return getRole() === "cover" ? "doctor" : "requester";
+  const role = getRole();
+  if (!role) return "system";
+  return role === "cover" ? "doctor" : "requester";
 }
 
 const SCHEMA_VERSION = 3;
@@ -337,8 +339,6 @@ function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> 
   return out;
 }
 
-
-if (typeof window !== "undefined") init();
 
 export function useNetwork() {
   const [s, setS] = useState<NetState>(state);

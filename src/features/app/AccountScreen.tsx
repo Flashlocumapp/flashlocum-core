@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { clearRole, getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
+import { getRole, setRole, subscribeRoleChange, type Role } from "@/lib/role";
 import {
   getCachedOnboardingStatus,
   hasCompletedOnboarding,
@@ -37,7 +37,7 @@ function deriveInitials(name: string, email: string): string {
 export function AccountScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [role, setLocalRole] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const authIdentity = useAuthIdentity();
@@ -57,7 +57,7 @@ export function AccountScreen() {
   }, [authIdentity, isDoctor, profile?.full_name, profileLoading]);
 
   const switchRole = async () => {
-    if (switching) return;
+    if (switching || !role) return;
     const next: Role = isDoctor ? "request" : "cover";
     const prev: Role = role;
     setSwitching(true);
@@ -98,6 +98,8 @@ export function AccountScreen() {
       { label: "Gender", value: profile?.gender || "—" },
     ];
   }, [isDoctor, profile, verification]);
+
+  if (!role) return null;
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
@@ -186,7 +188,6 @@ export function AccountScreen() {
                 await queryClient.cancelQueries();
                 unregisterDoctor();
                 queryClient.clear();
-                clearRole();
                 await supabase.auth.signOut();
                 navigate({ to: "/role", replace: true });
               }}

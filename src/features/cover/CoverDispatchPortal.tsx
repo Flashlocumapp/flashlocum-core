@@ -23,12 +23,16 @@ import {
 } from "@/features/cover/dispatch";
 
 export function CoverDispatchPortal() {
-  const [role, setLocalRole] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
+  if (role !== "cover") return null;
+  return <CoverDispatchOverlays />;
+}
+
+function CoverDispatchOverlays() {
   const { incoming, accepted, pendingRating } = useDispatch();
   const [summaryAckedId, setSummaryAckedId] = useState<string | null>(null);
 
-  if (role !== "cover") return null;
   if (!incoming && !accepted && !pendingRating) return null;
 
   const showSummary =

@@ -153,8 +153,9 @@ type TabId = typeof TABS[number]["id"];
 
 export function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
-  const [role, setLocalRole] = useState<Role>(() => getRole());
+  const [role, setLocalRole] = useState<Role | null>(() => getRole());
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
+  if (!role) return null;
 
   return role === "cover" ? (
     <DoctorCoverage tab={tab} setTab={setTab} />
