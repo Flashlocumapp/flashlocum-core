@@ -85,7 +85,7 @@ export function useRating(entityId: string | null | undefined): RatingView {
       listeners.delete(l);
     };
   }, []);
-  if (!entityId) return { score: 5.0, verified: true };
+  if (!entityId) return { score: 5.0, verified: true, provisional: true };
   return getRating(entityId);
 }
 
