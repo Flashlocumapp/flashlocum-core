@@ -20,7 +20,9 @@ export type DoctorProfile = {
   license?: string; // filename
   years?: string;
   bankName?: string;
+  bankCode?: string;
   bankAccount?: string;
+  bankAccountName?: string;
 };
 
 export function isOnboarded(role: Role): boolean {
