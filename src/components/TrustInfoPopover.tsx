@@ -8,11 +8,13 @@ export function TrustInfoPopover({
   showRatings = true,
   showReliability = true,
   align = "center",
+  direction = "down",
   className = "",
 }: {
   showRatings?: boolean;
   showReliability?: boolean;
   align?: "start" | "center" | "end";
+  direction?: "up" | "down";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
