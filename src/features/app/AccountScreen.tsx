@@ -292,7 +292,9 @@ function ProfileSheet({
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [gender, setGender] = useState(profile?.gender ?? "");
   const [bankName, setBankName] = useState(profile?.bank_name ?? "");
+  const [bankCode, setBankCode] = useState<string | undefined>(undefined);
   const [bankAccount, setBankAccount] = useState(profile?.bank_account ?? "");
+  const [bankAccountName, setBankAccountName] = useState(profile?.bank_account_name ?? "");
   const [saving, setSaving] = useState(false);
   const verification = useVerificationStatus();
 
@@ -305,6 +307,7 @@ function ProfileSheet({
             phone: phone || null,
             bank_name: bankName || null,
             bank_account: bankAccount || null,
+            bank_account_name: bankAccountName || null,
           }
         : {
             phone: phone || null,
