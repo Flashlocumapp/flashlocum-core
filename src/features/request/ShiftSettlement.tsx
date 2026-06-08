@@ -497,36 +497,22 @@ function SettlementPane({
   onPayWithMonnify?: () => void;
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
+  account: TransferAccount | null;
 }) {
-  // Monnify flow: render nothing behind the popup. The SDK overlays its own
-  // transfer checkout the moment settlement is reached.
+  // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
     return (
-      <motion.section
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="relative flex h-full w-full flex-col items-center justify-center bg-background safe-top"
-      >
-        {payError ? (
-          <div className="mx-6 max-w-sm text-center">
-            <p className="text-[13px] text-destructive">{payError}</p>
-            <button
-              onClick={onPayWithMonnify}
-              className="mt-4 h-12 rounded-full bg-primary px-6 text-[14px] font-semibold text-primary-foreground"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            <span className="text-[12.5px]">Opening secure transfer…</span>
-          </div>
-        )}
-      </motion.section>
+      <CustomTransferPane
+        amount={amount}
+        account={account}
+        payState={payState}
+        payError={payError}
+        paymentTriggered={paymentTriggered}
+        onRetry={onPayWithMonnify}
+      />
     );
   }
+
 
   const remaining = phase === "settlement"
     ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
