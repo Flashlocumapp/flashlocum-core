@@ -11,45 +11,15 @@ import {
 import { beginSettlementCheckout } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
-type MonnifyInitArgs = {
+type TransferAccount = {
   amount: number;
-  currency: string;
-  reference: string;
-  customerFullName: string;
-  customerEmail: string;
-  apiKey: string;
-  contractCode: string;
-  paymentDescription: string;
-  isTestMode?: boolean;
-  paymentMethods?: string[];
-  incomeSplitConfig?: Array<{ subAccountCode: string; splitPercentage: number; feeBearer: boolean }>;
-  onLoadStart?: () => void;
-  onLoadComplete?: () => void;
-  onComplete?: (response: unknown) => void;
-  onClose?: (response: unknown) => void;
-
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  expiresOn: string | null;
+  paymentReference: string;
 };
-type MonnifySdk = { initialize: (args: MonnifyInitArgs) => void };
 
-const MONNIFY_SDK_URL = "https://sdk.monnify.com/plugin/monnify.js";
-let monnifySdkPromise: Promise<void> | null = null;
-function loadMonnifySdk(): Promise<void> {
-  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
-  if ((window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK) return Promise.resolve();
-  if (monnifySdkPromise) return monnifySdkPromise;
-  monnifySdkPromise = new Promise<void>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = MONNIFY_SDK_URL;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => {
-      monnifySdkPromise = null;
-      reject(new Error("Failed to load Monnify SDK"));
-    };
-    document.head.appendChild(s);
-  });
-  return monnifySdkPromise;
-}
 
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
@@ -272,46 +242,22 @@ export function ShiftSettlement({
     autoConfirmAt.current = simNow() + 2500;
   };
 
-  // ---------------- Monnify split-payment ----------------
+  // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
+  const [account, setAccount] = useState<TransferAccount | null>(null);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
     setPayError(null);
     setPayState("starting");
     try {
-      const params = await beginCheckout({
+      const result = await beginCheckout({
         data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
       });
-      await loadMonnifySdk();
-      const MonnifySDK = (window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK;
-      if (!MonnifySDK) throw new Error("Payment widget failed to load. Please try again.");
+      setAccount(result);
       setPayState("waiting");
-      MonnifySDK.initialize({
-        amount: params.amount,
-        currency: params.currency,
-        reference: params.paymentReference,
-        customerFullName: params.customerName,
-        customerEmail: params.customerEmail,
-        apiKey: params.apiKey,
-        contractCode: params.contractCode,
-        paymentDescription: params.paymentDescription,
-        isTestMode: true,
-        paymentMethods: ["ACCOUNT_TRANSFER"],
-        incomeSplitConfig: params.incomeSplitConfig,
-
-        onLoadStart: () => {},
-        onLoadComplete: () => {},
-        onComplete: () => {
-          // Webhook will flip payment_status → paid; the poll picks it up.
-          autoConfirmAt.current = simNow() + 500;
-        },
-        onClose: () => {
-          setPayState("idle");
-        },
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
@@ -319,7 +265,7 @@ export function ShiftSettlement({
     }
   };
 
-  // Auto-open Monnify transfer checkout the moment we land in settlement.
+  // Auto-start the moment we land in settlement.
   const autoOpenedRef = useRef(false);
   useEffect(() => {
     if (!open || !requestId) return;
@@ -330,8 +276,14 @@ export function ShiftSettlement({
     void startMonnifyCheckout();
   }, [open, requestId, phase, payState]);
   useEffect(() => {
-    if (!open) autoOpenedRef.current = false;
+    if (!open) {
+      autoOpenedRef.current = false;
+      setAccount(null);
+      setPayState("idle");
+      setPayError(null);
+    }
   }, [open]);
+
 
 
   // Poll the row for paid status; flip to confirmed when webhook lands.
@@ -401,6 +353,7 @@ export function ShiftSettlement({
             onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
             payState={payState}
             payError={payError}
+            account={account}
           />
         )}
         {phase === "overtime" && (
@@ -417,6 +370,7 @@ export function ShiftSettlement({
             onPayWithMonnify={requestId ? startMonnifyCheckout : undefined}
             payState={payState}
             payError={payError}
+            account={account}
           />
         )}
         {phase === "confirmed" && (
@@ -531,6 +485,7 @@ function SettlementPane({
   onPayWithMonnify,
   payState,
   payError,
+  account,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -543,36 +498,22 @@ function SettlementPane({
   onPayWithMonnify?: () => void;
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
+  account: TransferAccount | null;
 }) {
-  // Monnify flow: render nothing behind the popup. The SDK overlays its own
-  // transfer checkout the moment settlement is reached.
+  // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
     return (
-      <motion.section
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="relative flex h-full w-full flex-col items-center justify-center bg-background safe-top"
-      >
-        {payError ? (
-          <div className="mx-6 max-w-sm text-center">
-            <p className="text-[13px] text-destructive">{payError}</p>
-            <button
-              onClick={onPayWithMonnify}
-              className="mt-4 h-12 rounded-full bg-primary px-6 text-[14px] font-semibold text-primary-foreground"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            <span className="text-[12.5px]">Opening secure transfer…</span>
-          </div>
-        )}
-      </motion.section>
+      <CustomTransferPane
+        amount={amount}
+        account={account}
+        payState={payState}
+        payError={payError}
+        paymentTriggered={paymentTriggered}
+        onRetry={onPayWithMonnify}
+      />
     );
   }
+
 
   const remaining = phase === "settlement"
     ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
@@ -662,6 +603,7 @@ function OvertimePane({
   onPayWithMonnify,
   payState,
   payError,
+  account,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -674,7 +616,20 @@ function OvertimePane({
   onPayWithMonnify?: () => void;
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
+  account: TransferAccount | null;
 }) {
+  if (onPayWithMonnify) {
+    return (
+      <CustomTransferPane
+        amount={total}
+        account={account}
+        payState={payState}
+        payError={payError}
+        paymentTriggered={paymentTriggered}
+        onRetry={onPayWithMonnify}
+      />
+    );
+  }
   void shift;
   const billedMin = extensionMin;
   const extra = extensionAmount;
@@ -871,5 +826,125 @@ function TopBar({ onClose }: { onClose?: () => void }) {
       <span className="text-[12px] uppercase tracking-[0.16em] text-muted-foreground">FlashLocum</span>
       <span className="h-9 w-9" />
     </div>
+  );
+}
+
+/* ---------------- Custom Transfer (Monnify-backed, in-app UI) ---------------- */
+
+function CustomTransferPane({
+  amount,
+  account,
+  payState,
+  payError,
+  paymentTriggered,
+  onRetry,
+}: {
+  amount: number;
+  account: TransferAccount | null;
+  payState: "idle" | "starting" | "waiting" | "error";
+  payError: string | null;
+  paymentTriggered: boolean;
+  onRetry: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <motion.section
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="relative flex h-full w-full flex-col safe-top"
+    >
+      <TopBar />
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Complete Coverage
+        </div>
+        <div className="mt-3 text-[13px] text-muted-foreground">Transfer Exactly</div>
+        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+          {fmtNaira(account?.amount ?? amount)}
+        </div>
+
+        {payState === "starting" || (!account && !payError) ? (
+          <div className="mt-10 flex flex-col items-center gap-3 text-muted-foreground">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span className="text-[12.5px]">Generating secure account…</span>
+          </div>
+        ) : payError ? (
+          <div className="mt-8 rounded-2xl bg-surface-elevated p-5 text-center">
+            <p className="text-[13px] text-destructive">{payError}</p>
+            <button
+              onClick={onRetry}
+              className="mt-4 h-11 rounded-full bg-primary px-6 text-[13.5px] font-semibold text-primary-foreground"
+            >
+              Try again
+            </button>
+          </div>
+        ) : account ? (
+          <>
+            <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Bank
+              </div>
+              <div className="mt-1 text-[15px] font-medium">{account.bankName}</div>
+
+              <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Account Number
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <div className="text-[26px] font-semibold leading-none tracking-[0.06em] tabular-nums">
+                  {account.accountNumber}
+                </div>
+                <button
+                  onClick={() => copy(account.accountNumber)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-[12px] font-medium text-foreground/80 active:opacity-80"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                    <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                  </svg>
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+
+              <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Account Name
+              </div>
+              <div className="mt-1 text-[14px] font-medium">{account.accountName}</div>
+            </div>
+
+            <p className="mt-4 text-[12px] text-muted-foreground">
+              Send the exact amount above from any Nigerian bank app. This page
+              updates automatically once payment is received.
+            </p>
+          </>
+        ) : null}
+
+        <div className="mt-auto pb-8">
+          <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
+            {paymentTriggered ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-foreground" />
+                Verifying payment…
+              </>
+            ) : payState === "waiting" ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-foreground" />
+                Waiting for transfer…
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </motion.section>
   );
 }

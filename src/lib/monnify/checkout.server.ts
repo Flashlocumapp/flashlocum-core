@@ -1,4 +1,5 @@
-// Server-only: initiates a Monnify hosted-checkout transaction with split config.
+// Server-only: initiates a Monnify transaction with split config and resolves
+// a one-time virtual account so we can render a custom in-app transfer UI.
 
 import { getMonnifyContractCode, monnifyFetch } from "./client.server";
 
@@ -10,17 +11,25 @@ export type InitTxInput = {
   paymentDescription: string;
   customerEmail: string;
   customerName: string;
-  redirectUrl: string;
   doctorSubAccountCode: string;
 };
 
 type InitTxResp = {
-  checkoutUrl: string;
   paymentReference: string;
   transactionReference: string;
 };
 
-export async function initiateSplitCheckout(input: InitTxInput): Promise<InitTxResp> {
+export type VirtualAccountDetails = {
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  amount: number;
+  expiresOn?: string;
+  transactionReference: string;
+  paymentReference: string;
+};
+
+export async function initiateSplitTransaction(input: InitTxInput): Promise<InitTxResp> {
   const body = {
     amount: input.amount,
     customerName: input.customerName,
@@ -29,8 +38,7 @@ export async function initiateSplitCheckout(input: InitTxInput): Promise<InitTxR
     paymentDescription: input.paymentDescription,
     currencyCode: "NGN",
     contractCode: getMonnifyContractCode(),
-    redirectUrl: input.redirectUrl,
-    paymentMethods: ["CARD", "ACCOUNT_TRANSFER", "USSD"],
+    paymentMethods: ["ACCOUNT_TRANSFER"],
     incomeSplitConfig: [
       {
         subAccountCode: input.doctorSubAccountCode,
@@ -44,3 +52,17 @@ export async function initiateSplitCheckout(input: InitTxInput): Promise<InitTxR
     body,
   });
 }
+
+/**
+ * Resolve a one-time virtual bank account for an initiated transaction.
+ * Bank is chosen by Monnify when bankCode is omitted.
+ */
+export async function initBankTransferAccount(
+  transactionReference: string,
+): Promise<VirtualAccountDetails> {
+  return monnifyFetch<VirtualAccountDetails>("/api/v1/merchant/bank-transfer/init-payment", {
+    method: "POST",
+    body: { transactionReference },
+  });
+}
+
