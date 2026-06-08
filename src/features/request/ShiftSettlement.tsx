@@ -11,6 +11,44 @@ import {
 import { beginSettlementCheckout } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
+type MonnifyInitArgs = {
+  amount: number;
+  currency: string;
+  reference: string;
+  customerFullName: string;
+  customerEmail: string;
+  apiKey: string;
+  contractCode: string;
+  paymentDescription: string;
+  isTestMode?: boolean;
+  incomeSplitConfig?: Array<{ subAccountCode: string; splitPercentage: number; feeBearer: boolean }>;
+  onLoadStart?: () => void;
+  onLoadComplete?: () => void;
+  onComplete?: (response: unknown) => void;
+  onClose?: (response: unknown) => void;
+};
+type MonnifySdk = { initialize: (args: MonnifyInitArgs) => void };
+
+const MONNIFY_SDK_URL = "https://sdk.monnify.com/plugin/monnify.js";
+let monnifySdkPromise: Promise<void> | null = null;
+function loadMonnifySdk(): Promise<void> {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
+  if ((window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK) return Promise.resolve();
+  if (monnifySdkPromise) return monnifySdkPromise;
+  monnifySdkPromise = new Promise<void>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = MONNIFY_SDK_URL;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => {
+      monnifySdkPromise = null;
+      reject(new Error("Failed to load Monnify SDK"));
+    };
+    document.head.appendChild(s);
+  });
+  return monnifySdkPromise;
+}
+
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
 
@@ -238,17 +276,41 @@ export function ShiftSettlement({
     setPayError(null);
     setPayState("starting");
     try {
-      const { checkoutUrl } = await beginCheckout({
+      const params = await beginCheckout({
         data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
       });
-      window.open(checkoutUrl, "_blank", "noopener");
+      await loadMonnifySdk();
+      const MonnifySDK = (window as unknown as { MonnifySDK?: MonnifySdk }).MonnifySDK;
+      if (!MonnifySDK) throw new Error("Payment widget failed to load. Please try again.");
       setPayState("waiting");
+      MonnifySDK.initialize({
+        amount: params.amount,
+        currency: params.currency,
+        reference: params.paymentReference,
+        customerFullName: params.customerName,
+        customerEmail: params.customerEmail,
+        apiKey: params.apiKey,
+        contractCode: params.contractCode,
+        paymentDescription: params.paymentDescription,
+        isTestMode: true,
+        incomeSplitConfig: params.incomeSplitConfig,
+        onLoadStart: () => {},
+        onLoadComplete: () => {},
+        onComplete: () => {
+          // Webhook will flip payment_status → paid; the poll picks it up.
+          autoConfirmAt.current = simNow() + 500;
+        },
+        onClose: () => {
+          setPayState("idle");
+        },
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
       setPayState("error");
     }
   };
+
 
   // Poll the row for paid status; flip to confirmed when webhook lands.
   useEffect(() => {
