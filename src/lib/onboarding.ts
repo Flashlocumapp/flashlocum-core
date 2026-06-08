@@ -18,6 +18,7 @@ export type DoctorProfile = {
   selfie?: string; // data url
   mdcn?: string;
   license?: string; // filename
+  nysc?: string; // filename
   years?: string;
   bankName?: string;
   bankCode?: string;

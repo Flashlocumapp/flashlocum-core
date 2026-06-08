@@ -13,6 +13,7 @@ export type ProfileRow = {
   gender: string | null;
   mdcn: string | null;
   license_name: string | null;
+  nysc_name?: string | null;
   years_experience: string | null;
   bank_name: string | null;
   bank_account: string | null;

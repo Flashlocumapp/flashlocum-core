@@ -288,7 +288,7 @@ function ScoreTile({ score }: { score: number }) {
         <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Ratings
         </div>
-        <TrustInfoPopover align="start" />
+        <TrustInfoPopover align="start" direction="up" showRatings showReliability={false} />
       </div>
       <div className="mt-0.5 flex items-baseline gap-1">
         <span className="text-[18px] font-semibold tabular-nums tracking-tight">
@@ -311,8 +311,11 @@ function ReliabilityTile({ display }: { display: string }) {
         boxShadow: "0 6px 20px -10px rgba(0,0,0,0.14)",
       }}
     >
-      <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        Reliability
+      <div className="flex items-center gap-1.5">
+        <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Reliability
+        </div>
+        <TrustInfoPopover align="end" direction="up" showRatings={false} showReliability />
       </div>
       <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
         {display}

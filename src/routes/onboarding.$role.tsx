@@ -44,11 +44,16 @@ function OnboardingScreen() {
   // onboarding session starts from a clean slate and requires explicit input.
 
   const licenseRef = useRef<HTMLInputElement>(null);
+  const nyscRef = useRef<HTMLInputElement>(null);
 
   const persist = () => {
     if (isDoctor) saveProfile("cover", doctor);
     else saveProfile("request", requester);
   };
+
+  // Phone: digits only, must be 11 digits starting with 0 (NG mobile, e.g. 080XXXXXXXX).
+  const sanitizePhone = (v: string) => v.replace(/\D/g, "").slice(0, 11);
+  const isValidPhone = (v?: string) => !!v && /^0\d{10}$/.test(v);
 
   const remoteFields = () =>
     isDoctor
@@ -57,6 +62,7 @@ function OnboardingScreen() {
           gender: doctor.gender ?? null,
           mdcn: doctor.mdcn ?? null,
           license_name: doctor.license ?? null,
+          nysc_name: doctor.nysc ?? null,
           selfie_url: doctor.selfie ?? null,
           bank_name: doctor.bankName ?? null,
           bank_account: doctor.bankAccount ?? null,
@@ -68,13 +74,14 @@ function OnboardingScreen() {
         };
 
   const step1Valid = isDoctor
-    ? !!(doctor.phone?.trim() && doctor.gender?.trim())
-    : !!(requester.phone?.trim() && requester.gender?.trim());
+    ? !!(isValidPhone(doctor.phone) && doctor.gender?.trim())
+    : !!(isValidPhone(requester.phone) && requester.gender?.trim());
 
   const step2Valid =
     !!doctor.selfie &&
     !!doctor.mdcn?.trim() &&
     !!doctor.license?.trim() &&
+    !!doctor.nysc?.trim() &&
     !!doctor.bankName?.trim() &&
     !!doctor.bankAccount?.trim() &&
     !!doctor.bankAccountName?.trim();
@@ -171,9 +178,11 @@ function OnboardingScreen() {
               <Field
                 label="Phone number"
                 type="tel"
-                placeholder="+234 800 000 0000"
+                inputMode="numeric"
+                placeholder="080XXXXXXXX"
+                maxLength={11}
                 value={requester.phone ?? ""}
-                onChange={(v) => setRequester((p) => ({ ...p, phone: v }))}
+                onChange={(v) => setRequester((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
               <SelectField
                 label="Gender"
@@ -187,9 +196,11 @@ function OnboardingScreen() {
               <Field
                 label="Phone number"
                 type="tel"
-                placeholder="+234 800 000 0000"
+                inputMode="numeric"
+                placeholder="080XXXXXXXX"
+                maxLength={11}
                 value={doctor.phone ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, phone: v }))}
+                onChange={(v) => setDoctor((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
               <SelectField
                 label="Gender"
@@ -229,6 +240,25 @@ function OnboardingScreen() {
                   setDoctor((p) => ({ ...p, license: f.name }));
                 }}
               />
+
+              <UploadField
+                label="NYSC certificate upload"
+                hint={doctor.nysc ? doctor.nysc : "Tap to upload PDF or image"}
+                onPick={() => nyscRef.current?.click()}
+              />
+              <input
+                ref={nyscRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setDoctor((p) => ({ ...p, nysc: f.name }));
+                }}
+              />
+
+
 
               <BankPayoutFields
                 bankName={doctor.bankName}

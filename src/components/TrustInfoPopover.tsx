@@ -8,11 +8,13 @@ export function TrustInfoPopover({
   showRatings = true,
   showReliability = true,
   align = "center",
+  direction = "down",
   className = "",
 }: {
   showRatings?: boolean;
   showReliability?: boolean;
   align?: "start" | "center" | "end";
+  direction?: "up" | "down";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -67,7 +69,7 @@ export function TrustInfoPopover({
       {open && (
         <div
           role="dialog"
-          className={`absolute top-full mt-2 z-50 w-64 rounded-2xl px-3.5 py-3 text-left ${alignClass}`}
+          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} z-50 w-64 rounded-2xl px-3.5 py-3 text-left ${alignClass}`}
           style={{
             background: "var(--color-surface-elevated)",
             border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
