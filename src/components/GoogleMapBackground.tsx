@@ -221,7 +221,7 @@ export function GoogleMapBackground({
           gestureHandling: "greedy",
           clickableIcons: false,
           styles: LIGHT_STYLE,
-          backgroundColor: "#d1d5db",
+          backgroundColor: "#aab2bd",
         });
         setMapReady(true);
       })
