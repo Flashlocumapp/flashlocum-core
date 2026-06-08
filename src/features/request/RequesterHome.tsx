@@ -1071,6 +1071,7 @@ function DispatchOverlay({
     });
     ownedIdRef.current = req.id;
     setRequestId(req.id);
+    if (location?.name) rememberRecentLocation(location);
     const t = window.setTimeout(() => setAmbient(true), 2800);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
