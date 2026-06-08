@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import type { Role } from "@/lib/role";
 import { setRole } from "@/lib/role";
 import {
@@ -10,11 +9,7 @@ import {
   type RequesterProfile,
 } from "@/lib/onboarding";
 import { markOnboardedRemote } from "@/lib/profile-remote";
-import {
-  listMonnifyBanks,
-  resolveBankAccountName,
-  type MonnifyBank,
-} from "@/lib/monnify/banks.functions";
+import { BankPayoutFields } from "@/components/BankPayoutFields";
 
 type OnboardingSearch = {
   from?: "auth" | "switch";
