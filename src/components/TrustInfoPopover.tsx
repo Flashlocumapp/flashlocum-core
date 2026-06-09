@@ -78,9 +78,14 @@ export function TrustInfoPopover({
         >
           {showRatings && (
             <div>
-              <div className="text-[11.5px] font-semibold tracking-tight">⭐ Ratings</div>
+              <div className="flex items-center gap-1.5 text-[11.5px] font-semibold tracking-tight text-foreground">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                Ratings
+              </div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                Average quality score from completed shifts. Becomes visible after 10 ratings.
+                Average feedback from completed shifts. Shows overall quality of experience.
               </p>
             </div>
           )}
@@ -92,9 +97,21 @@ export function TrustInfoPopover({
           )}
           {showReliability && (
             <div>
-              <div className="text-[11.5px] font-semibold tracking-tight">🟢 Reliability</div>
+              <div className="flex items-center gap-1.5 text-[11.5px] font-semibold tracking-tight text-foreground">
+                <span
+                  aria-hidden
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "9999px",
+                    background: "currentColor",
+                    display: "inline-block",
+                  }}
+                />
+                Reliability
+              </div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                Dependability after accepting a shift. Only cancellations after acceptance reduce it.
+                How often accepted shifts are successfully completed. Shows how dependable this doctor/hospital is.
               </p>
             </div>
           )}

@@ -221,6 +221,41 @@ export type Database = {
         }
         Relationships: []
       }
+      ratings: {
+        Row: {
+          created_at: string
+          id: string
+          ratee_entity_id: string
+          rater_user_id: string
+          score: number
+          shift_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ratee_entity_id: string
+          rater_user_id: string
+          score: number
+          shift_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ratee_entity_id?: string
+          rater_user_id?: string
+          score?: number
+          shift_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "coverage_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -279,6 +314,20 @@ export type Database = {
           selfie_url: string
           verification_status: Database["public"]["Enums"]["verification_status"]
           years_experience: string
+        }[]
+      }
+      get_rating: {
+        Args: { _entity_id: string }
+        Returns: {
+          count: number
+          score: number
+        }[]
+      }
+      get_reliability: {
+        Args: { _entity_id: string }
+        Returns: {
+          completed: number
+          total: number
         }[]
       }
       get_request_phone: { Args: { _request_id: string }; Returns: string }

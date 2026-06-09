@@ -1,140 +1,102 @@
-// FlashLocum reliability — dependability trust signal.
+// FlashLocum reliability — server-backed dependability signal.
 //
+// Source of truth: public.coverage_requests (via get_reliability RPC).
 // Rules:
-// - Every newly verified user starts at 100%.
-// - Reliability only becomes real after 10 accepted shifts.
-// - Formula: completed accepted shifts ÷ total accepted shifts × 100.
-// - Cancellations after an accept count against reliability equally.
-// - Same system for doctors and hospitals.
+// - Defaults to 100% until VERIFY_THRESHOLD accepted shifts.
+// - Formula: completed ÷ total accepted shifts × 100.
+// - Only cancellations AFTER acceptance count against (enforced by RPC).
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { subscribeNetwork, type NetState } from "./network";
 
-const STORAGE = "flashlocum.reliability.v1";
 const VERIFY_THRESHOLD = 10;
-
-type Outcome = "accepted" | "completed" | "cancelled";
-type EntityMap = Record<string, Outcome>; // requestId -> latest outcome
-type Store = { entities: Record<string, EntityMap> };
-
-type Listener = (s: Store) => void;
-const listeners = new Set<Listener>();
-let cache: Store | null = null;
-
-function load(): Store {
-  if (cache) return cache;
-  if (typeof window === "undefined") return { entities: {} };
-  try {
-    const raw = window.localStorage.getItem(STORAGE);
-    cache = raw ? (JSON.parse(raw) as Store) : { entities: {} };
-  } catch {
-    cache = { entities: {} };
-  }
-  return cache;
-}
-
-function save(next: Store) {
-  cache = next;
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.setItem(STORAGE, JSON.stringify(next));
-    } catch {
-      /* noop */
-    }
-  }
-  listeners.forEach((l) => l(next));
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("storage", (e) => {
-    if (e.key !== STORAGE) return;
-    cache = null;
-    const next = load();
-    listeners.forEach((l) => l(next));
-  });
-}
+const TTL_MS = 30_000;
 
 export type ReliabilityView = {
-  score: number; // 0–100
-  display: string; // "100%" / "97%"
-  provisional: boolean; // true while < 10 accepted shifts
+  score: number;
+  display: string;
+  provisional: boolean;
 };
 
-export function getReliability(entityId: string): ReliabilityView {
-  const m = load().entities[entityId];
-  if (!m) return { score: 100, display: "100%", provisional: true };
-  const outcomes = Object.values(m);
-  const total = outcomes.length;
-  if (total < VERIFY_THRESHOLD) return { score: 100, display: "100%", provisional: true };
-  const completed = outcomes.filter((o) => o === "completed").length;
-  const pct = Math.max(0, Math.min(100, Math.round((completed / total) * 100)));
-  return { score: pct, display: `${pct}%`, provisional: false };
+type CacheEntry = { completed: number; total: number; ts: number };
+const cache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<CacheEntry>>();
+const listeners = new Map<string, Set<() => void>>();
+
+function notify(entityId: string) {
+  listeners.get(entityId)?.forEach((l) => l());
 }
 
-function recordOutcome(entityId: string, requestId: string, outcome: Outcome) {
-  if (!entityId || !requestId) return;
-  const s = load();
-  const cur = s.entities[entityId] ?? {};
-  const prev = cur[requestId];
-  // Idempotent: terminal outcomes win, accepted only sets if not already terminal.
-  if (prev === "completed" || prev === "cancelled") {
-    if (outcome === "accepted") return;
-    if (outcome === prev) return;
-  }
-  if (prev === outcome) return;
-  save({
-    entities: {
-      ...s.entities,
-      [entityId]: { ...cur, [requestId]: outcome },
-    },
+async function fetchReliability(entityId: string): Promise<CacheEntry> {
+  const existing = inflight.get(entityId);
+  if (existing) return existing;
+  const p = (async () => {
+    const { data, error } = await supabase.rpc("get_reliability", { _entity_id: entityId });
+    if (error || !data || (Array.isArray(data) && data.length === 0)) {
+      return { completed: 0, total: 0, ts: Date.now() };
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      completed: Number(row.completed) || 0,
+      total: Number(row.total) || 0,
+      ts: Date.now(),
+    };
+  })().then((entry) => {
+    cache.set(entityId, entry);
+    inflight.delete(entityId);
+    notify(entityId);
+    return entry;
   });
+  inflight.set(entityId, p);
+  return p;
+}
+
+export function getReliability(entityId: string): ReliabilityView {
+  const c = cache.get(entityId);
+  if (!c || c.total < VERIFY_THRESHOLD) {
+    return { score: 100, display: "100%", provisional: true };
+  }
+  const pct = Math.max(0, Math.min(100, Math.round((c.completed / c.total) * 100)));
+  return { score: pct, display: `${pct}%`, provisional: false };
 }
 
 export function useReliability(entityId: string | null | undefined): ReliabilityView {
   const [, force] = useState(0);
   useEffect(() => {
+    if (!entityId) return;
+    let set = listeners.get(entityId);
+    if (!set) {
+      set = new Set();
+      listeners.set(entityId, set);
+    }
     const l = () => force((x) => x + 1);
-    listeners.add(l);
+    set.add(l);
+    const c = cache.get(entityId);
+    if (!c || Date.now() - c.ts > TTL_MS) {
+      fetchReliability(entityId);
+    }
     return () => {
-      listeners.delete(l);
+      set!.delete(l);
     };
-  }, []);
+  }, [entityId]);
   if (!entityId) return { score: 100, display: "100%", provisional: true };
   return getReliability(entityId);
 }
 
-function hospitalId(hospital: string): string {
-  return "hosp:" + hospital.toLowerCase().replace(/\s+/g, "_");
-}
-function doctorId(sid: string): string {
-  return "doc:" + sid;
-}
-
-// Auto-subscribe to operational events. Every device that loads this module
-// keeps its own reliability ledger in sync with the shared network feed.
+// Invalidate caches whenever a relevant shift event occurs, so reliability
+// reflects the latest server state without manual refresh.
 let bootstrapped = false;
 function bootstrap() {
   if (bootstrapped || typeof window === "undefined") return;
   bootstrapped = true;
   subscribeNetwork((s: NetState) => {
     const ev = s.lastEvent;
-    if (!ev || !ev.shiftId) return;
-    const r = s.requests[ev.shiftId];
-    if (!r) return;
-    const doctorEntity = r.acceptedBy ? doctorId(r.acceptedBy) : null;
-    const hospEntity = r.hospital ? hospitalId(r.hospital) : null;
-
-    if (ev.action === "accept") {
-      if (doctorEntity) recordOutcome(doctorEntity, r.id, "accepted");
-      if (hospEntity) recordOutcome(hospEntity, r.id, "accepted");
-    } else if (ev.action === "complete") {
-      if (doctorEntity) recordOutcome(doctorEntity, r.id, "completed");
-      if (hospEntity) recordOutcome(hospEntity, r.id, "completed");
-    } else if (ev.action === "cancel") {
-      // Only counts if request had been accepted (acceptedBy set).
-      if (!r.acceptedBy) return;
-      if (doctorEntity) recordOutcome(doctorEntity, r.id, "cancelled");
-      if (hospEntity) recordOutcome(hospEntity, r.id, "cancelled");
+    if (!ev || (ev.action !== "accept" && ev.action !== "complete" && ev.action !== "cancel")) return;
+    // Refresh all cached entries — keeps the impl simple and entries are tiny.
+    for (const key of Array.from(cache.keys())) {
+      cache.delete(key);
+      fetchReliability(key);
     }
   });
 }

@@ -1,89 +1,105 @@
-// FlashLocum ratings — calm ambient trust signals.
+// FlashLocum ratings — server-backed trust signal.
 //
+// Source of truth: public.ratings table in Supabase.
 // Rules:
-// - Every newly seen participant begins at 5.0.
-// - After 10 completed ratings, the real average replaces the default.
-// - We never expose counts to the UI ("128 ratings" is banned).
+// - Every newly seen participant displays 5.0 until they accumulate ratings.
+// - After VERIFY_THRESHOLD ratings, the real average replaces the default.
+// - We never expose counts to the UI.
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
-const STORAGE = "flashlocum.ratings.v1";
 const VERIFY_THRESHOLD = 10;
 
 export type RatingRole = "doctor" | "requester";
 
-type Bucket = { sum: number; count: number };
-type Store = { entities: Record<string, Bucket> };
-
-type Listener = (s: Store) => void;
-const listeners = new Set<Listener>();
-let cache: Store | null = null;
-
-function load(): Store {
-  if (cache) return cache;
-  if (typeof window === "undefined") return { entities: {} };
-  try {
-    const raw = window.localStorage.getItem(STORAGE);
-    cache = raw ? (JSON.parse(raw) as Store) : { entities: {} };
-  } catch {
-    cache = { entities: {} };
-  }
-  return cache;
-}
-
-function save(next: Store) {
-  cache = next;
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.setItem(STORAGE, JSON.stringify(next));
-    } catch {
-      /* noop */
-    }
-  }
-  listeners.forEach((l) => l(next));
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("storage", (e) => {
-    if (e.key !== STORAGE) return;
-    cache = null;
-    const next = load();
-    listeners.forEach((l) => l(next));
-  });
-}
-
 export type RatingView = {
-  score: number; // displayed value, e.g. 4.8 or 5.0
-  verified: boolean; // retained for compatibility; never rendered as text
+  score: number;
+  verified: boolean;
 };
 
-export function getRating(entityId: string): RatingView {
-  const b = load().entities[entityId];
-  if (!b || b.count < VERIFY_THRESHOLD) return { score: 5.0, verified: true };
-  return { score: round1(b.sum / b.count), verified: false };
+type CacheEntry = { score: number; count: number; ts: number };
+const cache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<CacheEntry>>();
+const listeners = new Map<string, Set<() => void>>();
+const TTL_MS = 30_000;
+
+function notify(entityId: string) {
+  listeners.get(entityId)?.forEach((l) => l());
 }
 
-export function recordRating(entityId: string, value: number) {
-  if (!entityId || value < 1 || value > 5) return;
-  const s = load();
-  const cur = s.entities[entityId] ?? { sum: 0, count: 0 };
-  save({
-    entities: {
-      ...s.entities,
-      [entityId]: { sum: cur.sum + value, count: cur.count + 1 },
-    },
+async function fetchRating(entityId: string): Promise<CacheEntry> {
+  const existing = inflight.get(entityId);
+  if (existing) return existing;
+  const p = (async () => {
+    const { data, error } = await supabase.rpc("get_rating", { _entity_id: entityId });
+    if (error || !data || (Array.isArray(data) && data.length === 0)) {
+      return { score: 0, count: 0, ts: Date.now() };
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      score: Number(row.score) || 0,
+      count: Number(row.count) || 0,
+      ts: Date.now(),
+    };
+  })().then((entry) => {
+    cache.set(entityId, entry);
+    inflight.delete(entityId);
+    notify(entityId);
+    return entry;
   });
+  inflight.set(entityId, p);
+  return p;
+}
+
+export function getRating(entityId: string): RatingView {
+  const c = cache.get(entityId);
+  if (!c || c.count < VERIFY_THRESHOLD) return { score: 5.0, verified: true };
+  return { score: round1(c.score), verified: false };
+}
+
+export async function recordRating(
+  entityId: string,
+  value: number,
+  shiftId?: string | null,
+) {
+  if (!entityId || value < 1 || value > 5) return;
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData.user?.id;
+  if (!uid) return;
+  const { error } = await supabase.from("ratings").insert({
+    ratee_entity_id: entityId,
+    rater_user_id: uid,
+    shift_id: shiftId ?? null,
+    score: Math.round(value),
+  });
+  if (error) {
+    console.warn("[ratings] insert failed", error);
+    return;
+  }
+  cache.delete(entityId);
+  await fetchRating(entityId);
 }
 
 export function useRating(entityId: string | null | undefined): RatingView {
   const [, force] = useState(0);
   useEffect(() => {
+    if (!entityId) return;
+    let set = listeners.get(entityId);
+    if (!set) {
+      set = new Set();
+      listeners.set(entityId, set);
+    }
     const l = () => force((x) => x + 1);
-    listeners.add(l);
+    set.add(l);
+    const c = cache.get(entityId);
+    if (!c || Date.now() - c.ts > TTL_MS) {
+      fetchRating(entityId);
+    }
     return () => {
-      listeners.delete(l);
+      set!.delete(l);
     };
-  }, []);
+  }, [entityId]);
   if (!entityId) return { score: 5.0, verified: true };
   return getRating(entityId);
 }
