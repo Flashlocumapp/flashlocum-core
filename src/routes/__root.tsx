@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { initLightMode } from "@/lib/theme";
 import { clearRole } from "@/lib/role";
 import { subscribeAuthState } from "@/lib/auth-ready";
+import { initNativeBridge } from "@/lib/native";
 import { unregisterDoctor } from "@/lib/network";
 
 function NotFoundComponent() {
@@ -88,6 +89,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
   useEffect(() => { initLightMode(); }, []);
+  useEffect(() => {
+    void initNativeBridge((path) => { void router.navigate({ to: path }); });
+  }, [router]);
   useEffect(() => {
     let sawSignOut = false;
     return subscribeAuthState(({ event, session }) => {
