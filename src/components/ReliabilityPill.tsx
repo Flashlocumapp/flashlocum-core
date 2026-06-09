@@ -19,12 +19,7 @@ export function ReliabilityPill({
   const r = useReliability(entityId);
   const dot = size === "md" ? 9 : 7;
   const num = size === "md" ? "text-[13px]" : "text-[11.5px]";
-  const color =
-    r.score >= 95
-      ? "var(--color-presence)"
-      : r.score >= 80
-        ? "color-mix(in oklab, var(--color-presence) 80%, orange)"
-        : "color-mix(in oklab, var(--color-foreground) 55%, transparent)";
+  const color = "color-mix(in oklab, var(--color-foreground) 80%, transparent)";
 
   return (
     <span
