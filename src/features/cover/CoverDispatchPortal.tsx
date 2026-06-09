@@ -84,7 +84,7 @@ function CoverDispatchOverlays() {
         }}
         onSubmit={(rating) => {
           if (rating > 0 && pendingRating) {
-            recordRating(pendingRating.hospitalId, rating);
+            void recordRating(pendingRating.hospitalId, rating, pendingRating.requestId);
             recordHistoryRating(pendingRating.requestId, rating);
           }
           if (pendingRating) setRatingDismissed(pendingRating.requestId);
