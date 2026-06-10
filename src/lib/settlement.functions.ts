@@ -157,6 +157,13 @@ export const simulateSettlementPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => SimInput.parse(d))
   .handler(async ({ data, context }) => {
+    // Production guard: only allow when pointed at the Monnify sandbox.
+    // This server fn marks a settlement as paid without real money moving,
+    // and must never be reachable against the live Monnify environment.
+    const base = process.env.MONNIFY_BASE_URL ?? "";
+    if (!/sandbox/i.test(base)) {
+      throw new Error("Payment simulation is disabled in production");
+    }
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
