@@ -31,15 +31,15 @@ export function RatingPill({
         <svg width={star} height={star} viewBox="0 0 24 24" fill="none" aria-hidden>
           <path
             d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z"
-            fill="color-mix(in oklab, var(--color-foreground) 78%, transparent)"
-            stroke="color-mix(in oklab, var(--color-foreground) 78%, transparent)"
+            fill="var(--color-trust)"
+            stroke="var(--color-trust)"
             strokeWidth="1.4"
             strokeLinejoin="round"
           />
         </svg>
         <span
           className={`${num} font-medium tabular-nums`}
-          style={{ color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)" }}
+          style={{ color: "var(--color-trust)" }}
         >
           {r.score.toFixed(1)}
         </span>

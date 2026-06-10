@@ -40,6 +40,10 @@ type Row = {
   cancelled_by: string | null;
   created_at: string;
   updated_at: string;
+  payment_status: string | null;
+  payment_reference: string | null;
+  paid_at: string | null;
+  remitted_at: string | null;
 };
 
 const TABLE = "coverage_requests";
@@ -134,6 +138,10 @@ export function rowToNet(r: Row): NetRequest {
     days: r.days,
     dayIndex: r.day_index,
     settledAmount: r.settled_amount ?? undefined,
+    paymentStatus: r.payment_status ?? undefined,
+    paymentReference: r.payment_reference ?? undefined,
+    paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,
+    remittedAt: r.remitted_at ? new Date(r.remitted_at).getTime() : undefined,
   };
 }
 

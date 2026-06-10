@@ -94,6 +94,10 @@ export type HistoryItem = Coverage & {
   updatedAt: number;
   rating?: number;
   settlementStatus: "Remitted" | "Pending" | "Voided";
+  paymentStatus?: string;
+  paymentReference?: string;
+  paidAt?: number;
+  remittedAt?: number;
 };
 
 let history: HistoryItem[] = [];
@@ -189,7 +193,13 @@ export function useDispatch(): View {
         }),
         updatedAt: r.updatedAt,
         rating: historyRatings[r.id],
-        settlementStatus: isCompleted ? "Pending" : "Voided",
+        settlementStatus: isCompleted
+          ? (r.remittedAt ? "Remitted" : "Pending")
+          : "Voided",
+        paymentStatus: r.paymentStatus,
+        paymentReference: r.paymentReference,
+        paidAt: r.paidAt,
+        remittedAt: r.remittedAt,
       } as HistoryItem;
     });
 

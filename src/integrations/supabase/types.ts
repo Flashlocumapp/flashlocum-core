@@ -40,6 +40,7 @@ export type Database = {
           payment_status: string | null
           payment_url: string | null
           phone: string
+          remitted_at: string | null
           requester_id: string
           settled_amount: number | null
           start_time: string
@@ -73,6 +74,7 @@ export type Database = {
           payment_status?: string | null
           payment_url?: string | null
           phone?: string
+          remitted_at?: string | null
           requester_id: string
           settled_amount?: number | null
           start_time: string
@@ -106,6 +108,7 @@ export type Database = {
           payment_status?: string | null
           payment_url?: string | null
           phone?: string
+          remitted_at?: string | null
           requester_id?: string
           settled_amount?: number | null
           start_time?: string
@@ -350,6 +353,10 @@ export type Database = {
         }[]
       }
       mark_settlement_paid: {
+        Args: { _amount: number; _payment_reference: string }
+        Returns: boolean
+      }
+      mark_settlement_remitted: {
         Args: { _amount: number; _payment_reference: string }
         Returns: boolean
       }

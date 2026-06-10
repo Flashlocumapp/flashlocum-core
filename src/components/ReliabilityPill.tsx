@@ -19,7 +19,7 @@ export function ReliabilityPill({
   const r = useReliability(entityId);
   const dot = size === "md" ? 9 : 7;
   const num = size === "md" ? "text-[13px]" : "text-[11.5px]";
-  const color = "color-mix(in oklab, var(--color-foreground) 80%, transparent)";
+  const color = "var(--color-trust)";
 
   return (
     <span
@@ -39,7 +39,7 @@ export function ReliabilityPill({
         />
         <span
           className={`${num} font-medium tabular-nums`}
-          style={{ color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)" }}
+          style={{ color: "var(--color-trust)" }}
         >
           {r.display}
         </span>

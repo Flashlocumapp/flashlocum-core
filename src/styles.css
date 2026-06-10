@@ -39,6 +39,7 @@
   --color-map: var(--map);
   --color-map-ink: var(--map-ink);
   --color-presence: var(--presence);
+  --color-trust: var(--trust);
 }
 
 :root {
@@ -83,6 +84,8 @@
   --map: oklch(0.955 0.004 240);
   --map-ink: oklch(0.85 0.006 240);
   --presence: oklch(0.62 0.14 145);
+  /* Calm cool slate-teal used for trust signals (rating + reliability). */
+  --trust: oklch(0.58 0.07 220);
 }
 
 .dark {
@@ -121,6 +124,7 @@
   --map: oklch(0.21 0.008 240);
   --map-ink: oklch(0.27 0.008 240);
   --presence: oklch(0.7 0.15 145);
+  --trust: oklch(0.72 0.08 220);
 }
 
 @layer base {
