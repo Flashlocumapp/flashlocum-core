@@ -111,6 +111,13 @@ export type NetRequest = {
   dayIndex?: number;
   /** Final billed amount captured at completeRequest time (worked-time based). */
   settledAmount?: number;
+  /** Requester→FlashLocum payment state ('pending' | 'paid'). */
+  paymentStatus?: string;
+  paymentReference?: string;
+  /** Timestamp (ms) when requester payment cleared. */
+  paidAt?: number;
+  /** Timestamp (ms) when FlashLocum remitted the payout to the doctor. */
+  remittedAt?: number;
 };
 
 
