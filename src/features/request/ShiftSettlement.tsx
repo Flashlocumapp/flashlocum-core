@@ -260,6 +260,7 @@ export function ShiftSettlement({
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const simulatePay = useServerFn(simulateSettlementPayment);
+  const verifyPay = useServerFn(verifySettlementPayment);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
