@@ -59,22 +59,14 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const paidAmount = Math.max(0, Math.round(amount));
         const { error } = await supabaseAdmin.rpc("mark_settlement_paid", {
           _payment_reference: ref,
-          _amount: paidAmount,
+          _amount: Math.max(0, Math.round(amount)),
         });
         if (error) {
           console.error("[monnify-webhook] mark_settlement_paid failed:", error);
           return new Response("Server error", { status: 500 });
         }
-        // Monnify split has already credited the doctor's sub-account with 85%.
-        // Record remittance so the doctor's Earnings reflects "Settled".
-        const { error: remErr } = await supabaseAdmin.rpc("mark_settlement_remitted", {
-          _payment_reference: ref,
-          _amount: Math.round(paidAmount * 0.85),
-        });
-        if (remErr) console.warn("[monnify-webhook] mark_settlement_remitted:", remErr.message);
         return new Response("ok", { status: 200 });
       },
     },
