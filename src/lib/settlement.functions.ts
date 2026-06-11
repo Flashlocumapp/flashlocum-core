@@ -167,14 +167,24 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("coverage_requests")
-      .select("id, requester_id, accepted_by, payment_reference, payment_status, settled_amount")
+      .select("id, requester_id, accepted_by, payment_reference, payment_status, settled_amount, remitted_at")
       .eq("id", data.requestId)
       .maybeSingle();
     if (error || !row) throw new Error("Coverage request not found");
     if (row.requester_id !== userId && row.accepted_by !== userId) {
       throw new Error("Not authorized");
     }
-    if (row.payment_status === "paid") return { paid: true, alreadyPaid: true };
+    if (row.payment_status === "paid") {
+      // Backfill remittance for sandbox / older rows paid before auto-remit shipped.
+      if (!row.remitted_at) {
+        const share = Math.round(Number(row.settled_amount ?? 0) * 0.85);
+        await supabaseAdmin.rpc("mark_settlement_remitted", {
+          _payment_reference: row.payment_reference!,
+          _amount: share,
+        });
+      }
+      return { paid: true, alreadyPaid: true };
+    }
     if (!row.payment_reference) return { paid: false, reason: "no_reference" as const };
 
     const { queryTransactionStatus } = await import("./monnify/checkout.server");
@@ -198,6 +208,15 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
       _amount: amount,
     });
     if (rpcErr) throw new Error(rpcErr.message);
+    // Monnify split already transferred the doctor's 85% to their sub-account
+    // bank in the same transaction. Mark remittance now so the doctor's
+    // Earnings screen flips to "Settled" end-to-end.
+    const doctorShare = Math.round(amount * 0.85);
+    const { error: remErr } = await supabaseAdmin.rpc("mark_settlement_remitted", {
+      _payment_reference: row.payment_reference,
+      _amount: doctorShare,
+    });
+    if (remErr) console.warn("[verifySettlementPayment] mark_settlement_remitted:", remErr.message);
     return { paid: true, alreadyPaid: false };
   });
 
