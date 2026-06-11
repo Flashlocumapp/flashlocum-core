@@ -85,7 +85,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
             "The doctor's bank name isn't recognised by our payment provider. Please ask them to re-select their bank from the list.",
           );
         }
-        throw new Error("Couldn't set up the payout split right now. Please try again in a moment.");
+        throw new Error(`Couldn't set up the payout split: ${msg}`);
       }
       await supabaseAdmin
         .from("profiles")
