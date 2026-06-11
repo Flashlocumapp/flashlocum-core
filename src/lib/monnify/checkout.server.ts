@@ -66,3 +66,20 @@ export async function initBankTransferAccount(
   });
 }
 
+export type TxStatus = {
+  paymentStatus?: string;
+  amountPaid?: number | string;
+  totalPayable?: number | string;
+  paymentReference?: string;
+  transactionReference?: string;
+};
+
+/** Query Monnify for the latest status of a transaction by our paymentReference. */
+export async function queryTransactionStatus(paymentReference: string): Promise<TxStatus> {
+  const ref = encodeURIComponent(paymentReference);
+  return monnifyFetch<TxStatus>(
+    `/api/v2/merchant/transactions/query?paymentReference=${ref}`,
+    { method: "GET" },
+  );
+}
+
