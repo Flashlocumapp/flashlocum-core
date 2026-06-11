@@ -153,6 +153,54 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
 // --- Dev-only: simulate Monnify webhook for sandbox testing ---
 const SimInput = z.object({ requestId: z.string().uuid() });
 
+
+// --- Reconcile: poll Monnify directly when the webhook hasn't landed yet ---
+// Useful in sandbox (webhook can't reach localhost) and as a production
+// safety net for delayed/missed webhooks.
+const VerifyInput = z.object({ requestId: z.string().uuid() });
+
+export const verifySettlementPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => VerifyInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("coverage_requests")
+      .select("id, requester_id, accepted_by, payment_reference, payment_status, settled_amount")
+      .eq("id", data.requestId)
+      .maybeSingle();
+    if (error || !row) throw new Error("Coverage request not found");
+    if (row.requester_id !== userId && row.accepted_by !== userId) {
+      throw new Error("Not authorized");
+    }
+    if (row.payment_status === "paid") return { paid: true, alreadyPaid: true };
+    if (!row.payment_reference) return { paid: false, reason: "no_reference" as const };
+
+    const { queryTransactionStatus } = await import("./monnify/checkout.server");
+    let status;
+    try {
+      status = await queryTransactionStatus(row.payment_reference);
+    } catch (e) {
+      console.warn("[verifySettlementPayment] query failed:", e);
+      return { paid: false, reason: "query_failed" as const };
+    }
+    const s = (status.paymentStatus ?? "").toUpperCase();
+    const isPaid = s === "PAID" || s === "OVERPAID" || s === "SUCCESS" || s === "SUCCESSFUL_TRANSACTION";
+    if (!isPaid) return { paid: false, status: s };
+
+    const amount = Math.max(
+      0,
+      Math.round(Number(status.amountPaid ?? status.totalPayable ?? row.settled_amount ?? 0)),
+    );
+    const { error: rpcErr } = await supabaseAdmin.rpc("mark_settlement_paid", {
+      _payment_reference: row.payment_reference,
+      _amount: amount,
+    });
+    if (rpcErr) throw new Error(rpcErr.message);
+    return { paid: true, alreadyPaid: false };
+  });
+
 export const simulateSettlementPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => SimInput.parse(d))

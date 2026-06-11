@@ -8,7 +8,7 @@ import {
   billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
-import { beginSettlementCheckout, simulateSettlementPayment } from "@/lib/settlement.functions";
+import { beginSettlementCheckout, simulateSettlementPayment, verifySettlementPayment } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type TransferAccount = {
@@ -260,6 +260,7 @@ export function ShiftSettlement({
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const simulatePay = useServerFn(simulateSettlementPayment);
+  const verifyPay = useServerFn(verifySettlementPayment);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
@@ -318,19 +319,33 @@ export function ShiftSettlement({
 
 
   // Poll the row for paid status; flip to confirmed when webhook lands.
+  // As a fallback (sandbox, missed/delayed webhooks), also ask the server
+  // to query Monnify directly and reconcile if the transaction is PAID.
   useEffect(() => {
     if (!open || !requestId) return;
     if (phase === "confirmed") return;
     let cancelled = false;
+    let ticks = 0;
     const tickFn = async () => {
+      ticks += 1;
       const { data } = await supabase
         .from("coverage_requests")
         .select("payment_status")
         .eq("id", requestId)
         .maybeSingle();
       if (cancelled) return;
-      if (data?.payment_status === "paid" && autoConfirmAt.current == null) {
-        autoConfirmAt.current = simNow() + 500;
+      if (data?.payment_status === "paid") {
+        if (autoConfirmAt.current == null) autoConfirmAt.current = simNow() + 500;
+        return;
+      }
+      // Every other tick (~8s), reconcile against Monnify in case the
+      // webhook never arrived (common in local/sandbox).
+      if (ticks % 2 === 0) {
+        try {
+          await verifyPay({ data: { requestId } });
+        } catch {
+          /* swallow — next tick will retry */
+        }
       }
     };
     void tickFn();
@@ -339,7 +354,7 @@ export function ShiftSettlement({
       cancelled = true;
       clearInterval(iv);
     };
-  }, [open, requestId, phase, totalAmount]);
+  }, [open, requestId, phase, totalAmount, verifyPay]);
 
   const handleCopy = async () => {
     try {
