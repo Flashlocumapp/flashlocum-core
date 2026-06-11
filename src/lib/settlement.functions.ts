@@ -198,6 +198,15 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
       _amount: amount,
     });
     if (rpcErr) throw new Error(rpcErr.message);
+    // Monnify split already transferred the doctor's 85% to their sub-account
+    // bank in the same transaction. Mark remittance now so the doctor's
+    // Earnings screen flips to "Settled" end-to-end.
+    const doctorShare = Math.round(amount * 0.85);
+    const { error: remErr } = await supabaseAdmin.rpc("mark_settlement_remitted", {
+      _payment_reference: row.payment_reference,
+      _amount: doctorShare,
+    });
+    if (remErr) console.warn("[verifySettlementPayment] mark_settlement_remitted:", remErr.message);
     return { paid: true, alreadyPaid: false };
   });
 
