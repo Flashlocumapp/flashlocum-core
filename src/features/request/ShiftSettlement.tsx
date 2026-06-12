@@ -1043,15 +1043,6 @@ function CustomTransferPane({
               </>
             ) : null}
           </div>
-          {onSimulate && account && !paymentTriggered && (
-            <button
-              onClick={onSimulate}
-              disabled={simulating}
-              className="h-11 w-full rounded-full border border-dashed border-foreground/30 text-[12.5px] font-medium text-muted-foreground active:opacity-80 disabled:opacity-50"
-            >
-              {simulating ? "Simulating…" : "Simulate payment (sandbox)"}
-            </button>
-          )}
         </div>
       </div>
 
