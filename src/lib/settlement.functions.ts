@@ -205,11 +205,19 @@ export const simulateSettlementPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => SimInput.parse(d))
   .handler(async ({ data, context }) => {
-    // Production guard: only allow when pointed at the Monnify sandbox.
-    // This server fn marks a settlement as paid without real money moving,
-    // and must never be reachable against the live Monnify environment.
-    const base = process.env.MONNIFY_BASE_URL ?? "";
-    if (!/sandbox/i.test(base)) {
+    // Production guard: simulation is only allowed when ALL of these hold:
+    //   1. NODE_ENV is not "production"
+    //   2. MONNIFY_BASE_URL points at the Monnify sandbox host
+    //   3. ALLOW_PAYMENT_SIMULATION env flag is explicitly "true"
+    // This server fn marks a settlement as paid without real money moving and
+    // must never be reachable against the live Monnify environment, even if
+    // a single guard is misconfigured.
+    const base = (process.env.MONNIFY_BASE_URL ?? "").toLowerCase();
+    const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
+    const simEnabled = (process.env.ALLOW_PAYMENT_SIMULATION ?? "").toLowerCase() === "true";
+    const isSandboxHost = /(^|[./-])sandbox\.monnify\.com/i.test(base) || /sandbox-api\.monnify/i.test(base);
+    const isProdEnv = nodeEnv === "production";
+    if (isProdEnv || !isSandboxHost || !simEnabled) {
       throw new Error("Payment simulation is disabled in production");
     }
     const { userId } = context;
