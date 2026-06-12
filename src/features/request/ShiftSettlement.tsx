@@ -418,8 +418,6 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
-            onSimulate={requestId ? handleSimulate : undefined}
-            simulating={simulating}
           />
         )}
         {phase === "confirmed" && (
