@@ -67,6 +67,27 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
           console.error("[monnify-webhook] mark_settlement_paid failed:", error);
           return new Response("Server error", { status: 500 });
         }
+
+        // Push the doctor who covered this shift.
+        try {
+          const { data: row } = await supabaseAdmin
+            .from("coverage_requests")
+            .select("accepted_by, hospital, settled_amount")
+            .eq("payment_reference", ref)
+            .maybeSingle();
+          if (row?.accepted_by) {
+            const { sendPushToUser } = await import("@/lib/push.server");
+            const naira = Number(row.settled_amount ?? amount ?? 0);
+            await sendPushToUser(row.accepted_by, {
+              title: "Payment received",
+              body: `You've been paid${naira > 0 ? ` ₦${naira.toLocaleString()}` : ""}${row.hospital ? ` for ${row.hospital}` : ""}.`,
+              data: { type: "payment_settled", paymentReference: ref },
+            });
+          }
+        } catch (e) {
+          console.warn("[monnify-webhook] push failed:", (e as Error).message);
+        }
+
         return new Response("ok", { status: 200 });
       },
     },

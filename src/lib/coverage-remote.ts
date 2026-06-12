@@ -539,19 +539,18 @@ export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>
  */
 export async function remoteClaimRequest(id: string, _doctorUserId: string): Promise<boolean> {
   void _doctorUserId;
-  // Claim runs through a SECURITY DEFINER RPC so approved doctors never have
-  // direct UPDATE access to searching rows (which would expose phone via the
-  // policy's USING clause).
-  const { data, error } = await supabase.rpc("claim_coverage_request", {
-    _request_id: id,
-  });
-  if (error) {
-    console.warn("[coverage-remote] claim error:", error.message);
+  // Goes through a server fn that runs the SECURITY DEFINER RPC and then
+  // pushes the requester (background-safe notification on native shells).
+  try {
+    const { claimAndNotifyFn } = await import("@/lib/coverage-notify.functions");
+    const res = await claimAndNotifyFn({ data: { requestId: id } });
+    const won = !!res?.won;
+    if (won) emitInvalidate(id);
+    return won;
+  } catch (e) {
+    console.warn("[coverage-remote] claim error:", (e as Error).message);
     return false;
   }
-  const won = !!data;
-  if (won) emitInvalidate(id);
-  return won;
 }
 
 export async function remoteDeleteRequest(id: string): Promise<void> {

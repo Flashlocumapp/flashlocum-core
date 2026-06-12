@@ -44,5 +44,30 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
+
+    // Notify the doctor of the verification decision.
+    try {
+      const { sendPushToUser } = await import("@/lib/push.server");
+      const titleByStatus: Record<VerificationStatus, string> = {
+        approved: "You're approved",
+        rejected: "Verification update",
+        suspended: "Account suspended",
+        pending: "Verification pending",
+      };
+      const bodyByStatus: Record<VerificationStatus, string> = {
+        approved: "You can now accept shifts on FlashLocum.",
+        rejected: "Your verification was not approved. Open the app for details.",
+        suspended: "Your account has been suspended. Contact support.",
+        pending: "Your account is back under review.",
+      };
+      await sendPushToUser(data.doctorId, {
+        title: titleByStatus[data.status],
+        body: bodyByStatus[data.status],
+        data: { type: "verification_status", status: data.status },
+      });
+    } catch (e) {
+      console.warn("[verify-notify] push failed:", (e as Error).message);
+    }
+
     return { ok: true };
   });
