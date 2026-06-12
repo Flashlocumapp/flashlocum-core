@@ -67,31 +67,50 @@ function emit() {
   snapshotListeners.forEach((fn) => fn(snap));
 }
 
-async function initialFetch() {
+// Guards against re-running the initial fetch on every TOKEN_REFRESHED /
+// INITIAL_SESSION event. We only refetch when the signed-in user identity
+// actually changes (sign-in / sign-out / user-switch).
+let lastFetchedUserId: string | null = null;
+let initialFetchInFlight: Promise<void> | null = null;
+
+async function initialFetch(force = false) {
   const auth = await ensureAuthReady();
-  if (!auth.userId) return;
-  const [presenceRes, approvedRes] = await Promise.all([
-    supabase.from(TABLE).select("user_id, online, top, left, last_seen"),
-    supabase.from("profiles").select("id").eq("verification_status", "approved"),
-  ]);
-  if (presenceRes.error) {
-    console.warn("[presence-remote] fetch error:", presenceRes.error.message);
-  } else {
-    rawRows.clear();
-    for (const r of presenceRes.data ?? []) {
-      rawRows.set(r.user_id, r as PresenceRow);
-    }
+  if (!auth.userId) {
+    lastFetchedUserId = null;
+    return;
   }
-  if (!approvedRes.error) {
-    approvedIds.clear();
-    checkedProfileIds.clear();
-    for (const p of approvedRes.data ?? []) {
-      approvedIds.add(p.id);
-      checkedProfileIds.add(p.id);
+  if (!force && lastFetchedUserId === auth.userId) return;
+  if (initialFetchInFlight) return initialFetchInFlight;
+  initialFetchInFlight = (async () => {
+    // Only fetch presence rows; approval status is resolved lazily per
+    // user_id via ensureApprovalKnown(). Shipping the full approved-doctor
+    // ID list to every requester on every token refresh was wasteful and
+    // leaked the doctor roster.
+    const presenceRes = await supabase
+      .from(TABLE)
+      .select("user_id, online, top, left, last_seen");
+    if (presenceRes.error) {
+      console.warn("[presence-remote] fetch error:", presenceRes.error.message);
+    } else {
+      rawRows.clear();
+      for (const r of presenceRes.data ?? []) {
+        rawRows.set(r.user_id, r as PresenceRow);
+      }
+      // Kick off lazy approval checks for any unknown ids; ensureApprovalKnown
+      // dedupes in-flight requests and caches results, so repeated calls are
+      // cheap.
+      for (const r of presenceRes.data ?? []) {
+        if (!checkedProfileIds.has(r.user_id)) void ensureApprovalKnown(r.user_id);
+      }
     }
-  }
-  emit();
+    lastFetchedUserId = auth.userId;
+    emit();
+  })().finally(() => {
+    initialFetchInFlight = null;
+  });
+  return initialFetchInFlight;
 }
+
 
 /** Lazily verify a doctor's approval status when their presence row appears
  *  but we have no cached approval state for them. Skips ids we've already
@@ -203,9 +222,20 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
   const offAuth = onUserIdChange((id) => {
     if (id) {
       ensureOwnProfileChannel(id);
+      // initialFetch() is a no-op when id matches lastFetchedUserId, so
+      // TOKEN_REFRESHED events that re-fire this listener don't trigger a
+      // refetch. A genuine sign-in / user-switch will refetch once.
       void initialFetch();
+    } else {
+      // Signed out — clear caches so the next sign-in starts clean.
+      lastFetchedUserId = null;
+      rawRows.clear();
+      approvedIds.clear();
+      checkedProfileIds.clear();
+      emit();
     }
   });
+
 
   return () => {
     snapshotListeners.delete(onSnapshot);
