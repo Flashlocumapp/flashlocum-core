@@ -122,7 +122,7 @@ function AdminScreen() {
             </p>
           </div>
           <button
-            onClick={refresh}
+            onClick={() => void refresh(SLICES_BY_TAB[tab])}
             disabled={refreshing}
             className="h-9 rounded-full bg-secondary px-3 text-[12.5px] font-medium disabled:opacity-60"
           >
