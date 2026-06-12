@@ -275,7 +275,7 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
 async function refreshSnapshot() {
   const auth = await ensureAuthReady();
   if (!auth.userId) return;
-  const rows = await fetchAll();
+  const rows = await fetchAll(auth.userId);
   if (!rows) return;
   cachedSnapshot = rows;
   cachedSnapshotUserId = activeCacheUserId();
