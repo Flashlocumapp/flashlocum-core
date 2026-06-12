@@ -448,6 +448,7 @@ export type Database = {
         Returns: boolean
       }
       claim_first_admin: { Args: never; Returns: boolean }
+      current_user_is_approved_doctor: { Args: never; Returns: boolean }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
