@@ -85,8 +85,10 @@
   --map: oklch(0.955 0.004 240);
   --map-ink: oklch(0.85 0.006 240);
   --presence: oklch(0.62 0.14 145);
-  /* Calm cool slate-teal used for trust signals (rating + reliability). */
+  /* Calm cool slate-teal used for trust signals (legacy). */
   --trust: oklch(0.58 0.07 220);
+  /* Gold/amber for star ratings. */
+  --rating: oklch(0.78 0.16 78);
 }
 
 .dark {
