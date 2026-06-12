@@ -307,43 +307,110 @@ export function ShiftSettlement({
 
 
 
-  // Poll the row for paid status; flip to confirmed when webhook lands.
-  // As a fallback (sandbox, missed/delayed webhooks), also ask the server
-  // to query Monnify directly and reconcile if the transaction is PAID.
+  // Detect paid status primarily via a per-row Realtime subscription
+  // (filter id=eq.${requestId}) — eliminates the per-user firehose poll.
+  // Adaptive polling kicks in only as a fallback: starts at 6s, backs off
+  // to 30s, pauses when the tab is hidden, and hard-stops after 20 min.
+  // Monnify reconcile runs at most every 60s and stops after 20 min.
   useEffect(() => {
     if (!open || !requestId) return;
     if (phase === "confirmed") return;
+
     let cancelled = false;
-    let ticks = 0;
-    const tickFn = async () => {
-      ticks += 1;
+    const startedAt = Date.now();
+    const HARD_STOP_MS = 20 * 60 * 1000; // 20 minutes
+    const MIN_DELAY_MS = 6_000;
+    const MAX_DELAY_MS = 30_000;
+    const RECONCILE_EVERY_MS = 60_000;
+    let delay = MIN_DELAY_MS;
+    let lastReconcileAt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const markPaid = () => {
+      if (autoConfirmAt.current == null) autoConfirmAt.current = simNow() + 500;
+    };
+
+    const checkOnce = async () => {
       const { data } = await supabase
         .from("coverage_requests")
         .select("payment_status")
         .eq("id", requestId)
         .maybeSingle();
-      if (cancelled) return;
+      if (cancelled) return true;
       if (data?.payment_status === "paid") {
-        if (autoConfirmAt.current == null) autoConfirmAt.current = simNow() + 500;
-        return;
+        markPaid();
+        return true;
       }
-      // Every other tick (~8s), reconcile against Monnify in case the
-      // webhook never arrived (common in local/sandbox).
-      if (ticks % 2 === 0) {
+      const now = Date.now();
+      if (now - lastReconcileAt >= RECONCILE_EVERY_MS) {
+        lastReconcileAt = now;
         try {
-          await verifyPay({ data: { requestId } });
+          const res = await verifyPay({ data: { requestId } });
+          if (!cancelled && res?.paid) {
+            markPaid();
+            return true;
+          }
         } catch {
           /* swallow — next tick will retry */
         }
       }
+      return false;
     };
-    void tickFn();
-    const iv = setInterval(tickFn, 4000);
+
+    const schedule = () => {
+      if (cancelled) return;
+      if (Date.now() - startedAt >= HARD_STOP_MS) return;
+      const wait = document.visibilityState === "hidden" ? MAX_DELAY_MS : delay;
+      timer = setTimeout(async () => {
+        const done = await checkOnce();
+        if (done || cancelled) return;
+        delay = Math.min(MAX_DELAY_MS, Math.round(delay * 1.5));
+        schedule();
+      }, wait);
+    };
+
+    // Realtime: fires the instant the webhook updates payment_status.
+    const channel = supabase
+      .channel(`settlement:${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "coverage_requests", filter: `id=eq.${requestId}` },
+        (payload) => {
+          const row = payload.new as { payment_status?: string } | null;
+          if (row?.payment_status === "paid") markPaid();
+        },
+      )
+      .subscribe();
+
+    // Kick off one immediate check, then enter adaptive backoff.
+    void (async () => {
+      const done = await checkOnce();
+      if (!done) schedule();
+    })();
+
+    const onVisibility = () => {
+      // When the tab returns to foreground, reset delay and check now.
+      if (document.visibilityState === "visible" && !cancelled) {
+        delay = MIN_DELAY_MS;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        void (async () => {
+          const done = await checkOnce();
+          if (!done) schedule();
+        })();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       cancelled = true;
-      clearInterval(iv);
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      void supabase.removeChannel(channel);
     };
-  }, [open, requestId, phase, totalAmount, verifyPay]);
+  }, [open, requestId, phase, verifyPay]);
 
   const handleCopy = async () => {
     try {
