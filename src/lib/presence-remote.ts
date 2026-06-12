@@ -27,11 +27,16 @@ type RealtimePayload = {
 const TABLE = "doctor_presence";
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
-let profilesChannel: ReturnType<typeof supabase.channel> | null = null;
+let ownProfileChannel: ReturnType<typeof supabase.channel> | null = null;
+let ownProfileChannelUserId: string | null = null;
 
 // Raw caches — backend truth.
 const rawRows = new Map<string, PresenceRow>();
 const approvedIds = new Set<string>();
+// Profiles we've already checked verification for — avoids re-fetching the
+// same unknown id on every heartbeat update.
+const checkedProfileIds = new Set<string>();
+const inFlightProfileChecks = new Set<string>();
 
 const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
@@ -79,9 +84,41 @@ async function initialFetch() {
   }
   if (!approvedRes.error) {
     approvedIds.clear();
-    for (const p of approvedRes.data ?? []) approvedIds.add(p.id);
+    checkedProfileIds.clear();
+    for (const p of approvedRes.data ?? []) {
+      approvedIds.add(p.id);
+      checkedProfileIds.add(p.id);
+    }
   }
   emit();
+}
+
+/** Lazily verify a doctor's approval status when their presence row appears
+ *  but we have no cached approval state for them. Skips ids we've already
+ *  resolved or have a fetch in flight for. */
+async function ensureApprovalKnown(userId: string) {
+  if (checkedProfileIds.has(userId) || inFlightProfileChecks.has(userId)) return;
+  inFlightProfileChecks.add(userId);
+  try {
+    const { data } = await supabase
+      .from("profiles")
+      .select("verification_status")
+      .eq("id", userId)
+      .maybeSingle();
+    checkedProfileIds.add(userId);
+    if (data?.verification_status === "approved") {
+      approvedIds.add(userId);
+      emit();
+    } else {
+      // Unapproved: drop any cached presence row (DB trigger should already
+      // have cleared it, but defend in depth).
+      if (rawRows.delete(userId)) emit();
+    }
+  } catch {
+    inFlightProfileChecks.delete(userId);
+    return;
+  }
+  inFlightProfileChecks.delete(userId);
 }
 
 function applyPresencePayload(payload: RealtimePayload) {
@@ -91,30 +128,57 @@ function applyPresencePayload(payload: RealtimePayload) {
     if (id) rawRows.delete(id);
   } else {
     const row = payload.new as PresenceRow | undefined;
-    if (row?.user_id) rawRows.set(row.user_id, row);
+    if (row?.user_id) {
+      rawRows.set(row.user_id, row);
+      if (!checkedProfileIds.has(row.user_id)) void ensureApprovalKnown(row.user_id);
+    }
   }
   emit();
 }
 
-function applyProfilePayload(payload: RealtimePayload) {
+/** Per-user channel for the signed-in user's own profile — used to track
+ *  their own verification status flipping (e.g. admin approves them while
+ *  they're online). Replaces the previous global profiles channel which
+ *  fired on every heartbeat for every user. */
+function applyOwnProfilePayload(payload: RealtimePayload) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
     const id = (payload.old as { id?: string } | undefined)?.id;
     if (id) {
       approvedIds.delete(id);
       rawRows.delete(id);
+      checkedProfileIds.delete(id);
+      emit();
     }
+    return;
+  }
+  const row = payload.new as { id: string; verification_status: string } | undefined;
+  if (!row?.id) return;
+  checkedProfileIds.add(row.id);
+  if (row.verification_status === "approved") {
+    approvedIds.add(row.id);
   } else {
-    const row = payload.new as { id: string; verification_status: string } | undefined;
-    if (row?.id) {
-      if (row.verification_status === "approved") approvedIds.add(row.id);
-      else {
-        approvedIds.delete(row.id);
-        rawRows.delete(row.id);
-      }
-    }
+    approvedIds.delete(row.id);
+    rawRows.delete(row.id);
   }
   emit();
+}
+
+function ensureOwnProfileChannel(userId: string) {
+  if (ownProfileChannelUserId === userId && ownProfileChannel) return;
+  if (ownProfileChannel) {
+    supabase.removeChannel(ownProfileChannel);
+    ownProfileChannel = null;
+  }
+  ownProfileChannelUserId = userId;
+  ownProfileChannel = supabase
+    .channel(`own-profile-verification-${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+      (payload) => applyOwnProfilePayload(payload),
+    )
+    .subscribe();
 }
 
 export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): () => void {
@@ -132,17 +196,15 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
       )
       .subscribe();
   }
-  if (!profilesChannel) {
-    profilesChannel = supabase
-      .channel("profiles_verification_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload) =>
-        applyProfilePayload(payload),
-      )
-      .subscribe();
-  }
+  void ensureAuthReady().then((auth) => {
+    if (auth.userId) ensureOwnProfileChannel(auth.userId);
+  });
 
   const offAuth = onUserIdChange((id) => {
-    if (id) void initialFetch();
+    if (id) {
+      ensureOwnProfileChannel(id);
+      void initialFetch();
+    }
   });
 
   return () => {
@@ -154,9 +216,10 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
         supabase.removeChannel(channel);
         channel = null;
       }
-      if (profilesChannel) {
-        supabase.removeChannel(profilesChannel);
-        profilesChannel = null;
+      if (ownProfileChannel) {
+        supabase.removeChannel(ownProfileChannel);
+        ownProfileChannel = null;
+        ownProfileChannelUserId = null;
       }
     }
   };

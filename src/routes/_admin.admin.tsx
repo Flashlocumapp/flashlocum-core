@@ -54,13 +54,24 @@ function AdminScreen() {
   }, [refresh]);
 
   useEffect(() => {
+    // Coalesce realtime bursts — every profile heartbeat, presence ping, and
+    // coverage status change otherwise fires a triple-RPC refresh per event.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const trigger = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void refresh();
+      }, 3000);
+    };
     const ch = supabase
       .channel("admin-dashboard-stream")
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "doctor_presence" }, () => void refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "coverage_requests" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, trigger)
+      .on("postgres_changes", { event: "*", schema: "public", table: "doctor_presence" }, trigger)
+      .on("postgres_changes", { event: "*", schema: "public", table: "coverage_requests" }, trigger)
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(ch);
     };
   }, [refresh]);
