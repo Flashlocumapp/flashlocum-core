@@ -424,14 +424,13 @@ export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null>
 export async function isCurrentUserAdmin(): Promise<boolean> {
   const { data: u } = await supabase.auth.getUser();
   if (!u.user) return false;
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", u.user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) return false;
-  return !!data;
+  try {
+    const { checkIsAdmin } = await import("@/lib/admin.functions");
+    const res = await checkIsAdmin();
+    return !!res?.isAdmin;
+  } catch {
+    return false;
+  }
 }
 
 export async function claimFirstAdmin(): Promise<boolean> {
@@ -454,13 +453,8 @@ export async function updateDoctorVerification(
   doctorId: string,
   status: VerificationStatus,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("profiles")
-    .update({ verification_status: status })
-    .eq("id", doctorId)
-    .select("id")
-    .single();
-  if (error) throw error;
+  const { updateDoctorVerificationFn } = await import("@/lib/admin.functions");
+  await updateDoctorVerificationFn({ data: { doctorId, status } });
 }
 
 /* ---------- Admin dashboard ---------- */
