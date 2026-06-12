@@ -19,7 +19,7 @@ export function ReliabilityPill({
   const r = useReliability(entityId);
   const dot = size === "md" ? 9 : 7;
   const num = size === "md" ? "text-[13px]" : "text-[11.5px]";
-  const color = "var(--color-trust)";
+  const color = "var(--color-presence)";
 
   return (
     <span
@@ -39,7 +39,7 @@ export function ReliabilityPill({
         />
         <span
           className={`${num} font-medium tabular-nums`}
-          style={{ color: "var(--color-trust)" }}
+          style={{ color: "var(--color-presence)" }}
         >
           {r.display}
         </span>

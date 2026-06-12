@@ -8,7 +8,7 @@ import {
   billableMinutes,
   type CoverageKind,
 } from "@/lib/pricing";
-import { beginSettlementCheckout, simulateSettlementPayment, verifySettlementPayment } from "@/lib/settlement.functions";
+import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 type TransferAccount = {
@@ -259,20 +259,22 @@ export function ShiftSettlement({
 
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
-  const simulatePay = useServerFn(simulateSettlementPayment);
   const verifyPay = useServerFn(verifySettlementPayment);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
-  const [simulating, setSimulating] = useState(false);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
     setPayError(null);
     setPayState("starting");
     try {
+      // Always use the LIVE recomputed amount so the Payment page stays in
+      // sync with Settlement / Coverage History when the 15-min hold expires
+      // and pricing rolls forward.
+      const liveAmount = Math.max(frozenAmountRef.current, Math.round(totalAmount));
       const result = await beginCheckout({
-        data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
+        data: { requestId, amount: liveAmount },
       });
       setAccount(result);
       setPayState("waiting");
@@ -280,19 +282,6 @@ export function ShiftSettlement({
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
       setPayState("error");
-    }
-  };
-
-  const handleSimulate = async () => {
-    if (!requestId || simulating) return;
-    setSimulating(true);
-    try {
-      await simulatePay({ data: { requestId } });
-      autoConfirmAt.current = simNow() + 500;
-    } catch (e) {
-      setPayError(e instanceof Error ? e.message : "Simulation failed");
-    } finally {
-      setSimulating(false);
     }
   };
 
@@ -393,6 +382,7 @@ export function ShiftSettlement({
             elapsed={elapsed}
             billedMin={frozenBilledMin}
             amount={frozenAmount}
+            liveAmount={totalAmount}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -400,8 +390,6 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
-            onSimulate={requestId ? handleSimulate : undefined}
-            simulating={simulating}
           />
         )}
         {phase === "overtime" && (
@@ -419,8 +407,6 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
-            onSimulate={requestId ? handleSimulate : undefined}
-            simulating={simulating}
           />
         )}
         {phase === "confirmed" && (
@@ -529,6 +515,7 @@ function SettlementPane({
   elapsed,
   billedMin,
   amount,
+  liveAmount,
   onCopy,
   onMadePayment,
   paymentTriggered,
@@ -536,14 +523,13 @@ function SettlementPane({
   payState,
   payError,
   account,
-  onSimulate,
-  simulating,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
   elapsed: number;
   billedMin: number;
   amount: number;
+  liveAmount?: number;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
@@ -551,21 +537,17 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
-  onSimulate?: () => void;
-  simulating?: boolean;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
     return (
       <CustomTransferPane
-        amount={amount}
+        amount={liveAmount ?? amount}
         account={account}
         payState={payState}
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
-        onSimulate={onSimulate}
-        simulating={simulating}
       />
     );
   }
@@ -661,8 +643,6 @@ function OvertimePane({
   payState,
   payError,
   account,
-  onSimulate,
-  simulating,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -676,8 +656,6 @@ function OvertimePane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
-  onSimulate?: () => void;
-  simulating?: boolean;
 }) {
   if (onPayWithMonnify) {
     return (
@@ -688,8 +666,6 @@ function OvertimePane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
-        onSimulate={onSimulate}
-        simulating={simulating}
       />
     );
   }
@@ -901,8 +877,6 @@ function CustomTransferPane({
   payError,
   paymentTriggered,
   onRetry,
-  onSimulate,
-  simulating,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -910,8 +884,6 @@ function CustomTransferPane({
   payError: string | null;
   paymentTriggered: boolean;
   onRetry: () => void;
-  onSimulate?: () => void;
-  simulating?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
@@ -938,6 +910,31 @@ function CustomTransferPane({
     : PRICE_HOLD_SEC;
   const expired = startedAtRef.current != null && remaining === 0;
 
+  // When the price hold expires AND the live recomputed amount differs from
+  // the locked transfer amount, automatically re-issue the transfer account
+  // so the Payment page always reflects the current source-of-truth amount
+  // (matching Settlement, Coverage History, etc.). Reset anchor so the new
+  // 15-min hold restarts.
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!expired) {
+      refreshedRef.current = false;
+      return;
+    }
+    if (refreshedRef.current) return;
+    if (account && amount > account.amount && !paymentTriggered) {
+      refreshedRef.current = true;
+      startedAtRef.current = null;
+      onRetry();
+    }
+  }, [expired, amount, account, paymentTriggered, onRetry]);
+
+  // Display always prefers the higher of locked vs live amount so the user
+  // never sees a stale value if recompute has happened.
+  const displayAmount = account
+    ? Math.max(account.amount, amount)
+    : amount;
+
   return (
     <motion.section
       initial={{ opacity: 0 }}
@@ -952,8 +949,9 @@ function CustomTransferPane({
         </div>
         <div className="mt-3 text-[13px] text-muted-foreground">Transfer Exactly</div>
         <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(account?.amount ?? amount)}
+          {fmtNaira(displayAmount)}
         </div>
+
 
         {payState === "starting" || (!account && !payError) ? (
           <div className="mt-10 flex flex-col items-center gap-3 text-muted-foreground">
@@ -1043,15 +1041,6 @@ function CustomTransferPane({
               </>
             ) : null}
           </div>
-          {onSimulate && account && !paymentTriggered && (
-            <button
-              onClick={onSimulate}
-              disabled={simulating}
-              className="h-11 w-full rounded-full border border-dashed border-foreground/30 text-[12.5px] font-medium text-muted-foreground active:opacity-80 disabled:opacity-50"
-            >
-              {simulating ? "Simulating…" : "Simulate payment (sandbox)"}
-            </button>
-          )}
         </div>
       </div>
 
