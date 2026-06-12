@@ -393,6 +393,7 @@ export function ShiftSettlement({
             elapsed={elapsed}
             billedMin={frozenBilledMin}
             amount={frozenAmount}
+            liveAmount={totalAmount}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -400,8 +401,6 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
-            onSimulate={requestId ? handleSimulate : undefined}
-            simulating={simulating}
           />
         )}
         {phase === "overtime" && (
