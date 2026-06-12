@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoleRouteImport } from './routes/role'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingRoleRouteImport } from './routes/onboarding.$role'
@@ -20,6 +19,7 @@ import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
+import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
 import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public/monnify-webhook'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 
@@ -31,11 +31,6 @@ const RoleRoute = RoleRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -77,6 +72,11 @@ const AppAccountRoute = AppAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppRoute,
 } as any)
+const AdminAdminRoute = AdminAdminRouteImport.update({
+  id: '/_admin/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
   id: '/api/public/monnify-webhook',
   path: '/api/public/monnify-webhook',
@@ -91,9 +91,9 @@ const LovableEmailQueueProcessRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
+  '/admin': typeof AdminAdminRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
@@ -105,9 +105,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
+  '/admin': typeof AdminAdminRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
@@ -121,9 +121,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
-  '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
+  '/_admin/admin': typeof AdminAdminRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
@@ -137,9 +137,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
     | '/reset-password'
     | '/role'
+    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
@@ -151,9 +151,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/reset-password'
     | '/role'
+    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
@@ -166,9 +166,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
-    | '/admin'
     | '/reset-password'
     | '/role'
+    | '/_admin/admin'
     | '/_app/account'
     | '/_app/coverage'
     | '/_app/earnings'
@@ -182,9 +182,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
-  AdminRoute: typeof AdminRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoleRoute: typeof RoleRoute
+  AdminAdminRoute: typeof AdminAdminRoute
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
@@ -205,13 +205,6 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -270,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAccountRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_admin/admin': {
+      id: '/_admin/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/monnify-webhook': {
       id: '/api/public/monnify-webhook'
       path: '/api/public/monnify-webhook'
@@ -306,9 +306,9 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
-  AdminRoute: AdminRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RoleRoute: RoleRoute,
+  AdminAdminRoute: AdminAdminRoute,
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
@@ -317,3 +317,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

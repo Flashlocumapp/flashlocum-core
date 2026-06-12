@@ -16,7 +16,7 @@ import {
 import { pushToast } from "@/lib/notifications";
 import { ensureAuthReady } from "@/lib/auth-ready";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/_admin/admin")({
   component: AdminScreen,
 });
 
