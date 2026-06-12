@@ -342,18 +342,46 @@ function handlePayload(payload: {
   }
 
   const strip = (r: Row | undefined) => (r ? { ...r, phone: "" } : r);
+  // Apply the change to the in-memory snapshot so newly-mounting subscribers
+  // see fresh state without us paying for a full SELECT on every event.
+  // Phone is intentionally blanked here — the RPC-backed phone map is only
+  // refreshed by refreshSnapshot(); event-driven rows show "" until the next
+  // explicit refresh, which is fine because phone is only revealed in the
+  // requester/cover settlement views where a refresh has already run.
+  const upsertCached = (net: NetRequest) => {
+    const idx = cachedSnapshot.findIndex((r) => r.id === net.id);
+    if (idx === -1) cachedSnapshot = [...cachedSnapshot, net];
+    else {
+      const next = cachedSnapshot.slice();
+      next[idx] = net;
+      cachedSnapshot = next;
+    }
+    writePersistedSnapshot(cachedSnapshot);
+  };
+
   if (payload.eventType === "INSERT") {
     const net = rowToNet(strip(payload.new as Row) as Row);
+    upsertCached(net);
     eventListeners.forEach((fn) => fn({ type: "INSERT", row: net }));
   } else if (payload.eventType === "UPDATE") {
     const net = rowToNet(strip(payload.new as Row) as Row);
     const old = payload.old ? rowToNet(strip(payload.old as Row) as Row) : null;
+    upsertCached(net);
     eventListeners.forEach((fn) => fn({ type: "UPDATE", row: net, old }));
   } else if (payload.eventType === "DELETE") {
     const id = (payload.old as Row | undefined)?.id;
-    if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+    if (id) {
+      cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
+      writePersistedSnapshot(cachedSnapshot);
+      eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+    }
   }
-  scheduleRefresh();
+  // NOTE: intentionally no scheduleRefresh() here. Consumers receive the
+  // mutation via onEvent and the cachedSnapshot is updated above, so the
+  // previous "refetch the whole table on every event" pattern is gone.
+  // The invalidation broadcast channel is still the fallback path when an
+  // RLS-filtered postgres_changes event never reaches us (e.g. a row leaving
+  // our scope after an accept).
 }
 
 /**
