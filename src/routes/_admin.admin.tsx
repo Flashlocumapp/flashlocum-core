@@ -1,11 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  claimFirstAdmin,
   fetchAdminOverview,
   fetchAdminUsers,
-  isCurrentUserAdmin,
   listDoctors,
   updateDoctorVerification,
   type AdminOverviewStats,
@@ -14,18 +12,15 @@ import {
   type VerificationStatus,
 } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
-import { ensureAuthReady } from "@/lib/auth-ready";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/_admin/admin")({
+  ssr: false,
   component: AdminScreen,
 });
 
-type LoadState = "checking" | "unauth" | "not-admin" | "ready";
 type Tab = "overview" | "users" | "pending" | "doctors";
 
 function AdminScreen() {
-  const navigate = useNavigate();
-  const [state, setState] = useState<LoadState>("checking");
   const [tab, setTab] = useState<Tab>("overview");
 
   const [stats, setStats] = useState<AdminOverviewStats | null>(null);
@@ -33,7 +28,6 @@ function AdminScreen() {
   const [doctors, setDoctors] = useState<ProfileRow[]>([]);
 
   const [busy, setBusy] = useState<string | null>(null);
-  const [claiming, setClaiming] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -56,24 +50,10 @@ function AdminScreen() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const auth = await ensureAuthReady();
-      if (!auth.session) {
-        setState("unauth");
-        return;
-      }
-      const admin = await isCurrentUserAdmin();
-      if (!admin) {
-        setState("not-admin");
-        return;
-      }
-      setState("ready");
-      await refresh();
-    })();
+    void refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (state !== "ready") return;
     const ch = supabase
       .channel("admin-dashboard-stream")
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void refresh())
@@ -83,7 +63,7 @@ function AdminScreen() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [state, refresh]);
+  }, [refresh]);
 
   const act = async (id: string, status: VerificationStatus) => {
     setBusy(id + status);
@@ -98,69 +78,6 @@ function AdminScreen() {
     }
   };
 
-  const handleClaim = async () => {
-    setClaiming(true);
-    try {
-      const ok = await claimFirstAdmin();
-      if (ok) {
-        pushToast({ tone: "presence", title: "You are now an admin." });
-        setState("ready");
-        await refresh();
-      } else {
-        pushToast({ tone: "warn", title: "An admin already exists." });
-      }
-    } catch (e) {
-      pushToast({ tone: "warn", title: (e as Error).message });
-    } finally {
-      setClaiming(false);
-    }
-  };
-
-  if (state === "checking") return <div className="min-h-screen bg-background" />;
-  if (state === "unauth") {
-    return (
-      <main className="min-h-screen bg-background safe-top safe-bottom">
-        <div className="mx-auto max-w-md px-6 pt-16 text-center">
-          <h1 className="text-[22px] font-semibold tracking-tight">Sign in required</h1>
-          <p className="mt-2 text-[14px] text-muted-foreground">
-            Please sign in to access the admin console.
-          </p>
-          <button
-            onClick={() => navigate({ to: "/role" })}
-            className="mt-6 h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground"
-          >
-            Go to sign in
-          </button>
-        </div>
-      </main>
-    );
-  }
-  if (state === "not-admin") {
-    return (
-      <main className="min-h-screen bg-background safe-top safe-bottom">
-        <div className="mx-auto max-w-md px-6 pt-16 text-center">
-          <h1 className="text-[22px] font-semibold tracking-tight">Admin access</h1>
-          <p className="mt-2 text-[14px] text-muted-foreground">
-            Your account does not have admin privileges. If no admin exists yet,
-            you can claim the first-admin role below.
-          </p>
-          <button
-            onClick={handleClaim}
-            disabled={claiming}
-            className="mt-6 h-12 w-full rounded-2xl bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {claiming ? "Claiming…" : "Claim first-admin role"}
-          </button>
-          <button
-            onClick={() => navigate({ to: "/home" })}
-            className="mt-3 h-12 w-full rounded-2xl bg-secondary text-[14px] font-medium"
-          >
-            Back to app
-          </button>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main className="min-h-screen bg-background safe-top safe-bottom">

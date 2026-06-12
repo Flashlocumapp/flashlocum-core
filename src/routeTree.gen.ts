@@ -11,15 +11,17 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoleRouteImport } from './routes/role'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AdminRouteImport } from './routes/_admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingRoleRouteImport } from './routes/onboarding.$role'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
+import { Route as AdminUnauthorizedRouteImport } from './routes/admin.unauthorized'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
+import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
 import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public/monnify-webhook'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 
@@ -33,13 +35,12 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/_admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,6 +56,11 @@ const OnboardingRoleRoute = OnboardingRoleRouteImport.update({
 const AuthRoleRoute = AuthRoleRouteImport.update({
   id: '/auth/$role',
   path: '/auth/$role',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUnauthorizedRoute = AdminUnauthorizedRouteImport.update({
+  id: '/admin/unauthorized',
+  path: '/admin/unauthorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppHomeRoute = AppHomeRouteImport.update({
@@ -77,6 +83,11 @@ const AppAccountRoute = AppAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppRoute,
 } as any)
+const AdminAdminRoute = AdminAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
   id: '/api/public/monnify-webhook',
   path: '/api/public/monnify-webhook',
@@ -91,13 +102,14 @@ const LovableEmailQueueProcessRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
+  '/admin': typeof AdminAdminRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
+  '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -105,13 +117,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
+  '/admin': typeof AdminAdminRoute
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
+  '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -120,14 +133,16 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_admin': typeof AdminRouteWithChildren
   '/_app': typeof AppRouteWithChildren
-  '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
+  '/_admin/admin': typeof AdminAdminRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
   '/_app/home': typeof AppHomeRoute
+  '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -137,13 +152,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
     | '/reset-password'
     | '/role'
+    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
     | '/home'
+    | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
     | '/api/public/monnify-webhook'
@@ -151,13 +167,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/reset-password'
     | '/role'
+    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
     | '/home'
+    | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
     | '/api/public/monnify-webhook'
@@ -165,14 +182,16 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/_admin'
     | '/_app'
-    | '/admin'
     | '/reset-password'
     | '/role'
+    | '/_admin/admin'
     | '/_app/account'
     | '/_app/coverage'
     | '/_app/earnings'
     | '/_app/home'
+    | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
     | '/api/public/monnify-webhook'
@@ -181,10 +200,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AppRoute: typeof AppRouteWithChildren
-  AdminRoute: typeof AdminRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoleRoute: typeof RoleRoute
+  AdminUnauthorizedRoute: typeof AdminUnauthorizedRoute
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
@@ -207,18 +227,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app': {
       id: '/_app'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_admin': {
+      id: '/_admin'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -240,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/$role'
       fullPath: '/auth/$role'
       preLoaderRoute: typeof AuthRoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/unauthorized': {
+      id: '/admin/unauthorized'
+      path: '/admin/unauthorized'
+      fullPath: '/admin/unauthorized'
+      preLoaderRoute: typeof AdminUnauthorizedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/home': {
@@ -270,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAccountRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_admin/admin': {
+      id: '/_admin/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminAdminRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/api/public/monnify-webhook': {
       id: '/api/public/monnify-webhook'
       path: '/api/public/monnify-webhook'
@@ -286,6 +320,16 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AdminRouteChildren {
+  AdminAdminRoute: typeof AdminAdminRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAdminRoute: AdminAdminRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
@@ -305,10 +349,11 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   AppRoute: AppRouteWithChildren,
-  AdminRoute: AdminRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RoleRoute: RoleRoute,
+  AdminUnauthorizedRoute: AdminUnauthorizedRoute,
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
