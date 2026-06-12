@@ -40,6 +40,7 @@
   --color-map-ink: var(--map-ink);
   --color-presence: var(--presence);
   --color-trust: var(--trust);
+  --color-rating: var(--rating);
 }
 
 :root {
