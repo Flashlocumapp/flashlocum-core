@@ -14,16 +14,34 @@ type MonnifyEvent = {
   };
 };
 
+// Monnify signs with HMAC-SHA512 — output is exactly 128 hex chars.
+const SIG_HEX_LEN = 128;
+const HEX_RE = /^[0-9a-fA-F]+$/;
+
 function verify(signature: string | null, rawBody: string): boolean {
+  // Reject missing / empty / malformed signatures up front so we never reach
+  // timingSafeEqual with attacker-controlled length.
   if (!signature) return false;
+  const sig = signature.trim().toLowerCase();
+  if (sig.length !== SIG_HEX_LEN || !HEX_RE.test(sig)) return false;
+
   const secret = process.env.MONNIFY_SECRET_KEY;
-  if (!secret) return false;
-  const expected = createHmac("sha512", secret).update(rawBody).digest("hex");
-  const a = Buffer.from(signature.toLowerCase());
-  const b = Buffer.from(expected.toLowerCase());
-  if (a.length !== b.length) return false;
+  if (!secret) {
+    console.error("[monnify-webhook] MONNIFY_SECRET_KEY is not set; rejecting");
+    return false;
+  }
+
+  // HMAC the RAW request body (not parsed JSON — re-serializing would change
+  // byte order / whitespace and break verification).
+  const expected = createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
+
+  // Compare as fixed-length hex buffers; timingSafeEqual requires equal length.
+  const a = Buffer.from(sig, "hex");
+  const b = Buffer.from(expected, "hex");
+  if (a.length !== b.length || a.length === 0) return false;
   return timingSafeEqual(a, b);
 }
+
 
 export const Route = createFileRoute("/api/public/monnify-webhook")({
   server: {
