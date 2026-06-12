@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoleRouteImport } from './routes/role'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AdminRouteImport } from './routes/_admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingRoleRouteImport } from './routes/onboarding.$role'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
+import { Route as AdminUnauthorizedRouteImport } from './routes/admin.unauthorized'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
@@ -37,6 +39,10 @@ const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/_admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -50,6 +56,11 @@ const OnboardingRoleRoute = OnboardingRoleRouteImport.update({
 const AuthRoleRoute = AuthRoleRouteImport.update({
   id: '/auth/$role',
   path: '/auth/$role',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUnauthorizedRoute = AdminUnauthorizedRouteImport.update({
+  id: '/admin/unauthorized',
+  path: '/admin/unauthorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppHomeRoute = AppHomeRouteImport.update({
@@ -73,9 +84,9 @@ const AppAccountRoute = AppAccountRouteImport.update({
   getParentRoute: () => AppRoute,
 } as any)
 const AdminAdminRoute = AdminAdminRouteImport.update({
-  id: '/_admin/admin',
+  id: '/admin',
   path: '/admin',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AdminRoute,
 } as any)
 const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
   id: '/api/public/monnify-webhook',
@@ -98,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
+  '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -112,6 +124,7 @@ export interface FileRoutesByTo {
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
+  '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -120,6 +133,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_admin': typeof AdminRouteWithChildren
   '/_app': typeof AppRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
@@ -128,6 +142,7 @@ export interface FileRoutesById {
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
   '/_app/home': typeof AppHomeRoute
+  '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -144,6 +159,7 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/earnings'
     | '/home'
+    | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
     | '/api/public/monnify-webhook'
@@ -158,6 +174,7 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/earnings'
     | '/home'
+    | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
     | '/api/public/monnify-webhook'
@@ -165,6 +182,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/_admin'
     | '/_app'
     | '/reset-password'
     | '/role'
@@ -173,6 +191,7 @@ export interface FileRouteTypes {
     | '/_app/coverage'
     | '/_app/earnings'
     | '/_app/home'
+    | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
     | '/api/public/monnify-webhook'
@@ -181,10 +200,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AppRoute: typeof AppRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoleRoute: typeof RoleRoute
-  AdminAdminRoute: typeof AdminAdminRoute
+  AdminUnauthorizedRoute: typeof AdminUnauthorizedRoute
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
@@ -214,6 +234,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_admin': {
+      id: '/_admin'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -233,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/$role'
       fullPath: '/auth/$role'
       preLoaderRoute: typeof AuthRoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/unauthorized': {
+      id: '/admin/unauthorized'
+      path: '/admin/unauthorized'
+      fullPath: '/admin/unauthorized'
+      preLoaderRoute: typeof AdminUnauthorizedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/home': {
@@ -268,7 +302,7 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminAdminRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/api/public/monnify-webhook': {
       id: '/api/public/monnify-webhook'
@@ -286,6 +320,16 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AdminRouteChildren {
+  AdminAdminRoute: typeof AdminAdminRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAdminRoute: AdminAdminRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRoute
@@ -305,10 +349,11 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   AppRoute: AppRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   RoleRoute: RoleRoute,
-  AdminAdminRoute: AdminAdminRoute,
+  AdminUnauthorizedRoute: AdminUnauthorizedRoute,
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
@@ -317,13 +362,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
