@@ -888,8 +888,6 @@ function CustomTransferPane({
   payError,
   paymentTriggered,
   onRetry,
-  onSimulate,
-  simulating,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -897,8 +895,6 @@ function CustomTransferPane({
   payError: string | null;
   paymentTriggered: boolean;
   onRetry: () => void;
-  onSimulate?: () => void;
-  simulating?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
@@ -925,6 +921,31 @@ function CustomTransferPane({
     : PRICE_HOLD_SEC;
   const expired = startedAtRef.current != null && remaining === 0;
 
+  // When the price hold expires AND the live recomputed amount differs from
+  // the locked transfer amount, automatically re-issue the transfer account
+  // so the Payment page always reflects the current source-of-truth amount
+  // (matching Settlement, Coverage History, etc.). Reset anchor so the new
+  // 15-min hold restarts.
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!expired) {
+      refreshedRef.current = false;
+      return;
+    }
+    if (refreshedRef.current) return;
+    if (account && amount > account.amount && !paymentTriggered) {
+      refreshedRef.current = true;
+      startedAtRef.current = null;
+      onRetry();
+    }
+  }, [expired, amount, account, paymentTriggered, onRetry]);
+
+  // Display always prefers the higher of locked vs live amount so the user
+  // never sees a stale value if recompute has happened.
+  const displayAmount = account
+    ? Math.max(account.amount, amount)
+    : amount;
+
   return (
     <motion.section
       initial={{ opacity: 0 }}
@@ -939,8 +960,9 @@ function CustomTransferPane({
         </div>
         <div className="mt-3 text-[13px] text-muted-foreground">Transfer Exactly</div>
         <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(account?.amount ?? amount)}
+          {fmtNaira(displayAmount)}
         </div>
+
 
         {payState === "starting" || (!account && !payError) ? (
           <div className="mt-10 flex flex-col items-center gap-3 text-muted-foreground">
