@@ -20,6 +20,17 @@ export const Route = createFileRoute("/_admin/admin")({
 
 type Tab = "overview" | "users" | "pending" | "doctors";
 
+// Map each tab to the data slices it actually renders.
+// Pending + Doctors share the same `doctors` dataset, so refreshing once
+// covers both. Overview pulls aggregate counts only — keep it cheap.
+type Slice = "stats" | "users" | "doctors";
+const SLICES_BY_TAB: Record<Tab, Slice[]> = {
+  overview: ["stats"],
+  users: ["stats", "users"],
+  pending: ["stats", "doctors"],
+  doctors: ["stats", "doctors"],
+};
+
 function AdminScreen() {
   const [tab, setTab] = useState<Tab>("overview");
 
@@ -30,38 +41,47 @@ function AdminScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const [s, u, d] = await Promise.all([
-        fetchAdminOverview(),
-        fetchAdminUsers(),
-        listDoctors(),
-      ]);
-      setStats(s);
-      setUsers(u);
-      setDoctors(d);
-    } catch (e) {
-      console.warn(e);
-      pushToast({ tone: "warn", title: (e as Error).message || "Refresh failed." });
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  const refresh = useCallback(
+    async (slices: Slice[] = ["stats", "users", "doctors"]) => {
+      setRefreshing(true);
+      try {
+        const want = new Set(slices);
+        const tasks: Promise<unknown>[] = [];
+        if (want.has("stats")) {
+          tasks.push(fetchAdminOverview().then(setStats));
+        }
+        if (want.has("users")) {
+          tasks.push(fetchAdminUsers().then(setUsers));
+        }
+        if (want.has("doctors")) {
+          tasks.push(listDoctors().then(setDoctors));
+        }
+        await Promise.all(tasks);
+      } catch (e) {
+        console.warn(e);
+        pushToast({ tone: "warn", title: (e as Error).message || "Refresh failed." });
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [],
+  );
+
+  // Initial load + reload when the user changes tabs (fetch only what's needed).
+  useEffect(() => {
+    void refresh(SLICES_BY_TAB[tab]);
+  }, [refresh, tab]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    // Coalesce realtime bursts — every profile heartbeat, presence ping, and
-    // coverage status change otherwise fires a triple-RPC refresh per event.
+    // Coalesce realtime bursts and only refetch the slices the current tab renders.
+    // Pre-debounce this was 3 RPCs per WAL event; now it's 1–2 RPCs every 3s max,
+    // and the overview tab does just one cheap aggregate call.
     let timer: ReturnType<typeof setTimeout> | null = null;
     const trigger = () => {
       if (timer) return;
       timer = setTimeout(() => {
         timer = null;
-        void refresh();
+        void refresh(SLICES_BY_TAB[tab]);
       }, 3000);
     };
     const ch = supabase
@@ -74,20 +94,21 @@ function AdminScreen() {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(ch);
     };
-  }, [refresh]);
+  }, [refresh, tab]);
 
   const act = async (id: string, status: VerificationStatus) => {
     setBusy(id + status);
     try {
       await updateDoctorVerification(id, status);
       pushToast({ tone: "presence", title: `Doctor ${status}.` });
-      await refresh();
+      await refresh(SLICES_BY_TAB[tab]);
     } catch (e) {
       pushToast({ tone: "warn", title: (e as Error).message || "Update failed." });
     } finally {
       setBusy(null);
     }
   };
+
 
 
   return (
