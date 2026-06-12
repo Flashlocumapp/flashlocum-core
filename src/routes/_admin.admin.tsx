@@ -1,11 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  claimFirstAdmin,
   fetchAdminOverview,
   fetchAdminUsers,
-  isCurrentUserAdmin,
   listDoctors,
   updateDoctorVerification,
   type AdminOverviewStats,
@@ -14,13 +12,12 @@ import {
   type VerificationStatus,
 } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
-import { ensureAuthReady } from "@/lib/auth-ready";
 
 export const Route = createFileRoute("/_admin/admin")({
+  ssr: false,
   component: AdminScreen,
 });
 
-type LoadState = "checking" | "unauth" | "not-admin" | "ready";
 type Tab = "overview" | "users" | "pending" | "doctors";
 
 function AdminScreen() {
