@@ -39,7 +39,7 @@ export function ReliabilityPill({
         />
         <span
           className={`${num} font-medium tabular-nums`}
-          style={{ color: "var(--color-trust)" }}
+          style={{ color: "var(--color-presence)" }}
         >
           {r.display}
         </span>
