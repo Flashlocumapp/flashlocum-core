@@ -222,6 +222,7 @@ type SubscribeOpts = {
 
 let activeSubscribers = 0;
 let channel: ReturnType<typeof supabase.channel> | null = null;
+let channelUserId: string | null = null;
 let invalidationChannel: ReturnType<typeof supabase.channel> | null = null;
 const eventListeners = new Set<(e: RemoteEvent) => void>();
 const snapshotListeners = new Set<(rows: NetRequest[]) => void>();
@@ -297,6 +298,84 @@ function emitInvalidate(id: string) {
   });
 }
 
+/**
+ * Handle a single postgres_changes payload. Shared between the per-user
+ * filtered bindings (own rows + open searching rows) so the dedupe logic
+ * lives in one place. Bindings can overlap — e.g. when a doctor accepts
+ * their own searching row, both the `accepted_by=eq.uid` and the prior
+ * `status=eq.searching` bindings may fire — so we de-duplicate by event id.
+ */
+const recentEventIds = new Map<string, number>();
+function handlePayload(payload: {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  new?: unknown;
+  old?: unknown;
+}) {
+  const row = (payload.new ?? payload.old) as Row | undefined;
+  if (!row?.id) return;
+  // Crude per-row event coalescing across overlapping filtered bindings.
+  const key = `${row.id}:${payload.eventType}:${(row as Row).updated_at ?? ""}`;
+  const now = Date.now();
+  const last = recentEventIds.get(key);
+  if (last && now - last < 1500) return;
+  recentEventIds.set(key, now);
+  // Light GC.
+  if (recentEventIds.size > 256) {
+    for (const [k, t] of recentEventIds) {
+      if (now - t > 5000) recentEventIds.delete(k);
+    }
+  }
+
+  const strip = (r: Row | undefined) => (r ? { ...r, phone: "" } : r);
+  if (payload.eventType === "INSERT") {
+    const net = rowToNet(strip(payload.new as Row) as Row);
+    eventListeners.forEach((fn) => fn({ type: "INSERT", row: net }));
+  } else if (payload.eventType === "UPDATE") {
+    const net = rowToNet(strip(payload.new as Row) as Row);
+    const old = payload.old ? rowToNet(strip(payload.old as Row) as Row) : null;
+    eventListeners.forEach((fn) => fn({ type: "UPDATE", row: net, old }));
+  } else if (payload.eventType === "DELETE") {
+    const id = (payload.old as Row | undefined)?.id;
+    if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+  }
+  scheduleRefresh();
+}
+
+/**
+ * Build a coverage_requests channel scoped to the signed-in user. RLS is
+ * still the source of truth; these filters just keep the WAL fan-out narrow
+ * so each client only receives events for rows it actually cares about:
+ *   - rows it created (requester)
+ *   - rows it accepted (cover doctor)
+ *   - open `searching` rows it could accept (cover doctor) — bounded set
+ */
+function ensureChannelForUser(userId: string) {
+  if (channelUserId === userId && channel) return;
+  if (channel) {
+    supabase.removeChannel(channel);
+    channel = null;
+  }
+  channelUserId = userId;
+  channel = supabase
+    .channel(`coverage_requests_changes_${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: TABLE, filter: `requester_id=eq.${userId}` },
+      handlePayload,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: TABLE, filter: `accepted_by=eq.${userId}` },
+      handlePayload,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: TABLE, filter: `status=eq.searching` },
+      handlePayload,
+    )
+    .subscribe();
+}
+
 export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   eventListeners.add(opts.onEvent);
   snapshotListeners.add(opts.onSnapshot);
@@ -315,37 +394,13 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     opts.onSnapshot(cachedSnapshot);
   }
 
-  // Fetch only after auth storage is hydrated. A cold-start null session would
-  // return an empty RLS scope and briefly wipe the cached operational state.
+  // Fetch + subscribe only after auth storage is hydrated.
   void ensureAuthReady().then((auth) => {
-    if (auth.userId) void refreshSnapshot();
+    if (auth.userId) {
+      ensureChannelForUser(auth.userId);
+      void refreshSnapshot();
+    }
   });
-
-  if (!channel) {
-    channel = supabase
-      .channel("coverage_requests_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) => {
-        // Strip phone from realtime payloads — the per-fetch RPC supplies it
-        // only to the requester and accepted doctor. refreshSnapshot() below
-        // re-fetches with the correct phone scope.
-        const strip = (r: Row | undefined) => (r ? { ...r, phone: "" } : r);
-        if (payload.eventType === "INSERT") {
-          const row = rowToNet(strip(payload.new as Row) as Row);
-          eventListeners.forEach((fn) => fn({ type: "INSERT", row }));
-          refreshSnapshot();
-        } else if (payload.eventType === "UPDATE") {
-          const row = rowToNet(strip(payload.new as Row) as Row);
-          const old = payload.old ? rowToNet(strip(payload.old as Row) as Row) : null;
-          eventListeners.forEach((fn) => fn({ type: "UPDATE", row, old }));
-          refreshSnapshot();
-        } else if (payload.eventType === "DELETE") {
-          const id = (payload.old as Row | undefined)?.id;
-          if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
-          refreshSnapshot();
-        }
-      })
-      .subscribe();
-  }
 
   if (!invalidationChannel) {
     invalidationChannel = supabase
@@ -360,9 +415,13 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       .subscribe();
   }
 
-  // Re-fetch whenever auth changes so a sign-in/out picks up the new RLS scope.
+  // Re-bind the filtered channel whenever auth identity changes — the
+  // previous channel's filter is hard-coded to the prior uid.
   const offAuth = onUserIdChange((id) => {
-    if (id) void refreshSnapshot();
+    if (id) {
+      ensureChannelForUser(id);
+      void refreshSnapshot();
+    }
   });
 
   return () => {
@@ -374,6 +433,7 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       if (channel) {
         supabase.removeChannel(channel);
         channel = null;
+        channelUserId = null;
       }
       if (invalidationChannel) {
         supabase.removeChannel(invalidationChannel);
