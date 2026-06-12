@@ -259,20 +259,22 @@ export function ShiftSettlement({
 
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
-  const simulatePay = useServerFn(simulateSettlementPayment);
   const verifyPay = useServerFn(verifySettlementPayment);
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
-  const [simulating, setSimulating] = useState(false);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
     setPayError(null);
     setPayState("starting");
     try {
+      // Always use the LIVE recomputed amount so the Payment page stays in
+      // sync with Settlement / Coverage History when the 15-min hold expires
+      // and pricing rolls forward.
+      const liveAmount = Math.max(frozenAmountRef.current, Math.round(totalAmount));
       const result = await beginCheckout({
-        data: { requestId, amount: frozenAmountRef.current || Math.round(totalAmount) },
+        data: { requestId, amount: liveAmount },
       });
       setAccount(result);
       setPayState("waiting");
@@ -280,19 +282,6 @@ export function ShiftSettlement({
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
       setPayState("error");
-    }
-  };
-
-  const handleSimulate = async () => {
-    if (!requestId || simulating) return;
-    setSimulating(true);
-    try {
-      await simulatePay({ data: { requestId } });
-      autoConfirmAt.current = simNow() + 500;
-    } catch (e) {
-      setPayError(e instanceof Error ? e.message : "Simulation failed");
-    } finally {
-      setSimulating(false);
     }
   };
 
