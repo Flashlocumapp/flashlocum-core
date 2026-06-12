@@ -526,6 +526,7 @@ function SettlementPane({
   elapsed,
   billedMin,
   amount,
+  liveAmount,
   onCopy,
   onMadePayment,
   paymentTriggered,
@@ -533,14 +534,13 @@ function SettlementPane({
   payState,
   payError,
   account,
-  onSimulate,
-  simulating,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
   elapsed: number;
   billedMin: number;
   amount: number;
+  liveAmount?: number;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
@@ -548,21 +548,17 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
-  onSimulate?: () => void;
-  simulating?: boolean;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
     return (
       <CustomTransferPane
-        amount={amount}
+        amount={liveAmount ?? amount}
         account={account}
         payState={payState}
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
-        onSimulate={onSimulate}
-        simulating={simulating}
       />
     );
   }
