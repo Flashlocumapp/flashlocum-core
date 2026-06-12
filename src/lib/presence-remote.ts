@@ -222,9 +222,20 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
   const offAuth = onUserIdChange((id) => {
     if (id) {
       ensureOwnProfileChannel(id);
+      // initialFetch() is a no-op when id matches lastFetchedUserId, so
+      // TOKEN_REFRESHED events that re-fire this listener don't trigger a
+      // refetch. A genuine sign-in / user-switch will refetch once.
       void initialFetch();
+    } else {
+      // Signed out — clear caches so the next sign-in starts clean.
+      lastFetchedUserId = null;
+      rawRows.clear();
+      approvedIds.clear();
+      checkedProfileIds.clear();
+      emit();
     }
   });
+
 
   return () => {
     snapshotListeners.delete(onSnapshot);
