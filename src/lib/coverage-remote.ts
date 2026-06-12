@@ -232,11 +232,26 @@ let cachedSnapshotUserId: string | null =
   initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function fetchAll(): Promise<NetRequest[] | null> {
+// Hard cap on the snapshot. Coverage UI only renders the user's own requests,
+// shifts they have accepted, and the currently-searching pool — at realistic
+// scale this is well under 500. The LIMIT bounds worst-case payload + parse
+// cost if the searching pool ever spikes (load shedding > crashing the tab).
+const SNAPSHOT_LIMIT = 500;
+
+async function fetchAll(userId: string): Promise<NetRequest[] | null> {
+  // Scope the fetch to rows this user actually needs — mirrors the realtime
+  // channel filters. Previously this issued `SELECT *` with no filter/limit
+  // and refetched on every realtime event; at 10k users that's a tablescan
+  // per event. RLS would have filtered the result anyway, but doing the work
+  // server-side avoids the planner walking unrelated rows.
+  const filter =
+    `requester_id.eq.${userId},accepted_by.eq.${userId},status.eq.searching`;
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
-    .order("created_at", { ascending: true });
+    .or(filter)
+    .order("created_at", { ascending: true })
+    .limit(SNAPSHOT_LIMIT);
   if (error) {
     console.warn("[coverage-remote] fetch error:", error.message);
     return null;
@@ -260,7 +275,7 @@ async function fetchAll(): Promise<NetRequest[] | null> {
 async function refreshSnapshot() {
   const auth = await ensureAuthReady();
   if (!auth.userId) return;
-  const rows = await fetchAll();
+  const rows = await fetchAll(auth.userId);
   if (!rows) return;
   cachedSnapshot = rows;
   cachedSnapshotUserId = activeCacheUserId();
@@ -327,18 +342,46 @@ function handlePayload(payload: {
   }
 
   const strip = (r: Row | undefined) => (r ? { ...r, phone: "" } : r);
+  // Apply the change to the in-memory snapshot so newly-mounting subscribers
+  // see fresh state without us paying for a full SELECT on every event.
+  // Phone is intentionally blanked here — the RPC-backed phone map is only
+  // refreshed by refreshSnapshot(); event-driven rows show "" until the next
+  // explicit refresh, which is fine because phone is only revealed in the
+  // requester/cover settlement views where a refresh has already run.
+  const upsertCached = (net: NetRequest) => {
+    const idx = cachedSnapshot.findIndex((r) => r.id === net.id);
+    if (idx === -1) cachedSnapshot = [...cachedSnapshot, net];
+    else {
+      const next = cachedSnapshot.slice();
+      next[idx] = net;
+      cachedSnapshot = next;
+    }
+    writePersistedSnapshot(cachedSnapshot);
+  };
+
   if (payload.eventType === "INSERT") {
     const net = rowToNet(strip(payload.new as Row) as Row);
+    upsertCached(net);
     eventListeners.forEach((fn) => fn({ type: "INSERT", row: net }));
   } else if (payload.eventType === "UPDATE") {
     const net = rowToNet(strip(payload.new as Row) as Row);
     const old = payload.old ? rowToNet(strip(payload.old as Row) as Row) : null;
+    upsertCached(net);
     eventListeners.forEach((fn) => fn({ type: "UPDATE", row: net, old }));
   } else if (payload.eventType === "DELETE") {
     const id = (payload.old as Row | undefined)?.id;
-    if (id) eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+    if (id) {
+      cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
+      writePersistedSnapshot(cachedSnapshot);
+      eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+    }
   }
-  scheduleRefresh();
+  // NOTE: intentionally no scheduleRefresh() here. Consumers receive the
+  // mutation via onEvent and the cachedSnapshot is updated above, so the
+  // previous "refetch the whole table on every event" pattern is gone.
+  // The invalidation broadcast channel is still the fallback path when an
+  // RLS-filtered postgres_changes event never reaches us (e.g. a row leaving
+  // our scope after an accept).
 }
 
 /**
