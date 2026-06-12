@@ -128,6 +128,7 @@
   --map-ink: oklch(0.27 0.008 240);
   --presence: oklch(0.7 0.15 145);
   --trust: oklch(0.72 0.08 220);
+  --rating: oklch(0.82 0.16 80);
 }
 
 @layer base {
