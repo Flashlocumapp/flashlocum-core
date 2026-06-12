@@ -15,6 +15,7 @@ import { clearRole } from "@/lib/role";
 import { subscribeAuthState } from "@/lib/auth-ready";
 import { initNativeBridge } from "@/lib/native";
 import { unregisterDoctor } from "@/lib/network";
+import { usePushRegistration } from "@/lib/push-registration";
 
 function NotFoundComponent() {
   return (
@@ -92,6 +93,7 @@ function RootComponent() {
   useEffect(() => {
     void initNativeBridge((path) => { void router.navigate({ to: path }); });
   }, [router]);
+  usePushRegistration();
   useEffect(() => {
     let sawSignOut = false;
     return subscribeAuthState(({ event, session }) => {
