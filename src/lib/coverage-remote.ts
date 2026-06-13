@@ -550,8 +550,7 @@ export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>
           "[coverage-remote] cancel skipped:",
           res && "reason" in res ? res.reason : "unknown",
         );
-      }
-      else emitInvalidate(id);
+      } else emitInvalidate(id);
       return;
     } catch (e) {
       console.warn("[coverage-remote] cancel error:", (e as Error).message);
