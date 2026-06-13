@@ -272,15 +272,34 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   });
 }
 
-async function refreshSnapshot() {
-  const auth = await ensureAuthReady();
-  if (!auth.userId) return;
-  const rows = await fetchAll(auth.userId);
-  if (!rows) return;
-  cachedSnapshot = rows;
-  cachedSnapshotUserId = activeCacheUserId();
-  writePersistedSnapshot(cachedSnapshot);
-  snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+// In-flight dedup for refreshSnapshot. Realtime bursts + manual refresh
+// calls can overlap; we coalesce concurrent callers onto a single fetch
+// and queue at most one follow-up so the latest state always wins.
+let refreshInFlight: Promise<void> | null = null;
+let refreshPending = false;
+
+async function refreshSnapshot(): Promise<void> {
+  if (refreshInFlight) {
+    refreshPending = true;
+    return refreshInFlight;
+  }
+  refreshInFlight = (async () => {
+    const auth = await ensureAuthReady();
+    if (!auth.userId) return;
+    const rows = await fetchAll(auth.userId);
+    if (!rows) return;
+    cachedSnapshot = rows;
+    cachedSnapshotUserId = activeCacheUserId();
+    writePersistedSnapshot(cachedSnapshot);
+    snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+  })().finally(() => {
+    refreshInFlight = null;
+    if (refreshPending) {
+      refreshPending = false;
+      void refreshSnapshot();
+    }
+  });
+  return refreshInFlight;
 }
 
 /**

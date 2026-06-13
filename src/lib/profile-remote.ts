@@ -213,33 +213,44 @@ if (typeof window !== "undefined") {
   });
 }
 
+// In-flight dedup for fetchMyProfile. Multiple components mount in parallel
+// (header, drawer, route loaders) and previously each issued its own SELECT
+// against `profiles`. We collapse concurrent callers onto a single promise.
+let fetchMyProfileInFlight: Promise<ProfileRow | null> | null = null;
+
 /** Fetch the current user's profile row, or null if it doesn't exist. */
 export async function fetchMyProfile(): Promise<ProfileRow | null> {
-  const auth = await ensureAuthReady();
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user ?? auth.user;
-  if (!user) return null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (error) {
-    console.warn("fetchMyProfile error", error);
-    if (cachedProfile !== undefined) return cachedProfile;
-    return null;
-  }
-  const profile = (data as ProfileRow | null) ?? null;
-  if (profile && !profile.full_name) {
-    const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
-    const fullName = meta.full_name || meta.name || null;
-    if (fullName) {
-      profile.full_name = fullName;
-      void supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+  if (fetchMyProfileInFlight) return fetchMyProfileInFlight;
+  fetchMyProfileInFlight = (async () => {
+    const auth = await ensureAuthReady();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user ?? auth.user;
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) {
+      console.warn("fetchMyProfile error", error);
+      if (cachedProfile !== undefined) return cachedProfile;
+      return null;
     }
-  }
-  rememberProfile(profile);
-  return profile;
+    const profile = (data as ProfileRow | null) ?? null;
+    if (profile && !profile.full_name) {
+      const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+      const fullName = meta.full_name || meta.name || null;
+      if (fullName) {
+        profile.full_name = fullName;
+        void supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+      }
+    }
+    rememberProfile(profile);
+    return profile;
+  })().finally(() => {
+    fetchMyProfileInFlight = null;
+  });
+  return fetchMyProfileInFlight;
 }
 
 /** True if user has completed onboarding for the given capability. */
@@ -398,25 +409,48 @@ export async function fetchVerificationStatus(): Promise<VerificationStatus> {
   return p?.verification_status ?? "pending";
 }
 
+// Per-id cache + in-flight dedup for fetchDoctorProfile. Settlement and
+// rating screens render the same doctor card from multiple subtrees; without
+// dedup each mount fires its own SELECT + RPC fallback.
+const DOCTOR_PROFILE_TTL_MS = 30_000;
+const doctorProfileCache = new Map<string, { value: ProfileRow | null; at: number }>();
+const doctorProfileInFlight = new Map<string, Promise<ProfileRow | null>>();
+
 /** Fetch a doctor's profile by user id. Requesters get only safe display
  *  fields via a SECURITY DEFINER RPC scoped to assignments they own; the
  *  doctor themself and admins read full rows directly via RLS. */
 export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null> {
   if (!id) return null;
-  const { data: direct } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (direct) return direct as ProfileRow;
-  // Fall back to the requester-safe RPC (returns only display fields).
-  const { data, error } = await supabase.rpc("get_assigned_doctor_profile", { _doctor: id });
-  if (error) {
-    console.warn("fetchDoctorProfile error", error);
-    return null;
-  }
-  const row = Array.isArray(data) ? data[0] : data;
-  return (row as ProfileRow | undefined) ?? null;
+  const cached = doctorProfileCache.get(id);
+  if (cached && Date.now() - cached.at < DOCTOR_PROFILE_TTL_MS) return cached.value;
+  const inflight = doctorProfileInFlight.get(id);
+  if (inflight) return inflight;
+  const p = (async () => {
+    const { data: direct } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (direct) {
+      const value = direct as ProfileRow;
+      doctorProfileCache.set(id, { value, at: Date.now() });
+      return value;
+    }
+    // Fall back to the requester-safe RPC (returns only display fields).
+    const { data, error } = await supabase.rpc("get_assigned_doctor_profile", { _doctor: id });
+    if (error) {
+      console.warn("fetchDoctorProfile error", error);
+      return null;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    const value = (row as ProfileRow | undefined) ?? null;
+    doctorProfileCache.set(id, { value, at: Date.now() });
+    return value;
+  })().finally(() => {
+    doctorProfileInFlight.delete(id);
+  });
+  doctorProfileInFlight.set(id, p);
+  return p;
 }
 
 /* ---------- Admin ---------- */
