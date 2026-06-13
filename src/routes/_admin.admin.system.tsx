@@ -14,9 +14,9 @@ function SystemPage() {
   const q = useQuery({
     queryKey: ["admin", "system"],
     queryFn: () => fetchHealth({ data: {} }),
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime: 30_000,
   });
+
   const data = q.data;
   const queueAlert = (data?.email.queues ?? []).some((qd) => qd.depth > 25);
 
