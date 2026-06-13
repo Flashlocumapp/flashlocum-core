@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ensureAuthReady } from "@/lib/auth-ready";
+import { isAdminHost } from "@/lib/admin-host";
 
 export const Route = createFileRoute("/")({
   component: Entry,
@@ -11,6 +12,16 @@ export const Route = createFileRoute("/")({
 function Entry() {
   const navigate = useNavigate();
   const [done, setDone] = useState(false);
+
+  // Admin subdomain skips the consumer splash entirely.
+  useEffect(() => {
+    if (isAdminHost()) {
+      void navigate({ to: "/admin", replace: true });
+    }
+  }, [navigate]);
+
+  if (isAdminHost()) return null;
+
   return (
     <AnimatePresence mode="wait">
       {!done ? (
