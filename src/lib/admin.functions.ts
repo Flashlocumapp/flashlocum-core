@@ -39,13 +39,16 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) throw new Error("Forbidden: admin role required");
 
-    const { error } = await context.supabase
+    const { data: updated, error } = await context.supabase
       .from("profiles")
       .update({ verification_status: data.status })
       .eq("id", data.doctorId)
-      .select("id")
+      .select("id, verification_status")
       .single();
     if (error) throw new Error(error.message);
+    if (updated.verification_status !== data.status) {
+      throw new Error("Verification status did not change.");
+    }
 
     // Notify the doctor of the verification decision.
     try {
