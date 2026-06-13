@@ -120,7 +120,12 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[settlement] initiateSplitTransaction failed:", msg);
-      throw new Error("Couldn't start the payment. Please try again.");
+      if (/invalid merchant to contract code/i.test(msg)) {
+        throw new Error(
+          "Payments aren't configured correctly: the Monnify contract code doesn't match the API key (likely a sandbox/live or wrong-account mismatch). Please update MONNIFY_CONTRACT_CODE / MONNIFY_API_KEY / MONNIFY_SECRET_KEY so all three are from the same Monnify account and environment.",
+        );
+      }
+      throw new Error(`Couldn't start the payment: ${msg}`);
     }
 
     let account;
