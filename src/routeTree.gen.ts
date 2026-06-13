@@ -22,6 +22,7 @@ import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
+import { Route as AdminAdminIndexRouteImport } from './routes/_admin.admin.index'
 import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public/monnify-webhook'
 import { Route as AdminAdminVerificationRouteImport } from './routes/_admin.admin.verification'
 import { Route as AdminAdminUsersRouteImport } from './routes/_admin.admin.users'
@@ -96,6 +97,11 @@ const AdminAdminRoute = AdminAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AdminRoute,
+} as any)
+const AdminAdminIndexRoute = AdminAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminAdminRoute,
 } as any)
 const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
   id: '/api/public/monnify-webhook',
@@ -176,13 +182,13 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
+  '/admin/': typeof AdminAdminIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
-  '/admin': typeof AdminAdminRouteWithChildren
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
@@ -200,6 +206,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
+  '/admin': typeof AdminAdminIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesById {
@@ -227,6 +234,7 @@ export interface FileRoutesById {
   '/_admin/admin/users': typeof AdminAdminUsersRoute
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
+  '/_admin/admin/': typeof AdminAdminIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRouteTypes {
@@ -253,13 +261,13 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/verification'
     | '/api/public/monnify-webhook'
+    | '/admin/'
     | '/lovable/email/queue/process'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/reset-password'
     | '/role'
-    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
@@ -277,6 +285,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/verification'
     | '/api/public/monnify-webhook'
+    | '/admin'
     | '/lovable/email/queue/process'
   id:
     | '__root__'
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/users'
     | '/_admin/admin/verification'
     | '/api/public/monnify-webhook'
+    | '/_admin/admin/'
     | '/lovable/email/queue/process'
   fileRoutesById: FileRoutesById
 }
@@ -412,6 +422,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdminRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/_admin/admin/': {
+      id: '/_admin/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminAdminIndexRouteImport
+      parentRoute: typeof AdminAdminRoute
+    }
     '/api/public/monnify-webhook': {
       id: '/api/public/monnify-webhook'
       path: '/api/public/monnify-webhook'
@@ -502,6 +519,7 @@ interface AdminAdminRouteChildren {
   AdminAdminSystemRoute: typeof AdminAdminSystemRoute
   AdminAdminUsersRoute: typeof AdminAdminUsersRoute
   AdminAdminVerificationRoute: typeof AdminAdminVerificationRoute
+  AdminAdminIndexRoute: typeof AdminAdminIndexRoute
 }
 
 const AdminAdminRouteChildren: AdminAdminRouteChildren = {
@@ -514,6 +532,7 @@ const AdminAdminRouteChildren: AdminAdminRouteChildren = {
   AdminAdminSystemRoute: AdminAdminSystemRoute,
   AdminAdminUsersRoute: AdminAdminUsersRoute,
   AdminAdminVerificationRoute: AdminAdminVerificationRoute,
+  AdminAdminIndexRoute: AdminAdminIndexRoute,
 }
 
 const AdminAdminRouteWithChildren = AdminAdminRoute._addFileChildren(
