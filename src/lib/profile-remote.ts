@@ -213,33 +213,44 @@ if (typeof window !== "undefined") {
   });
 }
 
+// In-flight dedup for fetchMyProfile. Multiple components mount in parallel
+// (header, drawer, route loaders) and previously each issued its own SELECT
+// against `profiles`. We collapse concurrent callers onto a single promise.
+let fetchMyProfileInFlight: Promise<ProfileRow | null> | null = null;
+
 /** Fetch the current user's profile row, or null if it doesn't exist. */
 export async function fetchMyProfile(): Promise<ProfileRow | null> {
-  const auth = await ensureAuthReady();
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user ?? auth.user;
-  if (!user) return null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (error) {
-    console.warn("fetchMyProfile error", error);
-    if (cachedProfile !== undefined) return cachedProfile;
-    return null;
-  }
-  const profile = (data as ProfileRow | null) ?? null;
-  if (profile && !profile.full_name) {
-    const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
-    const fullName = meta.full_name || meta.name || null;
-    if (fullName) {
-      profile.full_name = fullName;
-      void supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+  if (fetchMyProfileInFlight) return fetchMyProfileInFlight;
+  fetchMyProfileInFlight = (async () => {
+    const auth = await ensureAuthReady();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user ?? auth.user;
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) {
+      console.warn("fetchMyProfile error", error);
+      if (cachedProfile !== undefined) return cachedProfile;
+      return null;
     }
-  }
-  rememberProfile(profile);
-  return profile;
+    const profile = (data as ProfileRow | null) ?? null;
+    if (profile && !profile.full_name) {
+      const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+      const fullName = meta.full_name || meta.name || null;
+      if (fullName) {
+        profile.full_name = fullName;
+        void supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
+      }
+    }
+    rememberProfile(profile);
+    return profile;
+  })().finally(() => {
+    fetchMyProfileInFlight = null;
+  });
+  return fetchMyProfileInFlight;
 }
 
 /** True if user has completed onboarding for the given capability. */
