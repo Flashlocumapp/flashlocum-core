@@ -371,21 +371,13 @@ export function GoogleMapBackground({
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ background: "#aab2bd" }}>
       <div ref={ref} className="absolute inset-0 h-full w-full" />
-      {/* Hide Google Maps attribution / terms / report links */}
-      <style>{`
-        .gm-style-cc,
-        .gm-style > div > a,
-        .gmnoprint a[href*="google.com"],
-        .gm-style > div > div > span,
-        .gm-style .gm-style-cc a,
-        a[href*="maps.google.com"],
-        a[href*="www.google.com/intl"] {
-          display: none !important;
-          visibility: hidden !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-      `}</style>
+      {/*
+        Google Maps Platform ToS requires the "Google" logo, copyright text,
+        and Terms/Report-a-problem links to remain visible and clickable.
+        We previously hid them with display:none — that's a ToS violation.
+        Instead, keep them visible but ensure the bottom fade overlay below
+        does not intercept their clicks (pointer-events: none on the fade).
+      */}
       {/* Subtle bottom fade so floating UI reads against the map */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
