@@ -191,11 +191,20 @@ function HomeScreen({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    // getCurrentPosition has no native cancellation — guard the callback so
+    // a late fix arriving after unmount can't setState on an unmounted tree.
+    let cancelled = false;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        if (cancelled) return;
+        setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
       () => {},
       { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
     );
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const setCoverage = (c: CoverageId) => {
