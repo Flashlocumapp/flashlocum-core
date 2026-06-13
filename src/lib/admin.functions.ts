@@ -20,7 +20,7 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
     return { isAdmin: !!data };
   });
 
-/** Update a doctor's verification status. Server-side admin check; bypasses RLS via service role. */
+/** Update a doctor's verification status. Server-side admin check; runs as the signed-in admin so DB triggers allow the change. */
 export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { doctorId: string; status: VerificationStatus }) => {
@@ -36,8 +36,7 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) throw new Error("Forbidden: admin role required");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
+    const { error } = await context.supabase
       .from("profiles")
       .update({ verification_status: data.status })
       .eq("id", data.doctorId)
