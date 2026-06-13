@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
@@ -900,7 +900,7 @@ function ConfirmedPane({
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+const Row = memo(function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-center justify-between border-b border-border/50 py-2 last:border-0">
       <span className="text-[12.5px] text-muted-foreground">{label}</span>
@@ -909,11 +909,11 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       </span>
     </div>
   );
-}
+});
 
 /* ---------------- TopBar ---------------- */
 
-function TopBar({ onClose }: { onClose?: () => void }) {
+const TopBar = memo(function TopBar({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex h-12 w-full items-center justify-between px-4">
       {onClose ? (
@@ -933,7 +933,7 @@ function TopBar({ onClose }: { onClose?: () => void }) {
       <span className="h-9 w-9" />
     </div>
   );
-}
+});
 
 /* ---------------- Custom Transfer (Monnify-backed, in-app UI) ---------------- */
 
