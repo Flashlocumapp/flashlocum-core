@@ -182,3 +182,489 @@ export const adminListShifts = createServerFn({ method: "POST" })
     });
     return out;
   });
+
+// ---------- Analytics shared helpers ----------
+
+async function assertAdmin(context: { supabase: ReturnType<typeof Object>; userId: string }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = context.supabase as any;
+  const { data: isAdmin, error } = await sb.rpc("has_role", {
+    _user_id: context.userId,
+    _role: "admin",
+  });
+  if (error) throw new Error(error.message);
+  if (!isAdmin) throw new Error("Forbidden: admin role required");
+}
+
+function dayKey(ts: string | number | Date): string {
+  const d = new Date(ts);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+// ---------- Financial Analytics ----------
+
+export type FinanceSeriesPoint = {
+  date: string;
+  gross: number;
+  fees: number;
+  net: number;
+  count: number;
+};
+
+export type FinanceAnalytics = {
+  totals: {
+    gross: number;
+    fees: number;
+    net: number;
+    paid_count: number;
+    unpaid_count: number;
+    unremitted_amount: number;
+    pending_payout_count: number;
+  };
+  series: FinanceSeriesPoint[];
+  topHospitals: { hospital: string; gross: number; count: number }[];
+  topDoctors: { doctor_id: string; name: string | null; net: number; count: number }[];
+  paymentStatus: { status: string; count: number; amount: number }[];
+};
+
+export const adminFinanceAnalytics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { days?: number } | undefined) => ({
+    days: Math.min(Math.max(input?.days ?? 30, 1), 180),
+  }))
+  .handler(async ({ data, context }): Promise<FinanceAnalytics> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - data.days * 86_400_000).toISOString();
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("coverage_requests")
+      .select(
+        "id,accepted_by,hospital,amount,fee_pct,settled_amount,payment_status,paid_at,remitted_at,created_at",
+      )
+      .gte("created_at", since)
+      .limit(5000);
+    if (error) throw new Error(error.message);
+    const list = rows ?? [];
+
+    // Build daily buckets (paid revenue by paid_at when available).
+    const dayMap = new Map<string, FinanceSeriesPoint>();
+    for (let i = data.days - 1; i >= 0; i--) {
+      const k = dayKey(Date.now() - i * 86_400_000);
+      dayMap.set(k, { date: k, gross: 0, fees: 0, net: 0, count: 0 });
+    }
+
+    let gross = 0,
+      fees = 0,
+      net = 0,
+      paidCount = 0,
+      unpaidCount = 0,
+      unremittedAmount = 0,
+      pendingPayoutCount = 0;
+    const hospitalMap = new Map<string, { gross: number; count: number }>();
+    const doctorMap = new Map<string, { net: number; count: number }>();
+    const statusMap = new Map<string, { count: number; amount: number }>();
+
+    for (const r of list) {
+      const amt = Number(r.amount ?? 0);
+      const fee = Math.round((amt * Number(r.fee_pct ?? 0)) / 100);
+      const doctorNet = amt - fee;
+      const status = r.payment_status ?? "unpaid";
+      const s = statusMap.get(status) ?? { count: 0, amount: 0 };
+      s.count += 1;
+      s.amount += amt;
+      statusMap.set(status, s);
+
+      if (status === "paid") {
+        paidCount += 1;
+        gross += amt;
+        fees += fee;
+        net += doctorNet;
+        const k = dayKey(r.paid_at ?? r.created_at);
+        const bucket = dayMap.get(k);
+        if (bucket) {
+          bucket.gross += amt;
+          bucket.fees += fee;
+          bucket.net += doctorNet;
+          bucket.count += 1;
+        }
+        if (!r.remitted_at) {
+          unremittedAmount += doctorNet;
+          pendingPayoutCount += 1;
+        }
+        const h = hospitalMap.get(r.hospital) ?? { gross: 0, count: 0 };
+        h.gross += amt;
+        h.count += 1;
+        hospitalMap.set(r.hospital, h);
+        if (r.accepted_by) {
+          const d = doctorMap.get(r.accepted_by) ?? { net: 0, count: 0 };
+          d.net += doctorNet;
+          d.count += 1;
+          doctorMap.set(r.accepted_by, d);
+        }
+      } else {
+        unpaidCount += 1;
+      }
+    }
+
+    const topHospitals = [...hospitalMap.entries()]
+      .map(([hospital, v]) => ({ hospital, ...v }))
+      .sort((a, b) => b.gross - a.gross)
+      .slice(0, 8);
+
+    const topDoctorIds = [...doctorMap.entries()]
+      .sort((a, b) => b[1].net - a[1].net)
+      .slice(0, 8);
+    let nameMap = new Map<string, string | null>();
+    if (topDoctorIds.length) {
+      const { data: profs } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name")
+        .in(
+          "id",
+          topDoctorIds.map(([id]) => id),
+        );
+      nameMap = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
+    }
+    const topDoctors = topDoctorIds.map(([id, v]) => ({
+      doctor_id: id,
+      name: nameMap.get(id) ?? null,
+      ...v,
+    }));
+
+    return {
+      totals: {
+        gross,
+        fees,
+        net,
+        paid_count: paidCount,
+        unpaid_count: unpaidCount,
+        unremitted_amount: unremittedAmount,
+        pending_payout_count: pendingPayoutCount,
+      },
+      series: [...dayMap.values()],
+      topHospitals,
+      topDoctors,
+      paymentStatus: [...statusMap.entries()]
+        .map(([status, v]) => ({ status, ...v }))
+        .sort((a, b) => b.count - a.count),
+    };
+  });
+
+// ---------- Doctor Flashboard ----------
+
+export type DoctorFlashboardRow = {
+  doctor_id: string;
+  name: string | null;
+  online: boolean;
+  last_seen: string | null;
+  accepted: number;
+  completed: number;
+  cancelled: number;
+  active: number;
+  total_amount: number;
+  net_earnings: number;
+  completion_rate: number;
+  rating: number;
+  rating_count: number;
+};
+
+export type DoctorFlashboard = {
+  online_count: number;
+  approved_count: number;
+  total_completed: number;
+  total_cancelled: number;
+  acceptance_rate: number;
+  completion_rate: number;
+  rating_distribution: { score: number; count: number }[];
+  rows: DoctorFlashboardRow[];
+};
+
+export const adminDoctorFlashboard = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(() => ({}))
+  .handler(async ({ context }): Promise<DoctorFlashboard> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const [{ data: doctors }, { data: presence }, { data: shifts }, { data: ratings }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("profiles")
+          .select("id, full_name, verification_status")
+          .eq("verification_status", "approved"),
+        supabaseAdmin.from("doctor_presence").select("user_id, online, last_seen"),
+        supabaseAdmin
+          .from("coverage_requests")
+          .select("accepted_by, status, amount, fee_pct")
+          .not("accepted_by", "is", null)
+          .limit(5000),
+        supabaseAdmin.from("ratings").select("ratee_entity_id, score").limit(5000),
+      ]);
+
+    const presenceMap = new Map(
+      (presence ?? []).map((p) => [p.user_id, p]),
+    );
+    const stats = new Map<
+      string,
+      { accepted: number; completed: number; cancelled: number; active: number; total_amount: number; net: number }
+    >();
+    for (const s of shifts ?? []) {
+      if (!s.accepted_by) continue;
+      const cur =
+        stats.get(s.accepted_by) ??
+        { accepted: 0, completed: 0, cancelled: 0, active: 0, total_amount: 0, net: 0 };
+      cur.accepted += 1;
+      if (s.status === "completed") cur.completed += 1;
+      if (s.status === "cancelled") cur.cancelled += 1;
+      if (s.status === "active" || s.status === "paused") cur.active += 1;
+      if (s.status === "completed") {
+        const amt = Number(s.amount ?? 0);
+        cur.total_amount += amt;
+        cur.net += amt - Math.round((amt * Number(s.fee_pct ?? 0)) / 100);
+      }
+      stats.set(s.accepted_by, cur);
+    }
+
+    const ratingAgg = new Map<string, { sum: number; count: number }>();
+    const distribution = new Map<number, number>([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+      [5, 0],
+    ]);
+    for (const r of ratings ?? []) {
+      distribution.set(r.score, (distribution.get(r.score) ?? 0) + 1);
+      if (!r.ratee_entity_id?.startsWith("doc:")) continue;
+      const id = r.ratee_entity_id.slice(4);
+      const cur = ratingAgg.get(id) ?? { sum: 0, count: 0 };
+      cur.sum += r.score;
+      cur.count += 1;
+      ratingAgg.set(id, cur);
+    }
+
+    const rows: DoctorFlashboardRow[] = (doctors ?? []).map((d) => {
+      const p = presenceMap.get(d.id);
+      const s =
+        stats.get(d.id) ??
+        { accepted: 0, completed: 0, cancelled: 0, active: 0, total_amount: 0, net: 0 };
+      const ra = ratingAgg.get(d.id);
+      const finished = s.completed + s.cancelled;
+      return {
+        doctor_id: d.id,
+        name: d.full_name,
+        online:
+          !!p?.online &&
+          !!p?.last_seen &&
+          Date.now() - new Date(p.last_seen).getTime() < 120_000,
+        last_seen: p?.last_seen ?? null,
+        accepted: s.accepted,
+        completed: s.completed,
+        cancelled: s.cancelled,
+        active: s.active,
+        total_amount: s.total_amount,
+        net_earnings: s.net,
+        completion_rate: finished ? s.completed / finished : 0,
+        rating: ra && ra.count ? ra.sum / ra.count : 0,
+        rating_count: ra?.count ?? 0,
+      };
+    });
+    rows.sort((a, b) => b.completed - a.completed || b.net_earnings - a.net_earnings);
+
+    let totalCompleted = 0,
+      totalCancelled = 0,
+      totalAccepted = 0;
+    for (const r of rows) {
+      totalCompleted += r.completed;
+      totalCancelled += r.cancelled;
+      totalAccepted += r.accepted;
+    }
+    const onlineCount = rows.filter((r) => r.online).length;
+    const finished = totalCompleted + totalCancelled;
+
+    return {
+      online_count: onlineCount,
+      approved_count: rows.length,
+      total_completed: totalCompleted,
+      total_cancelled: totalCancelled,
+      acceptance_rate: totalAccepted ? totalAccepted / (totalAccepted + 0) : 0, // accepted / accepted (placeholder; we lack rejection data)
+      completion_rate: finished ? totalCompleted / finished : 0,
+      rating_distribution: [...distribution.entries()].map(([score, count]) => ({ score, count })),
+      rows,
+    };
+  });
+
+// ---------- Requester Analytics ----------
+
+export type RequesterRow = {
+  requester_id: string;
+  name: string | null;
+  total: number;
+  completed: number;
+  cancelled: number;
+  in_progress: number;
+  unfilled: number;
+  amount: number;
+  avg_time_to_fill_min: number | null;
+  cancellation_rate: number;
+};
+
+export type RequesterAnalytics = {
+  totals: {
+    requests: number;
+    requesters: number;
+    completed: number;
+    cancelled: number;
+    unfilled: number;
+    avg_time_to_fill_min: number | null;
+    cancellation_rate: number;
+    repeat_requester_rate: number;
+  };
+  topHospitals: { hospital: string; count: number; amount: number }[];
+  topAreas: { area: string; count: number }[];
+  rows: RequesterRow[];
+};
+
+export const adminRequesterAnalytics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { days?: number } | undefined) => ({
+    days: Math.min(Math.max(input?.days ?? 30, 1), 180),
+  }))
+  .handler(async ({ data, context }): Promise<RequesterAnalytics> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - data.days * 86_400_000).toISOString();
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("coverage_requests")
+      .select(
+        "id, requester_id, hospital, area, status, amount, accepted_by, created_at, updated_at",
+      )
+      .gte("created_at", since)
+      .limit(5000);
+    if (error) throw new Error(error.message);
+    const list = rows ?? [];
+
+    const perReq = new Map<
+      string,
+      {
+        total: number;
+        completed: number;
+        cancelled: number;
+        in_progress: number;
+        unfilled: number;
+        amount: number;
+        fillTimes: number[];
+      }
+    >();
+    const hospitalMap = new Map<string, { count: number; amount: number }>();
+    const areaMap = new Map<string, number>();
+    let completed = 0,
+      cancelled = 0,
+      unfilled = 0;
+    const fillTimes: number[] = [];
+
+    for (const r of list) {
+      const cur =
+        perReq.get(r.requester_id) ??
+        {
+          total: 0,
+          completed: 0,
+          cancelled: 0,
+          in_progress: 0,
+          unfilled: 0,
+          amount: 0,
+          fillTimes: [],
+        };
+      cur.total += 1;
+      cur.amount += Number(r.amount ?? 0);
+      if (r.status === "completed") {
+        cur.completed += 1;
+        completed += 1;
+      } else if (r.status === "cancelled") {
+        cur.cancelled += 1;
+        cancelled += 1;
+      } else if (r.status === "active" || r.status === "paused" || r.status === "accepted") {
+        cur.in_progress += 1;
+      } else if (r.status === "searching") {
+        cur.unfilled += 1;
+        unfilled += 1;
+      }
+      // Time-to-fill: created_at → updated_at when accepted_by is set.
+      if (r.accepted_by && r.created_at && r.updated_at) {
+        const mins =
+          (new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / 60_000;
+        if (mins > 0 && mins < 7 * 24 * 60) {
+          cur.fillTimes.push(mins);
+          fillTimes.push(mins);
+        }
+      }
+      perReq.set(r.requester_id, cur);
+
+      const h = hospitalMap.get(r.hospital) ?? { count: 0, amount: 0 };
+      h.count += 1;
+      h.amount += Number(r.amount ?? 0);
+      hospitalMap.set(r.hospital, h);
+      areaMap.set(r.area, (areaMap.get(r.area) ?? 0) + 1);
+    }
+
+    const requesterIds = [...perReq.keys()];
+    let nameMap = new Map<string, string | null>();
+    if (requesterIds.length) {
+      const { data: profs } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", requesterIds);
+      nameMap = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
+    }
+
+    const rowsOut: RequesterRow[] = [...perReq.entries()]
+      .map(([id, v]) => {
+        const finished = v.completed + v.cancelled;
+        return {
+          requester_id: id,
+          name: nameMap.get(id) ?? null,
+          total: v.total,
+          completed: v.completed,
+          cancelled: v.cancelled,
+          in_progress: v.in_progress,
+          unfilled: v.unfilled,
+          amount: v.amount,
+          avg_time_to_fill_min: v.fillTimes.length
+            ? v.fillTimes.reduce((a, b) => a + b, 0) / v.fillTimes.length
+            : null,
+          cancellation_rate: finished ? v.cancelled / finished : 0,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    const repeat = rowsOut.filter((r) => r.total >= 2).length;
+    const finishedAll = completed + cancelled;
+    const avgFill = fillTimes.length
+      ? fillTimes.reduce((a, b) => a + b, 0) / fillTimes.length
+      : null;
+
+    return {
+      totals: {
+        requests: list.length,
+        requesters: rowsOut.length,
+        completed,
+        cancelled,
+        unfilled,
+        avg_time_to_fill_min: avgFill,
+        cancellation_rate: finishedAll ? cancelled / finishedAll : 0,
+        repeat_requester_rate: rowsOut.length ? repeat / rowsOut.length : 0,
+      },
+      topHospitals: [...hospitalMap.entries()]
+        .map(([hospital, v]) => ({ hospital, ...v }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+      topAreas: [...areaMap.entries()]
+        .map(([area, count]) => ({ area, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+      rows: rowsOut.slice(0, 50),
+    };
+  });
+
