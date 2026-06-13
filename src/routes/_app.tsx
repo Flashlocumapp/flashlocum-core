@@ -91,23 +91,47 @@ export const Route = createFileRoute("/_app")({
   component: AppShell,
 });
 
+// Module-level singleton heartbeat. Using a refcount + shared interval means
+// React StrictMode double-mounts, HMR module reloads, and nested AppShell
+// remounts can never produce more than one timer firing `touchLastSeen` per
+// minute. Previously the interval lived inside useEffect — cleanup is correct
+// in steady state, but during HMR the old module's interval can briefly
+// overlap the new one, doubling DB writes.
+let heartbeatRefcount = 0;
+let heartbeatTimer: number | null = null;
+let visibilityHandler: (() => void) | null = null;
+
+function acquireHeartbeat(): () => void {
+  heartbeatRefcount += 1;
+  if (heartbeatRefcount === 1) {
+    heartbeatTimer = window.setInterval(() => {
+      void touchLastSeen();
+    }, 60_000);
+    visibilityHandler = () => {
+      if (document.visibilityState === "visible") void touchLastSeen(true);
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+  }
+  return () => {
+    heartbeatRefcount = Math.max(0, heartbeatRefcount - 1);
+    if (heartbeatRefcount === 0) {
+      if (heartbeatTimer !== null) {
+        window.clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      if (visibilityHandler) {
+        document.removeEventListener("visibilitychange", visibilityHandler);
+        visibilityHandler = null;
+      }
+    }
+  };
+}
+
 function AppShell() {
   const immersive = useImmersive();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  useEffect(() => {
-    const heartbeat = window.setInterval(() => {
-      void touchLastSeen();
-    }, 60_000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void touchLastSeen(true);
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.clearInterval(heartbeat);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, []);
+  useEffect(() => acquireHeartbeat(), []);
 
   return (
     <div
