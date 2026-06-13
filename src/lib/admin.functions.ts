@@ -711,155 +711,18 @@ export const adminRiskOverview = createServerFn({ method: "POST" })
     days: Math.min(Math.max(input?.days ?? 30, 1), 180),
   }))
   .handler(async ({ data, context }): Promise<RiskOverview> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const since = new Date(Date.now() - data.days * 86_400_000).toISOString();
-
-    const [{ data: shifts }, { data: profs }] = await Promise.all([
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("id, requester_id, accepted_by, status, cancelled_by, hospital, area, created_at, updated_at")
-        .gte("created_at", since)
-        .limit(5000),
-      supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, mdcn, verification_status, created_at, onboarded_cover_at"),
-    ]);
-
-    const profMap = new Map(
-      (profs ?? []).map((p) => [p.id, p]),
-    );
-
-    // Cancellation aggregates per actor.
-    const docAgg = new Map<string, { total: number; completed: number; cancelled: number }>();
-    const reqAgg = new Map<string, { total: number; completed: number; cancelled: number }>();
-    let docCompleted = 0,
-      docCancelled = 0,
-      reqCompleted = 0,
-      reqCancelled = 0,
-      cancelledAfterAccept = 0;
-    const stuckSearching: RiskOverview["stuckSearching"] = [];
-    const dayBuckets = new Map<string, number>();
-    for (let i = data.days - 1; i >= 0; i--) {
-      dayBuckets.set(dayKey(Date.now() - i * 86_400_000), 0);
-    }
-
-    const now = Date.now();
-    for (const s of shifts ?? []) {
-      const finished = s.status === "completed" || s.status === "cancelled";
-      if (s.accepted_by && finished) {
-        const cur = docAgg.get(s.accepted_by) ?? { total: 0, completed: 0, cancelled: 0 };
-        cur.total += 1;
-        if (s.status === "completed") {
-          cur.completed += 1;
-          docCompleted += 1;
-        } else {
-          cur.cancelled += 1;
-          docCancelled += 1;
-        }
-        docAgg.set(s.accepted_by, cur);
-      }
-      if (s.requester_id && finished) {
-        const cur = reqAgg.get(s.requester_id) ?? { total: 0, completed: 0, cancelled: 0 };
-        cur.total += 1;
-        if (s.status === "completed") {
-          cur.completed += 1;
-          reqCompleted += 1;
-        } else {
-          cur.cancelled += 1;
-          reqCancelled += 1;
-        }
-        reqAgg.set(s.requester_id, cur);
-      }
-      if (s.status === "cancelled" && s.accepted_by) cancelledAfterAccept += 1;
-      if (
-        s.status === "searching" &&
-        now - new Date(s.created_at).getTime() > 24 * 3_600_000
-      ) {
-        const req = profMap.get(s.requester_id);
-        stuckSearching.push({
-          id: s.id,
-          hospital: s.hospital,
-          area: s.area,
-          created_at: s.created_at,
-          requester_id: s.requester_id,
-          requester_name: req?.full_name ?? null,
-        });
-      }
-    }
-
-    // Signup trend from profiles.created_at.
-    for (const p of profs ?? []) {
-      const k = dayKey(p.created_at);
-      if (dayBuckets.has(k)) dayBuckets.set(k, (dayBuckets.get(k) ?? 0) + 1);
-    }
-
-    const toActor = (
-      m: Map<string, { total: number; completed: number; cancelled: number }>,
-    ): RiskActor[] =>
-      [...m.entries()]
-        .filter(([, v]) => v.cancelled >= 2)
-        .map(([id, v]) => ({
-          user_id: id,
-          name: profMap.get(id)?.full_name ?? null,
-          total: v.total,
-          cancelled: v.cancelled,
-          completed: v.completed,
-          cancellation_rate: v.total ? v.cancelled / v.total : 0,
-        }))
-        .sort((a, b) => b.cancellation_rate - a.cancellation_rate || b.cancelled - a.cancelled)
-        .slice(0, 10);
-
-    // Duplicate MDCN detection (only among onboarded doctors).
-    const mdcnMap = new Map<string, DuplicateMdcn["users"]>();
-    for (const p of profs ?? []) {
-      if (!p.mdcn || !p.onboarded_cover_at) continue;
-      const key = p.mdcn.trim().toUpperCase();
-      const arr = mdcnMap.get(key) ?? [];
-      arr.push({
-        id: p.id,
-        name: p.full_name,
-        verification_status: p.verification_status,
-        created_at: p.created_at,
-      });
-      mdcnMap.set(key, arr);
-    }
-    const duplicateMdcn: DuplicateMdcn[] = [...mdcnMap.entries()]
-      .filter(([, users]) => users.length > 1)
-      .map(([mdcn, users]) => ({ mdcn, count: users.length, users }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
-
-    const suspended = (profs ?? []).filter((p) => p.verification_status === "suspended").length;
-    const rejected = (profs ?? []).filter((p) => p.verification_status === "rejected").length;
-    const pending = (profs ?? []).filter(
-      (p) => p.verification_status === "pending" && p.onboarded_cover_at,
-    ).length;
-
-    stuckSearching.sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
-
-    return {
-      totals: {
-        cancellation_rate_doctor:
-          docCompleted + docCancelled ? docCancelled / (docCompleted + docCancelled) : 0,
-        cancellation_rate_requester:
-          reqCompleted + reqCancelled ? reqCancelled / (reqCompleted + reqCancelled) : 0,
-        suspended_doctors: suspended,
-        rejected_doctors: rejected,
-        pending_doctors: pending,
-        duplicate_mdcn_groups: duplicateMdcn.length,
-        requests_cancelled_after_accept: cancelledAfterAccept,
-        requests_unfilled_24h: stuckSearching.length,
-      },
-      topDoctorCancellers: toActor(docAgg),
-      topRequesterCancellers: toActor(reqAgg),
-      duplicateMdcn,
-      signupTrend: [...dayBuckets.entries()].map(([day, signups]) => ({ day, signups })),
-      stuckSearching: stuckSearching.slice(0, 20),
-    };
+    // The RPC is admin-gated (`has_role` check inside) and runs as SECURITY
+    // DEFINER, so the admin's user-scoped supabase client is enough — no
+    // service-role and no wide table scans in app code.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = context.supabase as any;
+    const { data: payload, error } = await sb.rpc("admin_risk_overview", {
+      _days: data.days,
+    });
+    if (error) throw new Error(error.message);
+    return payload as RiskOverview;
   });
+
 
 // ---------- Support Tools ----------
 
