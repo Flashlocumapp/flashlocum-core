@@ -546,7 +546,7 @@ export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>
     try {
       const { cancelAndNotifyFn } = await import("@/lib/coverage-notify.functions");
       const res = await cancelAndNotifyFn({ data: { requestId: id } });
-      if (!res?.ok) console.warn("[coverage-remote] cancel skipped:", res?.reason ?? "unknown");
+      if (!res?.ok) console.warn("[coverage-remote] cancel skipped:", res && "reason" in res ? res.reason : "unknown");
       else emitInvalidate(id);
       return;
     } catch (e) {
