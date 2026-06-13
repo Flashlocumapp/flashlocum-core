@@ -243,7 +243,7 @@ export const adminFinanceAnalytics = createServerFn({ method: "POST" })
         "id,accepted_by,hospital,amount,fee_pct,settled_amount,payment_status,paid_at,remitted_at,created_at",
       )
       .gte("created_at", since)
-      .limit(5000);
+      .limit(20000);
     if (error) throw new Error(error.message);
     const list = rows ?? [];
 
@@ -398,8 +398,8 @@ export const adminDoctorFlashboard = createServerFn({ method: "POST" })
           .from("coverage_requests")
           .select("accepted_by, status, amount, fee_pct")
           .not("accepted_by", "is", null)
-          .limit(5000),
-        supabaseAdmin.from("ratings").select("ratee_entity_id, score").limit(5000),
+          .limit(20000),
+        supabaseAdmin.from("ratings").select("ratee_entity_id, score").limit(20000),
       ]);
 
     const presenceMap = new Map(
@@ -542,7 +542,7 @@ export const adminRequesterAnalytics = createServerFn({ method: "POST" })
         "id, requester_id, hospital, area, status, amount, accepted_by, created_at, updated_at",
       )
       .gte("created_at", since)
-      .limit(5000);
+      .limit(20000);
     if (error) throw new Error(error.message);
     const list = rows ?? [];
 
@@ -711,155 +711,18 @@ export const adminRiskOverview = createServerFn({ method: "POST" })
     days: Math.min(Math.max(input?.days ?? 30, 1), 180),
   }))
   .handler(async ({ data, context }): Promise<RiskOverview> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const since = new Date(Date.now() - data.days * 86_400_000).toISOString();
-
-    const [{ data: shifts }, { data: profs }] = await Promise.all([
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("id, requester_id, accepted_by, status, cancelled_by, hospital, area, created_at, updated_at")
-        .gte("created_at", since)
-        .limit(5000),
-      supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, mdcn, verification_status, created_at, onboarded_cover_at"),
-    ]);
-
-    const profMap = new Map(
-      (profs ?? []).map((p) => [p.id, p]),
-    );
-
-    // Cancellation aggregates per actor.
-    const docAgg = new Map<string, { total: number; completed: number; cancelled: number }>();
-    const reqAgg = new Map<string, { total: number; completed: number; cancelled: number }>();
-    let docCompleted = 0,
-      docCancelled = 0,
-      reqCompleted = 0,
-      reqCancelled = 0,
-      cancelledAfterAccept = 0;
-    const stuckSearching: RiskOverview["stuckSearching"] = [];
-    const dayBuckets = new Map<string, number>();
-    for (let i = data.days - 1; i >= 0; i--) {
-      dayBuckets.set(dayKey(Date.now() - i * 86_400_000), 0);
-    }
-
-    const now = Date.now();
-    for (const s of shifts ?? []) {
-      const finished = s.status === "completed" || s.status === "cancelled";
-      if (s.accepted_by && finished) {
-        const cur = docAgg.get(s.accepted_by) ?? { total: 0, completed: 0, cancelled: 0 };
-        cur.total += 1;
-        if (s.status === "completed") {
-          cur.completed += 1;
-          docCompleted += 1;
-        } else {
-          cur.cancelled += 1;
-          docCancelled += 1;
-        }
-        docAgg.set(s.accepted_by, cur);
-      }
-      if (s.requester_id && finished) {
-        const cur = reqAgg.get(s.requester_id) ?? { total: 0, completed: 0, cancelled: 0 };
-        cur.total += 1;
-        if (s.status === "completed") {
-          cur.completed += 1;
-          reqCompleted += 1;
-        } else {
-          cur.cancelled += 1;
-          reqCancelled += 1;
-        }
-        reqAgg.set(s.requester_id, cur);
-      }
-      if (s.status === "cancelled" && s.accepted_by) cancelledAfterAccept += 1;
-      if (
-        s.status === "searching" &&
-        now - new Date(s.created_at).getTime() > 24 * 3_600_000
-      ) {
-        const req = profMap.get(s.requester_id);
-        stuckSearching.push({
-          id: s.id,
-          hospital: s.hospital,
-          area: s.area,
-          created_at: s.created_at,
-          requester_id: s.requester_id,
-          requester_name: req?.full_name ?? null,
-        });
-      }
-    }
-
-    // Signup trend from profiles.created_at.
-    for (const p of profs ?? []) {
-      const k = dayKey(p.created_at);
-      if (dayBuckets.has(k)) dayBuckets.set(k, (dayBuckets.get(k) ?? 0) + 1);
-    }
-
-    const toActor = (
-      m: Map<string, { total: number; completed: number; cancelled: number }>,
-    ): RiskActor[] =>
-      [...m.entries()]
-        .filter(([, v]) => v.cancelled >= 2)
-        .map(([id, v]) => ({
-          user_id: id,
-          name: profMap.get(id)?.full_name ?? null,
-          total: v.total,
-          cancelled: v.cancelled,
-          completed: v.completed,
-          cancellation_rate: v.total ? v.cancelled / v.total : 0,
-        }))
-        .sort((a, b) => b.cancellation_rate - a.cancellation_rate || b.cancelled - a.cancelled)
-        .slice(0, 10);
-
-    // Duplicate MDCN detection (only among onboarded doctors).
-    const mdcnMap = new Map<string, DuplicateMdcn["users"]>();
-    for (const p of profs ?? []) {
-      if (!p.mdcn || !p.onboarded_cover_at) continue;
-      const key = p.mdcn.trim().toUpperCase();
-      const arr = mdcnMap.get(key) ?? [];
-      arr.push({
-        id: p.id,
-        name: p.full_name,
-        verification_status: p.verification_status,
-        created_at: p.created_at,
-      });
-      mdcnMap.set(key, arr);
-    }
-    const duplicateMdcn: DuplicateMdcn[] = [...mdcnMap.entries()]
-      .filter(([, users]) => users.length > 1)
-      .map(([mdcn, users]) => ({ mdcn, count: users.length, users }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
-
-    const suspended = (profs ?? []).filter((p) => p.verification_status === "suspended").length;
-    const rejected = (profs ?? []).filter((p) => p.verification_status === "rejected").length;
-    const pending = (profs ?? []).filter(
-      (p) => p.verification_status === "pending" && p.onboarded_cover_at,
-    ).length;
-
-    stuckSearching.sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
-
-    return {
-      totals: {
-        cancellation_rate_doctor:
-          docCompleted + docCancelled ? docCancelled / (docCompleted + docCancelled) : 0,
-        cancellation_rate_requester:
-          reqCompleted + reqCancelled ? reqCancelled / (reqCompleted + reqCancelled) : 0,
-        suspended_doctors: suspended,
-        rejected_doctors: rejected,
-        pending_doctors: pending,
-        duplicate_mdcn_groups: duplicateMdcn.length,
-        requests_cancelled_after_accept: cancelledAfterAccept,
-        requests_unfilled_24h: stuckSearching.length,
-      },
-      topDoctorCancellers: toActor(docAgg),
-      topRequesterCancellers: toActor(reqAgg),
-      duplicateMdcn,
-      signupTrend: [...dayBuckets.entries()].map(([day, signups]) => ({ day, signups })),
-      stuckSearching: stuckSearching.slice(0, 20),
-    };
+    // The RPC is admin-gated (`has_role` check inside) and runs as SECURITY
+    // DEFINER, so the admin's user-scoped supabase client is enough — no
+    // service-role and no wide table scans in app code.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = context.supabase as any;
+    const { data: payload, error } = await sb.rpc("admin_risk_overview", {
+      _days: data.days,
+    });
+    if (error) throw new Error(error.message);
+    return payload as RiskOverview;
   });
+
 
 // ---------- Support Tools ----------
 
@@ -983,99 +846,66 @@ export const adminSystemHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(() => ({}))
   .handler(async ({ context }): Promise<SystemHealth> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
-
-    const [
-      { data: queues },
-      { count: emailSent },
-      { count: emailFailed },
-      { count: suppressedTotal },
-      { data: tokens },
-      { count: profilesCount },
-      { count: requestsCount },
-      { count: ratingsCount },
-      { count: signups24 },
-      { count: requests24 },
-      { count: completed24 },
-      { count: cancelled24 },
-    ] = await Promise.all([
-      supabaseAdmin.rpc("email_queue_depth"),
-      supabaseAdmin
-        .from("email_send_log")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "sent")
-        .gte("created_at", dayAgo),
-      supabaseAdmin
-        .from("email_send_log")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "failed")
-        .gte("created_at", dayAgo),
-      supabaseAdmin.from("suppressed_emails").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("device_tokens").select("user_id, platform"),
-      supabaseAdmin.from("profiles").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("coverage_requests").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("ratings").select("*", { count: "exact", head: true }),
-      supabaseAdmin
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", dayAgo),
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", dayAgo),
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "completed")
-        .gte("updated_at", dayAgo),
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "cancelled")
-        .gte("updated_at", dayAgo),
+    // Both RPCs self-gate on `has_role('admin')`. Aggregation runs entirely
+    // in Postgres, so no row data crosses the wire — safe at 50k+ users.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = context.supabase as any;
+    const [{ data: health, error: hErr }, { data: queues, error: qErr }] = await Promise.all([
+      sb.rpc("admin_system_health"),
+      sb.rpc("email_queue_depth"),
     ]);
+    if (hErr) throw new Error(hErr.message);
+    if (qErr) throw new Error(qErr.message);
 
-    const platformMap = new Map<string, number>();
-    const users = new Set<string>();
-    for (const t of tokens ?? []) {
-      platformMap.set(t.platform, (platformMap.get(t.platform) ?? 0) + 1);
-      users.add(t.user_id);
-    }
+    type HealthRow = {
+      email_sent_24h: number;
+      email_failed_24h: number;
+      suppressed_total: number;
+      device_tokens: number;
+      users_with_tokens: number;
+      platforms: { platform: string; count: number }[];
+      profiles_total: number;
+      requests_total: number;
+      ratings_total: number;
+      signups_24h: number;
+      requests_24h: number;
+      completed_24h: number;
+      cancelled_24h: number;
+    };
+    const h = health as HealthRow;
 
     return {
       email: {
-        queues:
-          (queues ?? []).map((q) => ({
-            queue_name: q.queue_name,
-            depth: Number(q.depth ?? 0),
-            oldest_enqueued_at: q.oldest_enqueued_at,
-          })) ?? [],
+        queues: (queues ?? []).map((q: { queue_name: string; depth: number | string; oldest_enqueued_at: string | null }) => ({
+          queue_name: q.queue_name,
+          depth: Number(q.depth ?? 0),
+          oldest_enqueued_at: q.oldest_enqueued_at,
+        })),
         last24h: {
-          sent: emailSent ?? 0,
-          failed: emailFailed ?? 0,
+          sent: h.email_sent_24h ?? 0,
+          failed: h.email_failed_24h ?? 0,
           suppressed: 0,
         },
-        suppressed_total: suppressedTotal ?? 0,
+        suppressed_total: h.suppressed_total ?? 0,
       },
       push: {
-        device_tokens: tokens?.length ?? 0,
-        users_with_tokens: users.size,
-        platforms: [...platformMap.entries()].map(([platform, count]) => ({ platform, count })),
+        device_tokens: h.device_tokens ?? 0,
+        users_with_tokens: h.users_with_tokens ?? 0,
+        platforms: h.platforms ?? [],
       },
       database: {
-        profiles: profilesCount ?? 0,
-        coverage_requests: requestsCount ?? 0,
-        ratings: ratingsCount ?? 0,
+        profiles: h.profiles_total ?? 0,
+        coverage_requests: h.requests_total ?? 0,
+        ratings: h.ratings_total ?? 0,
         active_subscriptions_estimate: 0,
       },
       activity: {
-        signups_24h: signups24 ?? 0,
-        requests_24h: requests24 ?? 0,
-        completed_24h: completed24 ?? 0,
-        cancelled_24h: cancelled24 ?? 0,
+        signups_24h: h.signups_24h ?? 0,
+        requests_24h: h.requests_24h ?? 0,
+        completed_24h: h.completed_24h ?? 0,
+        cancelled_24h: h.cancelled_24h ?? 0,
       },
     };
   });
+
 

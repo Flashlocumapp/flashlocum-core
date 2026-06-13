@@ -14,9 +14,9 @@ function SystemPage() {
   const q = useQuery({
     queryKey: ["admin", "system"],
     queryFn: () => fetchHealth({ data: {} }),
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime: 30_000,
   });
+
   const data = q.data;
   const queueAlert = (data?.email.queues ?? []).some((qd) => qd.depth > 25);
 
@@ -24,7 +24,7 @@ function SystemPage() {
     <div className="mx-auto max-w-[1300px] space-y-6 p-6">
       <AdminPageHeader
         title="System Health"
-        subtitle="Platform vitals — refreshes every 30 seconds."
+        subtitle="Platform vitals. Use Refresh for a live snapshot."
         right={<RefreshButton onClick={() => q.refetch()} busy={q.isFetching} />}
       />
 
