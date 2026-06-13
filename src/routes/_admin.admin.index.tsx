@@ -12,7 +12,7 @@ import {
   StatCard,
 } from "@/lib/admin-ui";
 
-export const Route = createFileRoute("/_admin/admin")({
+export const Route = createFileRoute("/_admin/admin/")({
   ssr: false,
   component: AdminOverview,
 });
