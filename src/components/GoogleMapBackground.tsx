@@ -184,12 +184,17 @@ export function GoogleMapBackground({
     }
 
     let gotFix = false;
+    // getCurrentPosition can't be cancelled — guard callbacks so late fixes
+    // arriving after unmount don't push samples into a stale component.
+    let cancelled = false;
     const onErr = (err: GeolocationPositionError) => {
+      if (cancelled) return;
       console.warn("[map] geolocation error", err.code, err.message);
     };
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (cancelled) return;
         gotFix = true;
         acceptSample(pos.coords);
       },
@@ -198,6 +203,7 @@ export function GoogleMapBackground({
     );
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
+        if (cancelled) return;
         gotFix = true;
         acceptSample(pos.coords);
       },
@@ -208,9 +214,10 @@ export function GoogleMapBackground({
     // If high-accuracy fails or takes too long, also try a low-accuracy
     // fix in parallel — some devices/browsers refuse high-accuracy outright.
     const lowAccTimer = window.setTimeout(() => {
-      if (gotFix) return;
+      if (cancelled || gotFix) return;
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          if (cancelled) return;
           gotFix = true;
           acceptSample(pos.coords);
         },
@@ -220,6 +227,7 @@ export function GoogleMapBackground({
     }, 4_000);
 
     return () => {
+      cancelled = true;
       navigator.geolocation.clearWatch(watchId);
       window.clearTimeout(lowAccTimer);
     };
