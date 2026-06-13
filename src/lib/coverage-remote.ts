@@ -244,8 +244,7 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   // and refetched on every realtime event; at 10k users that's a tablescan
   // per event. RLS would have filtered the result anyway, but doing the work
   // server-side avoids the planner walking unrelated rows.
-  const filter =
-    `requester_id.eq.${userId},accepted_by.eq.${userId},status.eq.searching`;
+  const filter = `requester_id.eq.${userId},accepted_by.eq.${userId},status.eq.searching`;
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
@@ -546,7 +545,12 @@ export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>
     try {
       const { cancelAndNotifyFn } = await import("@/lib/coverage-notify.functions");
       const res = await cancelAndNotifyFn({ data: { requestId: id } });
-      if (!res?.ok) console.warn("[coverage-remote] cancel skipped:", res && "reason" in res ? res.reason : "unknown");
+      if (!res?.ok) {
+        console.warn(
+          "[coverage-remote] cancel skipped:",
+          res && "reason" in res ? res.reason : "unknown",
+        );
+      }
       else emitInvalidate(id);
       return;
     } catch (e) {

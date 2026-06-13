@@ -6,7 +6,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 function isUuid(v: unknown): v is string {
-  return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  return (
+    typeof v === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+  );
 }
 
 /**
@@ -75,7 +78,8 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
     if (readError) throw new Error(readError.message);
     if (!row) return { ok: false, reason: "missing" as const };
 
-    const actor = row.accepted_by === userId ? "doctor" : row.requester_id === userId ? "requester" : null;
+    const actor =
+      row.accepted_by === userId ? "doctor" : row.requester_id === userId ? "requester" : null;
     if (!actor) throw new Error("Not authorized");
     if (row.status === "cancelled") return { ok: true, cancelledBy: row.cancelled_by ?? actor };
 
