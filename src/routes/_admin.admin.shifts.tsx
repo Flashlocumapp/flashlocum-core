@@ -82,7 +82,7 @@ function AdminShiftsPage() {
           timer = setTimeout(() => {
             timer = null;
             void refresh();
-          }, 2500);
+          }, 5000);
         },
       )
       .subscribe();

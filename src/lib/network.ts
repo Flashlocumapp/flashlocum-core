@@ -47,7 +47,10 @@ const CHANNEL = "flashlocum.net.v3";
 const STORAGE = "flashlocum.net.v3";
 const LEGACY_STORAGE = "flashlocum.net.v2";
 const SESSION_KEY = "flashlocum.session";
-const HEARTBEAT_MS = 4000;
+// Presence heartbeat cadence. 25s keeps doctors comfortably within the 2-min
+// STALE_MS window (presence-remote) while cutting write load ~6x vs the old
+// 4s cadence — critical at 500+ concurrent doctors.
+const HEARTBEAT_MS = 25000;
 const STALE_MS = 12000;
 const BROADCAST_TTL_MS = 30 * 60 * 1000;
 const MAX_CONFIRMED_SHIFTS = 3;

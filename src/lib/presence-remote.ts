@@ -112,32 +112,60 @@ async function initialFetch(force = false) {
 }
 
 
-/** Lazily verify a doctor's approval status when their presence row appears
- *  but we have no cached approval state for them. Skips ids we've already
- *  resolved or have a fetch in flight for. */
-async function ensureApprovalKnown(userId: string) {
-  if (checkedProfileIds.has(userId) || inFlightProfileChecks.has(userId)) return;
-  inFlightProfileChecks.add(userId);
+/** Lazily verify doctors' approval status in batches. Coalesces all unknown
+ *  ids requested within a microtask + 50ms window into a single
+ *  `id IN (...)` query, so a fresh page-load that surfaces N online doctors
+ *  costs 1 round-trip instead of N. */
+const pendingApprovalChecks = new Set<string>();
+let approvalFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function flushApprovalChecks() {
+  approvalFlushTimer = null;
+  const ids = Array.from(pendingApprovalChecks).filter(
+    (id) => !checkedProfileIds.has(id) && !inFlightProfileChecks.has(id),
+  );
+  pendingApprovalChecks.clear();
+  if (ids.length === 0) return;
+  ids.forEach((id) => inFlightProfileChecks.add(id));
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
-      .select("verification_status")
-      .eq("id", userId)
-      .maybeSingle();
-    checkedProfileIds.add(userId);
-    if (data?.verification_status === "approved") {
-      approvedIds.add(userId);
-      emit();
-    } else {
-      // Unapproved: drop any cached presence row (DB trigger should already
-      // have cleared it, but defend in depth).
-      if (rawRows.delete(userId)) emit();
+      .select("id, verification_status")
+      .in("id", ids);
+    if (error) {
+      ids.forEach((id) => inFlightProfileChecks.delete(id));
+      return;
     }
+    const approvedSet = new Set(
+      (data ?? [])
+        .filter((r) => r.verification_status === "approved")
+        .map((r) => r.id as string),
+    );
+    let changed = false;
+    for (const id of ids) {
+      checkedProfileIds.add(id);
+      if (approvedSet.has(id)) {
+        if (!approvedIds.has(id)) {
+          approvedIds.add(id);
+          changed = true;
+        }
+      } else if (rawRows.delete(id)) {
+        changed = true;
+      }
+    }
+    ids.forEach((id) => inFlightProfileChecks.delete(id));
+    if (changed) emit();
   } catch {
-    inFlightProfileChecks.delete(userId);
-    return;
+    ids.forEach((id) => inFlightProfileChecks.delete(id));
   }
-  inFlightProfileChecks.delete(userId);
+}
+
+function ensureApprovalKnown(userId: string) {
+  if (checkedProfileIds.has(userId) || inFlightProfileChecks.has(userId)) return;
+  pendingApprovalChecks.add(userId);
+  if (approvalFlushTimer == null) {
+    approvalFlushTimer = setTimeout(flushApprovalChecks, 50);
+  }
 }
 
 function applyPresencePayload(payload: RealtimePayload) {
