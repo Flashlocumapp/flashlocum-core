@@ -542,6 +542,18 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
 }
 
 export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>): Promise<void> {
+  if (patch.status === "cancelled") {
+    try {
+      const { cancelAndNotifyFn } = await import("@/lib/coverage-notify.functions");
+      const res = await cancelAndNotifyFn({ data: { requestId: id } });
+      if (!res?.ok) console.warn("[coverage-remote] cancel skipped:", res?.reason ?? "unknown");
+      else emitInvalidate(id);
+      return;
+    } catch (e) {
+      console.warn("[coverage-remote] cancel error:", (e as Error).message);
+      return;
+    }
+  }
   const dbPatch = netPatchToRow(patch);
   if (Object.keys(dbPatch).length === 0) return;
   const { error } = await supabase.from(TABLE).update(dbPatch).eq("id", id);
