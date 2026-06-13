@@ -95,7 +95,11 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
 
     // 6. Initiate transaction + resolve one-time virtual account for in-app UI.
     // Always mint a fresh reference — Monnify rejects duplicates (422).
-    const paymentReference = `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}`;
+    // Format: flsh_<requestId16>_<ms>_<rand8>. The random suffix prevents
+    // collisions on rapid retries within the same millisecond (double-tap,
+    // concurrent retries) where Date.now() alone is not unique.
+    const rand = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+    const paymentReference = `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}_${rand}`;
 
 
     const { initiateSplitTransaction, initBankTransferAccount } = await import(
