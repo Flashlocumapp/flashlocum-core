@@ -453,6 +453,14 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      email_queue_depth: {
+        Args: never
+        Returns: {
+          depth: number
+          oldest_enqueued_at: string
+          queue_name: string
+        }[]
+      }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
@@ -519,6 +527,7 @@ export type Database = {
         }
         Returns: number
       }
+      prune_email_send_log: { Args: { _retain_days?: number }; Returns: number }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
