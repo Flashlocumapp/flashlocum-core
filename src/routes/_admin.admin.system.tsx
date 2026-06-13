@@ -24,7 +24,7 @@ function SystemPage() {
     <div className="mx-auto max-w-[1300px] space-y-6 p-6">
       <AdminPageHeader
         title="System Health"
-        subtitle="Platform vitals — refreshes every 30 seconds."
+        subtitle="Platform vitals. Use Refresh for a live snapshot."
         right={<RefreshButton onClick={() => q.refetch()} busy={q.isFetching} />}
       />
 
