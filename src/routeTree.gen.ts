@@ -21,7 +21,7 @@ import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
 import { Route as AppAccountRouteImport } from './routes/_app.account'
-import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
+import { Route as AdminAdminIndexRouteImport } from './routes/_admin.admin.index'
 import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public/monnify-webhook'
 import { Route as AdminAdminVerificationRouteImport } from './routes/_admin.admin.verification'
 import { Route as AdminAdminUsersRouteImport } from './routes/_admin.admin.users'
@@ -92,9 +92,9 @@ const AppAccountRoute = AppAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppRoute,
 } as any)
-const AdminAdminRoute = AdminAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const AdminAdminIndexRoute = AdminAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
   getParentRoute: () => AdminRoute,
 } as any)
 const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
@@ -103,49 +103,49 @@ const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAdminVerificationRoute = AdminAdminVerificationRouteImport.update({
-  id: '/verification',
-  path: '/verification',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/verification',
+  path: '/admin/verification',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminUsersRoute = AdminAdminUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminSystemRoute = AdminAdminSystemRouteImport.update({
-  id: '/system',
-  path: '/system',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/system',
+  path: '/admin/system',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminSupportRoute = AdminAdminSupportRouteImport.update({
-  id: '/support',
-  path: '/support',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/support',
+  path: '/admin/support',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminShiftsRoute = AdminAdminShiftsRouteImport.update({
-  id: '/shifts',
-  path: '/shifts',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/shifts',
+  path: '/admin/shifts',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminRiskRoute = AdminAdminRiskRouteImport.update({
-  id: '/risk',
-  path: '/risk',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/risk',
+  path: '/admin/risk',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminRequestersRoute = AdminAdminRequestersRouteImport.update({
-  id: '/requesters',
-  path: '/requesters',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/requesters',
+  path: '/admin/requesters',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminFlashboardRoute = AdminAdminFlashboardRouteImport.update({
-  id: '/flashboard',
-  path: '/flashboard',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/flashboard',
+  path: '/admin/flashboard',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAdminFinanceRoute = AdminAdminFinanceRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => AdminAdminRoute,
+  id: '/admin/finance',
+  path: '/admin/finance',
+  getParentRoute: () => AdminRoute,
 } as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
@@ -158,7 +158,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
-  '/admin': typeof AdminAdminRouteWithChildren
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
@@ -176,13 +175,13 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
+  '/admin/': typeof AdminAdminIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
-  '/admin': typeof AdminAdminRouteWithChildren
   '/account': typeof AppAccountRoute
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
@@ -200,6 +199,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
+  '/admin': typeof AdminAdminIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesById {
@@ -209,7 +209,6 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/role': typeof RoleRoute
-  '/_admin/admin': typeof AdminAdminRouteWithChildren
   '/_app/account': typeof AppAccountRoute
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
@@ -227,6 +226,7 @@ export interface FileRoutesById {
   '/_admin/admin/users': typeof AdminAdminUsersRoute
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
+  '/_admin/admin/': typeof AdminAdminIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRouteTypes {
@@ -235,7 +235,6 @@ export interface FileRouteTypes {
     | '/'
     | '/reset-password'
     | '/role'
-    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
@@ -253,13 +252,13 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/verification'
     | '/api/public/monnify-webhook'
+    | '/admin/'
     | '/lovable/email/queue/process'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/reset-password'
     | '/role'
-    | '/admin'
     | '/account'
     | '/coverage'
     | '/earnings'
@@ -277,6 +276,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/verification'
     | '/api/public/monnify-webhook'
+    | '/admin'
     | '/lovable/email/queue/process'
   id:
     | '__root__'
@@ -285,7 +285,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/reset-password'
     | '/role'
-    | '/_admin/admin'
     | '/_app/account'
     | '/_app/coverage'
     | '/_app/earnings'
@@ -303,6 +302,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/users'
     | '/_admin/admin/verification'
     | '/api/public/monnify-webhook'
+    | '/_admin/admin/'
     | '/lovable/email/queue/process'
   fileRoutesById: FileRoutesById
 }
@@ -405,11 +405,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAccountRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_admin/admin': {
-      id: '/_admin/admin'
+    '/_admin/admin/': {
+      id: '/_admin/admin/'
       path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminAdminRouteImport
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminAdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
     '/api/public/monnify-webhook': {
@@ -421,66 +421,66 @@ declare module '@tanstack/react-router' {
     }
     '/_admin/admin/verification': {
       id: '/_admin/admin/verification'
-      path: '/verification'
+      path: '/admin/verification'
       fullPath: '/admin/verification'
       preLoaderRoute: typeof AdminAdminVerificationRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/users': {
       id: '/_admin/admin/users'
-      path: '/users'
+      path: '/admin/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminAdminUsersRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/system': {
       id: '/_admin/admin/system'
-      path: '/system'
+      path: '/admin/system'
       fullPath: '/admin/system'
       preLoaderRoute: typeof AdminAdminSystemRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/support': {
       id: '/_admin/admin/support'
-      path: '/support'
+      path: '/admin/support'
       fullPath: '/admin/support'
       preLoaderRoute: typeof AdminAdminSupportRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/shifts': {
       id: '/_admin/admin/shifts'
-      path: '/shifts'
+      path: '/admin/shifts'
       fullPath: '/admin/shifts'
       preLoaderRoute: typeof AdminAdminShiftsRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/risk': {
       id: '/_admin/admin/risk'
-      path: '/risk'
+      path: '/admin/risk'
       fullPath: '/admin/risk'
       preLoaderRoute: typeof AdminAdminRiskRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/requesters': {
       id: '/_admin/admin/requesters'
-      path: '/requesters'
+      path: '/admin/requesters'
       fullPath: '/admin/requesters'
       preLoaderRoute: typeof AdminAdminRequestersRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/flashboard': {
       id: '/_admin/admin/flashboard'
-      path: '/flashboard'
+      path: '/admin/flashboard'
       fullPath: '/admin/flashboard'
       preLoaderRoute: typeof AdminAdminFlashboardRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/_admin/admin/finance': {
       id: '/_admin/admin/finance'
-      path: '/finance'
+      path: '/admin/finance'
       fullPath: '/admin/finance'
       preLoaderRoute: typeof AdminAdminFinanceRouteImport
-      parentRoute: typeof AdminAdminRoute
+      parentRoute: typeof AdminRoute
     }
     '/lovable/email/queue/process': {
       id: '/lovable/email/queue/process'
@@ -492,7 +492,7 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AdminAdminRouteChildren {
+interface AdminRouteChildren {
   AdminAdminFinanceRoute: typeof AdminAdminFinanceRoute
   AdminAdminFlashboardRoute: typeof AdminAdminFlashboardRoute
   AdminAdminRequestersRoute: typeof AdminAdminRequestersRoute
@@ -502,9 +502,10 @@ interface AdminAdminRouteChildren {
   AdminAdminSystemRoute: typeof AdminAdminSystemRoute
   AdminAdminUsersRoute: typeof AdminAdminUsersRoute
   AdminAdminVerificationRoute: typeof AdminAdminVerificationRoute
+  AdminAdminIndexRoute: typeof AdminAdminIndexRoute
 }
 
-const AdminAdminRouteChildren: AdminAdminRouteChildren = {
+const AdminRouteChildren: AdminRouteChildren = {
   AdminAdminFinanceRoute: AdminAdminFinanceRoute,
   AdminAdminFlashboardRoute: AdminAdminFlashboardRoute,
   AdminAdminRequestersRoute: AdminAdminRequestersRoute,
@@ -514,18 +515,7 @@ const AdminAdminRouteChildren: AdminAdminRouteChildren = {
   AdminAdminSystemRoute: AdminAdminSystemRoute,
   AdminAdminUsersRoute: AdminAdminUsersRoute,
   AdminAdminVerificationRoute: AdminAdminVerificationRoute,
-}
-
-const AdminAdminRouteWithChildren = AdminAdminRoute._addFileChildren(
-  AdminAdminRouteChildren,
-)
-
-interface AdminRouteChildren {
-  AdminAdminRoute: typeof AdminAdminRouteWithChildren
-}
-
-const AdminRouteChildren: AdminRouteChildren = {
-  AdminAdminRoute: AdminAdminRouteWithChildren,
+  AdminAdminIndexRoute: AdminAdminIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
