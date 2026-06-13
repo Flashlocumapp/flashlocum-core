@@ -439,12 +439,19 @@ export async function claimFirstAdmin(): Promise<boolean> {
   return !!data;
 }
 
+// Safety cap: the admin doctors list is fully rendered client-side and
+// filtered/searched in-memory. Capping the fetch protects the admin tab
+// from blowing up at thousands of approved doctors. When the count
+// approaches this ceiling, move to server-side search + paginated load.
+export const ADMIN_DOCTORS_LIST_LIMIT = 500;
+
 export async function listDoctors(): Promise<ProfileRow[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .not("onboarded_cover_at", "is", null)
-    .order("onboarded_cover_at", { ascending: false });
+    .order("onboarded_cover_at", { ascending: false })
+    .limit(ADMIN_DOCTORS_LIST_LIMIT);
   if (error) throw error;
   return (data as ProfileRow[]) ?? [];
 }

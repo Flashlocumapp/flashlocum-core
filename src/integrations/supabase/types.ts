@@ -427,7 +427,7 @@ export type Database = {
     }
     Functions: {
       admin_list_users: {
-        Args: never
+        Args: { _limit?: number; _offset?: number }
         Returns: {
           created_at: string
           email: string
