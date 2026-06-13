@@ -243,7 +243,7 @@ export const adminFinanceAnalytics = createServerFn({ method: "POST" })
         "id,accepted_by,hospital,amount,fee_pct,settled_amount,payment_status,paid_at,remitted_at,created_at",
       )
       .gte("created_at", since)
-      .limit(5000);
+      .limit(20000);
     if (error) throw new Error(error.message);
     const list = rows ?? [];
 
@@ -398,8 +398,8 @@ export const adminDoctorFlashboard = createServerFn({ method: "POST" })
           .from("coverage_requests")
           .select("accepted_by, status, amount, fee_pct")
           .not("accepted_by", "is", null)
-          .limit(5000),
-        supabaseAdmin.from("ratings").select("ratee_entity_id, score").limit(5000),
+          .limit(20000),
+        supabaseAdmin.from("ratings").select("ratee_entity_id, score").limit(20000),
       ]);
 
     const presenceMap = new Map(
@@ -542,7 +542,7 @@ export const adminRequesterAnalytics = createServerFn({ method: "POST" })
         "id, requester_id, hospital, area, status, amount, accepted_by, created_at, updated_at",
       )
       .gte("created_at", since)
-      .limit(5000);
+      .limit(20000);
     if (error) throw new Error(error.message);
     const list = rows ?? [];
 
