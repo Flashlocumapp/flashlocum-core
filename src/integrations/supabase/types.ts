@@ -443,6 +443,8 @@ export type Database = {
         }[]
       }
       admin_overview_stats: { Args: never; Returns: Json }
+      admin_risk_overview: { Args: { _days?: number }; Returns: Json }
+      admin_system_health: { Args: never; Returns: Json }
       claim_coverage_request: {
         Args: { _request_id: string }
         Returns: boolean
@@ -537,6 +539,8 @@ export type Database = {
           read_ct: number
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       touch_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {
