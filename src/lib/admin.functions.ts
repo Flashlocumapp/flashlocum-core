@@ -846,99 +846,66 @@ export const adminSystemHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(() => ({}))
   .handler(async ({ context }): Promise<SystemHealth> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
-
-    const [
-      { data: queues },
-      { count: emailSent },
-      { count: emailFailed },
-      { count: suppressedTotal },
-      { data: tokens },
-      { count: profilesCount },
-      { count: requestsCount },
-      { count: ratingsCount },
-      { count: signups24 },
-      { count: requests24 },
-      { count: completed24 },
-      { count: cancelled24 },
-    ] = await Promise.all([
-      supabaseAdmin.rpc("email_queue_depth"),
-      supabaseAdmin
-        .from("email_send_log")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "sent")
-        .gte("created_at", dayAgo),
-      supabaseAdmin
-        .from("email_send_log")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "failed")
-        .gte("created_at", dayAgo),
-      supabaseAdmin.from("suppressed_emails").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("device_tokens").select("user_id, platform"),
-      supabaseAdmin.from("profiles").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("coverage_requests").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("ratings").select("*", { count: "exact", head: true }),
-      supabaseAdmin
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", dayAgo),
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", dayAgo),
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "completed")
-        .gte("updated_at", dayAgo),
-      supabaseAdmin
-        .from("coverage_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "cancelled")
-        .gte("updated_at", dayAgo),
+    // Both RPCs self-gate on `has_role('admin')`. Aggregation runs entirely
+    // in Postgres, so no row data crosses the wire — safe at 50k+ users.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = context.supabase as any;
+    const [{ data: health, error: hErr }, { data: queues, error: qErr }] = await Promise.all([
+      sb.rpc("admin_system_health"),
+      sb.rpc("email_queue_depth"),
     ]);
+    if (hErr) throw new Error(hErr.message);
+    if (qErr) throw new Error(qErr.message);
 
-    const platformMap = new Map<string, number>();
-    const users = new Set<string>();
-    for (const t of tokens ?? []) {
-      platformMap.set(t.platform, (platformMap.get(t.platform) ?? 0) + 1);
-      users.add(t.user_id);
-    }
+    type HealthRow = {
+      email_sent_24h: number;
+      email_failed_24h: number;
+      suppressed_total: number;
+      device_tokens: number;
+      users_with_tokens: number;
+      platforms: { platform: string; count: number }[];
+      profiles_total: number;
+      requests_total: number;
+      ratings_total: number;
+      signups_24h: number;
+      requests_24h: number;
+      completed_24h: number;
+      cancelled_24h: number;
+    };
+    const h = health as HealthRow;
 
     return {
       email: {
-        queues:
-          (queues ?? []).map((q) => ({
-            queue_name: q.queue_name,
-            depth: Number(q.depth ?? 0),
-            oldest_enqueued_at: q.oldest_enqueued_at,
-          })) ?? [],
+        queues: (queues ?? []).map((q: { queue_name: string; depth: number | string; oldest_enqueued_at: string | null }) => ({
+          queue_name: q.queue_name,
+          depth: Number(q.depth ?? 0),
+          oldest_enqueued_at: q.oldest_enqueued_at,
+        })),
         last24h: {
-          sent: emailSent ?? 0,
-          failed: emailFailed ?? 0,
+          sent: h.email_sent_24h ?? 0,
+          failed: h.email_failed_24h ?? 0,
           suppressed: 0,
         },
-        suppressed_total: suppressedTotal ?? 0,
+        suppressed_total: h.suppressed_total ?? 0,
       },
       push: {
-        device_tokens: tokens?.length ?? 0,
-        users_with_tokens: users.size,
-        platforms: [...platformMap.entries()].map(([platform, count]) => ({ platform, count })),
+        device_tokens: h.device_tokens ?? 0,
+        users_with_tokens: h.users_with_tokens ?? 0,
+        platforms: h.platforms ?? [],
       },
       database: {
-        profiles: profilesCount ?? 0,
-        coverage_requests: requestsCount ?? 0,
-        ratings: ratingsCount ?? 0,
+        profiles: h.profiles_total ?? 0,
+        coverage_requests: h.requests_total ?? 0,
+        ratings: h.ratings_total ?? 0,
         active_subscriptions_estimate: 0,
       },
       activity: {
-        signups_24h: signups24 ?? 0,
-        requests_24h: requests24 ?? 0,
-        completed_24h: completed24 ?? 0,
-        cancelled_24h: cancelled24 ?? 0,
+        signups_24h: h.signups_24h ?? 0,
+        requests_24h: h.requests_24h ?? 0,
+        completed_24h: h.completed_24h ?? 0,
+        cancelled_24h: h.cancelled_24h ?? 0,
       },
     };
   });
+
 
