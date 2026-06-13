@@ -8,7 +8,12 @@ import {
   type SupportSearchHit,
 } from "@/lib/admin.functions";
 import { AdminPageHeader, Chip, Empty } from "@/lib/admin-ui";
-import { toast } from "@/lib/feedback";
+import { pushToast } from "@/lib/notifications";
+
+const toast = {
+  success: (title: string) => pushToast({ title, tone: "presence" }),
+  error: (title: string) => pushToast({ title, tone: "warn" }),
+};
 
 export const Route = createFileRoute("/_admin/admin/support")({
   ssr: false,
