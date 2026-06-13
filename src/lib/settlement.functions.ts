@@ -163,14 +163,19 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => VerifyInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { userId } = context;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
+    const { supabase, userId } = context;
+    // Authorization via RLS: the user-scoped client only returns rows the
+    // caller is the requester or assigned doctor on. Matches the
+    // authorization model used by beginSettlementCheckout.
+    const { data: row, error } = await supabase
       .from("coverage_requests")
       .select("id, requester_id, accepted_by, payment_reference, payment_status, settled_amount")
       .eq("id", data.requestId)
       .maybeSingle();
-    if (error || !row) throw new Error("Coverage request not found");
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Not authorized");
+    // Defense-in-depth: even if RLS were misconfigured, only the requester
+    // or assigned doctor may verify payment.
     if (row.requester_id !== userId && row.accepted_by !== userId) {
       throw new Error("Not authorized");
     }
@@ -193,6 +198,8 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
       0,
       Math.round(Number(status.amountPaid ?? status.totalPayable ?? row.settled_amount ?? 0)),
     );
+    // Admin client only for the privileged RPC that flips payment_status.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: rpcErr } = await supabaseAdmin.rpc("mark_settlement_paid", {
       _payment_reference: row.payment_reference,
       _amount: amount,
@@ -220,17 +227,20 @@ export const simulateSettlementPayment = createServerFn({ method: "POST" })
     if (isProdEnv || !isSandboxHost || !simEnabled) {
       throw new Error("Payment simulation is disabled in production");
     }
-    const { userId } = context;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
+    const { supabase, userId } = context;
+    // Authorization via RLS — same model as beginSettlementCheckout.
+    const { data: row, error } = await supabase
       .from("coverage_requests")
       .select("id, requester_id, payment_reference, payment_status, settled_amount")
       .eq("id", data.requestId)
       .maybeSingle();
-    if (error || !row) throw new Error("Coverage request not found");
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Not authorized");
     if (row.requester_id !== userId) throw new Error("Not authorized");
     if (!row.payment_reference) throw new Error("No active payment to simulate. Start checkout first.");
     if (row.payment_status === "paid") return { ok: true, alreadyPaid: true };
+    // Admin client only for the privileged RPC.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: rpcErr } = await supabaseAdmin.rpc("mark_settlement_paid", {
       _payment_reference: row.payment_reference,
       _amount: row.settled_amount ?? 0,
