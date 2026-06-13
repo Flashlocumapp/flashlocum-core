@@ -130,7 +130,7 @@ export const adminListShifts = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(data.limit);
     if (data.status && data.status !== "all") {
-      query = query.eq("status", data.status);
+      query = query.eq("status", data.status as "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled");
     }
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
