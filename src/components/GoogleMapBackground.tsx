@@ -141,7 +141,7 @@ export function GoogleMapBackground({
 } = {}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const markerObjs = useRef<google.maps.Marker[]>([]);
+  const markerObjs = useRef<Map<string, google.maps.Marker>>(new Map());
   const placeMarkerObjs = useRef<google.maps.Marker[]>([]);
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
@@ -306,27 +306,48 @@ export function GoogleMapBackground({
   // Render available-doctor presence markers. Marker.top/left (0..1) is used
   // as a pseudo-spread around the current center until real coordinates flow
   // in from the presence layer.
+  //
+  // IMPORTANT: this effect must NOT tear down and rebuild every marker on
+  // each geolocation tick. We diff by marker.key — adds, removes, and moves
+  // are all O(changed) instead of O(all). Position is updated in-place when
+  // the center drifts, so the existing Marker instances (and their SMIL
+  // pulse animations) stay alive.
   useEffect(() => {
     if (!mapRef.current) return;
-    markerObjs.current.forEach((m) => m.setMap(null));
-    markerObjs.current = [];
-    if (!markers || markers.length === 0) return;
+    const pool = markerObjs.current;
+    const next = markers ?? [];
     const c = center ?? userCenter ?? FALLBACK_CENTER;
     const spread = 0.03; // ~3km
-    markers.forEach((m) => {
+    const seen = new Set<string>();
+    next.forEach((m) => {
+      seen.add(m.key);
       const pos = {
         lat: c.lat + (0.5 - m.top) * spread,
         lng: c.lng + (m.left - 0.5) * spread,
       };
-      const marker = new google.maps.Marker({
-        position: pos,
-        map: mapRef.current!,
-        icon: doctorIcon(),
-        optimized: false, // SMIL pulse requires non-optimized rendering
-        zIndex: 40,
-      });
-      markerObjs.current.push(marker);
+      const existing = pool.get(m.key);
+      if (existing) {
+        existing.setPosition(pos);
+      } else {
+        pool.set(
+          m.key,
+          new google.maps.Marker({
+            position: pos,
+            map: mapRef.current!,
+            icon: doctorIcon(),
+            optimized: false, // SMIL pulse requires non-optimized rendering
+            zIndex: 40,
+          }),
+        );
+      }
     });
+    // Remove markers that are no longer in the input.
+    for (const [key, marker] of pool) {
+      if (!seen.has(key)) {
+        marker.setMap(null);
+        pool.delete(key);
+      }
+    }
   }, [markers, center, userCenter, mapReady]);
 
   // Hospital / place markers are intentionally NOT rendered on the map.
