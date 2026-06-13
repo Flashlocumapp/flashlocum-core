@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { GoogleMapBackground, type PlaceMapMarker } from "@/components/GoogleMapBackground";
 import type { Marker } from "@/components/MapBackground";
@@ -814,14 +814,14 @@ function CoverageFields({
   );
 }
 
-function Fields({ children }: { children: React.ReactNode }) {
+const Fields = memo(function Fields({ children }: { children: React.ReactNode }) {
   return <div className="space-y-2.5">{children}</div>;
-}
-function Row({ children }: { children: React.ReactNode }) {
+});
+const Row = memo(function Row({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-2.5">{children}</div>;
-}
+});
 
-function CtrlField({
+const CtrlField = memo(function CtrlField({
   label,
   type,
   value,
@@ -875,9 +875,9 @@ function CtrlField({
       />
     </label>
   );
-}
+});
 
-function Stepper({
+const Stepper = memo(function Stepper({
   label,
   value,
   setValue,
@@ -926,9 +926,9 @@ function Stepper({
       </div>
     </div>
   );
-}
+});
 
-function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
+const DaysStepper = memo(function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
   return (
     <Stepper
       label="Coverage Length"
@@ -945,9 +945,9 @@ function DaysStepper({ value, setValue }: { value: number; setValue: (n: number)
       }
     />
   );
-}
+});
 
-function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+const NoteField = memo(function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
       <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
@@ -962,7 +962,7 @@ function NoteField({ value, onChange }: { value: string; onChange: (v: string) =
       />
     </label>
   );
-}
+});
 
 /* ---------------------- Settlement sheet ---------------------- */
 
@@ -1446,7 +1446,7 @@ function DispatchOverlay({
   );
 }
 
-function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
+const ConnectionPulse = memo(function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
   // Keeps fmtElapsed bundled even when nothing renders it directly.
   void fmtElapsed;
   return (
@@ -1478,4 +1478,4 @@ function ConnectionPulse({ className, paused }: { className?: string; paused?: b
       />
     </div>
   );
-}
+});
