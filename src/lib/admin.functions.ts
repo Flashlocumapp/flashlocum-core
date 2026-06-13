@@ -5,7 +5,10 @@ type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
 const ALLOWED: VerificationStatus[] = ["pending", "approved", "suspended", "rejected"];
 
 function isUuid(v: unknown): v is string {
-  return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  return (
+    typeof v === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+  );
 }
 
 /** Server-authoritative admin gate. Returns true only if the calling user has the 'admin' role. */
