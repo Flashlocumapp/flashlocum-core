@@ -705,6 +705,7 @@ export function completeRequest(id: string) {
     billedMin,
     endHHMM,
     Math.max(1, cur.days ?? 1),
+    cur.environment ?? "normal",
   ).amount;
   applyPatch(
     id,
