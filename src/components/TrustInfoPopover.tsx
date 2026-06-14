@@ -89,7 +89,7 @@ export function TrustInfoPopover({
                 Ratings
               </div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                Average feedback from completed shifts. Shows overall quality of experience.
+                {ratingsText ?? "Average feedback from completed shifts. Shows overall quality of experience."}
               </p>
             </div>
           )}
