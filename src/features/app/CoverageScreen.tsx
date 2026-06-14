@@ -143,8 +143,10 @@ function toRequestItem(r: NetRequest): RequestItem {
     accumulatedMs: r.accumulatedMs ?? 0,
     days: settledDays,
     dayIndex: Math.max(1, r.dayIndex ?? 1),
+    environment: r.environment ?? "normal",
   };
 }
+
 
 
 
