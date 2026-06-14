@@ -1334,6 +1334,24 @@ function CustomTransferPane({
         ) : null}
 
         <div className="mt-auto space-y-3 pb-8">
+          {account && (
+            <button
+              type="button"
+              disabled={paymentTriggered || payCheckState === "checking"}
+              onClick={onCheckPayment}
+              className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+            >
+              {paymentTriggered || payCheckState === "checking" ? "Confirming payment…" : "I have made payment"}
+            </button>
+          )}
+          {payCheckState === "not_found" && !paymentTriggered && (
+            <p className="text-center text-[12px] text-muted-foreground">
+              Payment is not confirmed yet. Tap again after your bank marks the transfer successful.
+            </p>
+          )}
+          {payCheckState === "error" && payCheckError && !paymentTriggered && (
+            <p className="text-center text-[12px] text-destructive">{payCheckError}</p>
+          )}
           <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
             {paymentTriggered ? (
               <>
