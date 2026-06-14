@@ -42,7 +42,10 @@ export type Coverage = {
   days: number;
   dayIndex: number;
   settledAmount?: number;
+  /** Captured at booking; surfaced in every doctor-facing view. */
+  environment?: "normal" | "busy";
 };
+
 
 // Full monetary formatting everywhere (₦36,500). No K abbreviation.
 export const nairaK = (n: number) => "₦" + n.toLocaleString("en-NG");
