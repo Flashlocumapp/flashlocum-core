@@ -889,8 +889,18 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
+  const now = simNow();
   return Object.values(s.requests)
-    .filter((r) => r.status === "broadcasting")
+    .filter(
+      (r) =>
+        r.status === "broadcasting" &&
+        // Hide stale rows that were never accepted/cancelled: a broadcasting
+        // row older than BROADCAST_TTL_MS is treated as expired and never
+        // surfaces to doctors as an incoming card.
+        now - r.createdAt < BROADCAST_TTL_MS &&
+        // Also hide rows whose scheduled window has already passed.
+        (!r.endTs || r.endTs > now),
+    )
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
