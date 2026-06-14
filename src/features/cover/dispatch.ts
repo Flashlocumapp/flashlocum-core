@@ -331,14 +331,11 @@ export function ensureDoctorSession(initialOnline = true) {
         body: "Payment will be remitted to your account by 10PM today.",
         ttl: 5200,
       });
-      pendingRating = {
-        requestId: r.id,
-        hospitalId: hospitalEntityId(r.hospital),
-        hospital: r.hospital,
-        coverage: r.coverage,
-        total: r.settledAmount ?? r.amount,
-        feePct: r.feePct,
-      };
+      // Tie the PaymentSummary to the EXACT transaction that just completed.
+      // Live details (hospital/coverage/total/feePct) are derived in
+      // useDispatch() from the current request row so post-webhook
+      // settled_amount updates flow into the card automatically.
+      pendingRatingRequestId = r.id;
 
 
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
