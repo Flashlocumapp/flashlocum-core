@@ -1177,6 +1177,9 @@ function CustomTransferPane({
   payError,
   paymentTriggered,
   onRetry,
+  payCheckState,
+  payCheckError,
+  onCheckPayment,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -1184,6 +1187,9 @@ function CustomTransferPane({
   payError: string | null;
   paymentTriggered: boolean;
   onRetry: () => void;
+  payCheckState: "idle" | "checking" | "not_found" | "error";
+  payCheckError: string | null;
+  onCheckPayment: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
