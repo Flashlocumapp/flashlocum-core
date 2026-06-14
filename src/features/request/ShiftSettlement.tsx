@@ -1017,8 +1017,10 @@ function ConfirmedPane({
           </div>
         )}
 
+        {rated && (
           <p className="mt-2 text-[12px] text-muted-foreground">Thanks for the feedback.</p>
         )}
+
 
         <div className="mt-auto space-y-2 pb-8">
           <button
