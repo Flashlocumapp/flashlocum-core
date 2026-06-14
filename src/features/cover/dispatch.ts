@@ -449,7 +449,7 @@ export function dismissAccepted() {
 }
 
 export function dismissPendingRating() {
-  pendingRating = null;
+  pendingRatingRequestId = null;
   bump();
 }
 
