@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
@@ -285,6 +285,13 @@ export function ShiftSettlement({
     autoConfirmAt.current = simNow() + 2500;
   };
 
+  const confirmPaymentNow = useCallback(() => {
+    const now = simNow();
+    autoConfirmAt.current = now;
+    confirmedAtRef.current = now;
+    setPhase("confirmed");
+  }, []);
+
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const verifyPay = useServerFn(verifySettlementPayment);
@@ -293,6 +300,8 @@ export function ShiftSettlement({
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
+  const [payCheckState, setPayCheckState] = useState<"idle" | "checking" | "not_found" | "error">("idle");
+  const [payCheckError, setPayCheckError] = useState<string | null>(null);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
@@ -308,10 +317,29 @@ export function ShiftSettlement({
       });
       setAccount(result);
       setPayState("waiting");
+      setPayCheckState("idle");
+      setPayCheckError(null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
       setPayState("error");
+    }
+  };
+
+  const checkMonnifyPaymentNow = async () => {
+    if (!requestId || payCheckState === "checking") return;
+    setPayCheckState("checking");
+    setPayCheckError(null);
+    try {
+      const res = await verifyPay({ data: { requestId } });
+      if (res?.paid) {
+        confirmPaymentNow();
+      } else {
+        setPayCheckState("not_found");
+      }
+    } catch (e) {
+      setPayCheckState("error");
+      setPayCheckError(e instanceof Error ? e.message : "Could not confirm payment yet");
     }
   };
 
@@ -344,6 +372,8 @@ export function ShiftSettlement({
       setAccount(null);
       setPayState("idle");
       setPayError(null);
+      setPayCheckState("idle");
+      setPayCheckError(null);
     }
   }, [open]);
 
