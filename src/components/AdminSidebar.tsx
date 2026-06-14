@@ -30,6 +30,8 @@ const sections = [
   { title: "User Management", url: "/admin/users", icon: Users, group: "Operations" },
   { title: "Doctor Verification", url: "/admin/verification", icon: ShieldCheck, group: "Operations" },
   { title: "Shift Monitoring", url: "/admin/shifts", icon: CalendarClock, group: "Operations" },
+  { title: "Unpaid Shifts", url: "/admin/unpaid", icon: Receipt, group: "Operations" },
+
   { title: "Financial Analytics", url: "/admin/finance", icon: Wallet, group: "Business" },
   { title: "Doctor Flashboard", url: "/admin/flashboard", icon: Activity, group: "Business" },
   { title: "Requester Analytics", url: "/admin/requesters", icon: Building2, group: "Business" },
