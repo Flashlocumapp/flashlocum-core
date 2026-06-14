@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { DismissSheet } from "./DismissSheet";
-import { EnvironmentBadge } from "./EnvironmentBadge";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 
@@ -12,9 +11,7 @@ export type HistoryDetail = {
   amount: number;
   note?: string;
   rating?: number;
-  environment?: "normal" | "busy";
 };
-
 
 export function HistoryDetailSheet({
   open,
@@ -54,20 +51,16 @@ export function HistoryDetailSheet({
           <div className="truncate text-[16px] font-medium">{identity.fullName}</div>
           <div className="text-[12px] text-muted-foreground">{identity.mdcn}</div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <EnvironmentBadge environment={item.environment} size="xs" />
-          <span
-            className="rounded-full px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.1em]"
-            style={{
-              background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
-              color: "var(--color-presence)",
-            }}
-          >
-            Settled
-          </span>
-        </div>
+        <span
+          className="rounded-full px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.1em]"
+          style={{
+            background: "color-mix(in oklab, var(--color-presence) 14%, transparent)",
+            color: "var(--color-presence)",
+          }}
+        >
+          Settled
+        </span>
       </div>
-
 
       <div className="mt-4 rounded-2xl bg-secondary/50 px-3.5 py-3">
         <Row label="Coverage" value={item.coverage} />

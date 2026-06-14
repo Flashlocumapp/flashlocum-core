@@ -5,8 +5,6 @@ import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
 
-
-
 // Doctor net payout = total paid − FlashLocum service fee (15%).
 const FEE_PCT = 15;
 const netPayout = (gross: number) => Math.max(0, Math.round(gross * (1 - FEE_PCT / 100)));
@@ -28,7 +26,6 @@ type Payout = {
   paidAt?: number;
   remittedAt?: number;
   paymentReference?: string;
-  environment?: "normal" | "busy";
 };
 
 function toPayout(h: HistoryItem): Payout {
@@ -52,10 +49,8 @@ function toPayout(h: HistoryItem): Payout {
     paidAt: h.paidAt,
     remittedAt: h.remittedAt,
     paymentReference: h.paymentReference,
-    environment: h.environment,
   };
 }
-
 
 /* ---------- Range filter ---------- */
 
@@ -239,15 +234,12 @@ function PayoutRow({
         className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:opacity-90"
         aria-expanded={open}
       >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-[14.5px] font-medium">{payout.facility}</span>
-            </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14.5px] font-medium">{payout.facility}</div>
           <div className="truncate text-[12.5px] text-muted-foreground">
             {payout.coverage} · {shortWeekdays(payout.completedOn)}
           </div>
         </div>
-
         <div className="flex flex-col items-end gap-0.5">
           <div className="text-[14.5px] font-semibold tabular-nums">
             {fmtNairaK(payout.amount)}

@@ -17,7 +17,6 @@ import {
 } from "./pricing";
 import {
   getCurrentUserIdSync,
-  notifyCoverageChanged,
   onUserIdChange,
   primeUserId,
   remoteClaimRequest,
@@ -34,36 +33,6 @@ import {
   upsertMyPresence,
   type PresenceRow,
 } from "./presence-remote";
-
-/**
- * Fire backend-authoritative shift lifecycle RPC. Errors are surfaced to the
- * console only — the optimistic local network state already gives UI feedback,
- * and the backend remains the source of truth for billing on settlement read.
- */
-function callServerLifecycle(kind: "start" | "pause" | "resume" | "end", requestId: string) {
-  if (typeof window === "undefined") return Promise.resolve();
-  return import("./shift.functions")
-    .then((m) => {
-      const fn =
-        kind === "start" ? m.startShift
-        : kind === "pause" ? m.pauseShift
-        : kind === "resume" ? m.resumeShift
-        : m.endShift;
-      return fn({ data: { requestId } });
-    })
-    .then(() => {
-      // coverage_requests is excluded from supabase_realtime; without this
-      // explicit invalidate broadcast the OTHER party (e.g. the doctor when
-      // the requester starts the shift) never sees started_at / status flip
-      // and their LiveTimer never starts ticking.
-      notifyCoverageChanged(requestId);
-    })
-    .catch((err) => {
-      console.warn(`[network] ${kind}Shift RPC failed:`, err?.message ?? err);
-    });
-}
-
-
 
 
 function actorOf(): Actor {
@@ -152,8 +121,6 @@ export type NetRequest = {
   paidAt?: number;
   /** Timestamp (ms) when FlashLocum remitted the payout to the doctor. */
   remittedAt?: number;
-  /** Environment toggle at booking time; multiplies pricing ×1.25 when 'busy'. */
-  environment?: "normal" | "busy";
 };
 
 
@@ -343,86 +310,12 @@ function init() {
 
 
   // Subscribe to Supabase coverage_requests realtime.
-  //
-  // onSnapshot diffs the new snapshot against the in-memory requests and
-  // synthesizes a NetEvent for any status transition the postgres_changes
-  // path missed (RLS-filtered, dropped subscription, race with the
-  // invalidate-broadcast refresh, etc.). This is what drives doctor-side
-  // pendingRating on `complete` and the incoming card on `publish`. If
-  // postgres_changes already fired, applyRemoteEvent has already updated
-  // state.requests, so the diff is a no-op and nothing double-fires.
-  let firstSnapshot = true;
   remoteUnsubscribe = subscribeCoverageRemote({
     onSnapshot: (rows) => {
       const requests: Record<string, NetRequest> = {};
       for (const r of rows) requests[r.id] = r;
-      const prev = state.requests;
-      const isFirst = firstSnapshot;
-      firstSnapshot = false;
-      let netEvent: Omit<NetEvent, "at"> | undefined;
-      for (const r of rows) {
-        const old = prev[r.id];
-        if (!old) {
-          // Suppress synthesized publish events on the initial snapshot —
-          // they represent pre-existing rows the doctor is just now
-          // discovering, NOT a brand-new request made for them.
-          if (!isFirst && r.status === "broadcasting") {
-            netEvent = {
-              actor: "requester",
-              actorId: r.requesterSessionId,
-              shiftId: r.id,
-              action: "publish",
-            };
-          }
-          continue;
-        }
-        if (old.status === r.status) continue;
-        if (r.status === "completed") {
-          netEvent = {
-            actor: "requester",
-            actorId: r.requesterSessionId,
-            shiftId: r.id,
-            action: "complete",
-          };
-        } else if (r.status === "cancelled") {
-          netEvent = {
-            actor: r.cancelledBy === "doctor" ? "doctor" : "requester",
-            actorId:
-              r.cancelledBy === "doctor"
-                ? (r.acceptedBy ?? r.requesterSessionId)
-                : r.requesterSessionId,
-            shiftId: r.id,
-            action: "cancel",
-          };
-        } else if (old.status === "broadcasting" && r.status === "accepted") {
-          netEvent = {
-            actor: "doctor",
-            actorId: r.acceptedBy ?? "",
-            shiftId: r.id,
-            action: "accept",
-          };
-        } else if (old.status === "accepted" && r.status === "active") {
-          netEvent = {
-            actor: "requester",
-            actorId: r.requesterSessionId,
-            shiftId: r.id,
-            action: (old.accumulatedMs ?? 0) > 0 ? "resume" : "start",
-          };
-        } else if (old.status === "active" && r.status === "accepted") {
-          netEvent = {
-            actor: "requester",
-            actorId: r.requesterSessionId,
-            shiftId: r.id,
-            action: "pause",
-          };
-        }
-      }
       state = { ...state, requests };
-      if (netEvent) {
-        save(state, netEvent);
-      } else {
-        listeners.forEach((l) => l(state));
-      }
+      listeners.forEach((l) => l(state));
     },
     onEvent: applyRemoteEvent,
   });
@@ -515,10 +408,8 @@ export function registerDoctor(initialOnline: boolean) {
     },
   };
   save(next);
-  // Backend write only when registering online. App boot calls this with
-  // initialOnline=false; writing that immediately would incorrectly clear an
-  // already-online doctor before the backend presence snapshot hydrates.
-  if (desiredOnline) void upsertMyPresence({ online: desiredOnline, top: pos.top, left: pos.left });
+  // Backend write so other devices see this doctor.
+  void upsertMyPresence({ online: desiredOnline, top: pos.top, left: pos.left });
 }
 
 export function unregisterDoctor() {
@@ -670,21 +561,6 @@ function applyPatch(
   void remoteUpdateRequest(id, patch);
 }
 
-function applyLocalPatch(
-  id: string,
-  patch: Partial<NetRequest>,
-  event: Omit<NetEvent, "at" | "shiftId">,
-) {
-  refreshState();
-  const cur = state.requests[id];
-  if (!cur) return;
-  const next = { ...cur, ...patch, updatedAt: simNow() };
-  save(
-    { ...state, requests: { ...state.requests, [id]: next } },
-    { ...event, shiftId: id },
-  );
-}
-
 /** Generic patch — actor inferred from current session role. */
 export function updateRequest(id: string, patch: Partial<NetRequest>) {
   applyPatch(id, patch, {
@@ -773,10 +649,6 @@ export function startRequest(id: string) {
   const cur = state.requests[id];
   if (!cur) return;
   const isResume = (cur.accumulatedMs ?? 0) > 0;
-  // Anchor startedAt to simNow() so a brand-new shift always renders
-  // segment = simNow() - startedAt = 0, regardless of any prior simulation
-  // fast-forward offset. LiveTimer uses simNow() on both sides, so the
-  // computed elapsed remains in sync across requester/doctor.
   const patch: Partial<NetRequest> = {
     status: "active",
     startedAt: simNow(),
@@ -787,30 +659,22 @@ export function startRequest(id: string) {
     actorId: getSessionId(),
     action: isResume ? "resume" : "start",
   });
-  callServerLifecycle(isResume ? "resume" : "start", id);
 }
 
 export function pauseShift(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "active") return;
+  const segment = cur.startedAt ? Math.max(0, simNow() - cur.startedAt) : 0;
+  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
   const days = Math.max(1, cur.days ?? 1);
   const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
-  // The completed day has been billed + paid by the time pauseShift runs
-  // (webhook → confirmPaymentNow → onConfirmed → here). Reset the per-day
-  // timer so the next working day resumes from 0 for both the requester
-  // and the doctor; advance dayIndex to the next scheduled day.
-  applyLocalPatch(id, { status: "accepted", startedAt: undefined, accumulatedMs: 0, dayIndex }, {
-    actor: "requester",
-    actorId: getSessionId(),
-    action: "pause",
-  });
-  void callServerLifecycle("pause", id).then(() => {
-    notifyCoverageChanged(id);
-  });
+  applyPatch(
+    id,
+    { status: "accepted", startedAt: undefined, accumulatedMs, dayIndex },
+    { actor: "requester", actorId: getSessionId(), action: "pause" },
+  );
 }
-
-
 
 export function completeRequest(id: string) {
   refreshState();
@@ -839,18 +703,13 @@ export function completeRequest(id: string) {
     billedMin,
     endHHMM,
     Math.max(1, cur.days ?? 1),
-    cur.environment ?? "normal",
   ).amount;
-  applyLocalPatch(id, { status: "completed", accumulatedMs, startedAt: undefined, settledAmount }, {
-    actor: "requester",
-    actorId: getSessionId(),
-    action: "complete",
-  });
-  void callServerLifecycle("end", id).then(() => {
-    notifyCoverageChanged(id);
-  });
+  applyPatch(
+    id,
+    { status: "completed", accumulatedMs, startedAt: undefined, settledAmount },
+    { actor: "requester", actorId: getSessionId(), action: "complete" },
+  );
 }
-
 
 /** Pause broadcasting (hides from doctors) without losing request. */
 export function pauseRequest(id: string) {
@@ -897,16 +756,7 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 export function broadcastingRequests(s: NetState): NetRequest[] {
   const now = simNow();
   return Object.values(s.requests)
-    .filter(
-      (r) =>
-        r.status === "broadcasting" &&
-        // Hide stale rows that were never accepted/cancelled: a broadcasting
-        // row older than BROADCAST_TTL_MS is treated as expired and never
-        // surfaces to doctors as an incoming card.
-        now - r.createdAt < BROADCAST_TTL_MS &&
-        // Also hide rows whose scheduled window has already passed.
-        (!r.endTs || r.endTs > now),
-    )
+    .filter((r) => r.status === "broadcasting" && now - r.createdAt <= BROADCAST_TTL_MS)
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 

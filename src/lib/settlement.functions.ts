@@ -26,11 +26,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     if (reqRow.requester_id !== userId) throw new Error("Only the requester can pay this settlement");
     if (!reqRow.accepted_by) throw new Error("No assigned doctor yet");
     if (reqRow.payment_status === "paid") {
-      return {
-        alreadyPaid: true as const,
-        paymentReference: reqRow.payment_reference ?? null,
-        checkoutUrl: reqRow.payment_url ?? null,
-      };
+      throw new Error("This settlement has already been paid");
     }
 
 

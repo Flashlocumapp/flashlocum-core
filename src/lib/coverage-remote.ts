@@ -44,7 +44,6 @@ type Row = {
   payment_reference: string | null;
   paid_at: string | null;
   remitted_at: string | null;
-  environment: string;
 };
 
 const TABLE = "coverage_requests";
@@ -143,7 +142,6 @@ export function rowToNet(r: Row): NetRequest {
     paymentReference: r.payment_reference ?? undefined,
     paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,
     remittedAt: r.remitted_at ? new Date(r.remitted_at).getTime() : undefined,
-    environment: r.environment === "busy" ? "busy" : "normal",
   };
 }
 
@@ -170,7 +168,6 @@ function netPatchToRow(p: Partial<NetRequest>): Partial<Row> {
   if (p.days !== undefined) out.days = p.days;
   if (p.dayIndex !== undefined) out.day_index = p.dayIndex;
   if (p.settledAmount !== undefined) out.settled_amount = p.settledAmount ?? null;
-  if (p.environment !== undefined) out.environment = p.environment;
   return out;
 }
 
@@ -332,17 +329,6 @@ function emitInvalidate(id: string) {
     event: "invalidate",
     payload: { id, at: Date.now() },
   });
-}
-
-/**
- * Public helper — call after a server RPC (start/pause/resume/end) mutates
- * a coverage_requests row so other clients (e.g. the doctor watching the
- * requester's shift start) refresh their snapshot. coverage_requests is
- * not in the supabase_realtime publication, so postgres_changes won't fire
- * for these mutations and the invalidate broadcast is the only signal.
- */
-export function notifyCoverageChanged(id: string) {
-  emitInvalidate(id);
 }
 
 /**
@@ -545,7 +531,6 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
     days: req.days ?? 1,
     day_index: req.dayIndex ?? 1,
     cancelled_by: req.cancelledBy ?? null,
-    environment: req.environment ?? "normal",
   };
   const { error } = await supabase.from(TABLE).insert(row);
   if (error) {

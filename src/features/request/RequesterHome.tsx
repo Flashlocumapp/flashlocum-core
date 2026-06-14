@@ -22,7 +22,7 @@ import {
   cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
-import { computeCoveragePricing, coverageKindFromLabel, type Environment } from "@/lib/pricing";
+import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
   fetchHospitalSuggestions,
@@ -89,20 +89,14 @@ function makeInitialDraft(coverage: CoverageId): Draft {
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = {
-  coverage: CoverageId;
-  draft: Draft;
-  days: number;
-  environment: Environment;
-};
+type PricingContext = { coverage: CoverageId; draft: Draft; days: number };
 
-function computePricing({ coverage, draft, days, environment }: PricingContext) {
+function computePricing({ coverage, draft, days }: PricingContext) {
   return computeCoveragePricing(
     coverageKindFromLabel(COVERAGE_SHORT[coverage]),
     draft.startTime,
     draft.endTime,
     days,
-    environment,
   );
 }
 
@@ -178,7 +172,6 @@ function HomeScreen({ active }: { active: boolean }) {
   const [searchOrigin, setSearchOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
-  const [environment, setEnvironment] = useState<Environment>("normal");
   const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
@@ -410,7 +403,6 @@ function HomeScreen({ active }: { active: boolean }) {
             coverage={coverage}
             days={days}
             draft={draft}
-            environment={environment}
             location={location}
             requestId={activeRequestId}
             setRequestId={setActiveRequestId}
@@ -418,7 +410,7 @@ function HomeScreen({ active }: { active: boolean }) {
         ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, draft, days, environment })}
+            pricing={computePricing({ coverage, draft, days })}
 
             onConfirm={() => setStage("dispatch")}
           />
@@ -441,8 +433,6 @@ function HomeScreen({ active }: { active: boolean }) {
             setDays={setDays}
             draft={draft}
             patchDraft={patchDraft}
-            environment={environment}
-            setEnvironment={setEnvironment}
             onAdvance={() => setStage("match")}
           />
         )}
@@ -470,8 +460,6 @@ function DispatchSheet({
   setDays,
   draft,
   patchDraft,
-  environment,
-  setEnvironment,
   onAdvance,
 }: {
   stage: Stage;
@@ -490,8 +478,6 @@ function DispatchSheet({
   setDays: (n: number) => void;
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
-  environment: Environment;
-  setEnvironment: (e: Environment) => void;
   onAdvance: () => void;
 }) {
   const isCollapsed = stage === "collapsed";
@@ -662,8 +648,6 @@ function DispatchSheet({
                 setDays={setDays}
                 draft={draft}
                 patchDraft={patchDraft}
-                environment={environment}
-                setEnvironment={setEnvironment}
                 onAdvance={onAdvance}
               />
             )}
@@ -684,8 +668,6 @@ function ConfigureBody({
   setDays,
   draft,
   patchDraft,
-  environment,
-  setEnvironment,
   onAdvance,
 }: {
   location: Recent;
@@ -695,8 +677,6 @@ function ConfigureBody({
   setDays: (n: number) => void;
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
-  environment: Environment;
-  setEnvironment: (e: Environment) => void;
   onAdvance: () => void;
 }) {
   return (
@@ -739,9 +719,7 @@ function ConfigureBody({
         </p>
       )}
 
-      {/* Dynamic fields — switch fluidly per coverage type.
-          Environment selector slot renders inside CoverageFields,
-          directly above the Note (optional) field. */}
+      {/* Dynamic fields — switch fluidly per coverage type */}
       <AnimatePresence mode="wait">
         <motion.div
           key={coverage}
@@ -756,16 +734,9 @@ function ConfigureBody({
             setDays={setDays}
             draft={draft}
             patchDraft={patchDraft}
-            beforeNoteSlot={
-              <EnvironmentSelector
-                value={environment}
-                onChange={setEnvironment}
-              />
-            }
           />
         </motion.div>
       </AnimatePresence>
-
 
       {/* Arrow progression */}
       <div className="flex justify-end pt-1">
@@ -807,14 +778,12 @@ function CoverageFields({
   setDays,
   draft,
   patchDraft,
-  beforeNoteSlot,
 }: {
   coverage: CoverageId;
   days: number;
   setDays: (n: number) => void;
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
-  beforeNoteSlot?: React.ReactNode;
 }) {
   const bounds = dateBounds();
   // Clamp start date into the 7-day operational window if it drifts.
@@ -849,58 +818,10 @@ function CoverageFields({
         />
         <DaysStepper value={days} setValue={setDays} />
       </Row>
-      {beforeNoteSlot}
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
 }
-
-/**
- * Normal / Busy toggle. No pricing copy — the multiplier still applies
- * server-side, but the requester only sees what each option means
- * operationally.
- */
-function EnvironmentSelector({
-  value,
-  onChange,
-}: {
-  value: Environment;
-  onChange: (e: Environment) => void;
-}) {
-  return (
-    <div className="rounded-2xl bg-secondary/60 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-          Environment
-        </span>
-        <div className="flex rounded-full bg-background p-0.5 text-[12px] font-semibold">
-          {(["normal", "busy"] as const).map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => onChange(opt)}
-              className="rounded-full px-3 py-1 capitalize transition-colors"
-              style={{
-                background:
-                  value === opt ? "var(--color-primary)" : "transparent",
-                color:
-                  value === opt
-                    ? "var(--color-primary-foreground)"
-                    : "var(--color-foreground)",
-              }}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
-        {value === "normal" ? "Standard working conditions." : "High workload environment."}
-      </p>
-    </div>
-  );
-}
-
 
 const Fields = memo(function Fields({ children }: { children: React.ReactNode }) {
   return <div className="space-y-2.5">{children}</div>;
@@ -1108,7 +1029,6 @@ function DispatchOverlay({
   coverage,
   days,
   draft,
-  environment,
   location,
   requestId,
   setRequestId,
@@ -1118,7 +1038,6 @@ function DispatchOverlay({
   coverage: CoverageId;
   days: number;
   draft: Draft;
-  environment: Environment;
   location: Recent | null;
   requestId: string | null;
   setRequestId: (id: string | null) => void;
@@ -1144,7 +1063,7 @@ function DispatchOverlay({
   const acceptedSelfie = doctorIdentity.selfieUrl;
 
   const paused = cancelOpen || editOpen;
-  const pricing = computePricing({ coverage, draft, days, environment });
+  const pricing = computePricing({ coverage, draft, days });
 
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
@@ -1176,7 +1095,6 @@ function DispatchOverlay({
         startTs: win.startTs,
         endTs: win.endTs,
         days: Math.max(1, days),
-        environment,
       });
       resumeRequest(cur.id);
       ownedIdRef.current = cur.id;
@@ -1206,7 +1124,6 @@ function DispatchOverlay({
       endTs: win.endTs,
       days: Math.max(1, days),
       dayIndex: 1,
-      environment,
     });
     ownedIdRef.current = req.id;
     setRequestId(req.id);
@@ -1291,8 +1208,7 @@ function DispatchOverlay({
       const newEndTs = newStartTs + totalDur * 3_600_000;
       // Re-price across ALL booked days so multi-day totals stay correct.
       const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
-      const env: Environment = (cur?.environment ?? environment) ?? "normal";
-      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays, env);
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),

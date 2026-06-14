@@ -1,65 +1,71 @@
-# Environment + Multi-Day Payment Flow Overhaul
+## Monnify Split Payment Integration
 
-## 1. Environment Selector UI (RequesterHome booking sheet)
+### How it will work (end-to-end)
 
-- Remove the "Busy multiplies pricing × 1.25" hint inline.
-- Keep the two-pill **Normal / Busy** toggle, no pricing copy.
-- Move the whole Environment block to sit **above** the "Note (optional)" field.
-- Add helper text directly under the toggle:
-  - **Normal** — Standard working conditions
-  - **Busy** — High workload environment
-- Backend already persists `environment` on `coverage_requests` — no schema change.
+1. Doctor ends a shift → Settlement screen shows the amount.
+2. Requester taps **Pay with Monnify** → app calls a server function that:
+   - Looks up the assigned doctor's bank details (`bank_name`, `bank_account`).
+   - If the doctor doesn't yet have a Monnify sub-account, creates one via Monnify's `/api/v1/sub-accounts` and stores its `subAccountCode` on the doctor's profile.
+   - Initializes a Monnify transaction with an `incomeSplitConfig` → **85% to the doctor's sub-account, 15% (remainder) stays with FlashLocum's main wallet**.
+   - Returns the Monnify hosted-checkout URL.
+3. Requester is redirected to Monnify, pays, and is returned to the app.
+4. Monnify hits our webhook (`/api/public/monnify-webhook`) with the result; webhook verifies the HMAC signature, marks the `coverage_request` as paid, and triggers the existing "Settlement confirmed" UI on the next poll.
 
-## 2. Environment Visibility (doctor side)
+### Database changes (one migration)
 
-Surface a small `Normal` / `Busy` chip wherever a doctor sees a shift, using a shared `<EnvironmentBadge environment={...} />` component (neutral for normal, warning tone for busy, no pricing text):
+- **profiles**: add `monnify_sub_account_code TEXT` (nullable).
+- **coverage_requests**: add
+  - `payment_provider TEXT` (default `null`)
+  - `payment_reference TEXT` (Monnify `paymentReference`)
+  - `payment_status TEXT` (`pending` | `paid` | `failed`)
+  - `payment_url TEXT` (last-issued checkout link, for resume)
+  - `paid_at TIMESTAMPTZ`
+- New SECURITY DEFINER RPC `mark_settlement_paid(_payment_reference, _amount)` — called by the webhook (which runs as service role anyway, but the RPC keeps the update atomic and idempotent).
 
-- **New Request** card — `CoverDispatchPortal` incoming dispatch card.
-- **Upcoming Coverage / Active Shifts** — `CoverHome` accepted-shift cards.
-- **History** — `HistoryDetailSheet` row + detail.
-- **Earnings** — `EarningsScreen` per-shift rows.
+### Server code (TanStack `createServerFn` + one server route)
 
-Coverage payload already carries `environment` end-to-end via `coverage-remote.ts`; just render it.
+```
+src/lib/monnify/
+├── client.server.ts        # auth (Basic → access_token, cached), low-level fetch helpers
+├── sub-accounts.server.ts  # ensureSubAccountForDoctor()
+├── checkout.server.ts      # initiateSettlementCheckout()
+└── webhook.server.ts       # verifyMonnifySignature(), handleEvent()
 
-## 3. Pause / End Confirmation + Payment-Gated Flow
+src/lib/settlement.functions.ts
+└── beginSettlementCheckout  # createServerFn, requireSupabaseAuth
+                              # input: { requestId }
+                              # returns: { checkoutUrl, paymentReference }
 
-### Pause Shift (multi-day intent)
+src/routes/api/public/monnify-webhook.ts
+└── POST handler             # verifies monnify-signature header (HMAC-SHA512 of raw body
+                              # using MONNIFY_SECRET_KEY), then calls mark_settlement_paid
+                              # via supabaseAdmin RPC.
+```
 
-1. Requester taps **Pause Shift** → modal:
-   > "Pausing this shift means you are closing today's work and proceeding to payment for the completed shift. You can resume the shift anytime under Upcoming Coverage."
-   - Buttons: **Cancel** / **Pause & Pay**.
-2. On confirm → call `pause_shift` RPC (already bills the open segment + sets `payment_due_at`) → immediately open the existing Monnify checkout sheet for that segment amount.
-3. UI stays on the settlement screen until the **Monnify webhook** marks the segment paid (existing `mark_settlement_paid` already stamps `shift_segments.settled_at`).
-4. Polling (`getRequestBillingState`) detects `segments[last].settled_at IS NOT NULL` and `payment_status='paid'`:
-   - Show "Paid — shift moved to Upcoming Coverage" toast.
-   - Route requester back to home; the request now appears in Upcoming because `status='paused'` and the latest segment is settled (clears the "blocked from resume" state).
-5. Doctor side: same shift surfaces under Upcoming again with the same `environment` badge. Resume creates a fresh segment with its own start time (already handled by `resume_shift`).
+Secrets used (all already saved): `MONNIFY_API_KEY`, `MONNIFY_SECRET_KEY`, `MONNIFY_CONTRACT_CODE`, `MONNIFY_BASE_URL`.
 
-### End Shift (final settlement)
+### Frontend changes
 
-1. **End Shift** → modal:
-   > "Ending this shift means you are closing the entire assignment and proceeding to final payment for completed work."
-   - Buttons: **Cancel** / **End & Pay**.
-2. On confirm → `end_shift` RPC → open Monnify checkout for the final outstanding amount.
-3. Shift only renders as **Completed / Closed** once the webhook flips `payment_status='paid'`. Until then the settlement screen shows "Awaiting payment confirmation" with the existing 15-min window + auto-extension already wired.
+- `src/features/request/ShiftSettlement.tsx` — replace the static "Providus Bank / 0123456789 + I've Made Payment" block with a single **Pay with Monnify** button. On click:
+  - call `beginSettlementCheckout({ requestId })`,
+  - open the returned `checkoutUrl` in a new tab,
+  - poll `coverage_requests.payment_status` every 3 s (or use the existing realtime subscription) → when `paid`, transition to the existing `confirmed` pane.
+- Keep the manual "I've Made Payment" fallback hidden behind a small "Paid offline?" link for now (admin-only marking later).
 
-### Backend truth rule
+### Doctor onboarding note
 
-- No frontend code flips `status` to `accepted` (upcoming) or `completed` (closed-final) on its own. The DB RPCs + Monnify webhook remain the single source of truth.
-- `pause_shift` already sets `status='paused'` and creates `payment_due_at`; that's the "awaiting payment" state for a paused day. The UI now treats "paused + latest segment unsettled" as **pending payment**, and "paused + latest segment settled" as **upcoming / resumable**.
-- `end_shift` already sets `status='completed'` + `billing_locked_at`; the UI now treats `completed && payment_status!='paid'` as **awaiting final payment** (not yet shown as closed in history).
+The doctor must have `bank_name` + `bank_account` on their profile before a requester can pay them — those are already collected during cover onboarding. If missing at checkout time, `beginSettlementCheckout` throws a friendly error: *"This doctor hasn't completed payout setup yet."*
 
-No DB migration needed — all required fields (`environment`, `payment_status`, `shift_segments.settled_at`, `billing_locked_at`, `payment_due_at`) already exist.
+### What I will NOT touch
 
-## Files to touch
+- Pricing logic, timers, overtime math — untouched.
+- `RatingOverlay`, confirmation pane — untouched (just reached via the new webhook trigger instead of the simulated timer).
+- Existing simulated "I've Made Payment" demo flow stays as an admin/test fallback.
 
-- `src/features/request/RequesterHome.tsx` — reorder Environment block, drop multiplier copy, add helper text.
-- `src/features/request/ShiftSettlement.tsx` — confirmation modals for Pause/End, gate state transitions on `segments[last].settled_at` / `payment_status`.
-- `src/components/EnvironmentBadge.tsx` *(new)* — shared chip.
-- `src/features/cover/CoverDispatchPortal.tsx`, `src/features/cover/CoverHome.tsx`, `src/components/HistoryDetailSheet.tsx`, `src/features/app/EarningsScreen.tsx` — render badge.
-- (No backend / migration changes.)
+### Test plan
 
-## Out of scope
+1. Run a sandbox shift end-to-end with a test doctor whose bank fields are set; confirm a sub-account is created (logged), checkout URL returned, and after sandbox payment the webhook flips `payment_status = paid`.
+2. Replay the webhook with a tampered body → must return 401.
+3. Replay the same valid webhook twice → second call is a no-op (idempotent on `payment_reference`).
 
-- Changing pricing logic or the 1.25× multiplier itself (still applied server-side, just hidden in UI).
-- Restructuring how Monnify checkout is initiated (reuse the current sheet).
+Approve and I'll ship it.
