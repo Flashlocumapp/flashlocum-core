@@ -227,6 +227,12 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  // "end" = final assignment close (existing behaviour).
+  // "pause" = close today's segment → trigger Monnify → move to Upcoming
+  // only AFTER backend confirms the segment is paid (webhook source of truth).
+  const [settlingIntent, setSettlingIntent] = useState<"end" | "pause">("end");
+  const [pauseConfirmId, setPauseConfirmId] = useState<string | null>(null);
+  const [endConfirmId, setEndConfirmId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [editInitial, setEditInitial] = useState<EditableShift>({
@@ -251,6 +257,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         completedOn: historyItem.completedOn,
         amount: historyItem.amount,
         rating: ratings[historyItem.id],
+        environment: historyItem.environment,
       }
     : null;
 
@@ -262,12 +269,14 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const pauseToUpcoming = (id: string) => {
-    netPauseShift(id);
-    shiftCue("pause");
-    setTab("upcoming");
-    setNotice("Shift paused · Timer preserved");
-    window.setTimeout(() => setNotice(null), 2600);
+  // Pause Shift → confirmation modal → open ShiftSettlement in pause-intent
+  // mode. The local netPauseShift only fires once the backend reports the
+  // segment as paid (settlement onConfirmed → confirmEnd). This keeps the
+  // Monnify webhook the source of truth for the state change.
+  const requestPause = (id: string) => setPauseConfirmId(id);
+  const beginPause = (id: string) => {
+    setSettlingIntent("pause");
+    setSettlingId(id);
   };
 
   /**
@@ -275,15 +284,26 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    * multi-day, mid-day, after a pause) so the lifecycle stays flexible.
    * Settlement uses the accumulated continuous timer, not scheduled hours.
    */
+  const requestEnd = (id: string) => setEndConfirmId(id);
   const beginEndShift = (id: string) => {
+    setSettlingIntent("end");
     setSettlingId(id);
   };
 
   const confirmEnd = () => {
     if (!settlingId) return;
-    netCompleteRequest(settlingId);
-    shiftCue("end");
+    if (settlingIntent === "pause") {
+      netPauseShift(settlingId);
+      shiftCue("pause");
+      setTab("upcoming");
+      setNotice("Payment confirmed · Shift moved to Upcoming");
+      window.setTimeout(() => setNotice(null), 2600);
+    } else {
+      netCompleteRequest(settlingId);
+      shiftCue("end");
+    }
   };
+
 
 
 
