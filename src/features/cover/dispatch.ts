@@ -167,10 +167,8 @@ export function useDispatch(): View {
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
   const declined = new Set(me?.declined ?? []);
-  // Doctors never see their own requester-side broadcasts (dispatch must
-  // behave as a true multi-user network, not a same-account loopback).
   const liveRequests = broadcastingRequests(net).filter(
-    (r) => !declined.has(r.id) && r.requesterSessionId !== sid,
+    (r) => !declined.has(r.id),
   );
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
@@ -261,8 +259,6 @@ export function ensureDoctorSession(initialOnline = true) {
     // New request reached this doctor → calm notification cue.
     // Only fire when the doctor is online and has capacity to accept.
     if (ev.action === "publish" && ev.actor === "requester") {
-      // Ignore my own requester-side publishes — dispatch is multi-user.
-      if (r.requesterSessionId === sid) return;
       const me = s.doctors[sid];
       if (!me?.online) return;
       const mine = Object.values(s.requests).filter(
