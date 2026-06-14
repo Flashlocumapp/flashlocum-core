@@ -109,6 +109,20 @@ export function ShiftSettlement({
   const confirmedAtRef = useRef<number | null>(null);
   const autoConfirmAt = useRef<number | null>(null);
 
+  // Backend-authoritative segment list (one entry per pause/resume cycle).
+  // Surfaced in ConfirmedPane so multi-day shifts show a breakdown.
+  type SegmentRow = {
+    id: string;
+    segment_index: number;
+    started_at: string;
+    ended_at: string | null;
+    billed_minutes: number | null;
+    billed_amount: number | null;
+  };
+  const [segments, setSegments] = useState<SegmentRow[]>([]);
+  const [extensionCount, setExtensionCount] = useState(0);
+
+
   const tick = useSimClock(1000);
 
   const elapsed =
