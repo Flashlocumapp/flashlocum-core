@@ -247,6 +247,7 @@ export function ShiftSettlement({
       bm,
       shift.endHHMM,
       shift.days,
+      shift.environment ?? "normal",
     ).amount;
     setPhase("settlement");
     if (requestId) {
