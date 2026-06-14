@@ -1,26 +1,35 @@
-// FlashLocum pricing engine — official operational rates.
+// FlashLocum pricing — frontend mirror of the SQL `compute_quote` engine.
 //
-// Standard coverage:
-//   • Duration < 4 hrs           → flat ₦3,000/hr
-//   • Duration 4–5 hrs           → flat ₦2,500/hr
-//   • Duration ≥ 6 hrs           → split by real clock time:
-//       Day   (08:00–22:00) → ₦2,000/hr
-//       Night (22:00–08:00) → ₦1,500/hr
-//   • Single-day 24-hour shift   → flat ₦36,000
+// Server is authoritative (end_shift writes `total_billed_amount` to the
+// row). This module exists only to render consistent quotes/estimates
+// before the server amount is available. Numbers MUST match the backend.
 //
-// Home Care: flat ₦15,000/hr.
-//
-// Multi-day shifts repeat the booked daily window and inherit the same
-// hourly bucket as the per-day duration — they never trigger the 24h flat.
+// Spec:
+//   Standard (per-shift bucket from total hours):
+//     >= 6h   → day ₦2,000/hr  · night ₦1,500/hr
+//     4–<6h  → day ₦2,500/hr  · night ₦2,000/hr
+//     <4h    → day ₦3,000/hr  · night ₦2,500/hr
+//   Day band 06:00–22:00, Night 22:00–06:00 (Africa/Lagos).
+//   Fixed: single 24h shift → ₦36,000; single 48h block → ₦72,000.
+//   Home Care: ₦15,000/hr (no day/night split).
+//   Environment multiplier: Busy = ×1.25 (applied last, before fee split).
+//   Minimum billable = 60 min. Worked minutes round UP to 15-min blocks.
 
 export type CoverageKind = "standard" | "home";
+export type Environment = "normal" | "busy";
 
-const RATE_DAY = 2000;
-const RATE_NIGHT = 1500;
-const RATE_SHORT_45 = 2500;
-const RATE_SHORT_LT4 = 3000;
+const RATE_DAY_LONG = 2000;
+const RATE_NIGHT_LONG = 1500;
+const RATE_DAY_MID = 2500;
+const RATE_NIGHT_MID = 2000;
+const RATE_DAY_SHORT = 3000;
+const RATE_NIGHT_SHORT = 2500;
 const RATE_HOME = 15000;
 const FLAT_24H = 36000;
+const FLAT_48H = 72000;
+
+export const BUSY_MULTIPLIER = 1.25;
+export const MIN_BILLABLE_MINUTES = 60;
 
 export function coverageKindFromLabel(label: string): CoverageKind {
   return label.toLowerCase().startsWith("home") ? "home" : "standard";
@@ -31,20 +40,17 @@ function minsFromHHMM(s: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-/**
- * Split a single daily window (HH:MM → HH:MM, overnight allowed) into
- * day vs night minutes based on real clock-time overlap with 22:00–08:00.
- */
+/** Split a window into day vs night minutes using the 06–22 day band. */
 function splitPerDayMinutes(startHHMM: string, endHHMM: string) {
   const start = minsFromHHMM(startHHMM);
   let end = minsFromHHMM(endHHMM);
-  if (end === start) end += 24 * 60; // exact 24h window
-  if (end < start) end += 24 * 60; // overnight wrap
+  if (end === start) end += 24 * 60;
+  if (end < start) end += 24 * 60;
   let day = 0;
   let night = 0;
   for (let t = start; t < end; t++) {
     const h = Math.floor((t % (24 * 60)) / 60);
-    if (h >= 8 && h < 22) day++;
+    if (h >= 6 && h < 22) day++;
     else night++;
   }
   return { dayMinutes: day, nightMinutes: night };
@@ -52,56 +58,48 @@ function splitPerDayMinutes(startHHMM: string, endHHMM: string) {
 
 export type PricingResult = { amount: number; explanation: string };
 
-/**
- * Price a standard shift from total day/night minutes already accumulated.
- * Bucket is chosen from per-day duration so multi-day shifts inherit the
- * same hourly rate that the booked daily window qualifies for.
- */
+function applyEnvironment(amount: number, env: Environment): number {
+  return env === "busy" ? Math.round(amount * BUSY_MULTIPLIER) : Math.round(amount);
+}
+
+function envSuffix(env: Environment): string {
+  return env === "busy" ? " · Busy ×1.25" : "";
+}
+
+function bucketRates(perDayHrs: number) {
+  if (perDayHrs >= 6) return { day: RATE_DAY_LONG, night: RATE_NIGHT_LONG, label: "6h+" };
+  if (perDayHrs >= 4) return { day: RATE_DAY_MID, night: RATE_NIGHT_MID, label: "4–6h" };
+  return { day: RATE_DAY_SHORT, night: RATE_NIGHT_SHORT, label: "<4h" };
+}
+
 function priceStandard(
   totalDayMin: number,
   totalNightMin: number,
   perDayHrs: number,
+  env: Environment,
 ): PricingResult {
+  const { day: rd, night: rn } = bucketRates(perDayHrs);
   const dayHours = totalDayMin / 60;
   const nightHours = totalNightMin / 60;
-  const totalHrs = dayHours + nightHours;
-
-  // Short shifts: single flat hourly rate, no day/night split.
-  if (perDayHrs < 4) {
-    return {
-      amount: Math.round(totalHrs * RATE_SHORT_LT4),
-      explanation: `${trim(totalHrs)}h · ₦${RATE_SHORT_LT4.toLocaleString("en-NG")}/hr`,
-    };
-  }
-  if (perDayHrs < 6) {
-    return {
-      amount: Math.round(totalHrs * RATE_SHORT_45),
-      explanation: `${trim(totalHrs)}h · ₦${RATE_SHORT_45.toLocaleString("en-NG")}/hr`,
-    };
-  }
-
-  // Long shifts: split by real clock band.
-  const amount = Math.round(dayHours * RATE_DAY + nightHours * RATE_NIGHT);
+  const base = dayHours * rd + nightHours * rn;
+  const amount = applyEnvironment(base, env);
   const parts: string[] = [];
-  if (dayHours > 0)
-    parts.push(`${trim(dayHours)}h day · ₦${RATE_DAY.toLocaleString("en-NG")}/hr`);
+  if (dayHours > 0) parts.push(`${trim(dayHours)}h day · ₦${rd.toLocaleString("en-NG")}/hr`);
   if (nightHours > 0)
-    parts.push(`${trim(nightHours)}h night · ₦${RATE_NIGHT.toLocaleString("en-NG")}/hr`);
+    parts.push(`${trim(nightHours)}h night · ₦${rn.toLocaleString("en-NG")}/hr`);
   return {
     amount,
-    explanation: parts.join(" + ") || "Standard operational coverage rate.",
+    explanation: (parts.join(" + ") || "Standard coverage rate.") + envSuffix(env),
   };
 }
 
-/**
- * Compute coverage pricing from a repeating daily window.
- * `days` is the number of times the window is booked (defaults to 1).
- */
+/** Booked-window quote. */
 export function computeCoveragePricing(
   coverage: CoverageKind,
   startHHMM: string,
   endHHMM: string,
   days: number = 1,
+  environment: Environment = "normal",
 ): PricingResult {
   const d = Math.max(1, Math.round(days));
   const perDay = splitPerDayMinutes(startHHMM, endHHMM);
@@ -111,63 +109,56 @@ export function computeCoveragePricing(
   const totalHrs = (totalDayMin + totalNightMin) / 60;
 
   if (coverage === "home") {
+    const base = totalHrs * RATE_HOME;
     return {
-      amount: Math.round(totalHrs * RATE_HOME),
-      explanation: `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr for personal in-home coverage.`,
+      amount: applyEnvironment(base, environment),
+      explanation:
+        `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr in-home coverage.` +
+        envSuffix(environment),
     };
   }
 
-  // Single-day 24h flat override.
   if (d === 1 && Math.round(totalHrs) === 24) {
     return {
-      amount: FLAT_24H,
-      explanation: `Continuous 24-hour coverage · flat ₦${FLAT_24H.toLocaleString("en-NG")}.`,
+      amount: applyEnvironment(FLAT_24H, environment),
+      explanation:
+        `Continuous 24-hour coverage · flat ₦${FLAT_24H.toLocaleString("en-NG")}.` +
+        envSuffix(environment),
+    };
+  }
+  if (Math.round(totalHrs) === 48) {
+    return {
+      amount: applyEnvironment(FLAT_48H, environment),
+      explanation:
+        `48-hour block · flat ₦${FLAT_48H.toLocaleString("en-NG")}.` + envSuffix(environment),
     };
   }
 
-  return priceStandard(totalDayMin, totalNightMin, perDayHrs);
+  return priceStandard(totalDayMin, totalNightMin, perDayHrs, environment);
 }
 
 function trim(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-/**
- * 15-minute half-block billing expansion (unchanged operational rounding).
- */
-export function roundedOverrunMinutes(overrunMin: number): number {
-  const total = Math.max(0, Math.floor(overrunMin));
-  const fullHours = Math.floor(total / 60);
-  const rem = total % 60;
-  let extra = 0;
-  if (rem <= 15) extra = 0;
-  else if (rem <= 30) extra = 15;
-  else if (rem <= 45) extra = 45;
-  else extra = 60;
-  return fullHours * 60 + extra;
+/** Worked minutes → 15-min ceiling, min 60. */
+export function roundedOverrunMinutes(workedMin: number): number {
+  const total = Math.max(0, Math.floor(workedMin));
+  return Math.ceil(total / 15) * 15;
 }
-
-/**
- * Operational minimum: once coverage starts, the first 15 minutes are
- * always billable. Beyond that, regular half-block rounding applies.
- */
-export const MIN_BILLABLE_MINUTES = 15;
 export function billableMinutes(workedMin: number): number {
   if (!Number.isFinite(workedMin) || workedMin <= 0) return 0;
   return Math.max(MIN_BILLABLE_MINUTES, roundedOverrunMinutes(workedMin));
 }
 
-/**
- * Compute pricing from a real worked duration starting at `startHHMM`.
- * Binds final billing to the LIVE Active Coverage timer across pause/resume
- * cycles. Pass `workedMinutes` already rounded by `roundedOverrunMinutes`.
- */
+/** Live billing during/after a shift, based on real worked minutes. */
 export function computeWorkedPricing(
   coverage: CoverageKind,
   startHHMM: string,
   workedMinutes: number,
   endHHMM?: string,
   days: number = 1,
+  environment: Environment = "normal",
 ): PricingResult {
   const worked = Math.max(0, Math.floor(workedMinutes));
   const d = Math.max(1, Math.round(days));
@@ -185,23 +176,33 @@ export function computeWorkedPricing(
     const start = minsFromHHMM(startHHMM);
     for (let i = 0; i < worked; i++) {
       const h = Math.floor(((start + i) % (24 * 60)) / 60);
-      if (h >= 8 && h < 22) day++;
+      if (h >= 6 && h < 22) day++;
       else night++;
     }
   }
   const totalHrs = worked / 60;
 
   if (coverage === "home") {
+    const base = totalHrs * RATE_HOME;
     return {
-      amount: Math.round(totalHrs * RATE_HOME),
-      explanation: `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr for personal in-home coverage.`,
+      amount: applyEnvironment(base, environment),
+      explanation:
+        `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr.` + envSuffix(environment),
     };
   }
   if (d === 1 && Math.round(totalHrs) === 24) {
     return {
-      amount: FLAT_24H,
-      explanation: `Continuous 24-hour coverage · flat ₦${FLAT_24H.toLocaleString("en-NG")}.`,
+      amount: applyEnvironment(FLAT_24H, environment),
+      explanation: `Continuous 24-hour coverage · flat ₦${FLAT_24H.toLocaleString("en-NG")}.` +
+        envSuffix(environment),
     };
   }
-  return priceStandard(day, night, perDayHrs);
+  if (Math.round(totalHrs) === 48) {
+    return {
+      amount: applyEnvironment(FLAT_48H, environment),
+      explanation: `48-hour block · flat ₦${FLAT_48H.toLocaleString("en-NG")}.` +
+        envSuffix(environment),
+    };
+  }
+  return priceStandard(day, night, perDayHrs, environment);
 }
