@@ -874,6 +874,9 @@ function OvertimePane({
   payState,
   payError,
   account,
+  payCheckState,
+  payCheckError,
+  onCheckPayment,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -887,6 +890,9 @@ function OvertimePane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  payCheckState: "idle" | "checking" | "not_found" | "error";
+  payCheckError: string | null;
+  onCheckPayment: () => void;
 }) {
   if (onPayWithMonnify) {
     return (
@@ -897,6 +903,9 @@ function OvertimePane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        payCheckState={payCheckState}
+        payCheckError={payCheckError}
+        onCheckPayment={onCheckPayment}
       />
     );
   }
