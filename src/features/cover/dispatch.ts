@@ -287,7 +287,7 @@ export function ensureDoctorSession(initialOnline = true) {
 
     if (r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
-    processedEvents.add(eventKey);
+    processedEvents.set(eventKey, Date.now());
 
     if (ev.action === "start") {
       shiftCue("start");
