@@ -703,19 +703,7 @@ export function pauseShift(id: string) {
   callServerLifecycle("pause", id);
 }
 
-  refreshState();
-  const cur = state.requests[id];
-  if (!cur || cur.status !== "active") return;
-  const segment = cur.startedAt ? Math.max(0, simNow() - cur.startedAt) : 0;
-  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
-  const days = Math.max(1, cur.days ?? 1);
-  const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
-  applyPatch(
-    id,
-    { status: "accepted", startedAt: undefined, accumulatedMs, dayIndex },
-    { actor: "requester", actorId: getSessionId(), action: "pause" },
-  );
-}
+
 
 export function completeRequest(id: string) {
   refreshState();
