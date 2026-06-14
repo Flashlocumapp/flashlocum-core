@@ -407,8 +407,67 @@ export function ShiftSettlement({
       setPayError(null);
       setPayCheckState("idle");
       setPayCheckError(null);
+      setTx(null);
     }
   }, [open]);
+
+  // Load the authoritative transaction record from the backend whenever
+  // payment is confirmed. Polls briefly to absorb the gap between webhook
+  // marking paid and the row reflecting settled_amount / paid_at.
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase !== "confirmed") return;
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 12;
+    const run = async () => {
+      while (!cancelled && attempts < MAX_ATTEMPTS) {
+        attempts++;
+        try {
+          const { data: row } = await supabase
+            .from("coverage_requests")
+            .select(
+              "id, hospital, coverage_type, scheduled_start, scheduled_end, settled_amount, payment_reference, paid_at, accepted_by, payment_status",
+            )
+            .eq("id", requestId)
+            .maybeSingle();
+          if (cancelled) return;
+          if (row && row.payment_status === "paid") {
+            let doctorName: string | null = null;
+            if (row.accepted_by) {
+              const { data: doc } = await supabase
+                .rpc("get_assigned_doctor_profile", { _doctor: row.accepted_by })
+                .maybeSingle();
+              doctorName = (doc as { full_name?: string } | null)?.full_name ?? null;
+            }
+            if (!cancelled) {
+              setTx({
+                id: row.id,
+                hospital: row.hospital,
+                coverage_type: row.coverage_type,
+                scheduled_start: row.scheduled_start,
+                scheduled_end: row.scheduled_end,
+                settled_amount: row.settled_amount,
+                payment_reference: row.payment_reference,
+                paid_at: row.paid_at,
+                accepted_by: row.accepted_by,
+                doctorName,
+              });
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn("[settlement] load tx record failed:", err);
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestId, phase]);
+
 
 
 
