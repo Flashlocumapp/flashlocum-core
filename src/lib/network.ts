@@ -17,6 +17,7 @@ import {
 } from "./pricing";
 import {
   getCurrentUserIdSync,
+  notifyCoverageChanged,
   onUserIdChange,
   primeUserId,
   remoteClaimRequest,
