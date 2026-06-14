@@ -662,6 +662,8 @@ function DispatchSheet({
                 setDays={setDays}
                 draft={draft}
                 patchDraft={patchDraft}
+                environment={environment}
+                setEnvironment={setEnvironment}
                 onAdvance={onAdvance}
               />
             )}
@@ -682,6 +684,8 @@ function ConfigureBody({
   setDays,
   draft,
   patchDraft,
+  environment,
+  setEnvironment,
   onAdvance,
 }: {
   location: Recent;
@@ -691,6 +695,8 @@ function ConfigureBody({
   setDays: (n: number) => void;
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
+  environment: Environment;
+  setEnvironment: (e: Environment) => void;
   onAdvance: () => void;
 }) {
   return (
