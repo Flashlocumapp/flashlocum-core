@@ -34,6 +34,29 @@ import {
   type PresenceRow,
 } from "./presence-remote";
 
+/**
+ * Fire backend-authoritative shift lifecycle RPC. Errors are surfaced to the
+ * console only — the optimistic local network state already gives UI feedback,
+ * and the backend remains the source of truth for billing on settlement read.
+ */
+function callServerLifecycle(kind: "start" | "pause" | "resume" | "end", requestId: string) {
+  if (typeof window === "undefined") return;
+  void import("./shift.functions")
+    .then((m) => {
+      const fn =
+        kind === "start" ? m.startShift
+        : kind === "pause" ? m.pauseShift
+        : kind === "resume" ? m.resumeShift
+        : m.endShift;
+      return fn({ data: { requestId } });
+    })
+    .catch((err) => {
+      console.warn(`[network] ${kind}Shift RPC failed:`, err?.message ?? err);
+    });
+}
+
+
+
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
@@ -661,6 +684,7 @@ export function startRequest(id: string) {
     actorId: getSessionId(),
     action: isResume ? "resume" : "start",
   });
+  callServerLifecycle(isResume ? "resume" : "start", id);
 }
 
 export function pauseShift(id: string) {
@@ -676,7 +700,10 @@ export function pauseShift(id: string) {
     { status: "accepted", startedAt: undefined, accumulatedMs, dayIndex },
     { actor: "requester", actorId: getSessionId(), action: "pause" },
   );
+  callServerLifecycle("pause", id);
 }
+
+
 
 export function completeRequest(id: string) {
   refreshState();
@@ -712,7 +739,9 @@ export function completeRequest(id: string) {
     { status: "completed", accumulatedMs, startedAt: undefined, settledAmount },
     { actor: "requester", actorId: getSessionId(), action: "complete" },
   );
+  callServerLifecycle("end", id);
 }
+
 
 /** Pause broadcasting (hides from doctors) without losing request. */
 export function pauseRequest(id: string) {
