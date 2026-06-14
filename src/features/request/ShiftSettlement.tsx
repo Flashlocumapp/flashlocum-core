@@ -427,10 +427,10 @@ export function ShiftSettlement({
 
     // Fallback: coverage_requests is excluded from supabase_realtime, so the
     // postgres_changes binding above never fires in production. The webhook
-    // broadcasts on `coverage_invalidations` — when we receive it, do an
-    // immediate recheck so the screen flips to "paid" without polling delay.
+    // broadcasts on the `coverage_invalidations` channel — subscribe to the
+    // SAME channel name so we receive the signal and recheck instantly.
     const invalidate = supabase
-      .channel(`settlement-invalidate:${requestId}`)
+      .channel("coverage_invalidations", { config: { broadcast: { self: false } } })
       .on("broadcast", { event: "invalidate" }, () => {
         void checkOnce();
       })
