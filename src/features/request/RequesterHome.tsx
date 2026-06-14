@@ -758,6 +758,38 @@ function ConfigureBody({
         </motion.div>
       </AnimatePresence>
 
+      {/* Environment — Normal vs Busy (×1.25). */}
+      <div className="flex items-center justify-between rounded-2xl bg-secondary/60 px-3 py-2">
+        <div className="flex flex-col">
+          <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Environment
+          </span>
+          <span className="text-[11.5px] text-muted-foreground">
+            Busy multiplies pricing ×1.25
+          </span>
+        </div>
+        <div className="flex rounded-full bg-background p-0.5 text-[12px] font-semibold">
+          {(["normal", "busy"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setEnvironment(opt)}
+              className="rounded-full px-3 py-1 capitalize transition-colors"
+              style={{
+                background:
+                  environment === opt ? "var(--color-primary)" : "transparent",
+                color:
+                  environment === opt
+                    ? "var(--color-primary-foreground)"
+                    : "var(--color-foreground)",
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Arrow progression */}
       <div className="flex justify-end pt-1">
         <button
