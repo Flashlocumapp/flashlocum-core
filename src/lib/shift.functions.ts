@@ -57,7 +57,11 @@ export const startShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("start_shift", {
       _request_id: data.requestId,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Idempotent: another tab/optimistic call may have already started it.
+      if (/already started/i.test(error.message)) return { ok: true, already: true } as any;
+      throw new Error(error.message);
+    }
     return r as any;
   });
 
