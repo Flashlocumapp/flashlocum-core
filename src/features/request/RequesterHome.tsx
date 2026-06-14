@@ -410,6 +410,7 @@ function HomeScreen({ active }: { active: boolean }) {
             coverage={coverage}
             days={days}
             draft={draft}
+            environment={environment}
             location={location}
             requestId={activeRequestId}
             setRequestId={setActiveRequestId}
