@@ -239,6 +239,21 @@ export function useDispatch(): View {
     }
   }, [me, upcoming.length]);
 
+  let pendingRating: PendingRating | null = null;
+  if (pendingRatingRequestId) {
+    const r = net.requests[pendingRatingRequestId];
+    if (r && r.status === "completed" && r.acceptedBy === sid) {
+      pendingRating = {
+        requestId: r.id,
+        hospitalId: hospitalEntityId(r.hospital),
+        hospital: r.hospital,
+        coverage: r.coverage,
+        total: r.settledAmount ?? r.amount,
+        feePct: r.feePct,
+      };
+    }
+  }
+
   return {
     online,
     upcoming,
