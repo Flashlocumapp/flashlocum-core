@@ -87,7 +87,7 @@ export const resumeShift = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) {
-      if (/already (active|started|in progress)/i.test(error.message)) return { ok: true, already: true } as any;
+      if (/already (active|started|in progress)|not paused/i.test(error.message)) return { ok: true, already: true } as any;
       throw new Error(error.message);
     }
     return r as any;
