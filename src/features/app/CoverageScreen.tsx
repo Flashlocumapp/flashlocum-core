@@ -700,11 +700,6 @@ function RequestCard({
   const isHistory = item.status === "completed";
   const identity = useDoctorIdentity(item.doctorSid ?? null);
 
-  const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
-  const meta = isHistory
-    ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
-    : baseMeta;
-
   const onCardClick = isHistory ? onOpenHistory : onOpenDetail;
   const wrapperProps = {
     onClick: onCardClick,
@@ -715,23 +710,28 @@ function RequestCard({
     },
   };
 
+  const isMidShiftPause = isActive && item.days > 1 && item.dayIndex < item.days;
+  const isMidShiftEnd = isActive && (item.days <= 1 || item.dayIndex >= item.days);
+
   return (
     <div
       {...wrapperProps}
-      className="block w-full rounded-2xl px-3.5 py-3 text-left transition-colors active:bg-secondary/40"
+      className="block w-full rounded-2xl px-4 pt-4 pb-3 text-left transition-colors active:bg-secondary/40"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
           : "var(--color-surface-elevated)",
+        boxShadow: isHistory ? "none" : "0 4px 16px -10px rgba(0,0,0,0.10)",
       }}
     >
-      <div className="flex items-center gap-3">
-        <Avatar initials={identity.initials} selfieUrl={identity.selfieUrl} dim={isHistory} live={isActive} />
+      {/* Header: avatar + name/trust + primary action */}
+      <div className="flex items-start gap-3">
+        <Avatar initials={identity.initials} selfieUrl={identity.selfieUrl} dim={isHistory} live={isActive || isUpcoming} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
-              className="truncate text-[15px] font-medium"
+              className="truncate text-[16px] font-semibold tracking-tight"
               style={{
                 color: isHistory
                   ? "color-mix(in oklab, var(--color-foreground) 78%, transparent)"
@@ -752,41 +752,17 @@ function RequestCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
-            <span className="truncate">{identity.mdcn}</span>
-            <span>·</span>
-            <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
-            <span>·</span>
-            <ReliabilityPill entityId={item.doctorRatingId} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <RatingPill entityId={item.doctorRatingId} role="doctor" inline size="md" />
+            <ReliabilityPill entityId={item.doctorRatingId} size="md" inline />
+            <EnvironmentBadge environment={item.environment} size="xs" />
           </div>
-
-          <div
-            className="mt-0.5 truncate text-[12.5px]"
-            style={{
-              color: isHistory
-                ? "color-mix(in oklab, var(--color-foreground) 55%, transparent)"
-                : "color-mix(in oklab, var(--color-foreground) 70%, transparent)",
-            }}
-          >
-            {meta}
-          </div>
-          {isActive && (
-            <div className="mt-0.5">
-              <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
-            </div>
-          )}
-          {isUpcoming && item.accumulatedMs > 0 && (
-            <div className="mt-0.5">
-              <LiveTimer baseMs={item.accumulatedMs} />
-            </div>
-          )}
         </div>
 
         {isUpcoming && (
           <button
             onClick={(e) => { e.stopPropagation(); onStart(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            className="shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-transform active:scale-[0.97]"
             style={{
               background: "var(--color-foreground)",
               color: "var(--color-background)",
@@ -795,10 +771,10 @@ function RequestCard({
             {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
-        {isActive && item.days > 1 && item.dayIndex < item.days && (
+        {isMidShiftPause && (
           <button
             onClick={(e) => { e.stopPropagation(); onPause(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            className="shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-transform active:scale-[0.97]"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
               color: "var(--color-foreground)",
@@ -807,13 +783,13 @@ function RequestCard({
             Pause Shift
           </button>
         )}
-        {isActive && (item.days <= 1 || item.dayIndex >= item.days) && (
+        {isMidShiftEnd && (
           <button
             onClick={(e) => { e.stopPropagation(); onEnd(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            className="shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-transform active:scale-[0.97]"
             style={{
-              background: "var(--color-foreground)",
-              color: "var(--color-background)",
+              background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
+              color: "var(--color-foreground)",
             }}
           >
             End Shift
@@ -821,39 +797,182 @@ function RequestCard({
         )}
       </div>
 
-      {isUpcoming && item.accumulatedMs === 0 && (
-        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
-          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
-          <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
-          <a
-            href={`tel:${item.phone}`}
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
-            style={{
-              background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
-              color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Call
-          </a>
+      {/* Upcoming: two-column MDCN + Shift block (per reference) */}
+      {isUpcoming && (
+        <div className="mt-3 border-t border-border/40 pt-3">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 shrink-0">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground">MDCN</div>
+              <div className="mt-0.5 text-[12.5px] font-medium text-foreground/85">{identity.mdcn}</div>
+            </div>
+            <div className="h-8 w-px shrink-0 self-center bg-border/60" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Shift</div>
+              <div className="mt-0.5 text-[12.5px] text-foreground/85">
+                <MetaInline coverage={item.coverage} day={item.day} start={item.start} end={item.end} durationHrs={item.durationHrs} amount={item.amount} />
+              </div>
+            </div>
+          </div>
+          {item.accumulatedMs > 0 && (
+            <div className="mt-2">
+              <LiveTimer baseMs={item.accumulatedMs} live={false} />
+            </div>
+          )}
         </div>
       )}
-      {((isActive && item.days > 1 && item.dayIndex < item.days) ||
-        (isUpcoming && item.accumulatedMs > 0)) && (
-        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
-          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
+
+      {/* Active / History: meta line + (active) timer */}
+      {!isUpcoming && (
+        <div className="mt-3">
+          <div
+            className="text-[12.5px] leading-snug"
+            style={{
+              color: isHistory
+                ? "color-mix(in oklab, var(--color-foreground) 55%, transparent)"
+                : "color-mix(in oklab, var(--color-foreground) 75%, transparent)",
+            }}
+          >
+            {isHistory ? (
+              <>{item.coverage} · {item.completedOn ?? ""} · {item.start} · {item.durationHrs}hr · <Naira amount={item.amount} muted={isHistory} /></>
+            ) : (
+              <MetaInline coverage={item.coverage} day={item.day} start={item.start} end={item.end} durationHrs={item.durationHrs} amount={item.amount} />
+            )}
+          </div>
+          {isActive && (
+            <div className="mt-2">
+              <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bottom action row */}
+      {isUpcoming && item.accumulatedMs === 0 && (
+        <div className="mt-3 border-t border-border/40 pt-3 flex items-center gap-2">
+          <PillAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" icon="edit" />
+          <PillAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" icon="x" />
+          <PhoneLink phone={item.phone} />
+        </div>
+      )}
+
+      {isActive && (
+        <div className="mt-3 border-t border-border/40 pt-3 flex items-center gap-2">
+          <PhoneLink phone={item.phone} />
+          {isMidShiftPause && (
+            <PillAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" icon="x" />
+          )}
+        </div>
+      )}
+      {isUpcoming && item.accumulatedMs > 0 && (
+        <div className="mt-3 border-t border-border/40 pt-3 flex items-center gap-2">
+          <PhoneLink phone={item.phone} />
+          <PillAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" icon="x" />
         </div>
       )}
     </div>
+  );
+}
+
+/** Inline meta with the ₦amount tinted green to match reference. */
+function MetaInline({
+  coverage,
+  day,
+  start,
+  end,
+  durationHrs,
+  amount,
+}: {
+  coverage: string;
+  day: string;
+  start: string;
+  end: string;
+  durationHrs: number;
+  amount: number;
+}) {
+  const timing = end && end !== start ? `${start} - ${end}` : start;
+  return (
+    <span>
+      {coverage} · {shortDay(day)} · {timing} · {durationHrs}hr · <Naira amount={amount} />
+    </span>
+  );
+}
+
+function shortDay(s: string): string {
+  const map: Record<string, string> = { Sunday: "Sun", Monday: "Mon", Tuesday: "Tue", Wednesday: "Weds", Thursday: "Thu", Friday: "Fri", Saturday: "Sat" };
+  let out = s;
+  for (const [full, short] of Object.entries(map)) out = out.replace(new RegExp(`\\b${full}\\b`, "g"), short);
+  return out;
+}
+
+function Naira({ amount, muted = false }: { amount: number; muted?: boolean }) {
+  return (
+    <span
+      className="font-medium tabular-nums"
+      style={{
+        color: muted
+          ? "color-mix(in oklab, var(--color-presence) 75%, transparent)"
+          : "var(--color-presence)",
+      }}
+    >
+      ₦{amount.toLocaleString("en-NG")}
+    </span>
+  );
+}
+
+function PillAction({
+  onClick,
+  label,
+  icon,
+}: {
+  onClick: (e: React.MouseEvent) => void;
+  label: string;
+  icon?: "edit" | "x" | "phone";
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
+      style={{
+        background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+        color: "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+      }}
+    >
+      {icon === "edit" && (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+      )}
+      {icon === "x" && (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      )}
+      {icon === "phone" && (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      )}
+      {label}
+    </button>
+  );
+}
+
+function PhoneLink({ phone }: { phone: string }) {
+  return (
+    <a
+      href={`tel:${phone}`}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
+      style={{
+        background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+        color: "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Call
+    </a>
   );
 }
 
