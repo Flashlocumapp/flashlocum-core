@@ -1252,7 +1252,7 @@ function ConfirmedPane({
 
       <RatingOverlay
         open={ratingOpen}
-        doctor={shift.doctor}
+        doctor={doctor}
         onDismiss={() => setRatingOpen(false)}
         onSubmit={() => {
           setRated(true);
