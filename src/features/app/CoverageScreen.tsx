@@ -1097,7 +1097,6 @@ function CoverCard({
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
             <span>·</span>
             <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
 
         </div>
