@@ -42,8 +42,6 @@ import {
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
-import { useServerFn } from "@tanstack/react-start";
-import { pauseShift as serverPauseShift } from "@/lib/shift.functions";
 
 
 
@@ -271,26 +269,12 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  // Pause Shift → confirmation modal → call pause_shift RPC (server bills
-  // today's open segment + sets payment_due_at) → open ShiftSettlement in
-  // pause-intent mode where Monnify checkout auto-opens. The local
-  // netPauseShift only fires after the requester sees the webhook-confirmed
-  // payment (onConfirmed → confirmEnd). Monnify webhook = source of truth.
-  const callServerPauseShift = useServerFn(serverPauseShift);
-  const [pausing, setPausing] = useState(false);
+  // Pause Shift → confirmation modal → open ShiftSettlement in pause-intent
+  // mode. The local netPauseShift only fires once the backend reports the
+  // segment as paid (settlement onConfirmed → confirmEnd). This keeps the
+  // Monnify webhook the source of truth for the state change.
   const requestPause = (id: string) => setPauseConfirmId(id);
-  const beginPause = async (id: string) => {
-    if (pausing) return;
-    setPausing(true);
-    try {
-      await callServerPauseShift({ data: { requestId: id } });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Couldn't pause this shift";
-      pushToast({ tone: "warn", title: msg });
-      setPausing(false);
-      return;
-    }
-    setPausing(false);
+  const beginPause = (id: string) => {
     setSettlingIntent("pause");
     setSettlingId(id);
   };
@@ -791,7 +775,7 @@ function RequestCard({
               <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
             </div>
           )}
-          {isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1) && (
+          {isUpcoming && item.accumulatedMs > 0 && (
             <div className="mt-0.5">
               <LiveTimer baseMs={item.accumulatedMs} />
             </div>
@@ -807,7 +791,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {(item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift"}
+            {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && item.days > 1 && item.dayIndex < item.days && (
@@ -836,7 +820,7 @@ function RequestCard({
         )}
       </div>
 
-      {isUpcoming && item.accumulatedMs === 0 && item.dayIndex <= 1 && (
+      {isUpcoming && item.accumulatedMs === 0 && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
@@ -863,7 +847,7 @@ function RequestCard({
         </div>
       )}
       {((isActive && item.days > 1 && item.dayIndex < item.days) ||
-        (isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1))) && (
+        (isUpcoming && item.accumulatedMs > 0)) && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
         </div>

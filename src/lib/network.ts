@@ -772,10 +772,7 @@ export function startRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur) return;
-  // Multi-day shifts reset accumulatedMs to 0 on pause so each new day's
-  // timer starts at zero. Use dayIndex > 1 as the secondary signal so the
-  // doctor still receives a "resume" cue (not "start") on Day 2+.
-  const isResume = (cur.accumulatedMs ?? 0) > 0 || (cur.dayIndex ?? 1) > 1;
+  const isResume = (cur.accumulatedMs ?? 0) > 0;
   // Anchor startedAt to simNow() so a brand-new shift always renders
   // segment = simNow() - startedAt = 0, regardless of any prior simulation
   // fast-forward offset. LiveTimer uses simNow() on both sides, so the

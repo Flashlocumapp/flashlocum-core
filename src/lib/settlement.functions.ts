@@ -7,7 +7,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const InputSchema = z.object({
   requestId: z.string().uuid(),
-  amount: z.number().int().nonnegative().max(50_000_000),
+  amount: z.number().int().positive().max(50_000_000),
 });
 
 export const beginSettlementCheckout = createServerFn({ method: "POST" })
