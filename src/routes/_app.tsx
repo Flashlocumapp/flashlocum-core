@@ -183,6 +183,7 @@ function AppShell() {
       <CoverDispatchPortal />
       <ToastHost />
       <SimClockPanel />
+      <RestrictionBanner />
     </div>
   );
 }
