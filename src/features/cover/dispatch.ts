@@ -127,6 +127,13 @@ let pendingRating: PendingRating | null = null;
 const processedEvents = new Map<string, number>();
 const DEDUP_TTL_MS = 5000;
 
+// We only store the requestId here. The hospital / coverage / total / feePct
+// shown in the PaymentSummary are derived LIVE from the request row inside
+// useDispatch(), so the card always reflects the exact transaction that
+// just completed — including any settled_amount the Monnify webhook writes
+// after the fact.
+let pendingRatingRequestId: string | null = null;
+
 const localListeners = new Set<() => void>();
 function bump() {
   localListeners.forEach((l) => l());
