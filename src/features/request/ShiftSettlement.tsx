@@ -342,6 +342,12 @@ export function ShiftSettlement({
       // sync with Settlement / Coverage History when the 15-min hold expires
       // and pricing rolls forward.
       const liveAmount = Math.max(frozenAmountRef.current, Math.round(totalAmount));
+      // Nothing to bill (e.g. pause fired before any segment time elapsed) —
+      // skip Monnify entirely and confirm immediately so the shift can move on.
+      if (liveAmount <= 0) {
+        confirmPaymentNow();
+        return;
+      }
       const result = await beginCheckout({
         data: { requestId, amount: liveAmount },
       });
