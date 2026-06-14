@@ -745,6 +745,9 @@ function SettlementPane({
   payState,
   payError,
   account,
+  payCheckState,
+  payCheckError,
+  onCheckPayment,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -759,6 +762,9 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  payCheckState: "idle" | "checking" | "not_found" | "error";
+  payCheckError: string | null;
+  onCheckPayment: () => void;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
@@ -770,6 +776,9 @@ function SettlementPane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        payCheckState={payCheckState}
+        payCheckError={payCheckError}
+        onCheckPayment={onCheckPayment}
       />
     );
   }
