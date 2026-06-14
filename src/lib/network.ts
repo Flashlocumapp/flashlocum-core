@@ -51,6 +51,13 @@ function callServerLifecycle(kind: "start" | "pause" | "resume" | "end", request
         : m.endShift;
       return fn({ data: { requestId } });
     })
+    .then(() => {
+      // coverage_requests is excluded from supabase_realtime; without this
+      // explicit invalidate broadcast the OTHER party (e.g. the doctor when
+      // the requester starts the shift) never sees started_at / status flip
+      // and their LiveTimer never starts ticking.
+      notifyCoverageChanged(requestId);
+    })
     .catch((err) => {
       console.warn(`[network] ${kind}Shift RPC failed:`, err?.message ?? err);
     });
