@@ -179,6 +179,7 @@ export function ShiftSettlement({
           bm,
           shift.endHHMM,
           shift.days,
+          shift.environment ?? "normal",
         ).amount;
       } else {
         frozenBilledMinRef.current = 0;
