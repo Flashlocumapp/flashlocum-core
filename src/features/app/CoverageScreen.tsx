@@ -718,7 +718,7 @@ function RequestCard({
   return (
     <div
       {...wrapperProps}
-      className="block w-full rounded-2xl px-3.5 py-3 text-left transition-colors active:bg-secondary/40"
+      className="block w-full rounded-2xl px-3.5 py-2.5 text-left transition-colors active:bg-secondary/40"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 60%, transparent)"
@@ -751,25 +751,6 @@ function RequestCard({
                 {item.cancelledBy === "requester" ? "You Cancelled" : "Cancelled"}
               </span>
             )}
-          </div>
-          <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
-            <span className="truncate">{identity.mdcn}</span>
-            <span>·</span>
-            <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
-            <span>·</span>
-            <ReliabilityPill entityId={item.doctorRatingId} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
-          </div>
-
-          <div
-            className="mt-0.5 truncate text-[12.5px]"
-            style={{
-              color: isHistory
-                ? "color-mix(in oklab, var(--color-foreground) 55%, transparent)"
-                : "color-mix(in oklab, var(--color-foreground) 70%, transparent)",
-            }}
-          >
-            {meta}
           </div>
           {isActive && (
             <div className="mt-0.5">
@@ -822,7 +803,7 @@ function RequestCard({
       </div>
 
       {isUpcoming && item.accumulatedMs === 0 && (
-        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
+        <div className="mt-2 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
           <a
@@ -849,7 +830,7 @@ function RequestCard({
       )}
       {((isActive && item.days > 1 && item.dayIndex < item.days) ||
         (isUpcoming && item.accumulatedMs > 0)) && (
-        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
+        <div className="mt-2 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
         </div>
       )}
@@ -1089,7 +1070,7 @@ function CoverCard({
   return (
     <Wrapper
       {...wrapperProps}
-      className="block w-full rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-secondary/30"
+      className="block w-full rounded-2xl px-4 py-3 text-left transition-colors active:bg-secondary/30"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 65%, transparent)"
@@ -1113,8 +1094,6 @@ function CoverCard({
             {outcomeChip}
           </div>
           <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-            <span className="truncate">{item.area}</span>
-            <span>·</span>
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
             <span>·</span>
             <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
@@ -1146,7 +1125,7 @@ function CoverCard({
       </div>
 
       <div
-        className="mt-1.5 text-[12.5px] leading-snug"
+        className="mt-1 text-[12.5px] leading-snug"
         style={{
           color: isHistory
             ? "color-mix(in oklab, var(--color-foreground) 60%, transparent)"
@@ -1157,13 +1136,13 @@ function CoverCard({
       </div>
 
       {item.note && (
-        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">
+        <div className="mt-0.5 text-[11.5px] leading-snug text-foreground/65">
           {item.note}
         </div>
       )}
 
       {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <LiveTimer
             from={(item as CoverItem & { startedAt: number }).startedAt}
             baseMs={(item as CoverItem).accumulatedMs ?? 0}
@@ -1172,14 +1151,14 @@ function CoverCard({
         </div>
       )}
       {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) > 0 && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
         </div>
       )}
 
 
       {(isActive || isUpcoming) && (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-2">
           {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) === 0 && (
             <button
               onClick={(e) => {
