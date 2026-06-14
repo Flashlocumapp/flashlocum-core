@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DismissSheet } from "./DismissSheet";
+import { EnvironmentBadge } from "./EnvironmentBadge";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 
@@ -11,7 +12,9 @@ export type HistoryDetail = {
   amount: number;
   note?: string;
   rating?: number;
+  environment?: "normal" | "busy";
 };
+
 
 export function HistoryDetailSheet({
   open,
