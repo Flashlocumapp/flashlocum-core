@@ -315,7 +315,11 @@ export function ShiftSettlement({
       const result = await beginCheckout({
         data: { requestId, amount: liveAmount },
       });
-      setAccount(result);
+      if ("alreadyPaid" in result && result.alreadyPaid) {
+        confirmPaymentNow();
+        return;
+      }
+      setAccount(result as TransferAccount);
       setPayState("waiting");
       setPayCheckState("idle");
       setPayCheckError(null);
