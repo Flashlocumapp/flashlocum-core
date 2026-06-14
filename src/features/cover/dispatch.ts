@@ -117,7 +117,7 @@ export type PendingRating = {
   total: number;
   feePct: number;
 };
-let pendingRating: PendingRating | null = null;
+
 
 
 // Per-event timestamp map. We dedup by (actor, shift, action) with a short
