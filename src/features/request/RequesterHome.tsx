@@ -1141,6 +1141,7 @@ function DispatchOverlay({
       endTs: win.endTs,
       days: Math.max(1, days),
       dayIndex: 1,
+      environment,
     });
     ownedIdRef.current = req.id;
     setRequestId(req.id);
