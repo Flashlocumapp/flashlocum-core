@@ -351,16 +351,22 @@ function init() {
   // pendingRating on `complete` and the incoming card on `publish`. If
   // postgres_changes already fired, applyRemoteEvent has already updated
   // state.requests, so the diff is a no-op and nothing double-fires.
+  let firstSnapshot = true;
   remoteUnsubscribe = subscribeCoverageRemote({
     onSnapshot: (rows) => {
       const requests: Record<string, NetRequest> = {};
       for (const r of rows) requests[r.id] = r;
       const prev = state.requests;
+      const isFirst = firstSnapshot;
+      firstSnapshot = false;
       let netEvent: Omit<NetEvent, "at"> | undefined;
       for (const r of rows) {
         const old = prev[r.id];
         if (!old) {
-          if (r.status === "broadcasting") {
+          // Suppress synthesized publish events on the initial snapshot —
+          // they represent pre-existing rows the doctor is just now
+          // discovering, NOT a brand-new request made for them.
+          if (!isFirst && r.status === "broadcasting") {
             netEvent = {
               actor: "requester",
               actorId: r.requesterSessionId,
