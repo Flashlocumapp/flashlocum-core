@@ -120,7 +120,12 @@ export type PendingRating = {
 let pendingRating: PendingRating | null = null;
 
 
-const processedEvents = new Set<string>();
+// Per-event timestamp map. We dedup by (actor, shift, action) with a short
+// TTL so the postgres_changes path and the snapshot-diff fallback can't
+// both fire the same logical transition, while legitimate later events
+// for the same shift+action (e.g. a second pause after resume) still pass.
+const processedEvents = new Map<string, number>();
+const DEDUP_TTL_MS = 5000;
 
 const localListeners = new Set<() => void>();
 function bump() {
