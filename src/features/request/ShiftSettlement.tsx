@@ -109,6 +109,20 @@ export function ShiftSettlement({
   const confirmedAtRef = useRef<number | null>(null);
   const autoConfirmAt = useRef<number | null>(null);
 
+  // Backend-authoritative segment list (one entry per pause/resume cycle).
+  // Surfaced in ConfirmedPane so multi-day shifts show a breakdown.
+  type SegmentRow = {
+    id: string;
+    segment_index: number;
+    started_at: string;
+    ended_at: string | null;
+    billed_minutes: number | null;
+    billed_amount: number | null;
+  };
+  const [segments, setSegments] = useState<SegmentRow[]>([]);
+  const [extensionCount, setExtensionCount] = useState(0);
+
+
   const tick = useSimClock(1000);
 
   const elapsed =
@@ -447,6 +461,11 @@ export function ShiftSettlement({
             s.total_billed_amount,
           );
         }
+        if (Array.isArray(s.segments)) setSegments(s.segments as SegmentRow[]);
+        if (typeof s.payment_extension_count === "number") {
+          setExtensionCount(s.payment_extension_count);
+        }
+
         if (s.payment_status !== "paid" && s.payment_due_at && s.server_now) {
           const due = Date.parse(s.payment_due_at);
           const now = Date.parse(s.server_now);
@@ -546,9 +565,12 @@ export function ShiftSettlement({
             shift={shift}
             total={totalAmount}
             billedMin={billedMin}
+            segments={segments}
+            extensionCount={extensionCount}
             onClose={finalize}
           />
         )}
+
       </AnimatePresence>
     </motion.div>
   );
@@ -898,17 +920,41 @@ function ConfirmedPane({
   shift,
   total,
   billedMin,
+  segments = [],
+  extensionCount = 0,
   onClose,
 }: {
   shift: ShiftMeta;
   total: number;
   billedMin: number;
+  segments?: Array<{
+    id: string;
+    segment_index: number;
+    started_at: string;
+    ended_at: string | null;
+    billed_minutes: number | null;
+    billed_amount: number | null;
+  }>;
+  extensionCount?: number;
   onClose: () => void;
 }) {
   void billedMin;
   const [ratingOpen, setRatingOpen] = useState(true);
   const [rated, setRated] = useState(false);
 
+  const fmtSegTime = (iso: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("en-NG", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   return (
     <motion.section
@@ -933,12 +979,48 @@ function ConfirmedPane({
           <Row label="Facility" value={shift.facility} />
           <Row label="Coverage" value={shift.role} />
           <Row label="Settled" value={fmtNaira(total)} strong />
+          {extensionCount > 0 && (
+            <Row
+              label="Payment extensions"
+              value={`${extensionCount} × 15min`}
+            />
+          )}
         </div>
 
+        {segments.length > 1 && (
+          <div className="mt-4 rounded-2xl bg-surface-elevated p-5">
+            <div className="mb-2 text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground">
+              Session breakdown
+            </div>
+            <ul className="space-y-2">
+              {segments.map((s) => (
+                <li key={s.id} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] font-medium">
+                      Session {s.segment_index}
+                    </div>
+                    <div className="text-[11.5px] text-muted-foreground">
+                      {fmtSegTime(s.started_at)} → {fmtSegTime(s.ended_at)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[12.5px] font-semibold tabular-nums">
+                      {fmtNaira(s.billed_amount ?? 0)}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground tabular-nums">
+                      {fmtHrMin(s.billed_minutes ?? 0)}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {rated && (
           <p className="mt-2 text-[12px] text-muted-foreground">Thanks for the feedback.</p>
         )}
+
 
         <div className="mt-auto space-y-2 pb-8">
           <button
