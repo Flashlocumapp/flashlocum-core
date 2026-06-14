@@ -32,7 +32,7 @@ export const quoteShift = createServerFn({ method: "POST" })
       _coverage_kind: data.coverageKind,
     });
     if (error) throw new Error(error.message);
-    return q as { amount: number; breakdown: Record<string, unknown> };
+    return q as { amount: number; breakdown: any };
   });
 
 const ValidateInput = z.object({ start: z.string(), end: z.string() });
@@ -58,7 +58,7 @@ export const startShift = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) throw new Error(error.message);
-    return r as Record<string, unknown>;
+    return r as any;
   });
 
 export const pauseShift = createServerFn({ method: "POST" })
@@ -69,7 +69,7 @@ export const pauseShift = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) throw new Error(error.message);
-    return r as Record<string, unknown>;
+    return r as any;
   });
 
 export const resumeShift = createServerFn({ method: "POST" })
@@ -80,7 +80,7 @@ export const resumeShift = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) throw new Error(error.message);
-    return r as Record<string, unknown>;
+    return r as any;
   });
 
 export const endShift = createServerFn({ method: "POST" })
@@ -102,7 +102,7 @@ export const extendPaymentWindow = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) throw new Error(error.message);
-    return r as Record<string, unknown>;
+    return r as any;
   });
 
 export const getRequestBillingState = createServerFn({ method: "POST" })
