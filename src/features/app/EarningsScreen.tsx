@@ -28,6 +28,7 @@ type Payout = {
   paidAt?: number;
   remittedAt?: number;
   paymentReference?: string;
+  environment?: "normal" | "busy";
 };
 
 function toPayout(h: HistoryItem): Payout {
@@ -51,8 +52,10 @@ function toPayout(h: HistoryItem): Payout {
     paidAt: h.paidAt,
     remittedAt: h.remittedAt,
     paymentReference: h.paymentReference,
+    environment: h.environment,
   };
 }
+
 
 /* ---------- Range filter ---------- */
 
