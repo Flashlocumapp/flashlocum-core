@@ -69,7 +69,9 @@ type RequestItem = {
   accumulatedMs: number;
   days: number;
   dayIndex: number;
+  environment?: "normal" | "busy";
 };
+
 
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
