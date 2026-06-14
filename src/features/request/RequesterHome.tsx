@@ -89,14 +89,20 @@ function makeInitialDraft(coverage: CoverageId): Draft {
 
 /* ---------------------- Pricing ---------------------- */
 
-type PricingContext = { coverage: CoverageId; draft: Draft; days: number };
+type PricingContext = {
+  coverage: CoverageId;
+  draft: Draft;
+  days: number;
+  environment: Environment;
+};
 
-function computePricing({ coverage, draft, days }: PricingContext) {
+function computePricing({ coverage, draft, days, environment }: PricingContext) {
   return computeCoveragePricing(
     coverageKindFromLabel(COVERAGE_SHORT[coverage]),
     draft.startTime,
     draft.endTime,
     days,
+    environment,
   );
 }
 
