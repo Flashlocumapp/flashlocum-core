@@ -42,6 +42,8 @@ type ShiftMeta = {
   /** Number of booked days — multi-day shifts price perDay × days. */
   days?: number;
   coverageKind: CoverageKind;
+  /** Environment captured at booking; multiplies pricing ×1.25 when 'busy'. */
+  environment?: Environment;
 };
 
 const SAMPLE: ShiftMeta = {
