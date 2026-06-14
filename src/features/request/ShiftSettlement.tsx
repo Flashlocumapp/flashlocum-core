@@ -136,8 +136,9 @@ export function ShiftSettlement({
     id: string;
     hospital: string | null;
     coverage_type: string | null;
-    scheduled_start: string | null;
-    scheduled_end: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
     settled_amount: number | null;
     payment_reference: string | null;
     paid_at: string | null;
