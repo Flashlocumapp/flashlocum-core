@@ -894,14 +894,9 @@ function EnvironmentSelector({
           ))}
         </div>
       </div>
-      <ul className="mt-2 space-y-0.5 text-[11.5px] leading-snug text-muted-foreground">
-        <li>
-          <span className="font-medium text-foreground/80">Normal</span> — Standard working conditions
-        </li>
-        <li>
-          <span className="font-medium text-foreground/80">Busy</span> — High workload environment
-        </li>
-      </ul>
+      <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
+        {value === "normal" ? "Standard working conditions." : "High workload environment."}
+      </p>
     </div>
   );
 }

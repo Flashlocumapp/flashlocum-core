@@ -335,6 +335,17 @@ function emitInvalidate(id: string) {
 }
 
 /**
+ * Public helper — call after a server RPC (start/pause/resume/end) mutates
+ * a coverage_requests row so other clients (e.g. the doctor watching the
+ * requester's shift start) refresh their snapshot. coverage_requests is
+ * not in the supabase_realtime publication, so postgres_changes won't fire
+ * for these mutations and the invalidate broadcast is the only signal.
+ */
+export function notifyCoverageChanged(id: string) {
+  emitInvalidate(id);
+}
+
+/**
  * Handle a single postgres_changes payload. Shared between the per-user
  * filtered bindings (own rows + open searching rows) so the dedupe logic
  * lives in one place. Bindings can overlap — e.g. when a doctor accepts

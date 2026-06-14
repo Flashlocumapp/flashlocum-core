@@ -86,6 +86,25 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
           return new Response("Server error", { status: 500 });
         }
 
+        // Broadcast an instant invalidate so the requester's settlement
+        // screen flips to "paid" the moment we mark it, instead of waiting
+        // for the 6-30s polling fallback. coverage_requests is not in the
+        // supabase_realtime publication so postgres_changes won't fire here.
+        try {
+          const ch = supabaseAdmin.channel("coverage_invalidations", {
+            config: { broadcast: { self: false } },
+          });
+          await ch.subscribe();
+          await ch.send({
+            type: "broadcast",
+            event: "invalidate",
+            payload: { reference: ref, at: Date.now() },
+          });
+          await supabaseAdmin.removeChannel(ch);
+        } catch (e) {
+          console.warn("[monnify-webhook] broadcast failed:", (e as Error).message);
+        }
+
         // Push the doctor who covered this shift.
         try {
           const { data: row } = await supabaseAdmin
