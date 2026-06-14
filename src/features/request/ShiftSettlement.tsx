@@ -10,7 +10,7 @@ import {
   type Environment,
 } from "@/lib/pricing";
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
-import { getRequestBillingState, extendPaymentWindow, pauseShift as serverPauseShift } from "@/lib/shift.functions";
+import { getRequestBillingState, extendPaymentWindow } from "@/lib/shift.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 
