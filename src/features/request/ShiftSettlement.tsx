@@ -230,6 +230,17 @@ export function ShiftSettlement({
     }
   }, [phase, open, onConfirmed]);
 
+  // Pause+Pay: after webhook confirms payment, auto-close settlement so the
+  // shift moves to Upcoming Coverage with the timer reset for the next day.
+  // End Shift keeps the ConfirmedPane (rating overlay + payment summary).
+  useEffect(() => {
+    if (!open) return;
+    if (phase !== "confirmed") return;
+    if (intent !== "pause") return;
+    const t = setTimeout(() => onClose(), 700);
+    return () => clearTimeout(t);
+  }, [phase, intent, open, onClose]);
+
   // Passive payment detection — driven by simulated clock.
   useEffect(() => {
     if (!open) return;
