@@ -8,7 +8,7 @@ import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDeta
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
@@ -758,7 +758,6 @@ function RequestCard({
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
             <span>·</span>
             <ReliabilityPill entityId={item.doctorRatingId} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
 
           <div
@@ -1118,7 +1117,6 @@ function CoverCard({
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
             <span>·</span>
             <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
 
         </div>

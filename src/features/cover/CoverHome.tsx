@@ -3,7 +3,7 @@ import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { TrustInfoPopover } from "@/components/TrustInfoPopover";
-import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 import { fmtOpMeta } from "@/lib/format";
 
 import {
@@ -226,31 +226,27 @@ function CoverageTile({
           {active ? "Active coverage" : "Next coverage"}
         </div>
         {active ? (
-          <span className="inline-flex items-center gap-2">
-            <EnvironmentBadge environment={coverage.environment} size="xs" />
+          <span
+            className="flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.14em]"
+            style={{ color: "var(--color-presence)" }}
+          >
             <span
-              className="flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.14em]"
-              style={{ color: "var(--color-presence)" }}
+              className="relative h-1.5 w-1.5 rounded-full"
+              style={{ background: "var(--color-presence)" }}
             >
               <span
-                className="relative h-1.5 w-1.5 rounded-full"
-                style={{ background: "var(--color-presence)" }}
-              >
-                <span
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    background: "var(--color-presence)",
-                    opacity: 0.5,
-                    animation: "presence-pulse 1.6s ease-out infinite",
-                  }}
-                />
-              </span>
-              Live
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "var(--color-presence)",
+                  opacity: 0.5,
+                  animation: "presence-pulse 1.6s ease-out infinite",
+                }}
+              />
             </span>
+            Live
           </span>
         ) : (
           <span className="inline-flex items-center gap-2">
-            <EnvironmentBadge environment={coverage.environment} size="xs" />
             <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
             <ReliabilityPill entityId={hospitalEntityId(coverage.hospital)} inline />
           </span>
