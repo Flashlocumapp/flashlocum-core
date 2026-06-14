@@ -718,12 +718,14 @@ export function pauseShift(id: string) {
   const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
   const days = Math.max(1, cur.days ?? 1);
   const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
-  applyPatch(
-    id,
-    { status: "accepted", startedAt: undefined, accumulatedMs, dayIndex },
-    { actor: "requester", actorId: getSessionId(), action: "pause" },
-  );
-  callServerLifecycle("pause", id);
+  applyLocalPatch(id, { status: "accepted", startedAt: undefined, accumulatedMs, dayIndex }, {
+    actor: "requester",
+    actorId: getSessionId(),
+    action: "pause",
+  });
+  void callServerLifecycle("pause", id).then(() => {
+    notifyCoverageChanged(id);
+  });
 }
 
 
@@ -757,12 +759,14 @@ export function completeRequest(id: string) {
     Math.max(1, cur.days ?? 1),
     cur.environment ?? "normal",
   ).amount;
-  applyPatch(
-    id,
-    { status: "completed", accumulatedMs, startedAt: undefined, settledAmount },
-    { actor: "requester", actorId: getSessionId(), action: "complete" },
-  );
-  callServerLifecycle("end", id);
+  applyLocalPatch(id, { status: "completed", accumulatedMs, startedAt: undefined, settledAmount }, {
+    actor: "requester",
+    actorId: getSessionId(),
+    action: "complete",
+  });
+  void callServerLifecycle("end", id).then(() => {
+    notifyCoverageChanged(id);
+  });
 }
 
 
