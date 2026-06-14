@@ -108,7 +108,7 @@ export function TrustInfoPopover({
                     width: 8,
                     height: 8,
                     borderRadius: "9999px",
-                    background: "var(--color-trust)",
+                    background: "var(--color-presence)",
                     display: "inline-block",
                   }}
                 />
