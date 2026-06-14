@@ -141,8 +141,9 @@ export function ShiftSettlement({
         billedMin,
         shift.endHHMM,
         shift.days,
+        shift.environment ?? "normal",
       ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, billedMin],
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, billedMin],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
