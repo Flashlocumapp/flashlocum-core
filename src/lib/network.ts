@@ -121,6 +121,8 @@ export type NetRequest = {
   paidAt?: number;
   /** Timestamp (ms) when FlashLocum remitted the payout to the doctor. */
   remittedAt?: number;
+  /** Environment toggle at booking time; multiplies pricing ×1.25 when 'busy'. */
+  environment?: "normal" | "busy";
 };
 
 
