@@ -311,8 +311,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       const newStartTs = newStart.getTime();
       const newEndTs = newStartTs + totalDur * 3_600_000;
       const kind = coverageKindFromLabel(cur?.coverage ?? fallbackItem?.coverage ?? "Standard");
+      const env = (cur?.environment ?? "normal") as "normal" | "busy";
       // Re-price across ALL booked days so multi-day totals stay correct.
-      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, days);
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, days, env);
       const newAmount = repriced.amount;
 
       netUpdateRequest(id, {
