@@ -469,6 +469,8 @@ function DispatchSheet({
   setDays,
   draft,
   patchDraft,
+  environment,
+  setEnvironment,
   onAdvance,
 }: {
   stage: Stage;
@@ -487,6 +489,8 @@ function DispatchSheet({
   setDays: (n: number) => void;
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
+  environment: Environment;
+  setEnvironment: (e: Environment) => void;
   onAdvance: () => void;
 }) {
   const isCollapsed = stage === "collapsed";
