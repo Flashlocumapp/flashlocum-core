@@ -240,11 +240,15 @@ function PayoutRow({
         aria-expanded={open}
       >
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14.5px] font-medium">{payout.facility}</div>
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[14.5px] font-medium">{payout.facility}</span>
+            <EnvironmentBadge environment={payout.environment} size="xs" />
+          </div>
           <div className="truncate text-[12.5px] text-muted-foreground">
             {payout.coverage} · {shortWeekdays(payout.completedOn)}
           </div>
         </div>
+
         <div className="flex flex-col items-end gap-0.5">
           <div className="text-[14.5px] font-semibold tabular-nums">
             {fmtNairaK(payout.amount)}
