@@ -115,7 +115,7 @@ export function TrustInfoPopover({
                 Reliability
               </div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                How often accepted shifts are successfully completed. Shows how dependable this doctor/hospital is.
+                {reliabilityText ?? "How often accepted shifts are successfully completed. Shows how dependable this doctor/hospital is."}
               </p>
             </div>
           )}
