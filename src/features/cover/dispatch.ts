@@ -260,7 +260,8 @@ export function ensureDoctorSession(initialOnline = true) {
     // postgres_changes path and the snapshot-diff fallback can't both
     // fire the same logical transition (toast + pendingRating).
     const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}`;
-    if (processedEvents.has(eventKey)) return;
+    const _last = processedEvents.get(eventKey);
+    if (_last && Date.now() - _last < DEDUP_TTL_MS) return;
     const r = s.requests[ev.shiftId];
     if (!r) return;
 
