@@ -1079,7 +1079,7 @@ function DispatchOverlay({
   const acceptedSelfie = doctorIdentity.selfieUrl;
 
   const paused = cancelOpen || editOpen;
-  const pricing = computePricing({ coverage, draft, days });
+  const pricing = computePricing({ coverage, draft, days, environment });
 
   const dayStr = dayLabel(coverage, draft, days);
   const startStr = fmtAmPm(draft.startTime);
