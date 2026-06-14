@@ -1104,6 +1104,7 @@ function ConfirmedPane({
   billedMin,
   segments = [],
   extensionCount = 0,
+  tx = null,
   onClose,
 }: {
   shift: ShiftMeta;
@@ -1118,6 +1119,19 @@ function ConfirmedPane({
     billed_amount: number | null;
   }>;
   extensionCount?: number;
+  tx?: {
+    id: string;
+    hospital: string | null;
+    coverage_type: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    settled_amount: number | null;
+    payment_reference: string | null;
+    paid_at: string | null;
+    accepted_by: string | null;
+    doctorName: string | null;
+  } | null;
   onClose: () => void;
 }) {
   void billedMin;
@@ -1138,6 +1152,20 @@ function ConfirmedPane({
     });
   };
 
+  // Authoritative values from the backend transaction record. We render
+  // these instead of frontend state once `tx` lands so the page is always
+  // tied to the actual completed transaction.
+  const loading = !tx;
+  const facility = tx?.hospital ?? shift.facility;
+  const doctor = tx?.doctorName ?? shift.doctor;
+  const coverageLabel = tx?.coverage_type ?? shift.role;
+  const settled = tx?.settled_amount ?? total;
+  const paidAtLabel = tx?.paid_at ? fmtSegTime(tx.paid_at) : null;
+  const scheduleLabel =
+    tx?.day && tx?.start_time && tx?.end_time
+      ? `${tx.day} · ${tx.start_time} – ${tx.end_time}`
+      : null;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -1154,13 +1182,19 @@ function ConfirmedPane({
         </div>
         <h1 className="mt-4 text-[24px] font-semibold tracking-tight">Settlement confirmed</h1>
         <p className="mt-1 text-[13.5px] text-muted-foreground">
-          Coverage with {shift.doctor} closed.
+          {loading ? "Loading transaction details…" : `Coverage with ${doctor} closed.`}
         </p>
 
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5">
-          <Row label="Facility" value={shift.facility} />
-          <Row label="Coverage" value={shift.role} />
-          <Row label="Settled" value={fmtNaira(total)} strong />
+          <Row label="Facility" value={facility} />
+          <Row label="Coverage" value={coverageLabel} />
+          {scheduleLabel && <Row label="Shift" value={scheduleLabel} />}
+          <Row label="Doctor" value={doctor} />
+          <Row label="Settled" value={fmtNaira(settled)} strong />
+          {paidAtLabel && <Row label="Paid at" value={paidAtLabel} />}
+          {tx?.payment_reference && (
+            <Row label="Reference" value={tx.payment_reference} />
+          )}
           {extensionCount > 0 && (
             <Row
               label="Payment extensions"
@@ -1168,6 +1202,7 @@ function ConfirmedPane({
             />
           )}
         </div>
+
 
         {segments.length > 1 && (
           <div className="mt-4 rounded-2xl bg-surface-elevated p-5">
