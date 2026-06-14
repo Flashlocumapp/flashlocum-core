@@ -394,7 +394,7 @@ export function ShiftSettlement({
     const HARD_STOP_MS = 20 * 60 * 1000; // 20 minutes
     const MIN_DELAY_MS = 1_500;
     const MAX_DELAY_MS = 8_000;
-    const RECONCILE_EVERY_MS = 5_000;
+    const RECONCILE_EVERY_MS = 2_000;
     let delay = MIN_DELAY_MS;
     let lastReconcileAt = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
