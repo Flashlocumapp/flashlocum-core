@@ -420,6 +420,62 @@ export function ShiftSettlement({
     };
   }, [open, requestId, phase, verifyPay]);
 
+  // ------ Backend-authoritative billing state + auto-extension ------
+  // The backend owns the payment window. We poll get_request_billing_state
+  // while waiting for payment, override the displayed amount with the
+  // server's total_billed_amount, and call extend_payment_window the
+  // moment payment_due_at passes (the RPC handles the 15-min block +
+  // restriction-after-2 logic). Stops on confirmed / unmount.
+  const fetchBilling = useServerFn(getRequestBillingState);
+  const extendWindow = useServerFn(extendPaymentWindow);
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase === "active" || phase === "confirmed") return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let extending = false;
+
+    const tickServer = async () => {
+      try {
+        const s = await fetchBilling({ data: { requestId } });
+        if (cancelled || !s) return;
+        if (typeof s.total_billed_amount === "number" && s.total_billed_amount > 0) {
+          // Server total is authoritative — surface it in the UI.
+          frozenAmountRef.current = Math.max(
+            frozenAmountRef.current,
+            s.total_billed_amount,
+          );
+        }
+        if (s.payment_status !== "paid" && s.payment_due_at && s.server_now) {
+          const due = Date.parse(s.payment_due_at);
+          const now = Date.parse(s.server_now);
+          if (!Number.isNaN(due) && !Number.isNaN(now) && now >= due && !extending) {
+            extending = true;
+            try {
+              await extendWindow({ data: { requestId } });
+            } catch (err) {
+              console.warn("[settlement] extend_payment_window failed:", err);
+            } finally {
+              extending = false;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[settlement] billing poll failed:", err);
+      }
+      if (!cancelled) timer = setTimeout(tickServer, 30_000);
+    };
+    void tickServer();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [open, requestId, phase, fetchBilling, extendWindow]);
+
+
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(ACCOUNT.number);
