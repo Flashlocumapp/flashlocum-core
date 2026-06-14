@@ -775,7 +775,7 @@ function RequestCard({
               <LiveTimer from={item.startedAt} baseMs={item.accumulatedMs} live />
             </div>
           )}
-          {isUpcoming && item.accumulatedMs > 0 && (
+          {isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1) && (
             <div className="mt-0.5">
               <LiveTimer baseMs={item.accumulatedMs} />
             </div>
@@ -791,7 +791,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
+            {(item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift"}
           </button>
         )}
         {isActive && item.days > 1 && item.dayIndex < item.days && (
