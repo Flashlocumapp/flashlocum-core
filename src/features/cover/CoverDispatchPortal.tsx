@@ -190,9 +190,11 @@ function AcceptedBody({ item }: { item: Coverage }) {
           Coverage confirmed
         </div>
         <div className="inline-flex items-center gap-2">
+          <EnvironmentBadge environment={item.environment} size="xs" />
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
         </div>
+
       </div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight">{item.hospital}</div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
