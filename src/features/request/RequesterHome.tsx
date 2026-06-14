@@ -807,12 +807,14 @@ function CoverageFields({
   setDays,
   draft,
   patchDraft,
+  beforeNoteSlot,
 }: {
   coverage: CoverageId;
   days: number;
   setDays: (n: number) => void;
   draft: Draft;
   patchDraft: (p: Partial<Draft>) => void;
+  beforeNoteSlot?: React.ReactNode;
 }) {
   const bounds = dateBounds();
   // Clamp start date into the 7-day operational window if it drifts.
@@ -847,10 +849,63 @@ function CoverageFields({
         />
         <DaysStepper value={days} setValue={setDays} />
       </Row>
+      {beforeNoteSlot}
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
     </Fields>
   );
 }
+
+/**
+ * Normal / Busy toggle. No pricing copy — the multiplier still applies
+ * server-side, but the requester only sees what each option means
+ * operationally.
+ */
+function EnvironmentSelector({
+  value,
+  onChange,
+}: {
+  value: Environment;
+  onChange: (e: Environment) => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-secondary/60 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+          Environment
+        </span>
+        <div className="flex rounded-full bg-background p-0.5 text-[12px] font-semibold">
+          {(["normal", "busy"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(opt)}
+              className="rounded-full px-3 py-1 capitalize transition-colors"
+              style={{
+                background:
+                  value === opt ? "var(--color-primary)" : "transparent",
+                color:
+                  value === opt
+                    ? "var(--color-primary-foreground)"
+                    : "var(--color-foreground)",
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+      <ul className="mt-2 space-y-0.5 text-[11.5px] leading-snug text-muted-foreground">
+        <li>
+          <span className="font-medium text-foreground/80">Normal</span> — Standard working conditions
+        </li>
+        <li>
+          <span className="font-medium text-foreground/80">Busy</span> — High workload environment
+        </li>
+      </ul>
+    </div>
+  );
+}
+
 
 const Fields = memo(function Fields({ children }: { children: React.ReactNode }) {
   return <div className="space-y-2.5">{children}</div>;
