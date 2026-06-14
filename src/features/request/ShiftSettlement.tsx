@@ -400,7 +400,7 @@ export function ShiftSettlement({
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const markPaid = () => {
-      if (autoConfirmAt.current == null) autoConfirmAt.current = simNow() + 500;
+      confirmPaymentNow();
     };
 
     const checkOnce = async () => {
@@ -495,7 +495,7 @@ export function ShiftSettlement({
       void supabase.removeChannel(channel);
       void supabase.removeChannel(invalidate);
     };
-  }, [open, requestId, phase, verifyPay]);
+  }, [open, requestId, phase, verifyPay, confirmPaymentNow]);
 
   // ------ Backend-authoritative billing state + auto-extension ------
   // The backend owns the payment window. We poll get_request_billing_state
@@ -603,6 +603,9 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
+            payCheckState={payCheckState}
+            payCheckError={payCheckError}
+            onCheckPayment={checkMonnifyPaymentNow}
           />
         )}
         {phase === "overtime" && (
@@ -620,6 +623,9 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
+            payCheckState={payCheckState}
+            payCheckError={payCheckError}
+            onCheckPayment={checkMonnifyPaymentNow}
           />
         )}
         {phase === "confirmed" && (
