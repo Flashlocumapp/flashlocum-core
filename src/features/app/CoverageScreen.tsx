@@ -7,6 +7,9 @@ import { CancelFlow } from "@/components/CancelFlow";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import {
@@ -66,7 +69,9 @@ type RequestItem = {
   accumulatedMs: number;
   days: number;
   dayIndex: number;
+  environment?: "normal" | "busy";
 };
+
 
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
@@ -138,8 +143,10 @@ function toRequestItem(r: NetRequest): RequestItem {
     accumulatedMs: r.accumulatedMs ?? 0,
     days: settledDays,
     dayIndex: Math.max(1, r.dayIndex ?? 1),
+    environment: r.environment ?? "normal",
   };
 }
+
 
 
 
@@ -220,6 +227,12 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  // "end" = final assignment close (existing behaviour).
+  // "pause" = close today's segment → trigger Monnify → move to Upcoming
+  // only AFTER backend confirms the segment is paid (webhook source of truth).
+  const [settlingIntent, setSettlingIntent] = useState<"end" | "pause">("end");
+  const [pauseConfirmId, setPauseConfirmId] = useState<string | null>(null);
+  const [endConfirmId, setEndConfirmId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [editInitial, setEditInitial] = useState<EditableShift>({
@@ -244,6 +257,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         completedOn: historyItem.completedOn,
         amount: historyItem.amount,
         rating: ratings[historyItem.id],
+        environment: historyItem.environment,
       }
     : null;
 
@@ -255,12 +269,14 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  const pauseToUpcoming = (id: string) => {
-    netPauseShift(id);
-    shiftCue("pause");
-    setTab("upcoming");
-    setNotice("Shift paused · Timer preserved");
-    window.setTimeout(() => setNotice(null), 2600);
+  // Pause Shift → confirmation modal → open ShiftSettlement in pause-intent
+  // mode. The local netPauseShift only fires once the backend reports the
+  // segment as paid (settlement onConfirmed → confirmEnd). This keeps the
+  // Monnify webhook the source of truth for the state change.
+  const requestPause = (id: string) => setPauseConfirmId(id);
+  const beginPause = (id: string) => {
+    setSettlingIntent("pause");
+    setSettlingId(id);
   };
 
   /**
@@ -268,15 +284,26 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    * multi-day, mid-day, after a pause) so the lifecycle stays flexible.
    * Settlement uses the accumulated continuous timer, not scheduled hours.
    */
+  const requestEnd = (id: string) => setEndConfirmId(id);
   const beginEndShift = (id: string) => {
+    setSettlingIntent("end");
     setSettlingId(id);
   };
 
   const confirmEnd = () => {
     if (!settlingId) return;
-    netCompleteRequest(settlingId);
-    shiftCue("end");
+    if (settlingIntent === "pause") {
+      netPauseShift(settlingId);
+      shiftCue("pause");
+      setTab("upcoming");
+      setNotice("Payment confirmed · Shift moved to Upcoming");
+      window.setTimeout(() => setNotice(null), 2600);
+    } else {
+      netCompleteRequest(settlingId);
+      shiftCue("end");
+    }
   };
+
 
 
 
@@ -365,8 +392,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                   <RequestCard
                     item={item}
                     onStart={() => moveToActive(item.id)}
-                    onPause={() => pauseToUpcoming(item.id)}
-                    onEnd={() => beginEndShift(item.id)}
+                    onPause={() => requestPause(item.id)}
+                    onEnd={() => requestEnd(item.id)}
+
                     onCancel={() => setCancelTargetId(item.id)}
                     onEdit={() => openEdit(item.id)}
                     onOpenHistory={() => setHistoryId(item.id)}
@@ -409,6 +437,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!settling}
         onClose={() => setSettlingId(null)}
         initialPhase="settlement"
+        intent={settlingIntent}
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingId(null)}
         requestId={settling?.id}
@@ -429,6 +458,40 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
             : undefined
         }
       />
+
+      <ConfirmDialog
+        open={!!pauseConfirmId}
+        title="Pause this shift?"
+        body={
+          "Pausing this shift means you are closing today's work and proceeding to payment for the completed shift. You can resume the shift anytime under Upcoming Coverage."
+        }
+        confirmLabel="Pause & Pay"
+        cancelLabel="Keep Working"
+        onOpenChange={(next) => { if (!next) setPauseConfirmId(null); }}
+        onConfirm={() => {
+          const id = pauseConfirmId;
+          setPauseConfirmId(null);
+          if (id) beginPause(id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!endConfirmId}
+        title="End this shift?"
+        body={
+          "Ending this shift means you are closing the entire assignment and proceeding to final payment for completed work."
+        }
+        confirmLabel="End & Pay"
+        cancelLabel="Keep Working"
+        destructive
+        onOpenChange={(next) => { if (!next) setEndConfirmId(null); }}
+        onConfirm={() => {
+          const id = endConfirmId;
+          setEndConfirmId(null);
+          if (id) beginEndShift(id);
+        }}
+      />
+
 
       <CancelFlow
         open={!!cancelTargetId}
@@ -466,8 +529,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
         onDismiss={() => setDetailId(null)}
         onStart={(id) => { setDetailId(null); moveToActive(id); }}
-        onPause={(id) => { setDetailId(null); pauseToUpcoming(id); }}
-        onEnd={(id) => { setDetailId(null); beginEndShift(id); }}
+        onPause={(id) => { setDetailId(null); requestPause(id); }}
+        onEnd={(id) => { setDetailId(null); requestEnd(id); }}
+
         onEdit={(id) => { setDetailId(null); openEdit(id); }}
         onCancel={(id) => { setDetailId(null); setCancelTargetId(id); }}
       />
@@ -694,7 +758,9 @@ function RequestCard({
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
             <span>·</span>
             <ReliabilityPill entityId={item.doctorRatingId} inline />
+            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
+
           <div
             className="mt-0.5 truncate text-[12.5px]"
             style={{
@@ -1052,7 +1118,9 @@ function CoverCard({
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
             <span>·</span>
             <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
+
         </div>
         {isActive && (
           <span

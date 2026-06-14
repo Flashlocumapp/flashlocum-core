@@ -10,7 +10,7 @@ import {
   type Environment,
 } from "@/lib/pricing";
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
-import { getRequestBillingState, extendPaymentWindow } from "@/lib/shift.functions";
+import { getRequestBillingState, extendPaymentWindow, pauseShift as serverPauseShift } from "@/lib/shift.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -89,6 +89,7 @@ export function ShiftSettlement({
   initialPhase = "active",
   onConfirmed,
   requestId,
+  intent = "end",
 }: {
   open: boolean;
   onClose: () => void;
@@ -99,7 +100,12 @@ export function ShiftSettlement({
   /** When provided, settlement uses Monnify hosted checkout instead of the
    *  static demo bank-transfer block. */
   requestId?: string;
+  /** "end" = final assignment close. "pause" = close today's segment and
+   *  proceed to payment; on payment confirmation the requester returns to
+   *  Upcoming Coverage and can resume the shift later. */
+  intent?: "end" | "pause";
 }) {
+
   const [phase, setPhase] = useState<Phase>(initialPhase);
   // Anchor timestamps drive every elapsed/overtime computation so that a
   // simulation fast-forward instantly advances the visible state.
@@ -282,6 +288,8 @@ export function ShiftSettlement({
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const verifyPay = useServerFn(verifySettlementPayment);
+  const callPauseShift = useServerFn(serverPauseShift);
+
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
@@ -310,22 +318,35 @@ export function ShiftSettlement({
 
   // Auto-start the moment we land in settlement.
   const autoOpenedRef = useRef(false);
+  const pauseFiredRef = useRef(false);
   useEffect(() => {
     if (!open || !requestId) return;
     if (phase !== "settlement") return;
+    // When this settlement was opened via "Pause Shift" the backend hasn't
+    // billed the open segment yet — fire pause_shift RPC first so the
+    // server total_billed_amount reflects today's work before checkout opens.
+    if (intent === "pause" && !pauseFiredRef.current) {
+      pauseFiredRef.current = true;
+      void callPauseShift({ data: { requestId } }).catch((err) => {
+        console.warn("[settlement] server pause_shift failed:", err?.message ?? err);
+      });
+    }
     if (autoOpenedRef.current) return;
     if (payState !== "idle") return;
     autoOpenedRef.current = true;
     void startMonnifyCheckout();
-  }, [open, requestId, phase, payState]);
+  }, [open, requestId, phase, payState, intent, callPauseShift]);
+
   useEffect(() => {
     if (!open) {
       autoOpenedRef.current = false;
+      pauseFiredRef.current = false;
       setAccount(null);
       setPayState("idle");
       setPayError(null);
     }
   }, [open]);
+
 
 
 
