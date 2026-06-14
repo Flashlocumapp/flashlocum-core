@@ -114,9 +114,11 @@ function IncomingBody({ item }: { item: Coverage }) {
           </span>
         </div>
         <div className="inline-flex items-center gap-2">
+          <EnvironmentBadge environment={item.environment} size="xs" />
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
         </div>
+
       </div>
 
       <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">{item.hospital}</div>
