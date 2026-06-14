@@ -589,6 +589,7 @@ function RequesterDetailSheet({
                 <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
                 <span>·</span>
                 <ReliabilityPill entityId={item.doctorRatingId} inline />
+                <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
               </div>
             </div>
           </div>
