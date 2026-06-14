@@ -89,6 +89,7 @@ export function ShiftSettlement({
   initialPhase = "active",
   onConfirmed,
   requestId,
+  intent = "end",
 }: {
   open: boolean;
   onClose: () => void;
@@ -99,7 +100,12 @@ export function ShiftSettlement({
   /** When provided, settlement uses Monnify hosted checkout instead of the
    *  static demo bank-transfer block. */
   requestId?: string;
+  /** "end" = final assignment close. "pause" = close today's segment and
+   *  proceed to payment; on payment confirmation the requester returns to
+   *  Upcoming Coverage and can resume the shift later. */
+  intent?: "end" | "pause";
 }) {
+
   const [phase, setPhase] = useState<Phase>(initialPhase);
   // Anchor timestamps drive every elapsed/overtime computation so that a
   // simulation fast-forward instantly advances the visible state.
