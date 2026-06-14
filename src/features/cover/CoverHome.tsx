@@ -3,7 +3,9 @@ import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { TrustInfoPopover } from "@/components/TrustInfoPopover";
+import { EnvironmentBadge } from "@/components/EnvironmentBadge";
 import { fmtOpMeta } from "@/lib/format";
+
 import {
   doctorEntityId,
   hospitalEntityId,
