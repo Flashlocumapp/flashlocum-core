@@ -8,6 +8,8 @@ import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
+import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 import {
   acceptIncoming,
   cancelUpcoming,
