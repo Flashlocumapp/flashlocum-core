@@ -589,6 +589,7 @@ function RequesterDetailSheet({
                 <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
                 <span>·</span>
                 <ReliabilityPill entityId={item.doctorRatingId} inline />
+                <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
               </div>
             </div>
           </div>
@@ -1097,7 +1098,6 @@ function CoverCard({
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
             <span>·</span>
             <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
 
         </div>
@@ -1244,6 +1244,7 @@ function DoctorCoverageDetail({
             <div className="inline-flex items-center gap-2">
               <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
               <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+              <EnvironmentBadge environment={item.environment} size="xs" />
             </div>
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
