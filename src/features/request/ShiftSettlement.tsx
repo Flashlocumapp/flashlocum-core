@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
@@ -285,6 +285,13 @@ export function ShiftSettlement({
     autoConfirmAt.current = simNow() + 2500;
   };
 
+  const confirmPaymentNow = useCallback(() => {
+    const now = simNow();
+    autoConfirmAt.current = now;
+    confirmedAtRef.current = now;
+    setPhase("confirmed");
+  }, []);
+
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const verifyPay = useServerFn(verifySettlementPayment);
@@ -293,6 +300,8 @@ export function ShiftSettlement({
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
+  const [payCheckState, setPayCheckState] = useState<"idle" | "checking" | "not_found" | "error">("idle");
+  const [payCheckError, setPayCheckError] = useState<string | null>(null);
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
@@ -308,10 +317,29 @@ export function ShiftSettlement({
       });
       setAccount(result);
       setPayState("waiting");
+      setPayCheckState("idle");
+      setPayCheckError(null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not start checkout";
       setPayError(msg);
       setPayState("error");
+    }
+  };
+
+  const checkMonnifyPaymentNow = async () => {
+    if (!requestId || payCheckState === "checking") return;
+    setPayCheckState("checking");
+    setPayCheckError(null);
+    try {
+      const res = await verifyPay({ data: { requestId } });
+      if (res?.paid) {
+        confirmPaymentNow();
+      } else {
+        setPayCheckState("not_found");
+      }
+    } catch (e) {
+      setPayCheckState("error");
+      setPayCheckError(e instanceof Error ? e.message : "Could not confirm payment yet");
     }
   };
 
@@ -344,6 +372,8 @@ export function ShiftSettlement({
       setAccount(null);
       setPayState("idle");
       setPayError(null);
+      setPayCheckState("idle");
+      setPayCheckError(null);
     }
   }, [open]);
 
@@ -362,15 +392,15 @@ export function ShiftSettlement({
     let cancelled = false;
     const startedAt = Date.now();
     const HARD_STOP_MS = 20 * 60 * 1000; // 20 minutes
-    const MIN_DELAY_MS = 6_000;
-    const MAX_DELAY_MS = 30_000;
-    const RECONCILE_EVERY_MS = 60_000;
+    const MIN_DELAY_MS = 1_500;
+    const MAX_DELAY_MS = 8_000;
+    const RECONCILE_EVERY_MS = 2_000;
     let delay = MIN_DELAY_MS;
     let lastReconcileAt = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const markPaid = () => {
-      if (autoConfirmAt.current == null) autoConfirmAt.current = simNow() + 500;
+      confirmPaymentNow();
     };
 
     const checkOnce = async () => {
@@ -465,7 +495,7 @@ export function ShiftSettlement({
       void supabase.removeChannel(channel);
       void supabase.removeChannel(invalidate);
     };
-  }, [open, requestId, phase, verifyPay]);
+  }, [open, requestId, phase, verifyPay, confirmPaymentNow]);
 
   // ------ Backend-authoritative billing state + auto-extension ------
   // The backend owns the payment window. We poll get_request_billing_state
@@ -573,6 +603,9 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
+            payCheckState={payCheckState}
+            payCheckError={payCheckError}
+            onCheckPayment={checkMonnifyPaymentNow}
           />
         )}
         {phase === "overtime" && (
@@ -590,6 +623,9 @@ export function ShiftSettlement({
             payState={payState}
             payError={payError}
             account={account}
+            payCheckState={payCheckState}
+            payCheckError={payCheckError}
+            onCheckPayment={checkMonnifyPaymentNow}
           />
         )}
         {phase === "confirmed" && (
@@ -635,7 +671,7 @@ function ActivePane({
       className="relative flex h-full w-full flex-col safe-top"
     >
       <TopBar onClose={onClose} />
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col overflow-y-auto px-6 pt-2">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           Live Coverage
         </div>
@@ -709,6 +745,9 @@ function SettlementPane({
   payState,
   payError,
   account,
+  payCheckState,
+  payCheckError,
+  onCheckPayment,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -723,6 +762,9 @@ function SettlementPane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  payCheckState: "idle" | "checking" | "not_found" | "error";
+  payCheckError: string | null;
+  onCheckPayment: () => void;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
@@ -734,6 +776,9 @@ function SettlementPane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        payCheckState={payCheckState}
+        payCheckError={payCheckError}
+        onCheckPayment={onCheckPayment}
       />
     );
   }
@@ -829,6 +874,9 @@ function OvertimePane({
   payState,
   payError,
   account,
+  payCheckState,
+  payCheckError,
+  onCheckPayment,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -842,6 +890,9 @@ function OvertimePane({
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
   account: TransferAccount | null;
+  payCheckState: "idle" | "checking" | "not_found" | "error";
+  payCheckError: string | null;
+  onCheckPayment: () => void;
 }) {
   if (onPayWithMonnify) {
     return (
@@ -852,6 +903,9 @@ function OvertimePane({
         payError={payError}
         paymentTriggered={paymentTriggered}
         onRetry={onPayWithMonnify}
+        payCheckState={payCheckState}
+        payCheckError={payCheckError}
+        onCheckPayment={onCheckPayment}
       />
     );
   }
@@ -1123,6 +1177,9 @@ function CustomTransferPane({
   payError,
   paymentTriggered,
   onRetry,
+  payCheckState,
+  payCheckError,
+  onCheckPayment,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -1130,6 +1187,9 @@ function CustomTransferPane({
   payError: string | null;
   paymentTriggered: boolean;
   onRetry: () => void;
+  payCheckState: "idle" | "checking" | "not_found" | "error";
+  payCheckError: string | null;
+  onCheckPayment: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
@@ -1274,6 +1334,24 @@ function CustomTransferPane({
         ) : null}
 
         <div className="mt-auto space-y-3 pb-8">
+          {account && (
+            <button
+              type="button"
+              disabled={paymentTriggered || payCheckState === "checking"}
+              onClick={onCheckPayment}
+              className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
+            >
+              {paymentTriggered || payCheckState === "checking" ? "Confirming payment…" : "I have made payment"}
+            </button>
+          )}
+          {payCheckState === "not_found" && !paymentTriggered && (
+            <p className="text-center text-[12px] text-muted-foreground">
+              Payment is not confirmed yet. Tap again after your bank marks the transfer successful.
+            </p>
+          )}
+          {payCheckState === "error" && payCheckError && !paymentTriggered && (
+            <p className="text-center text-[12px] text-destructive">{payCheckError}</p>
+          )}
           <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
             {paymentTriggered ? (
               <>
