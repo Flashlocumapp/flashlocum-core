@@ -8,6 +8,8 @@ import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
+
+
 import {
   acceptIncoming,
   cancelUpcoming,
@@ -115,6 +117,7 @@ function IncomingBody({ item }: { item: Coverage }) {
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
         </div>
+
       </div>
 
       <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">{item.hospital}</div>
@@ -189,6 +192,7 @@ function AcceptedBody({ item }: { item: Coverage }) {
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
         </div>
+
       </div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight">{item.hospital}</div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>

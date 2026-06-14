@@ -26,6 +26,7 @@ import { Route as AdminAdminIndexRouteImport } from './routes/_admin.admin.index
 import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public/monnify-webhook'
 import { Route as AdminAdminVerificationRouteImport } from './routes/_admin.admin.verification'
 import { Route as AdminAdminUsersRouteImport } from './routes/_admin.admin.users'
+import { Route as AdminAdminUnpaidRouteImport } from './routes/_admin.admin.unpaid'
 import { Route as AdminAdminSystemRouteImport } from './routes/_admin.admin.system'
 import { Route as AdminAdminSupportRouteImport } from './routes/_admin.admin.support'
 import { Route as AdminAdminShiftsRouteImport } from './routes/_admin.admin.shifts'
@@ -118,6 +119,11 @@ const AdminAdminUsersRoute = AdminAdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminAdminRoute,
 } as any)
+const AdminAdminUnpaidRoute = AdminAdminUnpaidRouteImport.update({
+  id: '/unpaid',
+  path: '/unpaid',
+  getParentRoute: () => AdminAdminRoute,
+} as any)
 const AdminAdminSystemRoute = AdminAdminSystemRouteImport.update({
   id: '/system',
   path: '/system',
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/admin/shifts': typeof AdminAdminShiftsRoute
   '/admin/support': typeof AdminAdminSupportRoute
   '/admin/system': typeof AdminAdminSystemRoute
+  '/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByTo {
   '/admin/shifts': typeof AdminAdminShiftsRoute
   '/admin/support': typeof AdminAdminSupportRoute
   '/admin/system': typeof AdminAdminSystemRoute
+  '/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -231,6 +239,7 @@ export interface FileRoutesById {
   '/_admin/admin/shifts': typeof AdminAdminShiftsRoute
   '/_admin/admin/support': typeof AdminAdminSupportRoute
   '/_admin/admin/system': typeof AdminAdminSystemRoute
+  '/_admin/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/_admin/admin/users': typeof AdminAdminUsersRoute
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
@@ -258,6 +267,7 @@ export interface FileRouteTypes {
     | '/admin/shifts'
     | '/admin/support'
     | '/admin/system'
+    | '/admin/unpaid'
     | '/admin/users'
     | '/admin/verification'
     | '/api/public/monnify-webhook'
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
     | '/admin/shifts'
     | '/admin/support'
     | '/admin/system'
+    | '/admin/unpaid'
     | '/admin/users'
     | '/admin/verification'
     | '/api/public/monnify-webhook'
@@ -309,6 +320,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/shifts'
     | '/_admin/admin/support'
     | '/_admin/admin/system'
+    | '/_admin/admin/unpaid'
     | '/_admin/admin/users'
     | '/_admin/admin/verification'
     | '/api/public/monnify-webhook'
@@ -450,6 +462,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdminUsersRouteImport
       parentRoute: typeof AdminAdminRoute
     }
+    '/_admin/admin/unpaid': {
+      id: '/_admin/admin/unpaid'
+      path: '/unpaid'
+      fullPath: '/admin/unpaid'
+      preLoaderRoute: typeof AdminAdminUnpaidRouteImport
+      parentRoute: typeof AdminAdminRoute
+    }
     '/_admin/admin/system': {
       id: '/_admin/admin/system'
       path: '/system'
@@ -517,6 +536,7 @@ interface AdminAdminRouteChildren {
   AdminAdminShiftsRoute: typeof AdminAdminShiftsRoute
   AdminAdminSupportRoute: typeof AdminAdminSupportRoute
   AdminAdminSystemRoute: typeof AdminAdminSystemRoute
+  AdminAdminUnpaidRoute: typeof AdminAdminUnpaidRoute
   AdminAdminUsersRoute: typeof AdminAdminUsersRoute
   AdminAdminVerificationRoute: typeof AdminAdminVerificationRoute
   AdminAdminIndexRoute: typeof AdminAdminIndexRoute
@@ -530,6 +550,7 @@ const AdminAdminRouteChildren: AdminAdminRouteChildren = {
   AdminAdminShiftsRoute: AdminAdminShiftsRoute,
   AdminAdminSupportRoute: AdminAdminSupportRoute,
   AdminAdminSystemRoute: AdminAdminSystemRoute,
+  AdminAdminUnpaidRoute: AdminAdminUnpaidRoute,
   AdminAdminUsersRoute: AdminAdminUsersRoute,
   AdminAdminVerificationRoute: AdminAdminVerificationRoute,
   AdminAdminIndexRoute: AdminAdminIndexRoute,

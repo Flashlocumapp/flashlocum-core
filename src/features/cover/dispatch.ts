@@ -42,7 +42,10 @@ export type Coverage = {
   days: number;
   dayIndex: number;
   settledAmount?: number;
+  /** Captured at booking; surfaced in every doctor-facing view. */
+  environment?: "normal" | "busy";
 };
+
 
 // Full monetary formatting everywhere (₦36,500). No K abbreviation.
 export const nairaK = (n: number) => "₦" + n.toLocaleString("en-NG");
@@ -74,8 +77,10 @@ function toCoverage(r: NetRequest): Coverage {
     days: Math.max(1, r.days ?? 1),
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     settledAmount: r.settledAmount,
+    environment: r.environment ?? "normal",
   };
 }
+
 
 function conflictMessage(reason: AcceptBlockReason): string {
   if (reason === "max") return "You already have the maximum number of confirmed shifts.";
@@ -112,10 +117,22 @@ export type PendingRating = {
   total: number;
   feePct: number;
 };
-let pendingRating: PendingRating | null = null;
 
 
-const processedEvents = new Set<string>();
+
+// Per-event timestamp map. We dedup by (actor, shift, action) with a short
+// TTL so the postgres_changes path and the snapshot-diff fallback can't
+// both fire the same logical transition, while legitimate later events
+// for the same shift+action (e.g. a second pause after resume) still pass.
+const processedEvents = new Map<string, number>();
+const DEDUP_TTL_MS = 5000;
+
+// We only store the requestId here. The hospital / coverage / total / feePct
+// shown in the PaymentSummary are derived LIVE from the request row inside
+// useDispatch(), so the card always reflects the exact transaction that
+// just completed — including any settled_amount the Monnify webhook writes
+// after the fact.
+let pendingRatingRequestId: string | null = null;
 
 const localListeners = new Set<() => void>();
 function bump() {
@@ -161,12 +178,7 @@ export function useDispatch(): View {
     .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
-  const declined = new Set(me?.declined ?? []);
-  // Doctors never see their own requester-side broadcasts (dispatch must
-  // behave as a true multi-user network, not a same-account loopback).
-  const liveRequests = broadcastingRequests(net).filter(
-    (r) => !declined.has(r.id) && r.requesterSessionId !== sid,
-  );
+  const liveRequests = broadcastingRequests(net);
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -206,20 +218,41 @@ export function useDispatch(): View {
 
   let incoming: Coverage | null = null;
   if (online && upcoming.length < 3) {
-    const r = liveRequests[0];
+    const declined = new Set<string>(me?.declined ?? []);
+    const r = liveRequests.find(
+      (x) =>
+        x.status === "broadcasting" &&
+        x.requesterSessionId !== sid &&
+        !declined.has(x.id),
+    );
     if (r) incoming = toCoverage(r);
   }
 
   useEffect(() => {
-    if (!online || !me || upcoming.length < 3 || liveRequests.length === 0) return;
+    if (!me || upcoming.length < 3 || liveRequests.length === 0) return;
     liveRequests.forEach((r) => markDeclined(r.id));
-  }, [online, me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
+  }, [me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
       setDoctorAcceptedCount(upcoming.length);
     }
   }, [me, upcoming.length]);
+
+  let pendingRating: PendingRating | null = null;
+  if (pendingRatingRequestId) {
+    const r = net.requests[pendingRatingRequestId];
+    if (r && r.status === "completed" && r.acceptedBy === sid) {
+      pendingRating = {
+        requestId: r.id,
+        hospitalId: hospitalEntityId(r.hospital),
+        hospital: r.hospital,
+        coverage: r.coverage,
+        total: r.settledAmount ?? r.amount,
+        feePct: r.feePct,
+      };
+    }
+  }
 
   return {
     online,
@@ -248,16 +281,18 @@ export function ensureDoctorSession(initialOnline = true) {
     const sid = getSessionId();
     const ev = s.lastEvent;
     if (!ev || !ev.shiftId) return;
-    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
-    if (processedEvents.has(eventKey)) return;
+    // Dedup by (actor, shift, action) WITHOUT the timestamp so the
+    // postgres_changes path and the snapshot-diff fallback can't both
+    // fire the same logical transition (toast + pendingRating).
+    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}`;
+    const _last = processedEvents.get(eventKey);
+    if (_last && Date.now() - _last < DEDUP_TTL_MS) return;
     const r = s.requests[ev.shiftId];
     if (!r) return;
 
     // New request reached this doctor → calm notification cue.
     // Only fire when the doctor is online and has capacity to accept.
     if (ev.action === "publish" && ev.actor === "requester") {
-      // Ignore my own requester-side publishes — dispatch is multi-user.
-      if (r.requesterSessionId === sid) return;
       const me = s.doctors[sid];
       if (!me?.online) return;
       const mine = Object.values(s.requests).filter(
@@ -265,7 +300,7 @@ export function ensureDoctorSession(initialOnline = true) {
       );
       if (mine.length >= 3) return;
       if ((me.declined ?? []).includes(r.id)) return;
-      processedEvents.add(eventKey);
+      processedEvents.set(eventKey, Date.now());
       shiftCue("request");
       pushToast({
         tone: "presence",
@@ -277,7 +312,7 @@ export function ensureDoctorSession(initialOnline = true) {
 
     if (r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
-    processedEvents.add(eventKey);
+    processedEvents.set(eventKey, Date.now());
 
     if (ev.action === "start") {
       shiftCue("start");
@@ -311,14 +346,11 @@ export function ensureDoctorSession(initialOnline = true) {
         body: "Payment will be remitted to your account by 10PM today.",
         ttl: 5200,
       });
-      pendingRating = {
-        requestId: r.id,
-        hospitalId: hospitalEntityId(r.hospital),
-        hospital: r.hospital,
-        coverage: r.coverage,
-        total: r.settledAmount ?? r.amount,
-        feePct: r.feePct,
-      };
+      // Tie the PaymentSummary to the EXACT transaction that just completed.
+      // Live details (hospital/coverage/total/feePct) are derived in
+      // useDispatch() from the current request row so post-webhook
+      // settled_amount updates flow into the card automatically.
+      pendingRatingRequestId = r.id;
 
 
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
@@ -429,7 +461,7 @@ export function dismissAccepted() {
 }
 
 export function dismissPendingRating() {
-  pendingRating = null;
+  pendingRatingRequestId = null;
   bump();
 }
 

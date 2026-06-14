@@ -3,7 +3,9 @@ import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { TrustInfoPopover } from "@/components/TrustInfoPopover";
+
 import { fmtOpMeta } from "@/lib/format";
+
 import {
   doctorEntityId,
   hospitalEntityId,
@@ -249,6 +251,7 @@ function CoverageTile({
             <ReliabilityPill entityId={hospitalEntityId(coverage.hospital)} inline />
           </span>
         )}
+
       </div>
 
       <div className="mt-1.5 text-[15.5px] font-semibold leading-tight tracking-tight">
