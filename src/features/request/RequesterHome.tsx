@@ -1111,6 +1111,7 @@ function DispatchOverlay({
         startTs: win.startTs,
         endTs: win.endTs,
         days: Math.max(1, days),
+        environment,
       });
       resumeRequest(cur.id);
       ownedIdRef.current = cur.id;
