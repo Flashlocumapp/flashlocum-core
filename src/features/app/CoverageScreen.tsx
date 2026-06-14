@@ -1089,7 +1089,7 @@ function CoverCard({
   return (
     <Wrapper
       {...wrapperProps}
-      className="block w-full rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-secondary/30"
+      className="block w-full rounded-2xl px-4 py-3 text-left transition-colors active:bg-secondary/30"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 65%, transparent)"
@@ -1113,8 +1113,6 @@ function CoverCard({
             {outcomeChip}
           </div>
           <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-            <span className="truncate">{item.area}</span>
-            <span>·</span>
             <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
             <span>·</span>
             <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
@@ -1146,7 +1144,7 @@ function CoverCard({
       </div>
 
       <div
-        className="mt-1.5 text-[12.5px] leading-snug"
+        className="mt-1 text-[12.5px] leading-snug"
         style={{
           color: isHistory
             ? "color-mix(in oklab, var(--color-foreground) 60%, transparent)"
@@ -1157,13 +1155,13 @@ function CoverCard({
       </div>
 
       {item.note && (
-        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">
+        <div className="mt-0.5 text-[11.5px] leading-snug text-foreground/65">
           {item.note}
         </div>
       )}
 
       {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <LiveTimer
             from={(item as CoverItem & { startedAt: number }).startedAt}
             baseMs={(item as CoverItem).accumulatedMs ?? 0}
@@ -1172,14 +1170,14 @@ function CoverCard({
         </div>
       )}
       {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) > 0 && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
         </div>
       )}
 
 
       {(isActive || isUpcoming) && (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-2">
           {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) === 0 && (
             <button
               onClick={(e) => {
