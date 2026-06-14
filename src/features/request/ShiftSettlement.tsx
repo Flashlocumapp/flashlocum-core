@@ -671,7 +671,7 @@ function ActivePane({
       className="relative flex h-full w-full flex-col safe-top"
     >
       <TopBar onClose={onClose} />
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col overflow-y-auto px-6 pt-2">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           Live Coverage
         </div>
