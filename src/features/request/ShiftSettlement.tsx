@@ -461,6 +461,11 @@ export function ShiftSettlement({
             s.total_billed_amount,
           );
         }
+        if (Array.isArray(s.segments)) setSegments(s.segments as SegmentRow[]);
+        if (typeof s.payment_extension_count === "number") {
+          setExtensionCount(s.payment_extension_count);
+        }
+
         if (s.payment_status !== "paid" && s.payment_due_at && s.server_now) {
           const due = Date.parse(s.payment_due_at);
           const now = Date.parse(s.server_now);
