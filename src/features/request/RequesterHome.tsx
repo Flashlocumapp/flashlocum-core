@@ -22,7 +22,7 @@ import {
   cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
-import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
+import { computeCoveragePricing, coverageKindFromLabel, type Environment } from "@/lib/pricing";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
   fetchHospitalSuggestions,
