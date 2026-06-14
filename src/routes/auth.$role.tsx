@@ -498,11 +498,13 @@ function AuthScreen() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-7 space-y-3">
+        <form onSubmit={handleSubmit} className="mt-7 space-y-3" key={mode}>
           {mode === "signup" && (
             <Field
               label="Full name"
               type="text"
+              name="name"
+              id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
@@ -512,9 +514,11 @@ function AuthScreen() {
           <Field
             label="Email"
             type="email"
+            name={mode === "signup" ? "email" : "username"}
+            id={mode === "signup" ? "signup-email" : "login-email"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            autoComplete={mode === "signup" ? "email" : "username"}
             inputMode="email"
             placeholder="you@example.com"
           />
@@ -524,6 +528,8 @@ function AuthScreen() {
             <div className="mt-1.5 flex items-center rounded-2xl bg-secondary px-4">
               <input
                 type={showPw ? "text" : "password"}
+                name="password"
+                id={mode === "signup" ? "signup-password" : "login-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
