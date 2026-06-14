@@ -77,8 +77,10 @@ function toCoverage(r: NetRequest): Coverage {
     days: Math.max(1, r.days ?? 1),
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     settledAmount: r.settledAmount,
+    environment: r.environment ?? "normal",
   };
 }
+
 
 function conflictMessage(reason: AcceptBlockReason): string {
   if (reason === "max") return "You already have the maximum number of confirmed shifts.";
