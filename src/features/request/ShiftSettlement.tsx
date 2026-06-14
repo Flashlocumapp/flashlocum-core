@@ -128,6 +128,24 @@ export function ShiftSettlement({
   const [segments, setSegments] = useState<SegmentRow[]>([]);
   const [extensionCount, setExtensionCount] = useState(0);
 
+  // Authoritative transaction record loaded from the backend the moment
+  // payment is confirmed. ConfirmedPane renders from this — never from
+  // local/frontend state — so the Settlement Confirmed page is always
+  // tied to the exact completed transaction.
+  type TxRecord = {
+    id: string;
+    hospital: string | null;
+    coverage_type: string | null;
+    scheduled_start: string | null;
+    scheduled_end: string | null;
+    settled_amount: number | null;
+    payment_reference: string | null;
+    paid_at: string | null;
+    accepted_by: string | null;
+    doctorName: string | null;
+  };
+  const [tx, setTx] = useState<TxRecord | null>(null);
+
 
   const tick = useSimClock(1000);
 
