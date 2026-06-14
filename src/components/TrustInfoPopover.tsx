@@ -7,12 +7,16 @@ import { useEffect, useRef, useState } from "react";
 export function TrustInfoPopover({
   showRatings = true,
   showReliability = true,
+  ratingsText,
+  reliabilityText,
   align = "center",
   direction = "down",
   className = "",
 }: {
   showRatings?: boolean;
   showReliability?: boolean;
+  ratingsText?: string;
+  reliabilityText?: string;
   align?: "start" | "center" | "end";
   direction?: "up" | "down";
   className?: string;
