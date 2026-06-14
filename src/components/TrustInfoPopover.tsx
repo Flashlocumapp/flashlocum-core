@@ -83,7 +83,7 @@ export function TrustInfoPopover({
           {showRatings && (
             <div>
               <div className="flex items-center gap-1.5 text-[11.5px] font-semibold tracking-tight text-foreground">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--color-trust)" aria-hidden>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--color-rating)" aria-hidden>
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
                 Ratings
