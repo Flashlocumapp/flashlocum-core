@@ -213,15 +213,15 @@ export function useDispatch(): View {
 
 
   let incoming: Coverage | null = null;
-  if (online && upcoming.length < 3) {
+  if (upcoming.length < 3) {
     const r = liveRequests[0];
     if (r) incoming = toCoverage(r);
   }
 
   useEffect(() => {
-    if (!online || !me || upcoming.length < 3 || liveRequests.length === 0) return;
+    if (!me || upcoming.length < 3 || liveRequests.length === 0) return;
     liveRequests.forEach((r) => markDeclined(r.id));
-  }, [online, me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
+  }, [me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
