@@ -437,6 +437,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!settling}
         onClose={() => setSettlingId(null)}
         initialPhase="settlement"
+        intent={settlingIntent}
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingId(null)}
         requestId={settling?.id}
@@ -457,6 +458,40 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
             : undefined
         }
       />
+
+      <ConfirmDialog
+        open={!!pauseConfirmId}
+        title="Pause this shift?"
+        body={
+          "Pausing this shift means you are closing today's work and proceeding to payment for the completed shift. You can resume the shift anytime under Upcoming Coverage."
+        }
+        confirmLabel="Pause & Pay"
+        cancelLabel="Keep Working"
+        onOpenChange={(next) => { if (!next) setPauseConfirmId(null); }}
+        onConfirm={() => {
+          const id = pauseConfirmId;
+          setPauseConfirmId(null);
+          if (id) beginPause(id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!endConfirmId}
+        title="End this shift?"
+        body={
+          "Ending this shift means you are closing the entire assignment and proceeding to final payment for completed work."
+        }
+        confirmLabel="End & Pay"
+        cancelLabel="Keep Working"
+        destructive
+        onOpenChange={(next) => { if (!next) setEndConfirmId(null); }}
+        onConfirm={() => {
+          const id = endConfirmId;
+          setEndConfirmId(null);
+          if (id) beginEndShift(id);
+        }}
+      />
+
 
       <CancelFlow
         open={!!cancelTargetId}
