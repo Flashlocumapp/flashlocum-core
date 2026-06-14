@@ -417,7 +417,7 @@ function HomeScreen({ active }: { active: boolean }) {
         ) : stage === "match" ? (
           <SettlementSheet
             key="settlement"
-            pricing={computePricing({ coverage, draft, days })}
+            pricing={computePricing({ coverage, draft, days, environment })}
 
             onConfirm={() => setStage("dispatch")}
           />
@@ -440,6 +440,8 @@ function HomeScreen({ active }: { active: boolean }) {
             setDays={setDays}
             draft={draft}
             patchDraft={patchDraft}
+            environment={environment}
+            setEnvironment={setEnvironment}
             onAdvance={() => setStage("match")}
           />
         )}
