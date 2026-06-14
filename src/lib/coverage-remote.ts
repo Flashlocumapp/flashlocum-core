@@ -534,6 +534,7 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
     days: req.days ?? 1,
     day_index: req.dayIndex ?? 1,
     cancelled_by: req.cancelledBy ?? null,
+    environment: req.environment ?? "normal",
   };
   const { error } = await supabase.from(TABLE).insert(row);
   if (error) {
