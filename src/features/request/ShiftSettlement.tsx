@@ -318,14 +318,25 @@ export function ShiftSettlement({
 
   // Auto-start the moment we land in settlement.
   const autoOpenedRef = useRef(false);
+  const pauseFiredRef = useRef(false);
   useEffect(() => {
     if (!open || !requestId) return;
     if (phase !== "settlement") return;
+    // When this settlement was opened via "Pause Shift" the backend hasn't
+    // billed the open segment yet — fire pause_shift RPC first so the
+    // server total_billed_amount reflects today's work before checkout opens.
+    if (intent === "pause" && !pauseFiredRef.current) {
+      pauseFiredRef.current = true;
+      void callPauseShift({ data: { requestId } }).catch((err) => {
+        console.warn("[settlement] server pause_shift failed:", err?.message ?? err);
+      });
+    }
     if (autoOpenedRef.current) return;
     if (payState !== "idle") return;
     autoOpenedRef.current = true;
     void startMonnifyCheckout();
-  }, [open, requestId, phase, payState]);
+  }, [open, requestId, phase, payState, intent, callPauseShift]);
+
   useEffect(() => {
     if (!open) {
       autoOpenedRef.current = false;
