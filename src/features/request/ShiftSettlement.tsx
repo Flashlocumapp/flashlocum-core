@@ -428,7 +428,7 @@ export function ShiftSettlement({
           const { data: row } = await supabase
             .from("coverage_requests")
             .select(
-              "id, hospital, coverage_type, scheduled_start, scheduled_end, settled_amount, payment_reference, paid_at, accepted_by, payment_status",
+              "id, hospital, coverage_type, day, start_time, end_time, settled_amount, payment_reference, paid_at, accepted_by, payment_status",
             )
             .eq("id", requestId)
             .maybeSingle();
@@ -446,8 +446,9 @@ export function ShiftSettlement({
                 id: row.id,
                 hospital: row.hospital,
                 coverage_type: row.coverage_type,
-                scheduled_start: row.scheduled_start,
-                scheduled_end: row.scheduled_end,
+                day: row.day,
+                start_time: row.start_time,
+                end_time: row.end_time,
                 settled_amount: row.settled_amount,
                 payment_reference: row.payment_reference,
                 paid_at: row.paid_at,
