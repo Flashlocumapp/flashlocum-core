@@ -57,7 +57,11 @@ export const startShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("start_shift", {
       _request_id: data.requestId,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Idempotent: another tab/optimistic call may have already started it.
+      if (/already started/i.test(error.message)) return { ok: true, already: true } as any;
+      throw new Error(error.message);
+    }
     return r as any;
   });
 
@@ -68,7 +72,10 @@ export const pauseShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("pause_shift", {
       _request_id: data.requestId,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (/not in progress|already paused|not active/i.test(error.message)) return { ok: true, already: true } as any;
+      throw new Error(error.message);
+    }
     return r as any;
   });
 
@@ -79,7 +86,10 @@ export const resumeShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("resume_shift", {
       _request_id: data.requestId,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (/already (active|started|in progress)/i.test(error.message)) return { ok: true, already: true } as any;
+      throw new Error(error.message);
+    }
     return r as any;
   });
 
@@ -90,7 +100,10 @@ export const endShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("end_shift", {
       _request_id: data.requestId,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (/already (ended|completed)|not in progress/i.test(error.message)) return { ok: true, already: true } as any;
+      throw new Error(error.message);
+    }
     return r as { total_billed_amount: number; payment_due_at: string };
   });
 
