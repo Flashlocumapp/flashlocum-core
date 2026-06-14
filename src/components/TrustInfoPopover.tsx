@@ -7,12 +7,16 @@ import { useEffect, useRef, useState } from "react";
 export function TrustInfoPopover({
   showRatings = true,
   showReliability = true,
+  ratingsText,
+  reliabilityText,
   align = "center",
   direction = "down",
   className = "",
 }: {
   showRatings?: boolean;
   showReliability?: boolean;
+  ratingsText?: string;
+  reliabilityText?: string;
   align?: "start" | "center" | "end";
   direction?: "up" | "down";
   className?: string;
@@ -85,7 +89,7 @@ export function TrustInfoPopover({
                 Ratings
               </div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                Average feedback from completed shifts. Shows overall quality of experience.
+                {ratingsText ?? "Average feedback from completed shifts. Shows overall quality of experience."}
               </p>
             </div>
           )}
@@ -111,7 +115,7 @@ export function TrustInfoPopover({
                 Reliability
               </div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                How often accepted shifts are successfully completed. Shows how dependable this doctor/hospital is.
+                {reliabilityText ?? "How often accepted shifts are successfully completed. Shows how dependable this doctor/hospital is."}
               </p>
             </div>
           )}
