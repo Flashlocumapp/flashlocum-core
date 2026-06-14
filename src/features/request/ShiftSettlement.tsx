@@ -730,6 +730,7 @@ export function ShiftSettlement({
             billedMin={billedMin}
             segments={segments}
             extensionCount={extensionCount}
+            tx={tx}
             onClose={finalize}
           />
         )}
