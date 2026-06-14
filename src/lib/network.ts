@@ -509,8 +509,10 @@ export function registerDoctor(initialOnline: boolean) {
     },
   };
   save(next);
-  // Backend write so other devices see this doctor.
-  void upsertMyPresence({ online: desiredOnline, top: pos.top, left: pos.left });
+  // Backend write only when registering online. App boot calls this with
+  // initialOnline=false; writing that immediately would incorrectly clear an
+  // already-online doctor before the backend presence snapshot hydrates.
+  if (desiredOnline) void upsertMyPresence({ online: desiredOnline, top: pos.top, left: pos.left });
 }
 
 export function unregisterDoctor() {
@@ -888,9 +890,8 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
-  const now = simNow();
   return Object.values(s.requests)
-    .filter((r) => r.status === "broadcasting" && now - r.createdAt <= BROADCAST_TTL_MS)
+    .filter((r) => r.status === "broadcasting")
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
