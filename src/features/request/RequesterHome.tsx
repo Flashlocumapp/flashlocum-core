@@ -1043,6 +1043,7 @@ function DispatchOverlay({
   coverage,
   days,
   draft,
+  environment,
   location,
   requestId,
   setRequestId,
@@ -1052,6 +1053,7 @@ function DispatchOverlay({
   coverage: CoverageId;
   days: number;
   draft: Draft;
+  environment: Environment;
   location: Recent | null;
   requestId: string | null;
   setRequestId: (id: string | null) => void;
