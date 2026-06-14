@@ -758,7 +758,9 @@ function RequestCard({
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
             <span>·</span>
             <ReliabilityPill entityId={item.doctorRatingId} inline />
+            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
           </div>
+
           <div
             className="mt-0.5 truncate text-[12.5px]"
             style={{
