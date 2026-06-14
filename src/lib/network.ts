@@ -767,14 +767,13 @@ export function startRequest(id: string) {
   const cur = state.requests[id];
   if (!cur) return;
   const isResume = (cur.accumulatedMs ?? 0) > 0;
-  // IMPORTANT: persist startedAt as REAL wall-clock time (Date.now()) so the
-  // requester and doctor — who each carry an independent simulation offset —
-  // compute the live elapsed as `simNow() - startedAt`. That way both sides
-  // stay in sync at real time AND a local simulation fast-forward instantly
-  // advances the displayed timer for whoever performs it.
+  // Anchor startedAt to simNow() so a brand-new shift always renders
+  // segment = simNow() - startedAt = 0, regardless of any prior simulation
+  // fast-forward offset. LiveTimer uses simNow() on both sides, so the
+  // computed elapsed remains in sync across requester/doctor.
   const patch: Partial<NetRequest> = {
     status: "active",
-    startedAt: Date.now(),
+    startedAt: simNow(),
     accumulatedMs: cur.accumulatedMs ?? 0,
   };
   applyPatch(id, patch, {
