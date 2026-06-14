@@ -7,6 +7,7 @@ import {
   computeWorkedPricing,
   billableMinutes,
   type CoverageKind,
+  type Environment,
 } from "@/lib/pricing";
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
