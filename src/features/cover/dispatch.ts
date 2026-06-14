@@ -120,7 +120,12 @@ export type PendingRating = {
 let pendingRating: PendingRating | null = null;
 
 
-const processedEvents = new Set<string>();
+// Per-event timestamp map. We dedup by (actor, shift, action) with a short
+// TTL so the postgres_changes path and the snapshot-diff fallback can't
+// both fire the same logical transition, while legitimate later events
+// for the same shift+action (e.g. a second pause after resume) still pass.
+const processedEvents = new Map<string, number>();
+const DEDUP_TTL_MS = 5000;
 
 const localListeners = new Set<() => void>();
 function bump() {
@@ -251,8 +256,12 @@ export function ensureDoctorSession(initialOnline = true) {
     const sid = getSessionId();
     const ev = s.lastEvent;
     if (!ev || !ev.shiftId) return;
-    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
-    if (processedEvents.has(eventKey)) return;
+    // Dedup by (actor, shift, action) WITHOUT the timestamp so the
+    // postgres_changes path and the snapshot-diff fallback can't both
+    // fire the same logical transition (toast + pendingRating).
+    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}`;
+    const _last = processedEvents.get(eventKey);
+    if (_last && Date.now() - _last < DEDUP_TTL_MS) return;
     const r = s.requests[ev.shiftId];
     if (!r) return;
 
@@ -266,7 +275,7 @@ export function ensureDoctorSession(initialOnline = true) {
       );
       if (mine.length >= 3) return;
       if ((me.declined ?? []).includes(r.id)) return;
-      processedEvents.add(eventKey);
+      processedEvents.set(eventKey, Date.now());
       shiftCue("request");
       pushToast({
         tone: "presence",
@@ -278,7 +287,7 @@ export function ensureDoctorSession(initialOnline = true) {
 
     if (r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
-    processedEvents.add(eventKey);
+    processedEvents.set(eventKey, Date.now());
 
     if (ev.action === "start") {
       shiftCue("start");

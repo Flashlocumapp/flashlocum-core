@@ -343,12 +343,80 @@ function init() {
 
 
   // Subscribe to Supabase coverage_requests realtime.
+  //
+  // onSnapshot diffs the new snapshot against the in-memory requests and
+  // synthesizes a NetEvent for any status transition the postgres_changes
+  // path missed (RLS-filtered, dropped subscription, race with the
+  // invalidate-broadcast refresh, etc.). This is what drives doctor-side
+  // pendingRating on `complete` and the incoming card on `publish`. If
+  // postgres_changes already fired, applyRemoteEvent has already updated
+  // state.requests, so the diff is a no-op and nothing double-fires.
   remoteUnsubscribe = subscribeCoverageRemote({
     onSnapshot: (rows) => {
       const requests: Record<string, NetRequest> = {};
       for (const r of rows) requests[r.id] = r;
+      const prev = state.requests;
+      let netEvent: Omit<NetEvent, "at"> | undefined;
+      for (const r of rows) {
+        const old = prev[r.id];
+        if (!old) {
+          if (r.status === "broadcasting") {
+            netEvent = {
+              actor: "requester",
+              actorId: r.requesterSessionId,
+              shiftId: r.id,
+              action: "publish",
+            };
+          }
+          continue;
+        }
+        if (old.status === r.status) continue;
+        if (r.status === "completed") {
+          netEvent = {
+            actor: "requester",
+            actorId: r.requesterSessionId,
+            shiftId: r.id,
+            action: "complete",
+          };
+        } else if (r.status === "cancelled") {
+          netEvent = {
+            actor: r.cancelledBy === "doctor" ? "doctor" : "requester",
+            actorId:
+              r.cancelledBy === "doctor"
+                ? (r.acceptedBy ?? r.requesterSessionId)
+                : r.requesterSessionId,
+            shiftId: r.id,
+            action: "cancel",
+          };
+        } else if (old.status === "broadcasting" && r.status === "accepted") {
+          netEvent = {
+            actor: "doctor",
+            actorId: r.acceptedBy ?? "",
+            shiftId: r.id,
+            action: "accept",
+          };
+        } else if (old.status === "accepted" && r.status === "active") {
+          netEvent = {
+            actor: "requester",
+            actorId: r.requesterSessionId,
+            shiftId: r.id,
+            action: (old.accumulatedMs ?? 0) > 0 ? "resume" : "start",
+          };
+        } else if (old.status === "active" && r.status === "accepted") {
+          netEvent = {
+            actor: "requester",
+            actorId: r.requesterSessionId,
+            shiftId: r.id,
+            action: "pause",
+          };
+        }
+      }
       state = { ...state, requests };
-      listeners.forEach((l) => l(state));
+      if (netEvent) {
+        save(state, netEvent);
+      } else {
+        listeners.forEach((l) => l(state));
+      }
     },
     onEvent: applyRemoteEvent,
   });
