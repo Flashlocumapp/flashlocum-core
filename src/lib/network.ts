@@ -34,6 +34,29 @@ import {
   type PresenceRow,
 } from "./presence-remote";
 
+/**
+ * Fire backend-authoritative shift lifecycle RPC. Errors are surfaced to the
+ * console only — the optimistic local network state already gives UI feedback,
+ * and the backend remains the source of truth for billing on settlement read.
+ */
+function callServerLifecycle(kind: "start" | "pause" | "resume" | "end", requestId: string) {
+  if (typeof window === "undefined") return;
+  void import("./shift.functions")
+    .then((m) => {
+      const fn =
+        kind === "start" ? m.startShift
+        : kind === "pause" ? m.pauseShift
+        : kind === "resume" ? m.resumeShift
+        : m.endShift;
+      return fn({ data: { requestId } });
+    })
+    .catch((err) => {
+      console.warn(`[network] ${kind}Shift RPC failed:`, err?.message ?? err);
+    });
+}
+
+
+
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
