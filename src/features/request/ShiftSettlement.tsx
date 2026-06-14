@@ -128,6 +128,25 @@ export function ShiftSettlement({
   const [segments, setSegments] = useState<SegmentRow[]>([]);
   const [extensionCount, setExtensionCount] = useState(0);
 
+  // Authoritative transaction record loaded from the backend the moment
+  // payment is confirmed. ConfirmedPane renders from this — never from
+  // local/frontend state — so the Settlement Confirmed page is always
+  // tied to the exact completed transaction.
+  type TxRecord = {
+    id: string;
+    hospital: string | null;
+    coverage_type: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    settled_amount: number | null;
+    payment_reference: string | null;
+    paid_at: string | null;
+    accepted_by: string | null;
+    doctorName: string | null;
+  };
+  const [tx, setTx] = useState<TxRecord | null>(null);
+
 
   const tick = useSimClock(1000);
 
@@ -389,8 +408,68 @@ export function ShiftSettlement({
       setPayError(null);
       setPayCheckState("idle");
       setPayCheckError(null);
+      setTx(null);
     }
   }, [open]);
+
+  // Load the authoritative transaction record from the backend whenever
+  // payment is confirmed. Polls briefly to absorb the gap between webhook
+  // marking paid and the row reflecting settled_amount / paid_at.
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase !== "confirmed") return;
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 12;
+    const run = async () => {
+      while (!cancelled && attempts < MAX_ATTEMPTS) {
+        attempts++;
+        try {
+          const { data: row } = await supabase
+            .from("coverage_requests")
+            .select(
+              "id, hospital, coverage_type, day, start_time, end_time, settled_amount, payment_reference, paid_at, accepted_by, payment_status",
+            )
+            .eq("id", requestId)
+            .maybeSingle();
+          if (cancelled) return;
+          if (row && row.payment_status === "paid") {
+            let doctorName: string | null = null;
+            if (row.accepted_by) {
+              const { data: doc } = await supabase
+                .rpc("get_assigned_doctor_profile", { _doctor: row.accepted_by })
+                .maybeSingle();
+              doctorName = (doc as { full_name?: string } | null)?.full_name ?? null;
+            }
+            if (!cancelled) {
+              setTx({
+                id: row.id,
+                hospital: row.hospital,
+                coverage_type: row.coverage_type,
+                day: row.day,
+                start_time: row.start_time,
+                end_time: row.end_time,
+                settled_amount: row.settled_amount,
+                payment_reference: row.payment_reference,
+                paid_at: row.paid_at,
+                accepted_by: row.accepted_by,
+                doctorName,
+              });
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn("[settlement] load tx record failed:", err);
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestId, phase]);
+
 
 
 
@@ -651,6 +730,7 @@ export function ShiftSettlement({
             billedMin={billedMin}
             segments={segments}
             extensionCount={extensionCount}
+            tx={tx}
             onClose={finalize}
           />
         )}
@@ -1024,6 +1104,7 @@ function ConfirmedPane({
   billedMin,
   segments = [],
   extensionCount = 0,
+  tx = null,
   onClose,
 }: {
   shift: ShiftMeta;
@@ -1038,6 +1119,19 @@ function ConfirmedPane({
     billed_amount: number | null;
   }>;
   extensionCount?: number;
+  tx?: {
+    id: string;
+    hospital: string | null;
+    coverage_type: string | null;
+    day: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    settled_amount: number | null;
+    payment_reference: string | null;
+    paid_at: string | null;
+    accepted_by: string | null;
+    doctorName: string | null;
+  } | null;
   onClose: () => void;
 }) {
   void billedMin;
@@ -1058,6 +1152,20 @@ function ConfirmedPane({
     });
   };
 
+  // Authoritative values from the backend transaction record. We render
+  // these instead of frontend state once `tx` lands so the page is always
+  // tied to the actual completed transaction.
+  const loading = !tx;
+  const facility = tx?.hospital ?? shift.facility;
+  const doctor = tx?.doctorName ?? shift.doctor;
+  const coverageLabel = tx?.coverage_type ?? shift.role;
+  const settled = tx?.settled_amount ?? total;
+  const paidAtLabel = tx?.paid_at ? fmtSegTime(tx.paid_at) : null;
+  const scheduleLabel =
+    tx?.day && tx?.start_time && tx?.end_time
+      ? `${tx.day} · ${tx.start_time} – ${tx.end_time}`
+      : null;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -1074,13 +1182,19 @@ function ConfirmedPane({
         </div>
         <h1 className="mt-4 text-[24px] font-semibold tracking-tight">Settlement confirmed</h1>
         <p className="mt-1 text-[13.5px] text-muted-foreground">
-          Coverage with {shift.doctor} closed.
+          {loading ? "Loading transaction details…" : `Coverage with ${doctor} closed.`}
         </p>
 
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5">
-          <Row label="Facility" value={shift.facility} />
-          <Row label="Coverage" value={shift.role} />
-          <Row label="Settled" value={fmtNaira(total)} strong />
+          <Row label="Facility" value={facility} />
+          <Row label="Coverage" value={coverageLabel} />
+          {scheduleLabel && <Row label="Shift" value={scheduleLabel} />}
+          <Row label="Doctor" value={doctor} />
+          <Row label="Settled" value={fmtNaira(settled)} strong />
+          {paidAtLabel && <Row label="Paid at" value={paidAtLabel} />}
+          {tx?.payment_reference && (
+            <Row label="Reference" value={tx.payment_reference} />
+          )}
           {extensionCount > 0 && (
             <Row
               label="Payment extensions"
@@ -1088,6 +1202,7 @@ function ConfirmedPane({
             />
           )}
         </div>
+
 
         {segments.length > 1 && (
           <div className="mt-4 rounded-2xl bg-surface-elevated p-5">
@@ -1137,7 +1252,7 @@ function ConfirmedPane({
 
       <RatingOverlay
         open={ratingOpen}
-        doctor={shift.doctor}
+        doctor={doctor}
         onDismiss={() => setRatingOpen(false)}
         onSubmit={() => {
           setRated(true);
