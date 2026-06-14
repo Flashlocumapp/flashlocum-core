@@ -171,10 +171,7 @@ export function useDispatch(): View {
     .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
-  const declined = new Set(me?.declined ?? []);
-  const liveRequests = broadcastingRequests(net).filter(
-    (r) => !declined.has(r.id),
-  );
+  const liveRequests = broadcastingRequests(net);
   const derivedHistory: HistoryItem[] = Object.values(net.requests)
     .filter((r) => r.acceptedBy === sid && (r.status === "completed" || r.status === "cancelled"))
     .sort((a, b) => b.updatedAt - a.updatedAt)
