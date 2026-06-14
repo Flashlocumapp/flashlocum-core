@@ -1208,7 +1208,7 @@ function CoverCard({
   return (
     <Wrapper
       {...wrapperProps}
-      className="block w-full rounded-2xl px-4 py-3.5 text-left transition-colors active:bg-secondary/30"
+      className="block w-full rounded-2xl px-4 pt-4 pb-3.5 text-left transition-colors active:bg-secondary/30"
       style={{
         background: isHistory
           ? "color-mix(in oklab, var(--color-surface-elevated) 65%, transparent)"
@@ -1220,7 +1220,7 @@ function CoverCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center">
             <span
-              className="truncate text-[15.5px] font-semibold tracking-tight"
+              className="truncate text-[17px] font-semibold tracking-tight"
               style={{
                 color: isHistory
                   ? "color-mix(in oklab, var(--color-foreground) 80%, transparent)"
@@ -1231,19 +1231,11 @@ function CoverCard({
             </span>
             {outcomeChip}
           </div>
-          <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-            <span className="truncate">{item.area}</span>
-            <span>·</span>
-            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
-            <span>·</span>
-            <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
-            <EnvironmentBadge environment={item.environment} size="xs" className="ml-auto" />
-          </div>
-
+          <div className="mt-0.5 truncate text-[12.5px] text-muted-foreground">{item.area}</div>
         </div>
         {isActive && (
           <span
-            className="flex shrink-0 items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.14em]"
+            className="flex shrink-0 items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em]"
             style={{ color: "var(--color-presence)" }}
           >
             <span
@@ -1264,66 +1256,24 @@ function CoverCard({
         )}
       </div>
 
-      <div
-        className="mt-1.5 text-[12.5px] leading-snug"
-        style={{
-          color: isHistory
-            ? "color-mix(in oklab, var(--color-foreground) 60%, transparent)"
-            : "color-mix(in oklab, var(--color-foreground) 75%, transparent)",
-        }}
-      >
-        {meta}
-      </div>
-
-      {item.note && (
-        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">
-          {item.note}
+      {/* Trust row: ★ rating · reliability % · NORMAL pill ........ Call */}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline size="md" />
+          <ReliabilityPill entityId={hospitalEntityId(item.hospital)} size="md" inline />
+          <EnvironmentBadge environment={item.environment} size="xs" />
         </div>
-      )}
-
-      {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
-        <div className="mt-2">
-          <LiveTimer
-            from={(item as CoverItem & { startedAt: number }).startedAt}
-            baseMs={(item as CoverItem).accumulatedMs ?? 0}
-            live
-          />
-        </div>
-      )}
-      {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) > 0 && (
-        <div className="mt-2">
-          <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
-        </div>
-      )}
-
-
-      {(isActive || isUpcoming) && (
-        <div className="mt-3 flex items-center gap-2">
-          {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) === 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCancel?.();
-              }}
-              className="h-8 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
-              style={{
-                background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
-                color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
-              }}
-            >
-              Cancel Shift
-            </button>
-          )}
+        {(isActive || isUpcoming) && (
           <a
             href={`tel:${item.phone}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[12.5px] font-medium transition-colors active:opacity-80"
             style={{
-              background: isActive ? "var(--color-foreground)" : "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
-              color: isActive ? "var(--color-background)" : "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+              background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+              color: "color-mix(in oklab, var(--color-foreground) 88%, transparent)",
             }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
               <path
                 d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
                 stroke="currentColor"
@@ -1334,6 +1284,57 @@ function CoverCard({
             </svg>
             Call
           </a>
+        )}
+      </div>
+
+      <div
+        className="mt-3 text-[12.5px] leading-snug"
+        style={{
+          color: isHistory
+            ? "color-mix(in oklab, var(--color-foreground) 60%, transparent)"
+            : "color-mix(in oklab, var(--color-foreground) 78%, transparent)",
+        }}
+      >
+        {item.coverage} · {shortDay(item.day)} · {item.start}{item.end && item.end !== item.start ? ` - ${item.end}` : ""} · {item.durationHrs}hr · <Naira amount={item.amount} muted={isHistory} />
+      </div>
+
+      {item.note && (
+        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">
+          {item.note}
+        </div>
+      )}
+
+      {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
+        <div className="mt-2.5">
+          <LiveTimer
+            from={(item as CoverItem & { startedAt: number }).startedAt}
+            baseMs={(item as CoverItem).accumulatedMs ?? 0}
+            live
+          />
+        </div>
+      )}
+      {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) > 0 && (
+        <div className="mt-2.5">
+          <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
+        </div>
+      )}
+
+      {isUpcoming && ((item as CoverItem).accumulatedMs ?? 0) === 0 && (
+        <div className="mt-3 border-t border-border/40 pt-3">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancel?.();
+            }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
+            style={{
+              background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+              color: "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+            Cancel Shift
+          </button>
         </div>
       )}
     </Wrapper>
