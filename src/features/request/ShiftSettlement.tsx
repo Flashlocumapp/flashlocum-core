@@ -565,9 +565,12 @@ export function ShiftSettlement({
             shift={shift}
             total={totalAmount}
             billedMin={billedMin}
+            segments={segments}
+            extensionCount={extensionCount}
             onClose={finalize}
           />
         )}
+
       </AnimatePresence>
     </motion.div>
   );
