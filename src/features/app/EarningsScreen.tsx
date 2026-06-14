@@ -4,6 +4,8 @@ import { ChevronDown } from "lucide-react";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
+import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 
 // Doctor net payout = total paid − FlashLocum service fee (15%).
 const FEE_PCT = 15;
