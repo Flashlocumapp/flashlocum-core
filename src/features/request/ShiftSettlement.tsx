@@ -390,7 +390,7 @@ export function ShiftSettlement({
     if (payState !== "idle") return;
     autoOpenedRef.current = true;
     void startMonnifyCheckout();
-  }, [open, requestId, phase, payState, intent]);
+  }, [open, requestId, phase, payState]);
 
   useEffect(() => {
     if (!open) {
