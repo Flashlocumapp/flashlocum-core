@@ -1,71 +1,133 @@
-## Monnify Split Payment Integration
+## FlashLocum Backend Authority Migration
 
-### How it will work (end-to-end)
+Backend (Postgres + TanStack server fns) becomes the single source of truth for time, pricing, billing, payment windows, multi-day settlement, and account restrictions. Frontend only collects inputs and renders server results.
 
-1. Doctor ends a shift → Settlement screen shows the amount.
-2. Requester taps **Pay with Monnify** → app calls a server function that:
-   - Looks up the assigned doctor's bank details (`bank_name`, `bank_account`).
-   - If the doctor doesn't yet have a Monnify sub-account, creates one via Monnify's `/api/v1/sub-accounts` and stores its `subAccountCode` on the doctor's profile.
-   - Initializes a Monnify transaction with an `incomeSplitConfig` → **85% to the doctor's sub-account, 15% (remainder) stays with FlashLocum's main wallet**.
-   - Returns the Monnify hosted-checkout URL.
-3. Requester is redirected to Monnify, pays, and is returned to the app.
-4. Monnify hits our webhook (`/api/public/monnify-webhook`) with the result; webhook verifies the HMAC signature, marks the `coverage_request` as paid, and triggers the existing "Settlement confirmed" UI on the next poll.
+### 1. Schema migration
 
-### Database changes (one migration)
+**`coverage_requests` — new columns**
+- `environment text not null default 'normal' check (environment in ('normal','busy'))`
+- `payment_due_at timestamptz` — set at end-shift; +15 min from server `now()`
+- `payment_extension_count int not null default 0`
+- `last_extended_at timestamptz`
+- `total_billed_amount numeric` — authoritative final amount (overrides client `settled_amount`)
+- `billing_locked_at timestamptz` — once set, pricing fields are frozen
 
-- **profiles**: add `monnify_sub_account_code TEXT` (nullable).
-- **coverage_requests**: add
-  - `payment_provider TEXT` (default `null`)
-  - `payment_reference TEXT` (Monnify `paymentReference`)
-  - `payment_status TEXT` (`pending` | `paid` | `failed`)
-  - `payment_url TEXT` (last-issued checkout link, for resume)
-  - `paid_at TIMESTAMPTZ`
-- New SECURITY DEFINER RPC `mark_settlement_paid(_payment_reference, _amount)` — called by the webhook (which runs as service role anyway, but the RPC keeps the update atomic and idempotent).
+**`profiles` — new column**
+- `payment_restricted_at timestamptz` — when set, user cannot create/end shifts
 
-### Server code (TanStack `createServerFn` + one server route)
-
+**New table: `shift_segments`** (per pause/resume cycle for multi-day)
 ```
-src/lib/monnify/
-├── client.server.ts        # auth (Basic → access_token, cached), low-level fetch helpers
-├── sub-accounts.server.ts  # ensureSubAccountForDoctor()
-├── checkout.server.ts      # initiateSettlementCheckout()
-└── webhook.server.ts       # verifyMonnifySignature(), handleEvent()
-
-src/lib/settlement.functions.ts
-└── beginSettlementCheckout  # createServerFn, requireSupabaseAuth
-                              # input: { requestId }
-                              # returns: { checkoutUrl, paymentReference }
-
-src/routes/api/public/monnify-webhook.ts
-└── POST handler             # verifies monnify-signature header (HMAC-SHA512 of raw body
-                              # using MONNIFY_SECRET_KEY), then calls mark_settlement_paid
-                              # via supabaseAdmin RPC.
+id uuid pk, request_id uuid fk coverage_requests, segment_index int,
+started_at timestamptz, ended_at timestamptz,
+billed_minutes int, billed_amount numeric, settled_at timestamptz,
+created_at timestamptz default now()
 ```
+Plus GRANTs + RLS (requester or assigned doctor can read; only service_role writes).
 
-Secrets used (all already saved): `MONNIFY_API_KEY`, `MONNIFY_SECRET_KEY`, `MONNIFY_CONTRACT_CODE`, `MONNIFY_BASE_URL`.
+### 2. New SECURITY DEFINER RPCs
 
-### Frontend changes
+All read server time via `now()` (DB is `Africa/Lagos` per project setting — confirm in migration; force `SET TIME ZONE 'Africa/Lagos'` inside each fn).
 
-- `src/features/request/ShiftSettlement.tsx` — replace the static "Providus Bank / 0123456789 + I've Made Payment" block with a single **Pay with Monnify** button. On click:
-  - call `beginSettlementCheckout({ requestId })`,
-  - open the returned `checkoutUrl` in a new tab,
-  - poll `coverage_requests.payment_status` every 3 s (or use the existing realtime subscription) → when `paid`, transition to the existing `confirmed` pane.
-- Keep the manual "I've Made Payment" fallback hidden behind a small "Paid offline?" link for now (admin-only marking later).
+- `server_now()` → `timestamptz` (client clock-skew probe)
+- `validate_shift_schedule(_start timestamptz, _end timestamptz)` → throws if past, <30min lead, or end<=start
+- `compute_quote(_start, _end, _environment, _coverage_kind)` → `{ amount, breakdown jsonb }` — new rate table
+- `start_shift(_request_id)` → requester-only; stamps `started_at = now()`
+- `pause_shift(_request_id)` → bills current segment, inserts `shift_segments` row, opens settlement window for that segment
+- `resume_shift(_request_id)` → guard: previous segment must be `settled_at NOT NULL`
+- `end_shift(_request_id)` → final segment + `billing_locked_at = now()`, `payment_due_at = now() + 15min`, returns `{ total_billed_amount, payment_due_at }`
+- `extend_payment_window(_request_id)` → if `now() > payment_due_at` and unpaid: add 15-min billing block, recalc total, push `payment_due_at += 15min`, ++extension_count
+- `apply_payment_restriction()` — cron-ish; called on each shift action to lazily set `profiles.payment_restricted_at` for users with overdue unpaid shifts
+- `mark_settlement_paid` — extend existing to also clear `payment_restricted_at` if user has no other overdue shifts and to mark segment `settled_at`
 
-### Doctor onboarding note
+### 3. New pricing engine (server-side, SQL)
 
-The doctor must have `bank_name` + `bank_account` on their profile before a requester can pay them — those are already collected during cover onboarding. If missing at checkout time, `beginSettlementCheckout` throws a friendly error: *"This doctor hasn't completed payout setup yet."*
+Replaces `src/lib/pricing.ts` as authority. Bands: **day 06:00–22:00, night 22:00–06:00** (per new spec).
 
-### What I will NOT touch
+Per-shift duration buckets (bucket chosen from per-day hours):
+- `>=6h`: day ₦2,000/hr, night ₦1,500/hr
+- `4–<6h`: day ₦2,500/hr, night ₦2,000/hr
+- `<4h`: day ₦3,000/hr, night ₦2,500/hr
 
-- Pricing logic, timers, overtime math — untouched.
-- `RatingOverlay`, confirmation pane — untouched (just reached via the new webhook trigger instead of the simulated timer).
-- Existing simulated "I've Made Payment" demo flow stays as an admin/test fallback.
+Fixed: 24h → ₦36,000, 48h → ₦72,000.
+Home Care: ₦15,000/hr (kept from current).
 
-### Test plan
+Rounding:
+- Round worked minutes UP to 15-min blocks
+- Minimum bill = 60 min
+- Final-hour rule: if within ±15 min of booked duration, round to full booked hours
 
-1. Run a sandbox shift end-to-end with a test doctor whose bank fields are set; confirm a sub-account is created (logged), checkout URL returned, and after sandbox payment the webhook flips `payment_status = paid`.
-2. Replay the webhook with a tampered body → must return 401.
-3. Replay the same valid webhook twice → second call is a no-op (idempotent on `payment_reference`).
+Busy multiplier ×1.25 applied AFTER hourly calc, BEFORE fee split.
 
-Approve and I'll ship it.
+Fee: doctor 85% / FlashLocum 15% (already wired in Monnify split).
+
+### 4. Server functions (TanStack)
+
+`src/lib/shift.functions.ts` (new) — all `requireSupabaseAuth`:
+- `getServerNow` (no auth needed — public)
+- `quoteShift({ start, end, environment, coverageKind })`
+- `validateSchedule({ start, end })`
+- `startShift({ requestId })`
+- `pauseShift({ requestId })`
+- `resumeShift({ requestId })`
+- `endShift({ requestId })` → returns `{ totalAmount, paymentDueAt }`
+- `requestPaymentExtension({ requestId })` — called by client when countdown hits 0 and still unpaid
+- `getRequestBillingState({ requestId })` — polled by Settlement screen
+
+`src/lib/account.functions.ts`:
+- `getMyPaymentRestriction()` — returns `{ restricted: bool, overdueRequests: [...] }`
+
+### 5. Frontend changes
+
+**Delete client-side calculations**:
+- `src/lib/pricing.ts` → keep only `coverageKindFromLabel` + types; mark all compute fns deprecated, route through server.
+- `src/lib/clock.ts` `simNow()` → stays for dev sim, but **never** used for billing. Add big comment.
+
+**RequesterHome / booking flow**:
+- Date picker: server-time gated (call `getServerNow` on mount, disable past dates and times < server_now+30min)
+- Add **Environment** toggle (Normal / Busy) — radio in booking form
+- Live quote: debounced `quoteShift` call → show server-returned amount/breakdown
+- Block submit if `getMyPaymentRestriction().restricted`
+
+**ShiftSettlement.tsx**:
+- On render, poll `getRequestBillingState` every 3s
+- Display server `total_billed_amount` + `payment_due_at` countdown
+- When countdown hits 0 and unpaid: auto-call `requestPaymentExtension`, show new amount + new 15min timer
+- For multi-day: each pause triggers settlement of that segment (show segment list)
+
+**CoverageScreen / pause/resume buttons** (requester-only — hide for doctor):
+- All controls call server fns; doctor sees read-only state
+
+**Account restriction banner**:
+- Global `<RestrictionBanner />` mounted in `_app` layout; shows when restricted with list of overdue shifts
+
+### 6. Rate replacement
+
+Drop existing `RATE_DAY=2000 (8–22)` / `RATE_NIGHT=1500 (22–8)` model in favor of new bands + buckets above. Update `src/lib/pricing.ts` to call server, keep `computeCoveragePricing` only as a thin client-side estimate that's clearly labeled "estimate — server is authoritative", or remove entirely.
+
+### 7. Multi-day per-pause settlement
+
+- `pause_shift` immediately closes segment, returns its amount, opens 15-min payment window for that segment alone
+- `resume_shift` blocked until prior segment paid (server-enforced)
+- Each segment payment goes through existing Monnify flow with its own `payment_reference`
+
+### 8. Migration order
+
+1. Schema migration (tables, columns, RPCs, RLS, GRANTs)
+2. Server fn files
+3. Frontend rewrite (booking → settlement → restriction banner)
+4. Deprecate `src/lib/pricing.ts` compute paths
+
+### Notes / open risks
+
+- **Timezone**: confirm DB session TZ. Will `SET LOCAL TIME ZONE 'Africa/Lagos'` at the start of each pricing/scheduling RPC to be safe.
+- **Sim clock**: dev fast-forward (`src/lib/clock.ts`) won't move server time. Real server time will govern billing in dev too — pause/resume/end timing in dev will reflect wall clock, not the sim slider. Acceptable trade-off for backend-authority.
+- **Existing `settled_amount`** column stays as legacy display; `total_billed_amount` is the new authority.
+- **Monnify webhook** already updates `payment_status='paid'`; needs to also clear segment-level `settled_at` when applicable + clear `payment_restricted_at`.
+
+### Scope NOT in this round
+
+- Admin UI for managing unpaid shifts (data is there, UI later)
+- Push notifications for payment-window expiry
+- Retroactive cleanup of in-flight shifts (will require user to end-shift normally)
+
+Confirm and I'll ship the migration + server fns first, then the frontend.

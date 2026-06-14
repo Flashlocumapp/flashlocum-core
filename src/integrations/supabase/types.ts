@@ -21,6 +21,7 @@ export type Database = {
           accumulated_ms: number
           amount: number
           area: string
+          billing_locked_at: string | null
           cancelled_by: string | null
           coverage_type: string
           created_at: string
@@ -30,11 +31,15 @@ export type Database = {
           duration_hrs: number
           end_time: string
           end_ts: number | null
+          environment: string
           fee_pct: number
           hospital: string
           id: string
+          last_extended_at: string | null
           note: string | null
           paid_at: string | null
+          payment_due_at: string | null
+          payment_extension_count: number
           payment_provider: string | null
           payment_reference: string | null
           payment_status: string | null
@@ -47,6 +52,7 @@ export type Database = {
           start_ts: number | null
           started_at: number | null
           status: Database["public"]["Enums"]["coverage_request_status"]
+          total_billed_amount: number | null
           updated_at: string
         }
         Insert: {
@@ -55,6 +61,7 @@ export type Database = {
           accumulated_ms?: number
           amount?: number
           area: string
+          billing_locked_at?: string | null
           cancelled_by?: string | null
           coverage_type: string
           created_at?: string
@@ -64,11 +71,15 @@ export type Database = {
           duration_hrs?: number
           end_time: string
           end_ts?: number | null
+          environment?: string
           fee_pct?: number
           hospital: string
           id?: string
+          last_extended_at?: string | null
           note?: string | null
           paid_at?: string | null
+          payment_due_at?: string | null
+          payment_extension_count?: number
           payment_provider?: string | null
           payment_reference?: string | null
           payment_status?: string | null
@@ -81,6 +92,7 @@ export type Database = {
           start_ts?: number | null
           started_at?: number | null
           status?: Database["public"]["Enums"]["coverage_request_status"]
+          total_billed_amount?: number | null
           updated_at?: string
         }
         Update: {
@@ -89,6 +101,7 @@ export type Database = {
           accumulated_ms?: number
           amount?: number
           area?: string
+          billing_locked_at?: string | null
           cancelled_by?: string | null
           coverage_type?: string
           created_at?: string
@@ -98,11 +111,15 @@ export type Database = {
           duration_hrs?: number
           end_time?: string
           end_ts?: number | null
+          environment?: string
           fee_pct?: number
           hospital?: string
           id?: string
+          last_extended_at?: string | null
           note?: string | null
           paid_at?: string | null
+          payment_due_at?: string | null
+          payment_extension_count?: number
           payment_provider?: string | null
           payment_reference?: string | null
           payment_status?: string | null
@@ -115,6 +132,7 @@ export type Database = {
           start_ts?: number | null
           started_at?: number | null
           status?: Database["public"]["Enums"]["coverage_request_status"]
+          total_billed_amount?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -281,6 +299,7 @@ export type Database = {
           onboarded_at: string | null
           onboarded_cover_at: string | null
           onboarded_request_at: string | null
+          payment_restricted_at: string | null
           phone: string | null
           role: string | null
           selfie_url: string | null
@@ -306,6 +325,7 @@ export type Database = {
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
+          payment_restricted_at?: string | null
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
@@ -331,6 +351,7 @@ export type Database = {
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
+          payment_restricted_at?: string | null
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
@@ -370,6 +391,53 @@ export type Database = {
           {
             foreignKeyName: "ratings_shift_id_fkey"
             columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "coverage_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shift_segments: {
+        Row: {
+          billed_amount: number | null
+          billed_minutes: number | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          payment_reference: string | null
+          request_id: string
+          segment_index: number
+          settled_at: string | null
+          started_at: string
+        }
+        Insert: {
+          billed_amount?: number | null
+          billed_minutes?: number | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          payment_reference?: string | null
+          request_id: string
+          segment_index: number
+          settled_at?: string | null
+          started_at: string
+        }
+        Update: {
+          billed_amount?: number | null
+          billed_minutes?: number | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          payment_reference?: string | null
+          request_id?: string
+          segment_index?: number
+          settled_at?: string | null
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_segments_request_id_fkey"
+            columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "coverage_requests"
             referencedColumns: ["id"]
@@ -426,6 +494,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _bill_segment: {
+        Args: { _env: string; _kind: string; _seg_id: string }
+        Returns: number
+      }
+      _round_billable_minutes: { Args: { _worked: number }; Returns: number }
+      _split_day_night_minutes: {
+        Args: { _end: string; _start: string }
+        Returns: {
+          day_min: number
+          night_min: number
+        }[]
+      }
       admin_list_users: {
         Args: { _limit?: number; _offset?: number }
         Returns: {
@@ -450,6 +530,15 @@ export type Database = {
         Returns: boolean
       }
       claim_first_admin: { Args: never; Returns: boolean }
+      compute_quote: {
+        Args: {
+          _coverage_kind?: string
+          _end: string
+          _environment?: string
+          _start: string
+        }
+        Returns: Json
+      }
       current_user_is_approved_doctor: { Args: never; Returns: boolean }
       delete_email: {
         Args: { message_id: number; queue_name: string }
@@ -464,10 +553,12 @@ export type Database = {
           queue_name: string
         }[]
       }
+      end_shift: { Args: { _request_id: string }; Returns: Json }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      extend_payment_window: { Args: { _request_id: string }; Returns: Json }
       get_assigned_doctor_profile: {
         Args: { _doctor: string }
         Returns: {
@@ -480,6 +571,7 @@ export type Database = {
           years_experience: string
         }[]
       }
+      get_my_payment_restriction: { Args: never; Returns: Json }
       get_rating: {
         Args: { _entity_id: string }
         Returns: {
@@ -493,6 +585,10 @@ export type Database = {
           completed: number
           total: number
         }[]
+      }
+      get_request_billing_state: {
+        Args: { _request_id: string }
+        Returns: Json
       }
       get_request_phone: { Args: { _request_id: string }; Returns: string }
       has_role: {
@@ -530,6 +626,7 @@ export type Database = {
         }
         Returns: number
       }
+      pause_shift: { Args: { _request_id: string }; Returns: Json }
       prune_email_send_log: { Args: { _retain_days?: number }; Returns: number }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -539,9 +636,16 @@ export type Database = {
           read_ct: number
         }[]
       }
+      resume_shift: { Args: { _request_id: string }; Returns: Json }
+      server_now: { Args: never; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      start_shift: { Args: { _request_id: string }; Returns: Json }
       touch_last_seen: { Args: never; Returns: undefined }
+      validate_shift_schedule: {
+        Args: { _end: string; _start: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
