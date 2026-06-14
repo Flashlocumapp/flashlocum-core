@@ -739,7 +739,9 @@ export function completeRequest(id: string) {
     { status: "completed", accumulatedMs, startedAt: undefined, settledAmount },
     { actor: "requester", actorId: getSessionId(), action: "complete" },
   );
+  callServerLifecycle("end", id);
 }
+
 
 /** Pause broadcasting (hides from doctors) without losing request. */
 export function pauseRequest(id: string) {
