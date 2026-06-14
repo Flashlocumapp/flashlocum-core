@@ -10,7 +10,9 @@ import {
   AlertTriangle,
   LifeBuoy,
   HeartPulse,
+  Receipt,
 } from "lucide-react";
+
 
 import {
   Sidebar,
