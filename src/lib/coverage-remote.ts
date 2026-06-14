@@ -143,6 +143,7 @@ export function rowToNet(r: Row): NetRequest {
     paymentReference: r.payment_reference ?? undefined,
     paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,
     remittedAt: r.remitted_at ? new Date(r.remitted_at).getTime() : undefined,
+    environment: r.environment === "busy" ? "busy" : "normal",
   };
 }
 
