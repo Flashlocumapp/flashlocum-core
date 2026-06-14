@@ -251,7 +251,10 @@ export function ensureDoctorSession(initialOnline = true) {
     const sid = getSessionId();
     const ev = s.lastEvent;
     if (!ev || !ev.shiftId) return;
-    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
+    // Dedup by (actor, shift, action) WITHOUT the timestamp so the
+    // postgres_changes path and the snapshot-diff fallback can't both
+    // fire the same logical transition (toast + pendingRating).
+    const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}`;
     if (processedEvents.has(eventKey)) return;
     const r = s.requests[ev.shiftId];
     if (!r) return;
