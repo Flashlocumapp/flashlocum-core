@@ -259,8 +259,6 @@ export function ensureDoctorSession(initialOnline = true) {
     // New request reached this doctor → calm notification cue.
     // Only fire when the doctor is online and has capacity to accept.
     if (ev.action === "publish" && ev.actor === "requester") {
-      // Ignore my own requester-side publishes — dispatch is multi-user.
-      if (r.requesterSessionId === sid) return;
       const me = s.doctors[sid];
       if (!me?.online) return;
       const mine = Object.values(s.requests).filter(
