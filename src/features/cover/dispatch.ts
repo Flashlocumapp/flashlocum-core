@@ -210,8 +210,14 @@ export function useDispatch(): View {
 
 
   let incoming: Coverage | null = null;
-  if (upcoming.length < 3) {
-    const r = liveRequests[0];
+  if (online && upcoming.length < 3) {
+    const declined = new Set<string>(me?.declined ?? []);
+    const r = liveRequests.find(
+      (x) =>
+        x.status === "broadcasting" &&
+        x.requesterSessionId !== sid &&
+        !declined.has(x.id),
+    );
     if (r) incoming = toCoverage(r);
   }
 
