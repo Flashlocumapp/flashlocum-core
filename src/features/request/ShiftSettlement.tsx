@@ -7,6 +7,7 @@ import {
   computeWorkedPricing,
   billableMinutes,
   type CoverageKind,
+  type Environment,
 } from "@/lib/pricing";
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +42,8 @@ type ShiftMeta = {
   /** Number of booked days — multi-day shifts price perDay × days. */
   days?: number;
   coverageKind: CoverageKind;
+  /** Environment captured at booking; multiplies pricing ×1.25 when 'busy'. */
+  environment?: Environment;
 };
 
 const SAMPLE: ShiftMeta = {
@@ -138,8 +141,9 @@ export function ShiftSettlement({
         billedMin,
         shift.endHHMM,
         shift.days,
+        shift.environment ?? "normal",
       ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, billedMin],
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, billedMin],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
@@ -175,6 +179,7 @@ export function ShiftSettlement({
           bm,
           shift.endHHMM,
           shift.days,
+          shift.environment ?? "normal",
         ).amount;
       } else {
         frozenBilledMinRef.current = 0;
@@ -242,6 +247,7 @@ export function ShiftSettlement({
       bm,
       shift.endHHMM,
       shift.days,
+      shift.environment ?? "normal",
     ).amount;
     setPhase("settlement");
     if (requestId) {
