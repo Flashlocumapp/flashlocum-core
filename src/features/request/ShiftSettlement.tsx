@@ -463,6 +463,7 @@ export function ShiftSettlement({
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
       void supabase.removeChannel(channel);
+      void supabase.removeChannel(invalidate);
     };
   }, [open, requestId, phase, verifyPay]);
 
