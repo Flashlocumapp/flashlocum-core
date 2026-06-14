@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingRoleRouteImport } from './routes/onboarding.$role'
 import { Route as AuthRoleRouteImport } from './routes/auth.$role'
 import { Route as AdminUnauthorizedRouteImport } from './routes/admin.unauthorized'
+import { Route as AppSupportRouteImport } from './routes/_app.support'
 import { Route as AppHomeRouteImport } from './routes/_app.home'
 import { Route as AppEarningsRouteImport } from './routes/_app.earnings'
 import { Route as AppCoverageRouteImport } from './routes/_app.coverage'
@@ -73,6 +74,11 @@ const AdminUnauthorizedRoute = AdminUnauthorizedRouteImport.update({
   id: '/admin/unauthorized',
   path: '/admin/unauthorized',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppSupportRoute = AppSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppHomeRoute = AppHomeRouteImport.update({
   id: '/home',
@@ -175,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
+  '/support': typeof AppSupportRoute
   '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/coverage': typeof AppCoverageRoute
   '/earnings': typeof AppEarningsRoute
   '/home': typeof AppHomeRoute
+  '/support': typeof AppSupportRoute
   '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   '/_app/coverage': typeof AppCoverageRoute
   '/_app/earnings': typeof AppEarningsRoute
   '/_app/home': typeof AppHomeRoute
+  '/_app/support': typeof AppSupportRoute
   '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
@@ -257,6 +266,7 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/earnings'
     | '/home'
+    | '/support'
     | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/earnings'
     | '/home'
+    | '/support'
     | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/_app/coverage'
     | '/_app/earnings'
     | '/_app/home'
+    | '/_app/support'
     | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
@@ -398,6 +410,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/unauthorized'
       preLoaderRoute: typeof AdminUnauthorizedRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/support': {
+      id: '/_app/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof AppSupportRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/home': {
       id: '/_app/home'
@@ -575,6 +594,7 @@ interface AppRouteChildren {
   AppCoverageRoute: typeof AppCoverageRoute
   AppEarningsRoute: typeof AppEarningsRoute
   AppHomeRoute: typeof AppHomeRoute
+  AppSupportRoute: typeof AppSupportRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -582,6 +602,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCoverageRoute: AppCoverageRoute,
   AppEarningsRoute: AppEarningsRoute,
   AppHomeRoute: AppHomeRoute,
+  AppSupportRoute: AppSupportRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
