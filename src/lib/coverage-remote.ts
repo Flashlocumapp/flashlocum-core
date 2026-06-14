@@ -170,6 +170,7 @@ function netPatchToRow(p: Partial<NetRequest>): Partial<Row> {
   if (p.days !== undefined) out.days = p.days;
   if (p.dayIndex !== undefined) out.day_index = p.dayIndex;
   if (p.settledAmount !== undefined) out.settled_amount = p.settledAmount ?? null;
+  if (p.environment !== undefined) out.environment = p.environment;
   return out;
 }
 
