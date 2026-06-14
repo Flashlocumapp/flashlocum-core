@@ -275,7 +275,7 @@ export function ensureDoctorSession(initialOnline = true) {
       );
       if (mine.length >= 3) return;
       if ((me.declined ?? []).includes(r.id)) return;
-      processedEvents.add(eventKey);
+      processedEvents.set(eventKey, Date.now());
       shiftCue("request");
       pushToast({
         tone: "presence",
