@@ -288,6 +288,8 @@ export function ShiftSettlement({
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const verifyPay = useServerFn(verifySettlementPayment);
+  const callPauseShift = useServerFn(serverPauseShift);
+
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
