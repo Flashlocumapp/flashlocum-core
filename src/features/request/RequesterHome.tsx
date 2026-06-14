@@ -178,6 +178,7 @@ function HomeScreen({ active }: { active: boolean }) {
   const [searchOrigin, setSearchOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const [coverage, setCoverageRaw] = useState<CoverageId>("standard");
   const [days, setDays] = useState(1);
+  const [environment, setEnvironment] = useState<Environment>("normal");
   const [draft, setDraft] = useState<Draft>(() => makeInitialDraft("standard"));
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
