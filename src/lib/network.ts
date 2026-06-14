@@ -41,8 +41,8 @@ import {
  * and the backend remains the source of truth for billing on settlement read.
  */
 function callServerLifecycle(kind: "start" | "pause" | "resume" | "end", requestId: string) {
-  if (typeof window === "undefined") return;
-  void import("./shift.functions")
+  if (typeof window === "undefined") return Promise.resolve();
+  return import("./shift.functions")
     .then((m) => {
       const fn =
         kind === "start" ? m.startShift
@@ -592,6 +592,21 @@ function applyPatch(
     { ...event, shiftId: id },
   );
   void remoteUpdateRequest(id, patch);
+}
+
+function applyLocalPatch(
+  id: string,
+  patch: Partial<NetRequest>,
+  event: Omit<NetEvent, "at" | "shiftId">,
+) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  const next = { ...cur, ...patch, updatedAt: simNow() };
+  save(
+    { ...state, requests: { ...state.requests, [id]: next } },
+    { ...event, shiftId: id },
+  );
 }
 
 /** Generic patch — actor inferred from current session role. */
