@@ -173,7 +173,7 @@ export function AccountScreen() {
         <Section title="Support">
           <ListGroup>
             <NavRow title="Help Center" onClick={() => {}} />
-            <NavRow title="Contact Support" onClick={() => {}} last />
+            <NavRow title="Contact Support" onClick={() => navigate({ to: '/support' })} last />
           </ListGroup>
         </Section>
 
