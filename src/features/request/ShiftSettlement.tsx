@@ -340,11 +340,13 @@ export function ShiftSettlement({
   useEffect(() => {
     if (!open) {
       autoOpenedRef.current = false;
+      pauseFiredRef.current = false;
       setAccount(null);
       setPayState("idle");
       setPayError(null);
     }
   }, [open]);
+
 
 
 
