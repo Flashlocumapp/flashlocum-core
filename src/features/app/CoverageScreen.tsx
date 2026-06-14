@@ -494,8 +494,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
         onDismiss={() => setDetailId(null)}
         onStart={(id) => { setDetailId(null); moveToActive(id); }}
-        onPause={(id) => { setDetailId(null); pauseToUpcoming(id); }}
-        onEnd={(id) => { setDetailId(null); beginEndShift(id); }}
+        onPause={(id) => { setDetailId(null); requestPause(id); }}
+        onEnd={(id) => { setDetailId(null); requestEnd(id); }}
+
         onEdit={(id) => { setDetailId(null); openEdit(id); }}
         onCancel={(id) => { setDetailId(null); setCancelTargetId(id); }}
       />
