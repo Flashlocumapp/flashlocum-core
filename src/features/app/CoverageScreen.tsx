@@ -286,7 +286,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       await callServerPauseShift({ data: { requestId: id } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Couldn't pause this shift";
-      pushToast({ kind: "request", title: msg });
+      pushToast({ tone: "warn", title: msg });
       setPausing(false);
       return;
     }
