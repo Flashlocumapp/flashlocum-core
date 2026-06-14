@@ -117,7 +117,7 @@ export type PendingRating = {
   total: number;
   feePct: number;
 };
-let pendingRating: PendingRating | null = null;
+
 
 
 // Per-event timestamp map. We dedup by (actor, shift, action) with a short
@@ -126,6 +126,13 @@ let pendingRating: PendingRating | null = null;
 // for the same shift+action (e.g. a second pause after resume) still pass.
 const processedEvents = new Map<string, number>();
 const DEDUP_TTL_MS = 5000;
+
+// We only store the requestId here. The hospital / coverage / total / feePct
+// shown in the PaymentSummary are derived LIVE from the request row inside
+// useDispatch(), so the card always reflects the exact transaction that
+// just completed — including any settled_amount the Monnify webhook writes
+// after the fact.
+let pendingRatingRequestId: string | null = null;
 
 const localListeners = new Set<() => void>();
 function bump() {
@@ -232,6 +239,21 @@ export function useDispatch(): View {
     }
   }, [me, upcoming.length]);
 
+  let pendingRating: PendingRating | null = null;
+  if (pendingRatingRequestId) {
+    const r = net.requests[pendingRatingRequestId];
+    if (r && r.status === "completed" && r.acceptedBy === sid) {
+      pendingRating = {
+        requestId: r.id,
+        hospitalId: hospitalEntityId(r.hospital),
+        hospital: r.hospital,
+        coverage: r.coverage,
+        total: r.settledAmount ?? r.amount,
+        feePct: r.feePct,
+      };
+    }
+  }
+
   return {
     online,
     upcoming,
@@ -324,14 +346,11 @@ export function ensureDoctorSession(initialOnline = true) {
         body: "Payment will be remitted to your account by 10PM today.",
         ttl: 5200,
       });
-      pendingRating = {
-        requestId: r.id,
-        hospitalId: hospitalEntityId(r.hospital),
-        hospital: r.hospital,
-        coverage: r.coverage,
-        total: r.settledAmount ?? r.amount,
-        feePct: r.feePct,
-      };
+      // Tie the PaymentSummary to the EXACT transaction that just completed.
+      // Live details (hospital/coverage/total/feePct) are derived in
+      // useDispatch() from the current request row so post-webhook
+      // settled_amount updates flow into the card automatically.
+      pendingRatingRequestId = r.id;
 
 
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
@@ -442,7 +461,7 @@ export function dismissAccepted() {
 }
 
 export function dismissPendingRating() {
-  pendingRating = null;
+  pendingRatingRequestId = null;
   bump();
 }
 

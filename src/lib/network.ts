@@ -351,16 +351,22 @@ function init() {
   // pendingRating on `complete` and the incoming card on `publish`. If
   // postgres_changes already fired, applyRemoteEvent has already updated
   // state.requests, so the diff is a no-op and nothing double-fires.
+  let firstSnapshot = true;
   remoteUnsubscribe = subscribeCoverageRemote({
     onSnapshot: (rows) => {
       const requests: Record<string, NetRequest> = {};
       for (const r of rows) requests[r.id] = r;
       const prev = state.requests;
+      const isFirst = firstSnapshot;
+      firstSnapshot = false;
       let netEvent: Omit<NetEvent, "at"> | undefined;
       for (const r of rows) {
         const old = prev[r.id];
         if (!old) {
-          if (r.status === "broadcasting") {
+          // Suppress synthesized publish events on the initial snapshot —
+          // they represent pre-existing rows the doctor is just now
+          // discovering, NOT a brand-new request made for them.
+          if (!isFirst && r.status === "broadcasting") {
             netEvent = {
               actor: "requester",
               actorId: r.requesterSessionId,
@@ -767,14 +773,13 @@ export function startRequest(id: string) {
   const cur = state.requests[id];
   if (!cur) return;
   const isResume = (cur.accumulatedMs ?? 0) > 0;
-  // IMPORTANT: persist startedAt as REAL wall-clock time (Date.now()) so the
-  // requester and doctor — who each carry an independent simulation offset —
-  // compute the live elapsed as `simNow() - startedAt`. That way both sides
-  // stay in sync at real time AND a local simulation fast-forward instantly
-  // advances the displayed timer for whoever performs it.
+  // Anchor startedAt to simNow() so a brand-new shift always renders
+  // segment = simNow() - startedAt = 0, regardless of any prior simulation
+  // fast-forward offset. LiveTimer uses simNow() on both sides, so the
+  // computed elapsed remains in sync across requester/doctor.
   const patch: Partial<NetRequest> = {
     status: "active",
-    startedAt: Date.now(),
+    startedAt: simNow(),
     accumulatedMs: cur.accumulatedMs ?? 0,
   };
   applyPatch(id, patch, {
@@ -890,8 +895,18 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
+  const now = simNow();
   return Object.values(s.requests)
-    .filter((r) => r.status === "broadcasting")
+    .filter(
+      (r) =>
+        r.status === "broadcasting" &&
+        // Hide stale rows that were never accepted/cancelled: a broadcasting
+        // row older than BROADCAST_TTL_MS is treated as expired and never
+        // surfaces to doctors as an incoming card.
+        now - r.createdAt < BROADCAST_TTL_MS &&
+        // Also hide rows whose scheduled window has already passed.
+        (!r.endTs || r.endTs > now),
+    )
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
