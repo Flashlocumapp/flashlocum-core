@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
-import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 
 
 // Doctor net payout = total paid − FlashLocum service fee (15%).
@@ -239,11 +239,10 @@ function PayoutRow({
         className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:opacity-90"
         aria-expanded={open}
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-[14.5px] font-medium">{payout.facility}</span>
-            <EnvironmentBadge environment={payout.environment} size="xs" />
-          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[14.5px] font-medium">{payout.facility}</span>
+            </div>
           <div className="truncate text-[12.5px] text-muted-foreground">
             {payout.coverage} · {shortWeekdays(payout.completedOn)}
           </div>

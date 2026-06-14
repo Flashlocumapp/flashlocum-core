@@ -8,7 +8,7 @@ import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { recordRating } from "@/lib/ratings";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
-import { EnvironmentBadge } from "@/components/EnvironmentBadge";
+
 
 import {
   acceptIncoming,
@@ -114,7 +114,6 @@ function IncomingBody({ item }: { item: Coverage }) {
           </span>
         </div>
         <div className="inline-flex items-center gap-2">
-          <EnvironmentBadge environment={item.environment} size="xs" />
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
         </div>
@@ -190,7 +189,6 @@ function AcceptedBody({ item }: { item: Coverage }) {
           Coverage confirmed
         </div>
         <div className="inline-flex items-center gap-2">
-          <EnvironmentBadge environment={item.environment} size="xs" />
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
         </div>
