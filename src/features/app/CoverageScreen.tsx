@@ -424,6 +424,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
                 endHHMM: ampmTo24h(settling.end),
                 days: settling.days,
                 coverageKind: coverageKindFromLabel(settling.coverage),
+                environment: (net.requests[settling.id]?.environment ?? "normal") as "normal" | "busy",
               }
             : undefined
         }
