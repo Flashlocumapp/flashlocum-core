@@ -1226,7 +1226,8 @@ function DispatchOverlay({
       const newEndTs = newStartTs + totalDur * 3_600_000;
       // Re-price across ALL booked days so multi-day totals stay correct.
       const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
-      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays);
+      const env: Environment = (cur?.environment ?? environment) ?? "normal";
+      const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays, env);
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),
