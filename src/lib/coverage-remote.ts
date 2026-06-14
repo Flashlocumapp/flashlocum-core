@@ -44,7 +44,7 @@ type Row = {
   payment_reference: string | null;
   paid_at: string | null;
   remitted_at: string | null;
-  environment: string | null;
+  environment: string;
 };
 
 const TABLE = "coverage_requests";
