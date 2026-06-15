@@ -63,10 +63,12 @@ async function setProfileField(
   field: "selfie_url" | "license_name" | "nysc_name",
   value: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("profiles")
-    .update({ [field]: value })
-    .eq("id", uid);
+  const patch: Partial<{
+    selfie_url: string;
+    license_name: string;
+    nysc_name: string;
+  }> = { [field]: value };
+  const { error } = await supabase.from("profiles").update(patch).eq("id", uid);
   if (error) throw error;
 }
 
