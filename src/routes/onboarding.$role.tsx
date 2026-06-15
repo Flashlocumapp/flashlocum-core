@@ -43,6 +43,13 @@ function OnboardingScreen() {
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
   const [step, setStep] = useState<1 | 2>(1);
+  const [uploadingSelfie, setUploadingSelfie] = useState(false);
+  const [uploadingLicense, setUploadingLicense] = useState(false);
+  const [uploadingNysc, setUploadingNysc] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const { profile } = useMyProfile();
+  const expectedName = profile?.full_name ?? null;
 
   // Per product rule: never autofill/carry-over between flows. Each
   // onboarding session starts from a clean slate and requires explicit input.
@@ -58,6 +65,15 @@ function OnboardingScreen() {
   // Phone: digits only, must be 11 digits starting with 0 (NG mobile, e.g. 080XXXXXXXX).
   const sanitizePhone = (v: string) => v.replace(/\D/g, "").slice(0, 11);
   const isValidPhone = (v?: string) => !!v && /^0\d{10}$/.test(v);
+
+  const mdcnValue = doctor.mdcn?.trim() ?? "";
+  const mdcnValid = MDCN_REGEX.test(mdcnValue);
+  const mdcnError = mdcnValue.length > 0 && !mdcnValid;
+
+  const nameMatches =
+    !!doctor.bankAccountName &&
+    !!expectedName &&
+    isReasonableNameMatch(expectedName, doctor.bankAccountName);
 
   const remoteFields = () =>
     isDoctor
@@ -83,12 +99,16 @@ function OnboardingScreen() {
 
   const step2Valid =
     !!doctor.selfie &&
-    !!doctor.mdcn?.trim() &&
+    mdcnValid &&
     !!doctor.license?.trim() &&
     !!doctor.nysc?.trim() &&
     !!doctor.bankName?.trim() &&
     !!doctor.bankAccount?.trim() &&
-    !!doctor.bankAccountName?.trim();
+    !!doctor.bankAccountName?.trim() &&
+    nameMatches &&
+    !uploadingSelfie &&
+    !uploadingLicense &&
+    !uploadingNysc;
 
   const canContinue = isDoctor ? (step === 1 ? step1Valid : step2Valid) : step1Valid;
 
