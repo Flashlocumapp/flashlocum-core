@@ -8,8 +8,12 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { markOnboardedRemote } from "@/lib/profile-remote";
+import { markOnboardedRemote, useMyProfile } from "@/lib/profile-remote";
 import { BankPayoutFields } from "@/components/BankPayoutFields";
+import { uploadDoctorSelfie, uploadDoctorDocument } from "@/lib/doctor-uploads";
+import { isReasonableNameMatch } from "@/lib/name-match";
+
+const MDCN_REGEX = /^MDCN\/R\/\d{5,6}$/;
 
 type OnboardingSearch = {
   from?: "auth" | "switch";
