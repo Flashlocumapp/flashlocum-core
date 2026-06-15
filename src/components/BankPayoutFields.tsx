@@ -169,6 +169,11 @@ export function BankPayoutFields({
             </span>
           )}
         </div>
+        {mismatched && (
+          <p className="mt-1.5 text-[12.5px] text-destructive">
+            Account name does not match the name on your profile. Please check your details.
+          </p>
+        )}
       </div>
     </>
   );
