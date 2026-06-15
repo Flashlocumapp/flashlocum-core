@@ -6,6 +6,7 @@ import {
   type ProfileRow,
 } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AdminPageHeader,
   Chip,
