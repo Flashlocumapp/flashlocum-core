@@ -8,6 +8,14 @@
 //
 // Only the doctor (matching auth.uid()) and admins can read these
 // objects (RLS on storage.objects).
+//
+// After a successful upload we ALWAYS:
+//  1. Persist the new storage path on the doctor's profile row so admin
+//     review surfaces the latest document.
+//  2. Remove the previous stored file if its path differs (e.g. a new
+//     file extension), so admins never see stale uploads.
+//  3. If the doctor is in `action_required`, flip verification back to
+//     `pending` so both sides reflect "Pending Approval".
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -37,8 +45,41 @@ async function uploadAt(path: string, body: Blob, contentType: string): Promise<
   return path;
 }
 
-/** Upload the doctor's selfie (dataURL from the camera capture).
- *  Returns the storage path stored on `profiles.selfie_url`. */
+async function getProfileField(
+  uid: string,
+  field: "selfie_url" | "license_name" | "nysc_name",
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(field)
+    .eq("id", uid)
+    .maybeSingle();
+  if (error) return null;
+  return (data as Record<string, string | null> | null)?.[field] ?? null;
+}
+
+async function setProfileField(
+  uid: string,
+  field: "selfie_url" | "license_name" | "nysc_name",
+  value: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ [field]: value })
+    .eq("id", uid);
+  if (error) throw error;
+}
+
+async function removeStaleObject(prev: string | null, next: string): Promise<void> {
+  if (!prev || prev === next) return;
+  if (/^https?:\/\//i.test(prev)) return; // legacy URL, leave alone
+  try {
+    await supabase.storage.from(BUCKET).remove([prev]);
+  } catch (e) {
+    console.warn("removeStaleObject failed", e);
+  }
+}
+
 async function autoResubmitIfActionRequired(): Promise<void> {
   try {
     const { doctorResubmitVerification } = await import("@/lib/profile-remote");
@@ -48,12 +89,17 @@ async function autoResubmitIfActionRequired(): Promise<void> {
   }
 }
 
+/** Upload the doctor's selfie (dataURL from the camera capture).
+ *  Returns the storage path stored on `profiles.selfie_url`. */
 export async function uploadDoctorSelfie(dataUrl: string): Promise<string> {
   const uid = await currentUserId();
   const res = await fetch(dataUrl);
   const blob = await res.blob();
   const path = `${uid}/profile/selfie.jpg`;
+  const prev = await getProfileField(uid, "selfie_url");
   const out = await uploadAt(path, blob, blob.type || "image/jpeg");
+  await setProfileField(uid, "selfie_url", out);
+  await removeStaleObject(prev, out);
   await autoResubmitIfActionRequired();
   return out;
 }
@@ -67,7 +113,11 @@ export async function uploadDoctorDocument(
 ): Promise<string> {
   const uid = await currentUserId();
   const path = `${uid}/verification/${kind}.${extFor(file)}`;
+  const field = kind === "license" ? "license_name" : "nysc_name";
+  const prev = await getProfileField(uid, field);
   const out = await uploadAt(path, file, file.type || "application/octet-stream");
+  await setProfileField(uid, field, out);
+  await removeStaleObject(prev, out);
   await autoResubmitIfActionRequired();
   return out;
 }
