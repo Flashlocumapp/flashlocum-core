@@ -498,9 +498,16 @@ export async function listDoctors(): Promise<ProfileRow[]> {
 export async function updateDoctorVerification(
   doctorId: string,
   status: VerificationStatus,
+  extras?: { reason?: string; target?: string; note?: string },
 ): Promise<void> {
   const { updateDoctorVerificationFn } = await import("@/lib/admin.functions");
-  await updateDoctorVerificationFn({ data: { doctorId, status } });
+  await updateDoctorVerificationFn({ data: { doctorId, status, ...extras } });
+}
+
+export async function doctorResubmitVerification(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("doctor_resubmit_verification");
+  if (error) throw error;
+  return !!data;
 }
 
 /* ---------- Admin dashboard ---------- */
