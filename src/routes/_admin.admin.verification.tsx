@@ -22,19 +22,53 @@ export const Route = createFileRoute("/_admin/admin/verification")({
   component: AdminVerificationPage,
 });
 
-type Filter = "pending" | "approved" | "suspended" | "rejected" | "all";
+type Filter =
+  | "pending"
+  | "action_required"
+  | "approved"
+  | "suspended"
+  | "rejected"
+  | "all";
+
+// Profile rows extended with the new action-required metadata. types.ts
+// will catch up after the next regeneration; until then we widen locally.
+type DoctorRow = ProfileRow & {
+  verification_action_reason?: string | null;
+  verification_action_target?: string | null;
+  verification_action_note?: string | null;
+  verification_action_at?: string | null;
+};
+
+const ACTION_REASONS = [
+  "Document unclear",
+  "Missing document",
+  "Wrong document uploaded",
+  "Expired document",
+  "Information mismatch",
+  "Other",
+] as const;
+
+const ACTION_TARGETS = [
+  { id: "", label: "Not specified" },
+  { id: "selfie", label: "Selfie / profile photo" },
+  { id: "license", label: "Medical license" },
+  { id: "nysc", label: "NYSC certificate" },
+  { id: "bank", label: "Bank account details" },
+  { id: "mdcn", label: "MDCN number" },
+];
 
 function AdminVerificationPage() {
-  const [doctors, setDoctors] = useState<ProfileRow[]>([]);
+  const [doctors, setDoctors] = useState<DoctorRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
+  const [actionFor, setActionFor] = useState<DoctorRow | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
       const rows = await listDoctors();
-      setDoctors(rows);
+      setDoctors(rows as DoctorRow[]);
     } catch (e) {
       pushToast({ tone: "warn", title: (e as Error).message || "Refresh failed." });
     } finally {
@@ -46,11 +80,21 @@ function AdminVerificationPage() {
     void refresh();
   }, [refresh]);
 
-  const act = async (id: string, status: VerificationStatus) => {
+  const act = async (
+    id: string,
+    status: VerificationStatus,
+    extras?: { reason?: string; target?: string; note?: string },
+  ) => {
     setBusy(id + status);
     try {
-      await updateDoctorVerification(id, status);
-      pushToast({ tone: "presence", title: `Doctor ${status}.` });
+      await updateDoctorVerification(id, status, extras);
+      pushToast({
+        tone: "presence",
+        title:
+          status === "action_required"
+            ? "Doctor marked Action Required."
+            : `Doctor ${status}.`,
+      });
       await refresh();
     } catch (e) {
       pushToast({ tone: "warn", title: (e as Error).message || "Update failed." });
@@ -60,8 +104,18 @@ function AdminVerificationPage() {
   };
 
   const counts = useMemo(() => {
-    const c = { pending: 0, approved: 0, suspended: 0, rejected: 0, all: doctors.length };
-    for (const d of doctors) c[d.verification_status]++;
+    const c: Record<VerificationStatus, number> & { all: number } = {
+      pending: 0,
+      approved: 0,
+      suspended: 0,
+      rejected: 0,
+      action_required: 0,
+      all: doctors.length,
+    };
+    for (const d of doctors) {
+      const s = d.verification_status as VerificationStatus;
+      if (s in c) c[s]++;
+    }
     return c;
   }, [doctors]);
 
@@ -72,6 +126,7 @@ function AdminVerificationPage() {
 
   const filters: { id: Filter; label: string }[] = [
     { id: "pending", label: `Pending (${counts.pending})` },
+    { id: "action_required", label: `Action required (${counts.action_required})` },
     { id: "approved", label: `Approved (${counts.approved})` },
     { id: "suspended", label: `Suspended (${counts.suspended})` },
     { id: "rejected", label: `Rejected (${counts.rejected})` },
@@ -113,12 +168,25 @@ function AdminVerificationPage() {
                 key={d.id}
                 doctor={d}
                 busy={busy}
-                onAct={act}
+                onAct={(id, status) => void act(id, status)}
+                onActionRequired={() => setActionFor(d)}
               />
             ))}
           </div>
         )}
       </div>
+
+      {actionFor && (
+        <ActionRequiredSheet
+          doctor={actionFor}
+          submitting={busy === actionFor.id + "action_required"}
+          onClose={() => setActionFor(null)}
+          onSubmit={async (reason, target, note) => {
+            await act(actionFor.id, "action_required", { reason, target, note });
+            setActionFor(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -127,14 +195,16 @@ function VerificationCard({
   doctor,
   busy,
   onAct,
+  onActionRequired,
 }: {
-  doctor: ProfileRow;
+  doctor: DoctorRow;
   busy: string | null;
   onAct: (id: string, s: VerificationStatus) => void;
+  onActionRequired: () => void;
 }) {
   const isBusy = (s: string) => busy === doctor.id + s;
   const anyBusy = busy?.startsWith(doctor.id) ?? false;
-  const status = doctor.verification_status;
+  const status = doctor.verification_status as VerificationStatus;
   const tone = statusTone(status);
   return (
     <div
@@ -184,6 +254,26 @@ function VerificationCard({
         </div>
       </div>
 
+      {status === "action_required" && doctor.verification_action_reason && (
+        <div
+          className="mt-3 rounded-xl px-3 py-2 text-[11.5px] leading-snug"
+          style={{
+            background: "color-mix(in oklab, #b45309 12%, transparent)",
+            color: "#92400e",
+          }}
+        >
+          <div className="font-semibold">
+            {doctor.verification_action_reason}
+            {doctor.verification_action_target
+              ? ` · ${targetLabel(doctor.verification_action_target)}`
+              : ""}
+          </div>
+          {doctor.verification_action_note && (
+            <div className="mt-0.5 opacity-90">{doctor.verification_action_note}</div>
+          )}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {doctor.selfie_url && (
           <a
@@ -225,6 +315,14 @@ function VerificationCard({
                 : "Approve"}
           </button>
         )}
+        <button
+          onClick={onActionRequired}
+          disabled={anyBusy}
+          className="h-9 rounded-full px-3.5 text-[12.5px] font-semibold disabled:opacity-60"
+          style={{ background: "color-mix(in oklab, #b45309 15%, transparent)", color: "#92400e" }}
+        >
+          {isBusy("action_required") ? "Saving…" : "Action required"}
+        </button>
         {status !== "suspended" && (
           <button
             onClick={() => onAct(doctor.id, "suspended")}
@@ -244,6 +342,108 @@ function VerificationCard({
             {isBusy("rejected") ? "Rejecting…" : "Reject"}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function targetLabel(id: string): string {
+  return ACTION_TARGETS.find((t) => t.id === id)?.label ?? id;
+}
+
+function ActionRequiredSheet({
+  doctor,
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  doctor: DoctorRow;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string, target: string, note: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState<string>(
+    doctor.verification_action_reason || ACTION_REASONS[0],
+  );
+  const [target, setTarget] = useState<string>(
+    doctor.verification_action_target || "",
+  );
+  const [note, setNote] = useState<string>(doctor.verification_action_note || "");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-background p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-[15px] font-semibold tracking-tight">
+          Mark as Action Required
+        </div>
+        <div className="mt-0.5 text-[12px] text-muted-foreground">
+          {doctor.full_name || "This doctor"} will be unable to accept shifts until the
+          issue is resolved. A push notification will be sent.
+        </div>
+
+        <label className="mt-4 block text-[11.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Reason
+        </label>
+        <select
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-[13px]"
+        >
+          {ACTION_REASONS.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+
+        <label className="mt-4 block text-[11.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Which document / field
+        </label>
+        <select
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-[13px]"
+        >
+          {ACTION_TARGETS.map((t) => (
+            <option key={t.id || "none"} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+
+        <label className="mt-4 block text-[11.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Note (optional)
+        </label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="Add a short note the doctor will see…"
+          className="mt-1 w-full resize-none rounded-xl border border-border bg-background p-3 text-[13px]"
+        />
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={submitting || !reason.trim()}
+            onClick={() => void onSubmit(reason, target, note)}
+            className="h-9 rounded-full px-3.5 text-[12.5px] font-semibold text-white disabled:opacity-60"
+            style={{ background: "#b45309" }}
+          >
+            {submitting ? "Saving…" : "Send to doctor"}
+          </button>
+        </div>
       </div>
     </div>
   );
