@@ -339,6 +339,145 @@ function targetLabel(id: string): string {
   return ACTION_TARGETS.find((t) => t.id === id)?.label ?? id;
 }
 
+const DOCTORS_BUCKET = "doctors";
+const SIGNED_URL_TTL = 60 * 30; // 30 min
+
+function useSignedDoctorUrl(path: string | null | undefined): {
+  url: string | null;
+  loading: boolean;
+  error: string | null;
+} {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!path) {
+      setUrl(null);
+      setError(null);
+      return;
+    }
+    if (/^https?:\/\//i.test(path)) {
+      setUrl(path);
+      return;
+    }
+    setLoading(true);
+    void supabase.storage
+      .from(DOCTORS_BUCKET)
+      .createSignedUrl(path, SIGNED_URL_TTL)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setError(error?.message ?? "Unable to load file");
+          setUrl(null);
+        } else {
+          setError(null);
+          setUrl(data.signedUrl);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return { url, loading, error };
+}
+
+function DoctorAvatar({
+  path,
+  name,
+}: {
+  path: string | null | undefined;
+  name: string | null | undefined;
+}) {
+  const { url } = useSignedDoctorUrl(path);
+  return (
+    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-secondary">
+      {url ? (
+        <img src={url} alt={name ?? "Doctor"} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[15px] font-semibold text-muted-foreground">
+          {initials(name)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocRow({
+  label,
+  path,
+}: {
+  label: string;
+  path: string | null | undefined;
+}) {
+  const { url, loading, error } = useSignedDoctorUrl(path);
+  const disabled = !url;
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12px]">
+      <div className="min-w-0 truncate">
+        <span className="font-medium">{label}</span>
+        {!path && <span className="ml-1 text-muted-foreground">— not uploaded</span>}
+        {error && <span className="ml-1 text-destructive">— {error}</span>}
+      </div>
+      {path && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <a
+            href={url ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+            style={{ pointerEvents: disabled ? "none" : "auto", opacity: disabled ? 0.6 : 1 }}
+          >
+            {loading ? "Loading…" : "View"}
+          </a>
+          <a
+            href={url ?? "#"}
+            download
+            target="_blank"
+            rel="noreferrer"
+            className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+            style={{ pointerEvents: disabled ? "none" : "auto", opacity: disabled ? 0.6 : 1 }}
+          >
+            Download
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExternalDocRow({ label, url }: { label: string; url: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12px]">
+      <div className="min-w-0 truncate font-medium">{label}</div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+        >
+          View
+        </a>
+        <a
+          href={url}
+          download
+          target="_blank"
+          rel="noreferrer"
+          className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+        >
+          Download
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function ActionRequiredSheet({
   doctor,
   submitting,
