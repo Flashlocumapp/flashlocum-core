@@ -18,6 +18,9 @@ import { useRating } from "@/lib/ratings";
 import { useReliability } from "@/lib/reliability";
 import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
+import { useMyProfile } from "@/lib/profile-remote";
+import { uploadDoctorSelfie, uploadDoctorDocument } from "@/lib/doctor-uploads";
+import { useState } from "react";
 
 /**
  * CoverHome — doctor home tab.
