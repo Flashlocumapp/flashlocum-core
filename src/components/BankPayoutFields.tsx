@@ -11,6 +11,7 @@ import {
   resolveBankAccountName,
   type MonnifyBank,
 } from "@/lib/monnify/banks.functions";
+import { isReasonableNameMatch } from "@/lib/name-match";
 
 export type BankPayoutPatch = {
   bankName?: string;
@@ -24,14 +25,23 @@ export function BankPayoutFields({
   bankCode,
   bankAccount,
   bankAccountName,
+  expectedName,
   onChange,
 }: {
   bankName?: string | null;
   bankCode?: string | null;
   bankAccount?: string | null;
   bankAccountName?: string | null;
+  /** Doctor's profile name. When provided, the resolved bank account
+   *  name must reasonably match before the parent should let the form
+   *  submit (parent can read `bankAccountName` and rerun the matcher). */
+  expectedName?: string | null;
   onChange: (patch: BankPayoutPatch) => void;
 }) {
+  const mismatched =
+    !!expectedName &&
+    !!bankAccountName &&
+    !isReasonableNameMatch(expectedName, bankAccountName);
   const [banks, setBanks] = useState<MonnifyBank[]>([]);
   const [banksLoading, setBanksLoading] = useState(true);
   const [resolving, setResolving] = useState(false);
