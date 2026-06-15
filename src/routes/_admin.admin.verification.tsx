@@ -6,6 +6,7 @@ import {
   type ProfileRow,
 } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AdminPageHeader,
   Chip,
@@ -215,19 +216,7 @@ function VerificationCard({
       }}
     >
       <div className="flex items-start gap-3">
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-secondary">
-          {doctor.selfie_url ? (
-            <img
-              src={doctor.selfie_url}
-              alt={doctor.full_name ?? "Doctor"}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-[15px] font-semibold text-muted-foreground">
-              {initials(doctor.full_name)}
-            </div>
-          )}
-        </div>
+        <DoctorAvatar path={doctor.selfie_url} name={doctor.full_name} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 truncate text-[15px] font-semibold tracking-tight">
@@ -250,6 +239,19 @@ function VerificationCard({
               Submitted:{" "}
               <span className="text-foreground">{fmt(doctor.onboarded_cover_at)}</span>
             </div>
+            <div className="col-span-2">
+              Bank:{" "}
+              <span className="text-foreground">
+                {doctor.bank_name || "—"}
+                {doctor.bank_account ? ` · ${doctor.bank_account}` : ""}
+              </span>
+            </div>
+            {doctor.bank_account_name && (
+              <div className="col-span-2">
+                Account name:{" "}
+                <span className="text-foreground">{doctor.bank_account_name}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -274,32 +276,18 @@ function VerificationCard({
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {doctor.selfie_url && (
-          <a
-            href={doctor.selfie_url}
-            target="_blank"
-            rel="noreferrer"
-            className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-medium leading-8"
-          >
-            View selfie
-          </a>
-        )}
-        {doctor.verification_receipt_url ? (
-          <a
-            href={doctor.verification_receipt_url}
-            target="_blank"
-            rel="noreferrer"
-            className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-medium leading-8"
-          >
-            View receipt
-          </a>
-        ) : (
-          <span className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-medium leading-8 text-muted-foreground">
-            No receipt uploaded
-          </span>
+      <div className="mt-3 space-y-1.5">
+        <DocRow label="Selfie / profile photo" path={doctor.selfie_url} />
+        <DocRow label="Medical license" path={doctor.license_name} />
+        <DocRow label="NYSC certificate" path={doctor.nysc_name} />
+        {doctor.verification_receipt_url && (
+          <ExternalDocRow
+            label="Payment receipt"
+            url={doctor.verification_receipt_url}
+          />
         )}
       </div>
+
 
       <div className="mt-3 flex flex-wrap gap-2">
         {status !== "approved" && (
@@ -349,6 +337,145 @@ function VerificationCard({
 
 function targetLabel(id: string): string {
   return ACTION_TARGETS.find((t) => t.id === id)?.label ?? id;
+}
+
+const DOCTORS_BUCKET = "doctors";
+const SIGNED_URL_TTL = 60 * 30; // 30 min
+
+function useSignedDoctorUrl(path: string | null | undefined): {
+  url: string | null;
+  loading: boolean;
+  error: string | null;
+} {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!path) {
+      setUrl(null);
+      setError(null);
+      return;
+    }
+    if (/^https?:\/\//i.test(path)) {
+      setUrl(path);
+      return;
+    }
+    setLoading(true);
+    void supabase.storage
+      .from(DOCTORS_BUCKET)
+      .createSignedUrl(path, SIGNED_URL_TTL)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setError(error?.message ?? "Unable to load file");
+          setUrl(null);
+        } else {
+          setError(null);
+          setUrl(data.signedUrl);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return { url, loading, error };
+}
+
+function DoctorAvatar({
+  path,
+  name,
+}: {
+  path: string | null | undefined;
+  name: string | null | undefined;
+}) {
+  const { url } = useSignedDoctorUrl(path);
+  return (
+    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-secondary">
+      {url ? (
+        <img src={url} alt={name ?? "Doctor"} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[15px] font-semibold text-muted-foreground">
+          {initials(name)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocRow({
+  label,
+  path,
+}: {
+  label: string;
+  path: string | null | undefined;
+}) {
+  const { url, loading, error } = useSignedDoctorUrl(path);
+  const disabled = !url;
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12px]">
+      <div className="min-w-0 truncate">
+        <span className="font-medium">{label}</span>
+        {!path && <span className="ml-1 text-muted-foreground">— not uploaded</span>}
+        {error && <span className="ml-1 text-destructive">— {error}</span>}
+      </div>
+      {path && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <a
+            href={url ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+            style={{ pointerEvents: disabled ? "none" : "auto", opacity: disabled ? 0.6 : 1 }}
+          >
+            {loading ? "Loading…" : "View"}
+          </a>
+          <a
+            href={url ?? "#"}
+            download
+            target="_blank"
+            rel="noreferrer"
+            className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+            style={{ pointerEvents: disabled ? "none" : "auto", opacity: disabled ? 0.6 : 1 }}
+          >
+            Download
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExternalDocRow({ label, url }: { label: string; url: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12px]">
+      <div className="min-w-0 truncate font-medium">{label}</div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+        >
+          View
+        </a>
+        <a
+          href={url}
+          download
+          target="_blank"
+          rel="noreferrer"
+          className="h-7 rounded-full bg-background px-2.5 text-[11.5px] font-medium leading-7"
+        >
+          Download
+        </a>
+      </div>
+    </div>
+  );
 }
 
 function ActionRequiredSheet({
