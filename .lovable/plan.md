@@ -1,65 +1,55 @@
-# Environment + Multi-Day Payment Flow Overhaul
+# Doctor Verification & Validation
 
-## 1. Environment Selector UI (RequesterHome booking sheet)
+Four changes scoped to the doctor onboarding flow. No other system behaviour changes.
 
-- Remove the "Busy multiplies pricing × 1.25" hint inline.
-- Keep the two-pill **Normal / Busy** toggle, no pricing copy.
-- Move the whole Environment block to sit **above** the "Note (optional)" field.
-- Add helper text directly under the toggle:
-  - **Normal** — Standard working conditions
-  - **Busy** — High workload environment
-- Backend already persists `environment` on `coverage_requests` — no schema change.
+## 1. Private storage for doctor documents
 
-## 2. Environment Visibility (doctor side)
+Create a private `doctors` storage bucket with this layout per doctor:
 
-Surface a small `Normal` / `Busy` chip wherever a doctor sees a shift, using a shared `<EnvironmentBadge environment={...} />` component (neutral for normal, warning tone for busy, no pricing text):
+```text
+doctors/{user_id}/profile/selfie.jpg
+doctors/{user_id}/verification/license.<ext>
+doctors/{user_id}/verification/nysc.<ext>
+```
 
-- **New Request** card — `CoverDispatchPortal` incoming dispatch card.
-- **Upcoming Coverage / Active Shifts** — `CoverHome` accepted-shift cards.
-- **History** — `HistoryDetailSheet` row + detail.
-- **Earnings** — `EarningsScreen` per-shift rows.
+Access rules (RLS on `storage.objects`):
+- The doctor (`auth.uid()` = first path segment) can read/write their own files.
+- Admins (via `has_role(auth.uid(), 'admin')`) can read all files in the bucket.
+- No public read.
 
-Coverage payload already carries `environment` end-to-end via `coverage-remote.ts`; just render it.
+Today the onboarding screen stores only the file name on the profile row — no upload happens. After this change:
+- Selfie → uploaded to `profile/selfie.jpg`; signed URL stored on `profiles.selfie_url`.
+- License → uploaded to `verification/license.<ext>`; path stored on `profiles.license_name`.
+- NYSC → uploaded to `verification/nysc.<ext>`; path stored on `profiles.nysc_name`.
 
-## 3. Pause / End Confirmation + Payment-Gated Flow
+## 2. MDCN number validation
 
-### Pause Shift (multi-day intent)
+Regex enforced in the onboarding form: `^MDCN/R/\d{5,6}$`.
 
-1. Requester taps **Pause Shift** → modal:
-   > "Pausing this shift means you are closing today's work and proceeding to payment for the completed shift. You can resume the shift anytime under Upcoming Coverage."
-   - Buttons: **Cancel** / **Pause & Pay**.
-2. On confirm → call `pause_shift` RPC (already bills the open segment + sets `payment_due_at`) → immediately open the existing Monnify checkout sheet for that segment amount.
-3. UI stays on the settlement screen until the **Monnify webhook** marks the segment paid (existing `mark_settlement_paid` already stamps `shift_segments.settled_at`).
-4. Polling (`getRequestBillingState`) detects `segments[last].settled_at IS NOT NULL` and `payment_status='paid'`:
-   - Show "Paid — shift moved to Upcoming Coverage" toast.
-   - Route requester back to home; the request now appears in Upcoming because `status='paused'` and the latest segment is settled (clears the "blocked from resume" state).
-5. Doctor side: same shift surfaces under Upcoming again with the same `environment` badge. Resume creates a fresh segment with its own start time (already handled by `resume_shift`).
+- Inline error: "Please enter the correct format" when text is non-empty and fails the regex.
+- Submit button stays disabled until the value matches.
 
-### End Shift (final settlement)
+## 3. Account name validation
 
-1. **End Shift** → modal:
-   > "Ending this shift means you are closing the entire assignment and proceeding to final payment for completed work."
-   - Buttons: **Cancel** / **End & Pay**.
-2. On confirm → `end_shift` RPC → open Monnify checkout for the final outstanding amount.
-3. Shift only renders as **Completed / Closed** once the webhook flips `payment_status='paid'`. Until then the settlement screen shows "Awaiting payment confirmation" with the existing 15-min window + auto-extension already wired.
+When the bank-resolved account name comes back, compare it to the doctor's `full_name` (from their profile / signup):
 
-### Backend truth rule
+- Normalize both: uppercase, strip punctuation, collapse spaces, split into tokens, drop single-letter initials.
+- Accept if at least two name tokens from the profile appear in the resolved name in any order (covers `ADELEKE ISAIAH`, `ISAIAH A ADELEKE`).
+- If profile has only two tokens and resolved name has both plus an initial (`ADELEKE I`), accept.
+- Otherwise reject with: "Account name does not match the name on your profile. Please check your details."
 
-- No frontend code flips `status` to `accepted` (upcoming) or `completed` (closed-final) on its own. The DB RPCs + Monnify webhook remain the single source of truth.
-- `pause_shift` already sets `status='paused'` and creates `payment_due_at`; that's the "awaiting payment" state for a paused day. The UI now treats "paused + latest segment unsettled" as **pending payment**, and "paused + latest segment settled" as **upcoming / resumable**.
-- `end_shift` already sets `status='completed'` + `billing_locked_at`; the UI now treats `completed && payment_status!='paid'` as **awaiting final payment** (not yet shown as closed in history).
+The doctor cannot submit until the resolved name passes the check.
 
-No DB migration needed — all required fields (`environment`, `payment_status`, `shift_segments.settled_at`, `billing_locked_at`, `payment_due_at`) already exist.
+## 4. Source of truth
 
-## Files to touch
+`verification_status` stays `'pending'` until an admin approves. No change to that flow — only ensure the client cannot submit onboarding unless: MDCN passes, all three documents uploaded successfully, bank account name matches. Final `'approved'` flip remains admin-driven (existing `_admin.admin.verification.tsx`).
 
-- `src/features/request/RequesterHome.tsx` — reorder Environment block, drop multiplier copy, add helper text.
-- `src/features/request/ShiftSettlement.tsx` — confirmation modals for Pause/End, gate state transitions on `segments[last].settled_at` / `payment_status`.
-- `src/components/EnvironmentBadge.tsx` *(new)* — shared chip.
-- `src/features/cover/CoverDispatchPortal.tsx`, `src/features/cover/CoverHome.tsx`, `src/components/HistoryDetailSheet.tsx`, `src/features/app/EarningsScreen.tsx` — render badge.
-- (No backend / migration changes.)
+## Files
 
-## Out of scope
+- New migration: create `doctors` bucket + 4 RLS policies on `storage.objects`.
+- New `src/lib/doctor-uploads.ts`: `uploadDoctorSelfie`, `uploadDoctorDocument` helpers using the browser supabase client.
+- New `src/lib/name-match.ts`: `isReasonableNameMatch(profileName, resolvedName)`.
+- Edit `src/routes/onboarding.$role.tsx`: MDCN regex + inline error, upload selfie/license/nysc on file pick (show progress), pass profile name into `BankPayoutFields`, gate Submit on name-match.
+- Edit `src/components/BankPayoutFields.tsx`: accept optional `expectedName` prop; after resolve, run the matcher and surface the mismatch error.
 
-- Changing pricing logic or the 1.25× multiplier itself (still applied server-side, just hidden in UI).
-- Restructuring how Monnify checkout is initiated (reuse the current sheet).
+Build verification at the end.

@@ -8,8 +8,12 @@ import {
   type DoctorProfile,
   type RequesterProfile,
 } from "@/lib/onboarding";
-import { markOnboardedRemote } from "@/lib/profile-remote";
+import { markOnboardedRemote, useMyProfile } from "@/lib/profile-remote";
 import { BankPayoutFields } from "@/components/BankPayoutFields";
+import { uploadDoctorSelfie, uploadDoctorDocument } from "@/lib/doctor-uploads";
+import { isReasonableNameMatch } from "@/lib/name-match";
+
+const MDCN_REGEX = /^MDCN\/R\/\d{5,6}$/;
 
 type OnboardingSearch = {
   from?: "auth" | "switch";
@@ -39,6 +43,13 @@ function OnboardingScreen() {
   const [requester, setRequester] = useState<RequesterProfile>({});
   const [doctor, setDoctor] = useState<DoctorProfile>({});
   const [step, setStep] = useState<1 | 2>(1);
+  const [uploadingSelfie, setUploadingSelfie] = useState(false);
+  const [uploadingLicense, setUploadingLicense] = useState(false);
+  const [uploadingNysc, setUploadingNysc] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const { profile } = useMyProfile();
+  const expectedName = profile?.full_name ?? null;
 
   // Per product rule: never autofill/carry-over between flows. Each
   // onboarding session starts from a clean slate and requires explicit input.
@@ -54,6 +65,15 @@ function OnboardingScreen() {
   // Phone: digits only, must be 11 digits starting with 0 (NG mobile, e.g. 080XXXXXXXX).
   const sanitizePhone = (v: string) => v.replace(/\D/g, "").slice(0, 11);
   const isValidPhone = (v?: string) => !!v && /^0\d{10}$/.test(v);
+
+  const mdcnValue = doctor.mdcn?.trim() ?? "";
+  const mdcnValid = MDCN_REGEX.test(mdcnValue);
+  const mdcnError = mdcnValue.length > 0 && !mdcnValid;
+
+  const nameMatches =
+    !!doctor.bankAccountName &&
+    !!expectedName &&
+    isReasonableNameMatch(expectedName, doctor.bankAccountName);
 
   const remoteFields = () =>
     isDoctor
@@ -79,12 +99,16 @@ function OnboardingScreen() {
 
   const step2Valid =
     !!doctor.selfie &&
-    !!doctor.mdcn?.trim() &&
+    mdcnValid &&
     !!doctor.license?.trim() &&
     !!doctor.nysc?.trim() &&
     !!doctor.bankName?.trim() &&
     !!doctor.bankAccount?.trim() &&
-    !!doctor.bankAccountName?.trim();
+    !!doctor.bankAccountName?.trim() &&
+    nameMatches &&
+    !uploadingSelfie &&
+    !uploadingLicense &&
+    !uploadingNysc;
 
   const canContinue = isDoctor ? (step === 1 ? step1Valid : step2Valid) : step1Valid;
 
@@ -213,20 +237,48 @@ function OnboardingScreen() {
             <>
               <SelfieCapture
                 value={doctor.selfie}
-                onCapture={(dataUrl) => setDoctor((p) => ({ ...p, selfie: dataUrl }))}
+                uploading={uploadingSelfie}
+                onCapture={async (dataUrl) => {
+                  setUploadError(null);
+                  setUploadingSelfie(true);
+                  try {
+                    const path = await uploadDoctorSelfie(dataUrl);
+                    setDoctor((p) => ({ ...p, selfie: path }));
+                  } catch (e) {
+                    setUploadError(
+                      e instanceof Error ? e.message : "Selfie upload failed",
+                    );
+                  } finally {
+                    setUploadingSelfie(false);
+                  }
+                }}
                 onClear={() => setDoctor((p) => ({ ...p, selfie: undefined }))}
               />
 
-              <Field
-                label="MDCN number"
-                type="text"
-                value={doctor.mdcn ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
-              />
+              <div>
+                <Field
+                  label="MDCN number"
+                  type="text"
+                  placeholder="MDCN/R/12345"
+                  value={doctor.mdcn ?? ""}
+                  onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
+                />
+                {mdcnError && (
+                  <p className="mt-1.5 text-[12.5px] text-destructive">
+                    Please enter the correct format
+                  </p>
+                )}
+              </div>
 
               <UploadField
                 label="License / Payment receipt upload"
-                hint={doctor.license ? doctor.license : "Tap to upload PDF or image"}
+                hint={
+                  uploadingLicense
+                    ? "Uploading…"
+                    : doctor.license
+                      ? "License uploaded"
+                      : "Tap to upload PDF or image"
+                }
                 onPick={() => licenseRef.current?.click()}
               />
               <input
@@ -234,16 +286,34 @@ function OnboardingScreen() {
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const f = e.target.files?.[0];
+                  e.target.value = "";
                   if (!f) return;
-                  setDoctor((p) => ({ ...p, license: f.name }));
+                  setUploadError(null);
+                  setUploadingLicense(true);
+                  try {
+                    const path = await uploadDoctorDocument("license", f);
+                    setDoctor((p) => ({ ...p, license: path }));
+                  } catch (err) {
+                    setUploadError(
+                      err instanceof Error ? err.message : "License upload failed",
+                    );
+                  } finally {
+                    setUploadingLicense(false);
+                  }
                 }}
               />
 
               <UploadField
                 label="NYSC certificate upload"
-                hint={doctor.nysc ? doctor.nysc : "Tap to upload PDF or image"}
+                hint={
+                  uploadingNysc
+                    ? "Uploading…"
+                    : doctor.nysc
+                      ? "NYSC certificate uploaded"
+                      : "Tap to upload PDF or image"
+                }
                 onPick={() => nyscRef.current?.click()}
               />
               <input
@@ -251,24 +321,40 @@ function OnboardingScreen() {
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const f = e.target.files?.[0];
+                  e.target.value = "";
                   if (!f) return;
-                  setDoctor((p) => ({ ...p, nysc: f.name }));
+                  setUploadError(null);
+                  setUploadingNysc(true);
+                  try {
+                    const path = await uploadDoctorDocument("nysc", f);
+                    setDoctor((p) => ({ ...p, nysc: path }));
+                  } catch (err) {
+                    setUploadError(
+                      err instanceof Error ? err.message : "NYSC upload failed",
+                    );
+                  } finally {
+                    setUploadingNysc(false);
+                  }
                 }}
               />
 
-
+              {uploadError && (
+                <p className="text-[12.5px] text-destructive">{uploadError}</p>
+              )}
 
               <BankPayoutFields
                 bankName={doctor.bankName}
                 bankCode={doctor.bankCode}
                 bankAccount={doctor.bankAccount}
                 bankAccountName={doctor.bankAccountName}
+                expectedName={expectedName}
                 onChange={(patch) => setDoctor((p) => ({ ...p, ...patch }))}
               />
 
             </>
+
           )}
         </div>
 
@@ -367,10 +453,12 @@ function UploadField({
 
 function SelfieCapture({
   value,
+  uploading,
   onCapture,
   onClear,
 }: {
   value?: string;
+  uploading?: boolean;
   onCapture: (dataUrl: string) => void;
   onClear: () => void;
 }) {
@@ -378,6 +466,7 @@ function SelfieCapture({
   const [open, setOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const start = async () => {
     setError(null);
@@ -426,9 +515,13 @@ function SelfieCapture({
     ctx.translate(size, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(v, sx, sy, size, size, 0, 0, size, size);
-    onCapture(c.toDataURL("image/jpeg", 0.85));
+    const dataUrl = c.toDataURL("image/jpeg", 0.85);
+    setPreview(dataUrl);
+    onCapture(dataUrl);
     stop();
   };
+
+  const hasSelfie = !!value || !!preview;
 
   return (
     <div>
@@ -438,8 +531,8 @@ function SelfieCapture({
           className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-background"
           style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
         >
-          {value ? (
-            <img src={value} alt="Selfie" className="h-full w-full object-cover" />
+          {preview ? (
+            <img src={preview} alt="Selfie" className="h-full w-full object-cover" />
           ) : (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
               <circle cx="12" cy="9" r="3.2" stroke="currentColor" strokeWidth="1.6" />
@@ -449,17 +542,20 @@ function SelfieCapture({
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[14px] font-medium">
-            {value ? "Selfie captured" : "Live selfie required"}
+            {uploading ? "Uploading selfie…" : hasSelfie ? "Selfie captured" : "Live selfie required"}
           </div>
           <div className="text-[12px] text-muted-foreground">
-            {value ? "Retake to update" : "Front camera only"}
+            {hasSelfie ? "Retake to update" : "Front camera only"}
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          {value && (
+          {hasSelfie && !uploading && (
             <button
               type="button"
-              onClick={onClear}
+              onClick={() => {
+                setPreview(null);
+                onClear();
+              }}
               className="h-9 rounded-xl bg-background px-3 text-[12.5px] font-medium active:bg-accent"
               style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
             >
@@ -468,10 +564,11 @@ function SelfieCapture({
           )}
           <button
             type="button"
+            disabled={uploading}
             onClick={start}
             className="h-9 rounded-xl bg-primary px-3 text-[12.5px] font-semibold text-primary-foreground active:opacity-90"
           >
-            {value ? "Retake" : "Capture"}
+            {hasSelfie ? "Retake" : "Capture"}
           </button>
         </div>
       </div>

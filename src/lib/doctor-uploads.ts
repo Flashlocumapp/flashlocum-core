@@ -1,0 +1,60 @@
+// Upload helpers for doctor documents.
+//
+// Files live in the private `doctors` bucket under a per-user folder:
+//
+//   doctors/{user_id}/profile/selfie.jpg
+//   doctors/{user_id}/verification/license.<ext>
+//   doctors/{user_id}/verification/nysc.<ext>
+//
+// Only the doctor (matching auth.uid()) and admins can read these
+// objects (RLS on storage.objects).
+
+import { supabase } from "@/integrations/supabase/client";
+
+const BUCKET = "doctors";
+
+function extFor(file: File): string {
+  const fromName = file.name.includes(".") ? file.name.split(".").pop()! : "";
+  const safe = fromName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (safe) return safe;
+  if (file.type === "application/pdf") return "pdf";
+  if (file.type.startsWith("image/")) return file.type.split("/")[1] ?? "bin";
+  return "bin";
+}
+
+async function currentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) throw new Error("Not authenticated");
+  return data.user.id;
+}
+
+async function uploadAt(path: string, body: Blob, contentType: string): Promise<string> {
+  const { error } = await supabase.storage.from(BUCKET).upload(path, body, {
+    upsert: true,
+    contentType,
+  });
+  if (error) throw error;
+  return path;
+}
+
+/** Upload the doctor's selfie (dataURL from the camera capture).
+ *  Returns the storage path stored on `profiles.selfie_url`. */
+export async function uploadDoctorSelfie(dataUrl: string): Promise<string> {
+  const uid = await currentUserId();
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  const path = `${uid}/profile/selfie.jpg`;
+  return uploadAt(path, blob, blob.type || "image/jpeg");
+}
+
+export type DoctorDocKind = "license" | "nysc";
+
+/** Upload a verification document. Returns the storage path. */
+export async function uploadDoctorDocument(
+  kind: DoctorDocKind,
+  file: File,
+): Promise<string> {
+  const uid = await currentUserId();
+  const path = `${uid}/verification/${kind}.${extFor(file)}`;
+  return uploadAt(path, file, file.type || "application/octet-stream");
+}
