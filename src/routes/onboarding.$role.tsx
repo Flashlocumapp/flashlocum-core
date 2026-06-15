@@ -466,6 +466,7 @@ function SelfieCapture({
   const [open, setOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const start = async () => {
     setError(null);
