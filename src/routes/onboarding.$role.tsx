@@ -531,8 +531,8 @@ function SelfieCapture({
           className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-background"
           style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
         >
-          {value ? (
-            <img src={value} alt="Selfie" className="h-full w-full object-cover" />
+          {preview ? (
+            <img src={preview} alt="Selfie" className="h-full w-full object-cover" />
           ) : (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
               <circle cx="12" cy="9" r="3.2" stroke="currentColor" strokeWidth="1.6" />
@@ -542,17 +542,20 @@ function SelfieCapture({
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[14px] font-medium">
-            {value ? "Selfie captured" : "Live selfie required"}
+            {uploading ? "Uploading selfie…" : hasSelfie ? "Selfie captured" : "Live selfie required"}
           </div>
           <div className="text-[12px] text-muted-foreground">
-            {value ? "Retake to update" : "Front camera only"}
+            {hasSelfie ? "Retake to update" : "Front camera only"}
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          {value && (
+          {hasSelfie && !uploading && (
             <button
               type="button"
-              onClick={onClear}
+              onClick={() => {
+                setPreview(null);
+                onClear();
+              }}
               className="h-9 rounded-xl bg-background px-3 text-[12.5px] font-medium active:bg-accent"
               style={{ boxShadow: "inset 0 0 0 1px var(--color-hairline)" }}
             >
@@ -561,6 +564,7 @@ function SelfieCapture({
           )}
           <button
             type="button"
+            disabled={uploading}
             onClick={start}
             className="h-9 rounded-xl bg-primary px-3 text-[12.5px] font-semibold text-primary-foreground active:opacity-90"
           >
