@@ -216,19 +216,7 @@ function VerificationCard({
       }}
     >
       <div className="flex items-start gap-3">
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-secondary">
-          {doctor.selfie_url ? (
-            <img
-              src={doctor.selfie_url}
-              alt={doctor.full_name ?? "Doctor"}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-[15px] font-semibold text-muted-foreground">
-              {initials(doctor.full_name)}
-            </div>
-          )}
-        </div>
+        <DoctorAvatar path={doctor.selfie_url} name={doctor.full_name} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 truncate text-[15px] font-semibold tracking-tight">
@@ -251,6 +239,19 @@ function VerificationCard({
               Submitted:{" "}
               <span className="text-foreground">{fmt(doctor.onboarded_cover_at)}</span>
             </div>
+            <div className="col-span-2">
+              Bank:{" "}
+              <span className="text-foreground">
+                {doctor.bank_name || "—"}
+                {doctor.bank_account ? ` · ${doctor.bank_account}` : ""}
+              </span>
+            </div>
+            {doctor.bank_account_name && (
+              <div className="col-span-2">
+                Account name:{" "}
+                <span className="text-foreground">{doctor.bank_account_name}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -275,32 +276,18 @@ function VerificationCard({
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {doctor.selfie_url && (
-          <a
-            href={doctor.selfie_url}
-            target="_blank"
-            rel="noreferrer"
-            className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-medium leading-8"
-          >
-            View selfie
-          </a>
-        )}
-        {doctor.verification_receipt_url ? (
-          <a
-            href={doctor.verification_receipt_url}
-            target="_blank"
-            rel="noreferrer"
-            className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-medium leading-8"
-          >
-            View receipt
-          </a>
-        ) : (
-          <span className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-medium leading-8 text-muted-foreground">
-            No receipt uploaded
-          </span>
+      <div className="mt-3 space-y-1.5">
+        <DocRow label="Selfie / profile photo" path={doctor.selfie_url} />
+        <DocRow label="Medical license" path={doctor.license_name} />
+        <DocRow label="NYSC certificate" path={doctor.nysc_name} />
+        {doctor.verification_receipt_url && (
+          <ExternalDocRow
+            label="Payment receipt"
+            url={doctor.verification_receipt_url}
+          />
         )}
       </div>
+
 
       <div className="mt-3 flex flex-wrap gap-2">
         {status !== "approved" && (
