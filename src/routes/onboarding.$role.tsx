@@ -568,7 +568,7 @@ function SelfieCapture({
             onClick={start}
             className="h-9 rounded-xl bg-primary px-3 text-[12.5px] font-semibold text-primary-foreground active:opacity-90"
           >
-            {value ? "Retake" : "Capture"}
+            {hasSelfie ? "Retake" : "Capture"}
           </button>
         </div>
       </div>
