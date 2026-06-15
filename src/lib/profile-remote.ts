@@ -3,7 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/lib/role";
 import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
-export type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
+export type VerificationStatus =
+  | "pending"
+  | "approved"
+  | "suspended"
+  | "rejected"
+  | "action_required";
 
 export type ProfileRow = {
   id: string;
