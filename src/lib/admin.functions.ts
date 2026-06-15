@@ -77,7 +77,9 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
 
     const { data: updated, error } = await context.supabase
       .from("profiles")
-      .update(patch)
+      // types.ts may not yet include the new action-required columns or
+      // the new enum value — cast to bypass generated row types.
+      .update(patch as never)
       .eq("id", data.doctorId)
       .select("id, verification_status")
       .single();
