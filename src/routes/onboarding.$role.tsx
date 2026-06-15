@@ -515,9 +515,13 @@ function SelfieCapture({
     ctx.translate(size, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(v, sx, sy, size, size, 0, 0, size, size);
-    onCapture(c.toDataURL("image/jpeg", 0.85));
+    const dataUrl = c.toDataURL("image/jpeg", 0.85);
+    setPreview(dataUrl);
+    onCapture(dataUrl);
     stop();
   };
+
+  const hasSelfie = !!value || !!preview;
 
   return (
     <div>
