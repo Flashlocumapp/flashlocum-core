@@ -453,10 +453,12 @@ function UploadField({
 
 function SelfieCapture({
   value,
+  uploading,
   onCapture,
   onClear,
 }: {
   value?: string;
+  uploading?: boolean;
   onCapture: (dataUrl: string) => void;
   onClear: () => void;
 }) {
