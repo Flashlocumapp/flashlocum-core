@@ -304,6 +304,10 @@ export type Database = {
           role: string | null
           selfie_url: string | null
           updated_at: string
+          verification_action_at: string | null
+          verification_action_note: string | null
+          verification_action_reason: string | null
+          verification_action_target: string | null
           verification_receipt_url: string | null
           verification_status: Database["public"]["Enums"]["verification_status"]
           years_experience: string | null
@@ -330,6 +334,10 @@ export type Database = {
           role?: string | null
           selfie_url?: string | null
           updated_at?: string
+          verification_action_at?: string | null
+          verification_action_note?: string | null
+          verification_action_reason?: string | null
+          verification_action_target?: string | null
           verification_receipt_url?: string | null
           verification_status?: Database["public"]["Enums"]["verification_status"]
           years_experience?: string | null
@@ -356,6 +364,10 @@ export type Database = {
           role?: string | null
           selfie_url?: string | null
           updated_at?: string
+          verification_action_at?: string | null
+          verification_action_note?: string | null
+          verification_action_reason?: string | null
+          verification_action_target?: string | null
           verification_receipt_url?: string | null
           verification_status?: Database["public"]["Enums"]["verification_status"]
           years_experience?: string | null
@@ -545,6 +557,7 @@ export type Database = {
         Returns: boolean
       }
       dispatch_email_queue_processing: { Args: never; Returns: undefined }
+      doctor_resubmit_verification: { Args: never; Returns: boolean }
       email_queue_depth: {
         Args: never
         Returns: {
@@ -656,7 +669,12 @@ export type Database = {
         | "paused"
         | "completed"
         | "cancelled"
-      verification_status: "pending" | "approved" | "suspended" | "rejected"
+      verification_status:
+        | "pending"
+        | "approved"
+        | "suspended"
+        | "rejected"
+        | "action_required"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -793,7 +811,13 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
-      verification_status: ["pending", "approved", "suspended", "rejected"],
+      verification_status: [
+        "pending",
+        "approved",
+        "suspended",
+        "rejected",
+        "action_required",
+      ],
     },
   },
 } as const
