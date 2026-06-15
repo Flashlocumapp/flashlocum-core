@@ -237,20 +237,48 @@ function OnboardingScreen() {
             <>
               <SelfieCapture
                 value={doctor.selfie}
-                onCapture={(dataUrl) => setDoctor((p) => ({ ...p, selfie: dataUrl }))}
+                uploading={uploadingSelfie}
+                onCapture={async (dataUrl) => {
+                  setUploadError(null);
+                  setUploadingSelfie(true);
+                  try {
+                    const path = await uploadDoctorSelfie(dataUrl);
+                    setDoctor((p) => ({ ...p, selfie: path }));
+                  } catch (e) {
+                    setUploadError(
+                      e instanceof Error ? e.message : "Selfie upload failed",
+                    );
+                  } finally {
+                    setUploadingSelfie(false);
+                  }
+                }}
                 onClear={() => setDoctor((p) => ({ ...p, selfie: undefined }))}
               />
 
-              <Field
-                label="MDCN number"
-                type="text"
-                value={doctor.mdcn ?? ""}
-                onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
-              />
+              <div>
+                <Field
+                  label="MDCN number"
+                  type="text"
+                  placeholder="MDCN/R/12345"
+                  value={doctor.mdcn ?? ""}
+                  onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
+                />
+                {mdcnError && (
+                  <p className="mt-1.5 text-[12.5px] text-destructive">
+                    Please enter the correct format
+                  </p>
+                )}
+              </div>
 
               <UploadField
                 label="License / Payment receipt upload"
-                hint={doctor.license ? doctor.license : "Tap to upload PDF or image"}
+                hint={
+                  uploadingLicense
+                    ? "Uploading…"
+                    : doctor.license
+                      ? "License uploaded"
+                      : "Tap to upload PDF or image"
+                }
                 onPick={() => licenseRef.current?.click()}
               />
               <input
@@ -258,16 +286,34 @@ function OnboardingScreen() {
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const f = e.target.files?.[0];
+                  e.target.value = "";
                   if (!f) return;
-                  setDoctor((p) => ({ ...p, license: f.name }));
+                  setUploadError(null);
+                  setUploadingLicense(true);
+                  try {
+                    const path = await uploadDoctorDocument("license", f);
+                    setDoctor((p) => ({ ...p, license: path }));
+                  } catch (err) {
+                    setUploadError(
+                      err instanceof Error ? err.message : "License upload failed",
+                    );
+                  } finally {
+                    setUploadingLicense(false);
+                  }
                 }}
               />
 
               <UploadField
                 label="NYSC certificate upload"
-                hint={doctor.nysc ? doctor.nysc : "Tap to upload PDF or image"}
+                hint={
+                  uploadingNysc
+                    ? "Uploading…"
+                    : doctor.nysc
+                      ? "NYSC certificate uploaded"
+                      : "Tap to upload PDF or image"
+                }
                 onPick={() => nyscRef.current?.click()}
               />
               <input
@@ -275,24 +321,40 @@ function OnboardingScreen() {
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const f = e.target.files?.[0];
+                  e.target.value = "";
                   if (!f) return;
-                  setDoctor((p) => ({ ...p, nysc: f.name }));
+                  setUploadError(null);
+                  setUploadingNysc(true);
+                  try {
+                    const path = await uploadDoctorDocument("nysc", f);
+                    setDoctor((p) => ({ ...p, nysc: path }));
+                  } catch (err) {
+                    setUploadError(
+                      err instanceof Error ? err.message : "NYSC upload failed",
+                    );
+                  } finally {
+                    setUploadingNysc(false);
+                  }
                 }}
               />
 
-
+              {uploadError && (
+                <p className="text-[12.5px] text-destructive">{uploadError}</p>
+              )}
 
               <BankPayoutFields
                 bankName={doctor.bankName}
                 bankCode={doctor.bankCode}
                 bankAccount={doctor.bankAccount}
                 bankAccountName={doctor.bankAccountName}
+                expectedName={expectedName}
                 onChange={(patch) => setDoctor((p) => ({ ...p, ...patch }))}
               />
 
             </>
+
           )}
         </div>
 
