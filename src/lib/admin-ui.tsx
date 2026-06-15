@@ -22,7 +22,12 @@ export function Chip({ children, color }: { children: ReactNode; color?: string 
   );
 }
 
-export type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
+export type VerificationStatus =
+  | "pending"
+  | "approved"
+  | "suspended"
+  | "rejected"
+  | "action_required";
 
 export function statusTone(s: VerificationStatus) {
   switch (s) {
@@ -32,6 +37,8 @@ export function statusTone(s: VerificationStatus) {
       return { label: "Suspended", color: "#c2410c" };
     case "rejected":
       return { label: "Rejected", color: "#b91c1c" };
+    case "action_required":
+      return { label: "Action required", color: "#b45309" };
     default:
       return { label: "Pending", color: "var(--color-muted-foreground)" };
   }

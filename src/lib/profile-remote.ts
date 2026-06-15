@@ -3,7 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/lib/role";
 import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
-export type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
+export type VerificationStatus =
+  | "pending"
+  | "approved"
+  | "suspended"
+  | "rejected"
+  | "action_required";
 
 export type ProfileRow = {
   id: string;
@@ -493,9 +498,16 @@ export async function listDoctors(): Promise<ProfileRow[]> {
 export async function updateDoctorVerification(
   doctorId: string,
   status: VerificationStatus,
+  extras?: { reason?: string; target?: string; note?: string },
 ): Promise<void> {
   const { updateDoctorVerificationFn } = await import("@/lib/admin.functions");
-  await updateDoctorVerificationFn({ data: { doctorId, status } });
+  await updateDoctorVerificationFn({ data: { doctorId, status, ...extras } });
+}
+
+export async function doctorResubmitVerification(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("doctor_resubmit_verification");
+  if (error) throw error;
+  return !!data;
 }
 
 /* ---------- Admin dashboard ---------- */

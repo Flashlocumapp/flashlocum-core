@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
@@ -18,6 +18,9 @@ import { useRating } from "@/lib/ratings";
 import { useReliability } from "@/lib/reliability";
 import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
+import { useMyProfile } from "@/lib/profile-remote";
+import { uploadDoctorSelfie, uploadDoctorDocument } from "@/lib/doctor-uploads";
+
 
 /**
  * CoverHome — doctor home tab.
@@ -79,6 +82,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
             onToggle={handleToggleOnline}
           />
           {verification && !approved && <VerificationBanner status={verification} />}
+          {verification === "action_required" && <ActionRequiredCard />}
         </div>
       </header>
 
@@ -104,13 +108,17 @@ function VerificationBanner({ status }: { status: string }) {
       ? "Account suspended"
       : status === "rejected"
         ? "Verification rejected"
-        : "Verification pending";
+        : status === "action_required"
+          ? "Action required"
+          : "Verification pending";
   const body =
     status === "suspended"
       ? "Contact support to restore access."
       : status === "rejected"
         ? "Contact support for next steps."
-        : "An admin must approve your account before you can go online.";
+        : status === "action_required"
+          ? "Additional information is required to complete your verification."
+          : "An admin must approve your account before you can go online.";
   return (
     <div
       className="w-full max-w-xs rounded-2xl px-3.5 py-2.5 text-center"
@@ -124,6 +132,145 @@ function VerificationBanner({ status }: { status: string }) {
     </div>
   );
 }
+
+type ActionTarget = "selfie" | "license" | "nysc" | "" | "bank" | "mdcn";
+
+function targetLabel(t: string | null | undefined): string {
+  switch (t) {
+    case "selfie":
+      return "Selfie / profile photo";
+    case "license":
+      return "Medical license";
+    case "nysc":
+      return "NYSC certificate";
+    case "bank":
+      return "Bank account details";
+    case "mdcn":
+      return "MDCN number";
+    default:
+      return "Verification details";
+  }
+}
+
+function ActionRequiredCard() {
+  const { profile, refresh } = useMyProfile();
+  const [busy, setBusy] = useState<string | null>(null);
+  const target = (profile as unknown as { verification_action_target?: string | null } | null)
+    ?.verification_action_target as ActionTarget | null | undefined;
+  const reason = (profile as unknown as { verification_action_reason?: string | null } | null)
+    ?.verification_action_reason;
+  const note = (profile as unknown as { verification_action_note?: string | null } | null)
+    ?.verification_action_note;
+
+  const allowSelfie = !target || target === "selfie";
+  const allowLicense = !target || target === "license";
+  const allowNysc = !target || target === "nysc";
+
+  const handleFile = async (kind: "license" | "nysc", file: File | null) => {
+    if (!file) return;
+    setBusy(kind);
+    try {
+      await uploadDoctorDocument(kind, file);
+      pushToast({ tone: "presence", title: "Re-uploaded. Verification is back in review." });
+      await refresh();
+    } catch (e) {
+      pushToast({ tone: "warn", title: (e as Error).message || "Upload failed." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSelfie = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "user";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setBusy("selfie");
+      try {
+        const reader = new FileReader();
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        await uploadDoctorSelfie(dataUrl);
+        pushToast({ tone: "presence", title: "Selfie re-uploaded. Back in review." });
+        await refresh();
+      } catch (e) {
+        pushToast({ tone: "warn", title: (e as Error).message || "Upload failed." });
+      } finally {
+        setBusy(null);
+      }
+    };
+    input.click();
+  };
+
+  return (
+    <div
+      className="w-full max-w-xs rounded-2xl px-3.5 py-3 text-left"
+      style={{
+        background: "var(--color-surface-elevated)",
+        boxShadow: "0 6px 20px -10px rgba(0,0,0,0.18)",
+      }}
+    >
+      <div
+        className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: "#b45309" }}
+      >
+        {targetLabel(target)}
+      </div>
+      {reason && (
+        <div className="mt-1 text-[12.5px] font-semibold leading-snug">{reason}</div>
+      )}
+      {note && (
+        <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">{note}</div>
+      )}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {allowSelfie && (
+          <button
+            onClick={() => void handleSelfie()}
+            disabled={!!busy}
+            className="h-8 rounded-full bg-secondary px-3 text-[11.5px] font-semibold disabled:opacity-60"
+          >
+            {busy === "selfie" ? "Uploading…" : "Re-upload selfie"}
+          </button>
+        )}
+        {allowLicense && (
+          <label
+            className={`h-8 inline-flex items-center rounded-full bg-secondary px-3 text-[11.5px] font-semibold ${busy ? "opacity-60" : "cursor-pointer"}`}
+          >
+            {busy === "license" ? "Uploading…" : "Re-upload license"}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              disabled={!!busy}
+              onChange={(e) => void handleFile("license", e.target.files?.[0] ?? null)}
+            />
+          </label>
+        )}
+        {allowNysc && (
+          <label
+            className={`h-8 inline-flex items-center rounded-full bg-secondary px-3 text-[11.5px] font-semibold ${busy ? "opacity-60" : "cursor-pointer"}`}
+          >
+            {busy === "nysc" ? "Uploading…" : "Re-upload NYSC"}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              disabled={!!busy}
+              onChange={(e) => void handleFile("nysc", e.target.files?.[0] ?? null)}
+            />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 /* ------------------ Online toggle ------------------ */
 

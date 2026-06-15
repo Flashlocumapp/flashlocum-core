@@ -1,8 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type VerificationStatus = "pending" | "approved" | "suspended" | "rejected";
-const ALLOWED: VerificationStatus[] = ["pending", "approved", "suspended", "rejected"];
+type VerificationStatus =
+  | "pending"
+  | "approved"
+  | "suspended"
+  | "rejected"
+  | "action_required";
+const ALLOWED: VerificationStatus[] = [
+  "pending",
+  "approved",
+  "suspended",
+  "rejected",
+  "action_required",
+];
 
 function isUuid(v: unknown): v is string {
   return (
@@ -26,11 +37,22 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
 /** Update a doctor's verification status. Server-side admin check; runs as the signed-in admin so DB triggers allow the change. */
 export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { doctorId: string; status: VerificationStatus }) => {
-    if (!isUuid(input?.doctorId)) throw new Error("Invalid doctor id");
-    if (!ALLOWED.includes(input?.status)) throw new Error("Invalid status");
-    return input;
-  })
+  .inputValidator(
+    (input: {
+      doctorId: string;
+      status: VerificationStatus;
+      reason?: string;
+      target?: string;
+      note?: string;
+    }) => {
+      if (!isUuid(input?.doctorId)) throw new Error("Invalid doctor id");
+      if (!ALLOWED.includes(input?.status)) throw new Error("Invalid status");
+      if (input.status === "action_required" && !input.reason?.trim()) {
+        throw new Error("A reason is required for Action Required.");
+      }
+      return input;
+    },
+  )
   .handler(async ({ data, context }) => {
     const { data: isAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
       _user_id: context.userId,
@@ -39,9 +61,25 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) throw new Error("Forbidden: admin role required");
 
+    const patch: Record<string, unknown> = { verification_status: data.status };
+    if (data.status === "action_required") {
+      patch.verification_action_reason = data.reason?.trim() ?? null;
+      patch.verification_action_target = data.target?.trim() || null;
+      patch.verification_action_note = data.note?.trim() || null;
+      patch.verification_action_at = new Date().toISOString();
+    } else {
+      // Clear the action-required metadata once admin moves the doctor
+      // out of that state (approve / suspend / reject / pending).
+      patch.verification_action_reason = null;
+      patch.verification_action_target = null;
+      patch.verification_action_note = null;
+    }
+
     const { data: updated, error } = await context.supabase
       .from("profiles")
-      .update({ verification_status: data.status })
+      // types.ts may not yet include the new action-required columns or
+      // the new enum value — cast to bypass generated row types.
+      .update(patch as never)
       .eq("id", data.doctorId)
       .select("id, verification_status")
       .single();
@@ -58,12 +96,16 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
         rejected: "Verification update",
         suspended: "Account suspended",
         pending: "Verification pending",
+        action_required: "Action required on your verification",
       };
       const bodyByStatus: Record<VerificationStatus, string> = {
         approved: "You can now accept shifts on FlashLocum.",
         rejected: "Your verification was not approved. Open the app for details.",
         suspended: "Your account has been suspended. Contact support.",
         pending: "Your account is back under review.",
+        action_required:
+          data.reason?.trim() ||
+          "Additional information is required to complete your verification.",
       };
       await sendPushToUser(data.doctorId, {
         title: titleByStatus[data.status],
@@ -76,6 +118,7 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
 
 export type AdminShiftRow = {
   id: string;

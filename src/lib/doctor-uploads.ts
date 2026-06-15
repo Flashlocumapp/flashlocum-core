@@ -39,12 +39,23 @@ async function uploadAt(path: string, body: Blob, contentType: string): Promise<
 
 /** Upload the doctor's selfie (dataURL from the camera capture).
  *  Returns the storage path stored on `profiles.selfie_url`. */
+async function autoResubmitIfActionRequired(): Promise<void> {
+  try {
+    const { doctorResubmitVerification } = await import("@/lib/profile-remote");
+    await doctorResubmitVerification();
+  } catch (e) {
+    console.warn("auto-resubmit verification failed", e);
+  }
+}
+
 export async function uploadDoctorSelfie(dataUrl: string): Promise<string> {
   const uid = await currentUserId();
   const res = await fetch(dataUrl);
   const blob = await res.blob();
   const path = `${uid}/profile/selfie.jpg`;
-  return uploadAt(path, blob, blob.type || "image/jpeg");
+  const out = await uploadAt(path, blob, blob.type || "image/jpeg");
+  await autoResubmitIfActionRequired();
+  return out;
 }
 
 export type DoctorDocKind = "license" | "nysc";
@@ -56,5 +67,7 @@ export async function uploadDoctorDocument(
 ): Promise<string> {
   const uid = await currentUserId();
   const path = `${uid}/verification/${kind}.${extFor(file)}`;
-  return uploadAt(path, file, file.type || "application/octet-stream");
+  const out = await uploadAt(path, file, file.type || "application/octet-stream");
+  await autoResubmitIfActionRequired();
+  return out;
 }
