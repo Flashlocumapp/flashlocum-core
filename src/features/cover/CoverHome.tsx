@@ -82,6 +82,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
             onToggle={handleToggleOnline}
           />
           {verification && !approved && <VerificationBanner status={verification} />}
+          {verification === "action_required" && <ActionRequiredCard />}
         </div>
       </header>
 
