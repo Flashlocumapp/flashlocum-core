@@ -600,6 +600,12 @@ function AuthScreen() {
             {mode === "signup" ? "Sign in" : "Create one"}
           </button>
         </div>
+
+        <div className="mt-4 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
+          <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms of Service</Link>
+          <span className="text-hairline">·</span>
+          <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy Policy</Link>
+        </div>
       </div>
     </main>
   );
