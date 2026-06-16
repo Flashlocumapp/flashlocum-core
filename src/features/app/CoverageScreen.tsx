@@ -442,7 +442,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!settling}
         onClose={() => setSettlingId(null)}
         initialPhase="settlement"
-        intent={settlingIntent}
+        intent="end"
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingId(null)}
         requestId={settling?.id}
