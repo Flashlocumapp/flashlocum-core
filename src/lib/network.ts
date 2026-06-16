@@ -899,18 +899,17 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
   // NOTE: createdAt/endTs come from the database as real wall-clock
-  // timestamps. The sim clock (simNow) can be fast-forwarded per-tab for
-  // testing, so mixing it here would hide a brand-new request from a
-  // doctor whose tab has any sim offset. Use Date.now() for the TTL/expiry
-  // gate so the incoming card always surfaces fresh requests regardless
-  // of any sim fast-forward state.
+  // timestamps. A newly-published request must surface to doctors even if
+  // the requester chose a schedule window that has already ended today; the
+  // requester flow allowed publishing it, so silently filtering it here is
+  // what made the doctor-side accept/decline card disappear in the split-screen
+  // test. The freshness gate is the publish TTL, not the shift end time.
   const now = Date.now();
   return Object.values(s.requests)
     .filter(
       (r) =>
         r.status === "broadcasting" &&
-        now - r.createdAt < BROADCAST_TTL_MS &&
-        (!r.endTs || r.endTs > now),
+        now - r.createdAt < BROADCAST_TTL_MS,
     )
     .sort((a, b) => a.createdAt - b.createdAt);
 }
