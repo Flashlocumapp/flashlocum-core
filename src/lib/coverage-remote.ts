@@ -356,6 +356,10 @@ async function refreshSnapshot(): Promise<void> {
     cachedSnapshot = rows;
     cachedSnapshotUserId = activeCacheUserId();
     writePersistedSnapshot(cachedSnapshot);
+    // Mark that the current session has received an authoritative server
+    // snapshot. Incoming Coverage gates on this so cached rows can never
+    // be presented as live broadcasts.
+    setLiveSnapshotSeen(true);
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
   })().finally(() => {
     refreshInFlight = null;
