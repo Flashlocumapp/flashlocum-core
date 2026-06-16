@@ -234,6 +234,7 @@ let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
 let cachedSnapshotUserId: string | null =
   initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
 // shifts they have accepted, and the currently-searching pool — at realistic
