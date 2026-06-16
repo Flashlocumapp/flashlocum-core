@@ -49,8 +49,15 @@ function RoleScreen() {
           />
         </div>
 
-        <div className="mt-auto pt-10 text-center text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          FlashLocum · Realtime Coverage Network
+        <div className="mt-auto pt-10 text-center">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            FlashLocum · Realtime Coverage Network
+          </div>
+          <div className="mt-3 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
+            <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms</Link>
+            <span className="text-hairline">·</span>
+            <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy</Link>
+          </div>
         </div>
       </div>
     </main>
