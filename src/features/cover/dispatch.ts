@@ -166,8 +166,10 @@ export function useDispatch(): View {
   useEffect(() => {
     const l = () => force((x) => x + 1);
     localListeners.add(l);
+    const offLive = onLiveSnapshotChange(l);
     return () => {
       localListeners.delete(l);
+      offLive();
     };
   }, []);
 
