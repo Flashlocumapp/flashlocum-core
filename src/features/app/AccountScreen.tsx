@@ -104,7 +104,7 @@ export function AccountScreen() {
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
-      <header className="safe-top px-5 pt-4">
+      <header className="px-5 pt-4">
         <div className="mx-auto max-w-md">
           <h1 className="text-[26px] font-semibold tracking-tight">Account</h1>
         </div>

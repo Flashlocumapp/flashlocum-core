@@ -74,7 +74,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
       />
 
       {/* top primary Online/Offline pill */}
-      <header className="absolute inset-x-0 top-0 z-30 safe-top">
+      <header className="absolute inset-x-0 top-0 z-30">
         <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 pt-3">
           <OnlinePill
             online={online && approved}

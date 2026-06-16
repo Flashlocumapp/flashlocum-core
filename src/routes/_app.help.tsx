@@ -19,7 +19,7 @@ function HelpScreen() {
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
-      <header className="safe-top px-5 pt-4">
+      <header className="px-5 pt-4">
         <div className="mx-auto max-w-md">
           <button
             onClick={() => navigate({ to: "/account" })}

@@ -128,7 +128,7 @@ export function EarningsScreen({ active = true }: { active?: boolean }) {
 
   return (
     <section className="relative h-full w-full overflow-y-auto bg-background">
-      <header className="safe-top px-5 pt-4">
+      <header className="px-5 pt-4">
         <div className="mx-auto max-w-md">
           <h1 className="text-[26px] font-semibold tracking-tight">Earnings</h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">

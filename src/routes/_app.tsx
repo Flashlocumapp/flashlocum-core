@@ -151,7 +151,7 @@ function AppShell() {
       />
       <div
         className="absolute inset-x-0 top-0"
-        style={{ bottom: `var(--tab-bar-h)` }}
+        style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
