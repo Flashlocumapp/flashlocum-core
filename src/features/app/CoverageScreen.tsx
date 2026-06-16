@@ -229,10 +229,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
-  // "end" = final assignment close (existing behaviour).
-  // "pause" = close today's segment → trigger Monnify → move to Upcoming
-  // only AFTER backend confirms the segment is paid (webhook source of truth).
-  const [settlingIntent, setSettlingIntent] = useState<"end" | "pause">("end");
   const [pauseConfirmId, setPauseConfirmId] = useState<string | null>(null);
   const [endConfirmId, setEndConfirmId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
