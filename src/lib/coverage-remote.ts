@@ -515,7 +515,20 @@ function ensureChannelForUser(userId: string) {
       { event: "*", schema: "public", table: TABLE, filter: `accepted_by=eq.${userId}` },
       handlePayload,
     )
-    .subscribe();
+    .subscribe((status) => {
+      // Any disconnect / error invalidates the "live snapshot" guarantee.
+      // Incoming Coverage will stop rendering until the next refreshSnapshot
+      // succeeds, guaranteeing no stale broadcast resurrects across a drop.
+      if (status === "SUBSCRIBED") {
+        void refreshSnapshot();
+      } else if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
+        setLiveSnapshotSeen(false);
+      }
+    });
 }
 
 
