@@ -242,21 +242,35 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 const SNAPSHOT_LIMIT = 500;
 
 async function fetchAll(userId: string): Promise<NetRequest[] | null> {
-  // Scope the fetch to rows this user actually needs — mirrors the realtime
-  // channel filters. Previously this issued `SELECT *` with no filter/limit
-  // and refetched on every realtime event; at 10k users that's a tablescan
-  // per event. RLS would have filtered the result anyway, but doing the work
-  // server-side avoids the planner walking unrelated rows.
-  const filter = `requester_id.eq.${userId},accepted_by.eq.${userId},status.eq.searching`;
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select("*")
-    .or(filter)
-    .order("created_at", { ascending: true })
-    .limit(SNAPSHOT_LIMIT);
-  if (error) {
-    console.warn("[coverage-remote] fetch error:", error.message);
+  // Doctors can only directly read coverage_requests rows they accepted
+  // (`accepted_by = auth.uid()`); the SELECT policy intentionally hides
+  // sensitive columns of the open `searching` pool. The pool is fetched
+  // separately via a SECURITY DEFINER RPC that strips phone, payment, note,
+  // accommodation, and billing fields so doctors only see what they need to
+  // claim a job.
+  const ownFilter = `requester_id.eq.${userId},accepted_by.eq.${userId}`;
+  const [ownRes, poolRes] = await Promise.all([
+    supabase
+      .from(TABLE)
+      .select("*")
+      .or(ownFilter)
+      .order("created_at", { ascending: true })
+      .limit(SNAPSHOT_LIMIT),
+    supabase.rpc("list_open_coverage_requests"),
+  ]);
+  if (ownRes.error) {
+    console.warn("[coverage-remote] fetch error:", ownRes.error.message);
     return null;
+  }
+  if (poolRes.error) {
+    // Non-fatal: own rows still render. Pool will be empty until the next
+    // refresh (e.g. invalidation broadcast) succeeds.
+    console.warn("[coverage-remote] pool fetch error:", poolRes.error.message);
+  }
+  const merged = new Map<string, Row>();
+  for (const r of (ownRes.data ?? []) as Row[]) merged.set(r.id, r);
+  for (const r of (poolRes.data ?? []) as Row[]) {
+    if (!merged.has(r.id)) merged.set(r.id, r);
   }
   // Phone is column-restricted in RLS: only the requester or the accepted
   // doctor can read it, via a SECURITY DEFINER RPC.
@@ -267,12 +281,11 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
       if (p?.id) phoneMap.set(p.id, p.phone ?? "");
     }
   }
-  return (data ?? []).map((r) => {
-    const row = r as Row;
-    const net = rowToNet({ ...row, phone: phoneMap.get(row.id) ?? "" });
-    return net;
-  });
+  return Array.from(merged.values()).map((row) =>
+    rowToNet({ ...row, phone: phoneMap.get(row.id) ?? row.phone ?? "" }),
+  );
 }
+
 
 // In-flight dedup for refreshSnapshot. Realtime bursts + manual refresh
 // calls can overlap; we coalesce concurrent callers onto a single fetch
@@ -422,7 +435,12 @@ function handlePayload(payload: {
  * so each client only receives events for rows it actually cares about:
  *   - rows it created (requester)
  *   - rows it accepted (cover doctor)
- *   - open `searching` rows it could accept (cover doctor) — bounded set
+ *
+ * NOTE: there is intentionally no `status=eq.searching` binding. The SELECT
+ * policy now hides searching rows from doctors so RLS would never deliver
+ * those events anyway. New open-pool rows are surfaced via the
+ * `coverage_invalidations` broadcast, which triggers a re-fetch through the
+ * `list_open_coverage_requests` RPC (sensitive columns stripped server-side).
  */
 function ensureChannelForUser(userId: string) {
   if (channelUserId === userId && channel) return;
@@ -443,13 +461,9 @@ function ensureChannelForUser(userId: string) {
       { event: "*", schema: "public", table: TABLE, filter: `accepted_by=eq.${userId}` },
       handlePayload,
     )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: TABLE, filter: `status=eq.searching` },
-      handlePayload,
-    )
     .subscribe();
 }
+
 
 export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   eventListeners.add(opts.onEvent);
