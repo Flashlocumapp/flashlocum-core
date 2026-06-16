@@ -64,8 +64,43 @@ type Draft = {
   note: string;
 };
 
+function localDateInputValue(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function minutesOf(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+function nextDateForWindow(startTime: string, endTime: string, days = 1, now = new Date()): string {
+  const startMin = minutesOf(startTime);
+  const endMin = minutesOf(endTime);
+  const perDayMin = endMin > startMin ? endMin - startMin : endMin - startMin + 24 * 60;
+  const date = new Date(now);
+  date.setHours(0, 0, 0, 0);
+  while (true) {
+    const start = new Date(date);
+    start.setMinutes(startMin);
+    const endTs = start.getTime() + perDayMin * Math.max(1, days) * 60_000;
+    if (endTs > now.getTime()) return localDateInputValue(date);
+    date.setDate(date.getDate() + 1);
+  }
+}
+
+function windowHasEnded(startDate: string, startTime: string, endTime: string, days = 1, now = new Date()): boolean {
+  const startMs = new Date(`${startDate}T${startTime}:00`).getTime();
+  if (!Number.isFinite(startMs)) return false;
+  const startMin = minutesOf(startTime);
+  const endMin = minutesOf(endTime);
+  const perDayMin = endMin > startMin ? endMin - startMin : endMin - startMin + 24 * 60;
+  return startMs + perDayMin * Math.max(1, days) * 60_000 <= now.getTime();
+}
+
 function makeInitialDraft(coverage: CoverageId): Draft {
-  const today = new Date().toISOString().slice(0, 10);
   if (coverage === "weekend") {
     // Auto Sat→Mon, 48h block; user can still adjust start time.
     const d = new Date();
@@ -79,12 +114,12 @@ function makeInitialDraft(coverage: CoverageId): Draft {
     };
   }
   if (coverage === "home") {
-    return { startDate: today, startTime: "22:00", endTime: "06:00", note: "" };
+    return { startDate: nextDateForWindow("22:00", "06:00"), startTime: "22:00", endTime: "06:00", note: "" };
   }
   if (coverage === "24h") {
-    return { startDate: today, startTime: "08:00", endTime: "08:00", note: "" };
+    return { startDate: nextDateForWindow("08:00", "08:00"), startTime: "08:00", endTime: "08:00", note: "" };
   }
-  return { startDate: today, startTime: "08:00", endTime: "18:00", note: "" };
+  return { startDate: nextDateForWindow("08:00", "18:00"), startTime: "08:00", endTime: "18:00", note: "" };
 }
 
 /* ---------------------- Pricing ---------------------- */
@@ -821,8 +856,11 @@ function CoverageFields({
   useEffect(() => {
     if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
     else if (draft.startDate > bounds.max) patchDraft({ startDate: bounds.max });
+    else if (windowHasEnded(draft.startDate, draft.startTime, draft.endTime, days)) {
+      patchDraft({ startDate: nextDateForWindow(draft.startTime, draft.endTime, days) });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.startDate]);
+  }, [draft.startDate, draft.startTime, draft.endTime, days]);
 
   return (
     <Fields>
