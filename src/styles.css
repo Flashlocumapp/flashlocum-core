@@ -135,6 +135,7 @@
   * {
     border-color: var(--color-border);
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
 
   html,
@@ -142,6 +143,26 @@
   #root {
     height: 100%;
     overscroll-behavior: none;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    touch-action: pan-x pan-y;
+  }
+
+  html,
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Re-enable selection and callout for editable fields */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
   }
 
   body {
