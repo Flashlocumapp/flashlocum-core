@@ -48,7 +48,12 @@ type Row = {
 };
 
 const TABLE = "coverage_requests";
-const LS_KEY = "fl:coverage-cache:v1";
+// v2: cache is scoped to the doctor's OWN rows only. The open SEARCHING
+// pool is intentionally never persisted — it must always come from a live
+// server fetch so Incoming Coverage cannot resurrect stale broadcasts on
+// login / refresh / reconnect / reopen.
+const LS_KEY = "fl:coverage-cache:v2";
+const LEGACY_LS_KEYS = ["fl:coverage-cache:v1"];
 
 type PersistedCoverage = { uid: string; rows: NetRequest[]; savedAt: number };
 
@@ -56,16 +61,32 @@ function activeCacheUserId(): string | null {
   return cachedUserId ?? getCachedProfileUserId();
 }
 
+/**
+ * A row qualifies for the persisted snapshot only if it belongs to the
+ * doctor directly (their own request, or one they accepted). Open-pool
+ * rows from `list_open_coverage_requests` are EXCLUDED — they must always
+ * be re-fetched live so a cancelled / accepted / completed broadcast can
+ * never reappear after a reload.
+ */
+function isOwnRow(r: NetRequest, uid: string): boolean {
+  return r.requesterSessionId === uid || r.acceptedBy === uid;
+}
+
 function readPersistedSnapshot(): NetRequest[] {
   if (typeof window === "undefined") return [];
   const uid = activeCacheUserId();
   if (!uid) return [];
   try {
+    // Drop any pre-existing v1 cache from older builds — it may contain
+    // open-pool rows that would otherwise be replayed as Incoming.
+    for (const k of LEGACY_LS_KEYS) window.localStorage.removeItem(k);
     const raw = window.localStorage.getItem(LS_KEY);
     if (!raw) return [];
     const payload = JSON.parse(raw) as PersistedCoverage;
     if (!payload || payload.uid !== uid || !Array.isArray(payload.rows)) return [];
-    return payload.rows;
+    // Belt-and-braces filter: even if a regression writes pool rows into
+    // the cache, the read path strips anything not owned by this user.
+    return payload.rows.filter((r) => isOwnRow(r, uid));
   } catch {
     return [];
   }
@@ -76,7 +97,8 @@ function writePersistedSnapshot(rows: NetRequest[]) {
   const uid = activeCacheUserId();
   if (!uid) return;
   try {
-    const payload: PersistedCoverage = { uid, rows, savedAt: Date.now() };
+    const ownOnly = rows.filter((r) => isOwnRow(r, uid));
+    const payload: PersistedCoverage = { uid, rows: ownOnly, savedAt: Date.now() };
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
   } catch {
     /* ignore quota / privacy-mode errors */
@@ -87,12 +109,39 @@ function clearPersistedSnapshot() {
   if (typeof window === "undefined") return;
   cachedSnapshot = [];
   cachedSnapshotUserId = null;
+  setLiveSnapshotSeen(false);
   try {
     window.localStorage.removeItem(LS_KEY);
+    for (const k of LEGACY_LS_KEYS) window.localStorage.removeItem(k);
   } catch {
     /* ignore storage errors */
   }
   snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+}
+
+/**
+ * Set to true ONLY after a live server snapshot has been received in the
+ * current session. Consumers (e.g. Incoming Coverage) gate UI on this so
+ * cached rows can never be presented as authoritative server state.
+ *
+ * Reset on: sign-out, auth user change, and any realtime-channel drop.
+ */
+let liveSnapshotSeen = false;
+const liveSnapshotListeners = new Set<() => void>();
+
+export function hasLiveSnapshot(): boolean {
+  return liveSnapshotSeen;
+}
+
+export function onLiveSnapshotChange(fn: () => void): () => void {
+  liveSnapshotListeners.add(fn);
+  return () => liveSnapshotListeners.delete(fn);
+}
+
+function setLiveSnapshotSeen(v: boolean) {
+  if (liveSnapshotSeen === v) return;
+  liveSnapshotSeen = v;
+  liveSnapshotListeners.forEach((fn) => fn());
 }
 
 const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
