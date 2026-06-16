@@ -797,13 +797,14 @@ export function pauseShift(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "active") return;
-  const days = Math.max(1, cur.days ?? 1);
-  const dayIndex = Math.min(days, Math.max(1, cur.dayIndex ?? 1) + 1);
-  // The completed day has been billed + paid by the time pauseShift runs
-  // (webhook → confirmPaymentNow → onConfirmed → here). Reset the per-day
-  // timer so the next working day resumes from 0 for both the requester
-  // and the doctor; advance dayIndex to the next scheduled day.
-  applyLocalPatch(id, { status: "accepted", startedAt: undefined, accumulatedMs: 0, dayIndex }, {
+  // Pause closes the open segment server-side (pause_shift RPC). No billing,
+  // no payment state, no dayIndex change. Local mirror: stop the in-flight
+  // timer and FOLD the active segment into accumulatedMs so Resume picks up
+  // where we left off. The single bill is generated only at End Shift.
+  const segment =
+    cur.startedAt != null ? Math.max(0, simNow() - cur.startedAt) : 0;
+  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+  applyLocalPatch(id, { status: "accepted", startedAt: undefined, accumulatedMs }, {
     actor: "requester",
     actorId: getSessionId(),
     action: "pause",
