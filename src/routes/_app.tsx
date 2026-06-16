@@ -136,10 +136,12 @@ function AppShell() {
 
   return (
     <div
-      className="fixed inset-0 overflow-hidden"
+      className="fixed inset-0 overflow-y-auto overflow-x-hidden"
       style={{
         background: "var(--color-map)",
         ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px`,
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-y",
       }}
     >
       {/* Persistent backdrop — matches map ground colour so any one-frame
