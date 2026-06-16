@@ -91,6 +91,15 @@ function nextDateForWindow(startTime: string, endTime: string, days = 1, now = n
   }
 }
 
+function windowHasEnded(startDate: string, startTime: string, endTime: string, days = 1, now = new Date()): boolean {
+  const startMs = new Date(`${startDate}T${startTime}:00`).getTime();
+  if (!Number.isFinite(startMs)) return false;
+  const startMin = minutesOf(startTime);
+  const endMin = minutesOf(endTime);
+  const perDayMin = endMin > startMin ? endMin - startMin : endMin - startMin + 24 * 60;
+  return startMs + perDayMin * Math.max(1, days) * 60_000 <= now.getTime();
+}
+
 function makeInitialDraft(coverage: CoverageId): Draft {
   if (coverage === "weekend") {
     // Auto Sat→Mon, 48h block; user can still adjust start time.
@@ -847,8 +856,11 @@ function CoverageFields({
   useEffect(() => {
     if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
     else if (draft.startDate > bounds.max) patchDraft({ startDate: bounds.max });
+    else if (windowHasEnded(draft.startDate, draft.startTime, draft.endTime, days)) {
+      patchDraft({ startDate: nextDateForWindow(draft.startTime, draft.endTime, days) });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.startDate]);
+  }, [draft.startDate, draft.startTime, draft.endTime, days]);
 
   return (
     <Fields>
