@@ -154,8 +154,7 @@
   }
 
   html,
-  body,
-  #root {
+  body {
     height: 100%;
     overscroll-behavior: none;
     overflow: hidden;
@@ -163,6 +162,18 @@
     inset: 0;
     width: 100%;
     touch-action: pan-x pan-y;
+  }
+
+  #root {
+    height: 100%;
+    overscroll-behavior: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   html,
