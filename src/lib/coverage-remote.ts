@@ -234,6 +234,7 @@ let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
 let cachedSnapshotUserId: string | null =
   initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
 // shifts they have accepted, and the currently-searching pool — at realistic
@@ -504,6 +505,19 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       .subscribe();
   }
 
+  // Polling safety net: doctors only learn about new searching-pool rows
+  // through the `coverage_invalidations` broadcast (RLS hides the pool from
+  // postgres_changes). If a broadcast is lost — channel not yet subscribed
+  // when the requester inserts, transient disconnect, server-side fan-out
+  // drop — the doctor's incoming card would never appear. A cheap 15s
+  // re-fetch closes that gap; refreshSnapshot is in-flight-deduped so
+  // bursts collapse to a single RPC call.
+  if (!pollTimer) {
+    pollTimer = setInterval(() => {
+      if (activeSubscribers > 0) void refreshSnapshot();
+    }, 15_000);
+  }
+
   // Re-bind the filtered channel whenever auth identity changes — the
   // previous channel's filter is hard-coded to the prior uid.
   const offAuth = onUserIdChange((id) => {
@@ -527,6 +541,10 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       if (invalidationChannel) {
         supabase.removeChannel(invalidationChannel);
         invalidationChannel = null;
+      }
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
       }
     }
   };
