@@ -164,7 +164,8 @@
     touch-action: pan-x pan-y;
   }
 
-  #root {
+  #root,
+  #app-scroll-root {
     height: 100%;
     overscroll-behavior: none;
     overflow-y: auto;
@@ -174,6 +175,10 @@
     width: 100%;
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
+  }
+
+  #app-scroll-root {
+    isolation: isolate;
   }
 
   html,
