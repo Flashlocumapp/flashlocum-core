@@ -220,7 +220,11 @@ export function useDispatch(): View {
 
 
   let incoming: Coverage | null = null;
-  if (online && upcoming.length < 3) {
+  // HARD GATE: never render Incoming Coverage from cache. Only render once
+  // the current session has received an authoritative server snapshot from
+  // list_open_coverage_requests. Login / refresh / reconnect / reopen all
+  // reset this flag, so a stale broadcast cannot resurrect.
+  if (online && upcoming.length < 3 && hasLiveSnapshot()) {
     const declined = new Set<string>(me?.declined ?? []);
     const r = liveRequests.find(
       (x) =>
