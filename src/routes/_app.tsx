@@ -138,36 +138,34 @@ function AppShell() {
     <div
       className="fixed inset-0 overflow-y-auto overflow-x-hidden"
       style={{
-        background: "var(--color-map)",
+        background: "var(--color-background)",
         ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px`,
         WebkitOverflowScrolling: "touch",
         touchAction: "pan-y",
       }}
     >
-      {/* Persistent backdrop — matches map ground colour so any one-frame
-          gap between unmounting tab A and mounting tab B never paints white. */}
+      {/* Persistent backdrop matches body/page background so no lighter
+          layer is exposed during route transitions. */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0"
-        style={{ bottom: `var(--tab-bar-h)`, background: "var(--color-map)" }}
+        style={{ bottom: `var(--tab-bar-h)`, background: "var(--color-background)" }}
         aria-hidden
       />
       <div
         className="absolute inset-x-0 top-0"
         style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -2 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 overflow-y-auto overflow-x-hidden"
-            style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+        <div
+          key={pathname}
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+          style={{
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
+            background: "var(--color-background)",
+          }}
+        >
+          <Outlet />
+        </div>
       </div>
       <AnimatePresence>
         {!immersive && (

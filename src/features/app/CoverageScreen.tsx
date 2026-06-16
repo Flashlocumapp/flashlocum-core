@@ -229,10 +229,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [settlingId, setSettlingId] = useState<string | null>(null);
-  // "end" = final assignment close (existing behaviour).
-  // "pause" = close today's segment → trigger Monnify → move to Upcoming
-  // only AFTER backend confirms the segment is paid (webhook source of truth).
-  const [settlingIntent, setSettlingIntent] = useState<"end" | "pause">("end");
   const [pauseConfirmId, setPauseConfirmId] = useState<string | null>(null);
   const [endConfirmId, setEndConfirmId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -304,7 +300,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    */
   const requestEnd = (id: string) => setEndConfirmId(id);
   const beginEndShift = (id: string) => {
-    setSettlingIntent("end");
     setSettlingId(id);
   };
 
@@ -447,7 +442,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!settling}
         onClose={() => setSettlingId(null)}
         initialPhase="settlement"
-        intent={settlingIntent}
+        intent="end"
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingId(null)}
         requestId={settling?.id}
@@ -473,9 +468,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!pauseConfirmId}
         title="Pause this shift?"
         body={
-          "Pausing this shift means you are closing today's work and proceeding to payment for the completed shift. You can resume the shift anytime under Upcoming Coverage."
+          "Pausing stops time accumulation and moves this shift to Upcoming Coverage. You can resume any time. No payment is taken — billing only happens when you End Shift."
         }
-        confirmLabel="Pause & Pay"
+        confirmLabel="Pause Shift"
         cancelLabel="Keep Working"
         onOpenChange={(next) => { if (!next) setPauseConfirmId(null); }}
         onConfirm={() => {
@@ -804,7 +799,7 @@ function RequestCard({
             {(item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift"}
           </button>
         )}
-        {isActive && item.days > 1 && item.dayIndex < item.days && (
+        {isActive && item.days > 1 && (
           <button
             onClick={(e) => { e.stopPropagation(); onPause(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
@@ -816,7 +811,7 @@ function RequestCard({
             Pause Shift
           </button>
         )}
-        {isActive && (item.days <= 1 || item.dayIndex >= item.days) && (
+        {isActive && (
           <button
             onClick={(e) => { e.stopPropagation(); onEnd(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
