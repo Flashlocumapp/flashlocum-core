@@ -761,7 +761,7 @@ function ActivePane({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex h-full w-full flex-col safe-top"
+      className="relative flex h-full w-full flex-col"
     >
       <TopBar onClose={onClose} />
       <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col overflow-y-auto px-6 pt-2">
@@ -888,7 +888,7 @@ function SettlementPane({
       animate={{ y: 0, opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ type: "spring", stiffness: 280, damping: 32 }}
-      className="relative flex h-full w-full flex-col safe-top"
+      className="relative flex h-full w-full flex-col"
     >
       <TopBar />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
@@ -1012,7 +1012,7 @@ function OvertimePane({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex h-full w-full flex-col safe-top"
+      className="relative flex h-full w-full flex-col"
     >
       <TopBar />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
@@ -1168,7 +1168,7 @@ function ConfirmedPane({
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative flex h-full w-full flex-col safe-top"
+      className="relative flex h-full w-full flex-col"
     >
       <TopBar onClose={onClose} />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
@@ -1374,7 +1374,7 @@ function CustomTransferPane({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex h-full w-full flex-col safe-top"
+      className="relative flex h-full w-full flex-col"
     >
       <TopBar />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">

@@ -1385,7 +1385,7 @@ function CoverageHeader({
   setTab: (t: TabId) => void;
 }) {
   return (
-    <header className="safe-top px-5 pt-4">
+    <header className="px-5 pt-4">
       <div className="mx-auto max-w-md">
         <h1 className="text-[26px] font-semibold tracking-tight">Coverage</h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">{subtitle}</p>

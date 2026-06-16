@@ -372,7 +372,7 @@ function HomeScreen({ active }: { active: boolean }) {
 
       {/* Top floating trust card — calm rating + reliability for the requester */}
       {stage === "collapsed" && (
-        <header className="absolute inset-x-0 top-0 z-30 safe-top pointer-events-none">
+        <header className="absolute inset-x-0 top-0 z-30 pointer-events-none">
           <div className="mx-auto flex max-w-md justify-center px-4 pt-3">
             <div
               className="pointer-events-auto inline-flex items-center gap-3 rounded-full px-4 py-2 shadow-[0_4px_18px_-4px_rgba(0,0,0,0.18)]"
@@ -406,7 +406,7 @@ function HomeScreen({ active }: { active: boolean }) {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -16, opacity: 0 }}
             transition={{ type: "spring", stiffness: 280, damping: 32 }}
-            className="absolute left-3 right-3 z-30 mt-16 flex min-h-12 items-center gap-2 rounded-2xl bg-surface-elevated pl-2 pr-4 py-2 text-left shadow-[0_4px_18px_rgba(0,0,0,0.10)] safe-top"
+            className="absolute left-3 right-3 z-30 mt-16 flex min-h-12 items-center gap-2 rounded-2xl bg-surface-elevated pl-2 pr-4 py-2 text-left shadow-[0_4px_18px_rgba(0,0,0,0.10)]"
           >
             <button
               onClick={() => setStage("configure")}
