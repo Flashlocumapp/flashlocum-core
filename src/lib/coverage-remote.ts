@@ -540,12 +540,20 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   // Paint the last known operational state immediately. The async backend
   // snapshot reconciles afterward, but Coverage never flashes through an
   // empty/loading state after long inactivity or a fresh sign-in.
+  //
+  // NOTE: this cache contains ONLY the doctor's own rows (see
+  // writePersistedSnapshot). The open SEARCHING pool is never persisted,
+  // and Incoming Coverage is gated on hasLiveSnapshot() so even own-row
+  // cache replay cannot resurrect a stale broadcast.
   const uid = activeCacheUserId();
   const persisted = readPersistedSnapshot();
   if (persisted.length > 0) {
     cachedSnapshot = persisted;
     cachedSnapshotUserId = uid;
   }
+  // Every new mount starts with no live snapshot; it flips true only when
+  // refreshSnapshot() actually returns rows from the server in this session.
+  setLiveSnapshotSeen(false);
   if (uid && cachedSnapshotUserId === uid && cachedSnapshot.length > 0) {
     opts.onSnapshot(cachedSnapshot);
   }
@@ -584,9 +592,31 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     }, 15_000);
   }
 
+  // Tab/app reopen: force a server fetch the moment the user returns so
+  // Incoming Coverage cannot show pre-blur state without revalidation.
+  let onVisibility: (() => void) | null = null;
+  let onOnline: (() => void) | null = null;
+  if (typeof document !== "undefined") {
+    onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setLiveSnapshotSeen(false);
+        void refreshSnapshot();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+  }
+  if (typeof window !== "undefined") {
+    onOnline = () => {
+      setLiveSnapshotSeen(false);
+      void refreshSnapshot();
+    };
+    window.addEventListener("online", onOnline);
+  }
+
   // Re-bind the filtered channel whenever auth identity changes — the
   // previous channel's filter is hard-coded to the prior uid.
   const offAuth = onUserIdChange((id) => {
+    setLiveSnapshotSeen(false);
     if (id) {
       ensureChannelForUser(id);
       void refreshSnapshot();
@@ -597,6 +627,12 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     eventListeners.delete(opts.onEvent);
     snapshotListeners.delete(opts.onSnapshot);
     offAuth();
+    if (onVisibility && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisibility);
+    }
+    if (onOnline && typeof window !== "undefined") {
+      window.removeEventListener("online", onOnline);
+    }
     activeSubscribers--;
     if (activeSubscribers === 0) {
       if (channel) {
@@ -612,6 +648,7 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
         clearInterval(pollTimer);
         pollTimer = null;
       }
+      setLiveSnapshotSeen(false);
     }
   };
 }
