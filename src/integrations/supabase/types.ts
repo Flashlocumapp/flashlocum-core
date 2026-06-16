@@ -622,6 +622,55 @@ export type Database = {
           phone: string
         }[]
       }
+      list_open_coverage_requests: {
+        Args: never
+        Returns: {
+          accepted_by: string | null
+          accommodation: string | null
+          accumulated_ms: number
+          amount: number
+          area: string
+          billing_locked_at: string | null
+          cancelled_by: string | null
+          coverage_type: string
+          created_at: string
+          day: string
+          day_index: number
+          days: number
+          duration_hrs: number
+          end_time: string
+          end_ts: number | null
+          environment: string
+          fee_pct: number
+          hospital: string
+          id: string
+          last_extended_at: string | null
+          note: string | null
+          paid_at: string | null
+          payment_due_at: string | null
+          payment_extension_count: number
+          payment_provider: string | null
+          payment_reference: string | null
+          payment_status: string | null
+          payment_url: string | null
+          phone: string
+          remitted_at: string | null
+          requester_id: string
+          settled_amount: number | null
+          start_time: string
+          start_ts: number | null
+          started_at: number | null
+          status: Database["public"]["Enums"]["coverage_request_status"]
+          total_billed_amount: number | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "coverage_requests"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       mark_settlement_paid: {
         Args: { _amount: number; _payment_reference: string }
         Returns: boolean
