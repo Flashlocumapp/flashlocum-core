@@ -138,6 +138,21 @@
     -webkit-touch-callout: none;
   }
 
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  label,
+  summary,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    touch-action: manipulation;
+  }
+
   html,
   body,
   #root {
