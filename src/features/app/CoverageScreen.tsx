@@ -300,7 +300,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    */
   const requestEnd = (id: string) => setEndConfirmId(id);
   const beginEndShift = (id: string) => {
-    setSettlingIntent("end");
     setSettlingId(id);
   };
 
