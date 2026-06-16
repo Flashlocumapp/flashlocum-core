@@ -1,55 +1,72 @@
-# Doctor Verification & Validation
+## Goal
 
-Four changes scoped to the doctor onboarding flow. No other system behaviour changes.
+Multi-day shifts must follow the new rule: **one continuous timed assignment, one final payment at End Shift only**. Today, the code bills and opens Monnify on every Pause. This plan removes pause-time billing on both the backend and the requester UI without touching any other lifecycle, ratings, reliability, or admin behaviour.
 
-## 1. Private storage for doctor documents
+## Current behaviour (verified)
 
-Create a private `doctors` storage bucket with this layout per doctor:
+- `pause_shift` RPC (migration `20260614185952`) closes the open segment, runs `_bill_segment`, adds to `total_billed_amount`, sets `payment_due_at`, resets `payment_status='pending'`, clears `payment_reference/url/paid_at/settled_amount`.
+- `resume_shift` RPC (migration `20260614090509`) hard-blocks resume with `"Previous segment must be paid before resuming"` whenever any closed segment is unsettled.
+- `end_shift` already closes the final segment, sums `total_billed_amount`, and sets `payment_status='pending'` with a 15-minute `payment_due_at` — this is what we keep.
+- Requester UI (`CoverageScreen.tsx` ~L274–321) calls `pause_shift` then opens `ShiftSettlement` in `intent="pause"`, auto-launching Monnify checkout and only flipping local state to "Upcoming" after webhook confirmation.
 
-```text
-doctors/{user_id}/profile/selfie.jpg
-doctors/{user_id}/verification/license.<ext>
-doctors/{user_id}/verification/nysc.<ext>
-```
+## Changes
 
-Access rules (RLS on `storage.objects`):
-- The doctor (`auth.uid()` = first path segment) can read/write their own files.
-- Admins (via `has_role(auth.uid(), 'admin')`) can read all files in the bucket.
-- No public read.
+### 1. Backend (new migration)
 
-Today the onboarding screen stores only the file name on the profile row — no upload happens. After this change:
-- Selfie → uploaded to `profile/selfie.jpg`; signed URL stored on `profiles.selfie_url`.
-- License → uploaded to `verification/license.<ext>`; path stored on `profiles.license_name`.
-- NYSC → uploaded to `verification/nysc.<ext>`; path stored on `profiles.nysc_name`.
+Redefine **only** `pause_shift` and `resume_shift` (keep `start_shift`, `end_shift`, `_bill_segment`, Monnify webhook, `mark_settlement_paid` untouched).
 
-## 2. MDCN number validation
+`pause_shift`:
+- Validate requester + status `'active'`.
+- Close the open `shift_segments` row (`ended_at = now()`).
+- **Do not call `_bill_segment`. Do not touch `total_billed_amount`, `payment_*`, `settled_amount`, `paid_at`, `billing_locked_at`.**
+- `UPDATE coverage_requests SET status = 'paused'`.
+- Return `{ paused_at }`.
 
-Regex enforced in the onboarding form: `^MDCN/R/\d{5,6}$`.
+`resume_shift`:
+- Validate requester + status `'paused'`.
+- **Remove** the "previous segment must be paid" guard entirely.
+- Insert next `shift_segments` row with `segment_index = max+1`, `started_at = now()`.
+- `UPDATE coverage_requests SET status = 'active', payment_due_at = NULL`.
 
-- Inline error: "Please enter the correct format" when text is non-empty and fails the regex.
-- Submit button stays disabled until the value matches.
+End-of-shift billing in `end_shift` already sums all closed segments via `_bill_segment` over the final open segment and pre-existing `total_billed_amount`. Because pause no longer bills mid-shift, `total_billed_amount` will be 0 before `end_shift` runs. To keep total billing correct for multi-segment shifts, `end_shift` must bill **every** closed-but-unbilled segment, not just the last one. Update `end_shift` to:
 
-## 3. Account name validation
+- For each `shift_segments` row where `settled_at IS NULL`, close it if still open and call `_bill_segment`, summing into `total_billed_amount`.
+- Then set `status='completed'`, `billing_locked_at=now()`, `payment_due_at=now()+15min`, `settled_amount = total_billed_amount`, `payment_status='pending'`, clear `payment_reference/url/paid_at` (unchanged from today otherwise).
 
-When the bank-resolved account name comes back, compare it to the doctor's `full_name` (from their profile / signup):
+Grants and `SECURITY DEFINER` stay the same. Keep the `app.lifecycle_bypass` pattern so the requester guard trigger still allows the writes.
 
-- Normalize both: uppercase, strip punctuation, collapse spaces, split into tokens, drop single-letter initials.
-- Accept if at least two name tokens from the profile appear in the resolved name in any order (covers `ADELEKE ISAIAH`, `ISAIAH A ADELEKE`).
-- If profile has only two tokens and resolved name has both plus an initial (`ADELEKE I`), accept.
-- Otherwise reject with: "Account name does not match the name on your profile. Please check your details."
+### 2. Requester UI (`src/features/app/CoverageScreen.tsx`)
 
-The doctor cannot submit until the resolved name passes the check.
+- After `callServerPauseShift` resolves, **do not** open `ShiftSettlement`. Instead:
+  - Call local `netPauseShift(id)` immediately.
+  - `shiftCue("pause")`, `setTab("upcoming")`, show a "Shift paused" notice.
+- Remove `settlingIntent = "pause"` branch from `confirmEnd` (the pause path no longer reaches the settlement sheet).
+- Leave the End Shift path exactly as is: it still opens `ShiftSettlement` with `intent="end"`, runs Monnify, and only on webhook-confirmed payment moves to History + triggers ratings.
+- Update the inline code comments above `callServerPauseShift` / `confirmEnd` to reflect the new "pause = no billing" rule.
 
-## 4. Source of truth
+No changes to `RequestCard`, timers, doctor `CoverHome`, or `ShiftSettlement` itself. The doctor's Active/Upcoming/History state is already derived from `coverage_requests.status`, which both updated RPCs continue to drive — so both sides stay in sync.
 
-`verification_status` stays `'pending'` until an admin approves. No change to that flow — only ensure the client cannot submit onboarding unless: MDCN passes, all three documents uploaded successfully, bank account name matches. Final `'approved'` flip remains admin-driven (existing `_admin.admin.verification.tsx`).
+### 3. Timer
 
-## Files
+The existing accumulated-time model (`accumulated_ms` + open segment with `started_at`) already pauses on `status='paused'` and resumes on the next segment's `started_at`, server-clocked. No changes needed — removing pause-time billing does not affect timer math.
 
-- New migration: create `doctors` bucket + 4 RLS policies on `storage.objects`.
-- New `src/lib/doctor-uploads.ts`: `uploadDoctorSelfie`, `uploadDoctorDocument` helpers using the browser supabase client.
-- New `src/lib/name-match.ts`: `isReasonableNameMatch(profileName, resolvedName)`.
-- Edit `src/routes/onboarding.$role.tsx`: MDCN regex + inline error, upload selfie/license/nysc on file pick (show progress), pass profile name into `BankPayoutFields`, gate Submit on name-match.
-- Edit `src/components/BankPayoutFields.tsx`: accept optional `expectedName` prop; after resolve, run the matcher and surface the mismatch error.
+### 4. Out of scope / explicitly unchanged
 
-Build verification at the end.
+- `start_shift`, `_bill_segment`, `mark_settlement_paid`, Monnify webhook route, ratings RPCs.
+- Doctor app (`CoverHome.tsx`, `CoverDispatchPortal.tsx`).
+- Admin dashboards, finance, unpaid, risk.
+- Pricing logic in `src/lib/pricing.ts`.
+- Cancellation flow.
+
+## Technical details
+
+- One new migration file containing only `CREATE OR REPLACE FUNCTION` for `pause_shift`, `resume_shift`, `end_shift`, preserving signatures and grants.
+- One edit to `CoverageScreen.tsx` (~30 lines around the pause flow).
+- No schema, table, RLS, or grants changes.
+- No new packages, no new server functions, no client API changes.
+
+## Verification
+
+- Manual: requester starts a shift → pauses → no Monnify dialog appears, card moves to Upcoming, doctor side shows Upcoming, timer freezes. Resume → both sides return to Active, timer resumes from prior elapsed. End → Monnify opens with total of all segments → on webhook, both sides move to History with ratings prompt.
+- DB: after pause, `coverage_requests.payment_status` stays `NULL`/prior value, `total_billed_amount` stays 0, `shift_segments` row for the closed segment has `settled_at IS NULL`.
+- After end + webhook: `payment_status='paid'`, `total_billed_amount` equals sum across all segments, `settled_amount` matches.

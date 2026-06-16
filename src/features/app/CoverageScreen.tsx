@@ -271,11 +271,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setTab("active");
   };
 
-  // Pause Shift → confirmation modal → call pause_shift RPC (server bills
-  // today's open segment + sets payment_due_at) → open ShiftSettlement in
-  // pause-intent mode where Monnify checkout auto-opens. The local
-  // netPauseShift only fires after the requester sees the webhook-confirmed
-  // payment (onConfirmed → confirmEnd). Monnify webhook = source of truth.
+  // Pause Shift → pause_shift RPC ONLY closes the open segment and flips
+  // status to 'paused'. No billing, no Monnify. Multi-day shifts have a
+  // single final payment at End Shift. Local state mirrors the server.
   const callServerPauseShift = useServerFn(serverPauseShift);
   const [pausing, setPausing] = useState(false);
   const requestPause = (id: string) => setPauseConfirmId(id);
@@ -291,14 +289,18 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       return;
     }
     setPausing(false);
-    setSettlingIntent("pause");
-    setSettlingId(id);
+    netPauseShift(id);
+    shiftCue("pause");
+    setTab("upcoming");
+    setNotice("Shift paused");
+    window.setTimeout(() => setNotice(null), 2600);
   };
 
   /**
-   * End Shift — always settles. Requesters may tap at any time (single-day,
-   * multi-day, mid-day, after a pause) so the lifecycle stays flexible.
-   * Settlement uses the accumulated continuous timer, not scheduled hours.
+   * End Shift — the single billing event for the entire assignment. Server
+   * sums every segment, sets payment_due_at, and the settlement sheet runs
+   * the one Monnify checkout. Webhook confirmation is the only source of
+   * truth for payment success.
    */
   const requestEnd = (id: string) => setEndConfirmId(id);
   const beginEndShift = (id: string) => {
@@ -308,16 +310,8 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const confirmEnd = () => {
     if (!settlingId) return;
-    if (settlingIntent === "pause") {
-      netPauseShift(settlingId);
-      shiftCue("pause");
-      setTab("upcoming");
-      setNotice("Payment confirmed · Shift moved to Upcoming");
-      window.setTimeout(() => setNotice(null), 2600);
-    } else {
-      netCompleteRequest(settlingId);
-      shiftCue("end");
-    }
+    netCompleteRequest(settlingId);
+    shiftCue("end");
   };
 
 
