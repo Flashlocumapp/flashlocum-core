@@ -115,7 +115,9 @@ function RootComponent() {
   }, [queryClient, router]);
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <div id="app-scroll-root">
+        <Outlet />
+      </div>
     </QueryClientProvider>
   );
 }
