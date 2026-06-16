@@ -468,9 +468,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!pauseConfirmId}
         title="Pause this shift?"
         body={
-          "Pausing this shift means you are closing today's work and proceeding to payment for the completed shift. You can resume the shift anytime under Upcoming Coverage."
+          "Pausing stops time accumulation and moves this shift to Upcoming Coverage. You can resume any time. No payment is taken — billing only happens when you End Shift."
         }
-        confirmLabel="Pause & Pay"
+        confirmLabel="Pause Shift"
         cancelLabel="Keep Working"
         onOpenChange={(next) => { if (!next) setPauseConfirmId(null); }}
         onConfirm={() => {
