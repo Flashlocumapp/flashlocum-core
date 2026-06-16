@@ -160,7 +160,8 @@ function AppShell() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -2 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0"
+            className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
           >
             <Outlet />
           </motion.div>
