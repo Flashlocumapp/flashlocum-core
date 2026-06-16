@@ -799,7 +799,7 @@ function RequestCard({
             {(item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift"}
           </button>
         )}
-        {isActive && item.days > 1 && item.dayIndex < item.days && (
+        {isActive && item.days > 1 && (
           <button
             onClick={(e) => { e.stopPropagation(); onPause(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
@@ -811,7 +811,7 @@ function RequestCard({
             Pause Shift
           </button>
         )}
-        {isActive && (item.days <= 1 || item.dayIndex >= item.days) && (
+        {isActive && (
           <button
             onClick={(e) => { e.stopPropagation(); onEnd(); }}
             className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
