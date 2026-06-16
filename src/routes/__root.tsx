@@ -115,7 +115,7 @@ function RootComponent() {
   }, [queryClient, router]);
   return (
     <QueryClientProvider client={queryClient}>
-      <div id="app-scroll-root">
+      <div id="app-scroll-root" style={{ background: "var(--color-background)" }}>
         <Outlet />
       </div>
     </QueryClientProvider>
