@@ -137,6 +137,10 @@ export type AdminShiftRow = {
   amount: number;
   fee_pct: number;
   payment_status: string | null;
+  total_billed_amount: number | null;
+  settled_amount: number | null;
+  paid_at: string | null;
+  billing_locked_at: string | null;
   cancelled_by: string | null;
   started_at: number | null;
   created_at: string;
@@ -168,7 +172,7 @@ export const adminListShifts = createServerFn({ method: "POST" })
     let query = supabaseAdmin
       .from("coverage_requests")
       .select(
-        "id,status,requester_id,accepted_by,hospital,area,coverage_type,day,start_time,end_time,start_ts,end_ts,duration_hrs,amount,fee_pct,payment_status,cancelled_by,started_at,created_at,updated_at",
+        "id,status,requester_id,accepted_by,hospital,area,coverage_type,day,start_time,end_time,start_ts,end_ts,duration_hrs,amount,fee_pct,payment_status,total_billed_amount,settled_amount,paid_at,billing_locked_at,cancelled_by,started_at,created_at,updated_at",
       )
       .order("created_at", { ascending: false })
       .limit(data.limit);

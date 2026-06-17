@@ -1,42 +1,45 @@
 ## Goal
-When an admin restricts a doctor, remove them from the online pool **immediately** instead of waiting up to ~2 minutes for their heartbeat to go stale. Also tighten the staleness window so unrestricted-but-disconnected doctors fade faster.
+Admin Shift Monitoring currently shows `coverage_requests.amount` (the original booking estimate) in the Amount column for every row, regardless of billing/payment state. Switch it to surface the *actual* number that matters at each stage.
 
-## Current behavior
-- `doctor_presence.online` is never flipped when a restriction is applied.
-- The browser heartbeats every 25s; after Priority 2, heartbeats from a restricted doctor are rejected by RLS, so `last_seen` freezes.
-- Map (`presence-remote.ts`) and admin dashboard (`admin.functions.ts`) both treat a presence row as "online" only if `last_seen` is within **120s**.
-- Net effect: a restricted doctor lingers in the pool up to ~2 min.
+## Display rules (per row)
+
+| Stage | Trigger | Show | Label |
+|---|---|---|---|
+| Before billing locked | `billing_locked_at IS NULL` AND `total_billed_amount IS NULL` | `amount` | "Est." |
+| Billed, unpaid | `total_billed_amount` present AND `paid_at IS NULL` | `total_billed_amount` | "Due" |
+| Paid | `paid_at IS NOT NULL` | `settled_amount ?? total_billed_amount` | "Paid" |
+
+The `payment_status` column stays as-is in its own column.
 
 ## Changes
 
-### 1. Migration — force offline on restriction
-Add a trigger on `public.profiles` that fires `AFTER UPDATE OF account_restricted_at`. When the column transitions from `NULL` to a non-null value, run:
+### 1. `src/lib/admin.functions.ts`
+- Extend `AdminShiftRow` with `total_billed_amount: number | null`, `settled_amount: number | null`, `paid_at: string | null`, `billing_locked_at: string | null`.
+- Add those four columns to the `select(...)` string in `adminListShifts`.
+- Spread them into the returned row (already covered by `...r`).
 
-```sql
-UPDATE public.doctor_presence
-   SET online = false,
-       last_seen = now() - interval '10 minutes'
- WHERE user_id = NEW.id;
+### 2. `src/routes/_admin.admin.shifts.tsx`
+Replace the single-line Amount cell:
+```tsx
+<td className="px-4 py-2.5">{fmtNaira(r.amount)}</td>
 ```
+with a small helper that picks the value + label per the table above, rendered as:
+```
+₦ 42,000
+Due
+```
+(amount on top, small muted label below — matches the existing two-line cell style used for Hospital/Schedule/Requester columns).
 
-Pushing `last_seen` into the past guarantees every freshness check (current and tightened) treats the row as offline, regardless of `online` flag drift. The existing `doctor_presence_changes` realtime channel propagates the UPDATE to all connected clients within ~1s.
+No other columns change. Payment column already reads `payment_status`.
 
-No new GRANTs needed — function is `SECURITY DEFINER` owned by postgres, and `doctor_presence` already has the right grants.
-
-### 2. Tighten freshness window
-Change `STALE_MS` in `src/lib/presence-remote.ts` from `2 * 60 * 1000` to `60 * 1000` (60s). With a 25s heartbeat, a healthy doctor still has 2 heartbeats of slack; a disconnected one drops out at ~60s instead of ~120s.
-
-Mirror the same threshold in `src/lib/admin.functions.ts` (line 597: `120_000` → `60_000`) so the admin dashboard "online now" badge matches the map.
-
-### 3. No client code beyond the threshold change
-Realtime UPDATE from the trigger already triggers a re-render through the existing `doctor_presence_changes` subscription. No new client wiring required.
-
-## Verification
-1. As admin, restrict a doctor who is currently online. Within ~1s, their marker disappears from the live map and their badge flips to "offline" on the admin dashboard.
-2. Unrestrict, then have the doctor toggle Go Online (already blocked while restricted; succeeds after unrestrict). Confirm they reappear on the map within one heartbeat (~25s).
-3. With an unrestricted doctor, kill the tab. Confirm they fade out of the pool at ~60s (not 120s).
-4. Confirm End Shift / payment / rating remain functional on any active shift (no change to those paths).
+## Verification (post-edit)
+1. Read 3 rows from `coverage_requests` covering each stage and confirm the rendered cell matches:
+   - searching/accepted row → "Est." + `amount`
+   - completed-but-unpaid row → "Due" + `total_billed_amount`
+   - paid row → "Paid" + `settled_amount` (fallback to `total_billed_amount` if `settled_amount` is null)
+2. Visit `/admin/shifts` in preview, screenshot, confirm the three states render correctly.
+3. Provide a short audit report listing what changed and the verified states.
 
 ## Out of scope
-- Notifying the restricted doctor's device in real time ("you have been restricted") — separate work.
-- Cancelling any in-flight shifts the restricted doctor is currently working — Priority 2 already decided in-flight shifts close cleanly.
+- `AdminUnpaidShiftRow` / unpaid-shifts table — already uses `total_billed_amount`.
+- Any change to how billing/settlement is calculated. This is display-only.
