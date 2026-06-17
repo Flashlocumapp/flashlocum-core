@@ -42,7 +42,7 @@ const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
 
 /** Presence rows older than this are treated as offline / stale. */
-const STALE_MS = 2 * 60 * 1000;
+const STALE_MS = 60 * 1000;
 
 function buildSnapshot(): PresenceRow[] {
   const now = Date.now();

@@ -594,7 +594,7 @@ export const adminDoctorFlashboard = createServerFn({ method: "POST" })
         online:
           !!p?.online &&
           !!p?.last_seen &&
-          Date.now() - new Date(p.last_seen).getTime() < 120_000,
+          Date.now() - new Date(p.last_seen).getTime() < 60_000,
         last_seen: p?.last_seen ?? null,
         accepted: s.accepted,
         completed: s.completed,
