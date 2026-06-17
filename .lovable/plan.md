@@ -1,30 +1,27 @@
-Findings from the live audit:
+## Findings
+- A new live request exists in the backend and is still `searching` inside the 180-second broadcast window.
+- The approved doctor is online in backend presence.
+- The doctor card is currently gated by a separate local `online` value (`net.doctors[sid]`) and a live snapshot flag. If local presence/auth/session hydration lags or mismatches, the server-returned open request can be hidden even though the backend says the doctor is eligible.
+- The open request feed itself is already server-authoritative through `list_open_coverage_requests`; the risky part is the extra local visibility gate.
 
-- The latest request exists and is still open: `coverage_requests.id = 367bdb11-ad52-4338-89f5-cf3b8ebdb060`, `status = searching`, `accepted_by = null`, and still inside the 180s broadcast window.
-- The database trigger `coverage_requests_emit_invalidate` is installed and enabled.
-- `coverage_requests` is in the realtime publication.
-- The current preview session that called `list_open_coverage_requests` is authenticated as the requester user `ce06e7f8...`, not the approved doctor `d01894fb...`; that RPC correctly returned `[]` for the requester.
-- The approved doctor `d01894fb...` is present, approved, and online in `doctor_presence`.
+## Plan
+1. Keep accept/decline/assignment state strictly server-derived.
+   - Do not add optimistic accept/decline/assignment rendering.
+   - Keep the incoming card source as `list_open_coverage_requests` snapshot rows only.
 
-Plan:
+2. Patch the doctor incoming-card derivation.
+   - Treat `hasLiveSnapshot()` + server-returned broadcasting rows as the authority for whether an incoming request exists.
+   - Remove the local `online` dependency from hiding the incoming card after the server has already returned eligible open requests for the doctor.
+   - Keep capacity and per-doctor declined-revision checks.
 
-1. Verify the doctor-side session path
-   - Use the browser/network signal after switching to the doctor account or doctor browser context.
-   - Confirm that `list_open_coverage_requests` is called with the approved doctor token and returns the open request.
+3. Make the subscription refresh path robust.
+   - Ensure the invalidation broadcast always triggers a server refresh and component rerender.
+   - Avoid relying on direct open-pool realtime row delivery, since those rows are intentionally fetched through the safe RPC.
 
-2. If the doctor RPC returns the request but the card still does not render, fix only the client derivation gate
-   - Keep accept/decline/assignment fully server-authoritative.
-   - Do not add optimistic request removal or optimistic accept/decline state.
-   - Inspect `src/features/cover/dispatch.ts` and `src/lib/network.ts` for a stale local online/session-id mismatch.
-   - Patch the minimal state-listener/bump path so the incoming card derives from the server snapshot already held in `net.requests`.
+4. Add lightweight diagnostics only if needed.
+   - Add temporary, non-sensitive console warnings only around snapshot/eligibility failures if the issue remains after the patch.
 
-3. If the doctor RPC returns `[]`, fix only the backend eligibility/RPC path
-   - Keep `list_open_coverage_requests` as the single server source for the open pool.
-   - Adjust the RPC or permission gate so approved online doctors receive open `searching` rows while requesters still receive none.
-   - Do not expose sensitive requester fields; keep the existing stripped-column shape.
-
-4. Validate
-   - Create or use a live open request.
-   - Confirm the doctor-side RPC returns the row.
-   - Confirm the incoming card appears from server query/subscription results only.
-   - Confirm no optimistic accept/decline/assignment state is introduced.
+5. Validate.
+   - Confirm a current `searching` request appears in the doctor-side snapshot.
+   - Confirm the card renders from the server snapshot.
+   - Confirm accept still waits for server confirmation before showing the accepted state.
