@@ -542,19 +542,41 @@ function ensureChannelForUser(userId: string) {
       handlePayload,
     )
     .subscribe((status) => {
-      // Any disconnect / error invalidates the "live snapshot" guarantee.
-      // Incoming Coverage will stop rendering until the next refreshSnapshot
-      // succeeds, guaranteeing no stale broadcast resurrects across a drop.
+      // Treat brief reconnects as background refreshes — blanking the
+      // "live snapshot" guarantee on every flicker causes Incoming Coverage
+      // to disappear and reappear on mobile networks where the channel
+      // routinely cycles. We only invalidate the guarantee if the channel
+      // stays down past a grace window.
       if (status === "SUBSCRIBED") {
+        clearChannelDownGrace();
         void refreshSnapshot();
       } else if (
         status === "CHANNEL_ERROR" ||
         status === "TIMED_OUT" ||
         status === "CLOSED"
       ) {
-        setLiveSnapshotSeen(false);
+        scheduleChannelDownBlank();
       }
     });
+}
+
+// 10s grace before a dropped realtime channel invalidates the live snapshot.
+// Most disconnects on mobile reconnect well inside this window; without the
+// grace, every flap blanks Incoming Coverage for a full poll cycle.
+const CHANNEL_DOWN_GRACE_MS = 10_000;
+let channelDownTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleChannelDownBlank() {
+  if (channelDownTimer) return;
+  channelDownTimer = setTimeout(() => {
+    channelDownTimer = null;
+    setLiveSnapshotSeen(false);
+  }, CHANNEL_DOWN_GRACE_MS);
+}
+function clearChannelDownGrace() {
+  if (channelDownTimer) {
+    clearTimeout(channelDownTimer);
+    channelDownTimer = null;
+  }
 }
 
 
