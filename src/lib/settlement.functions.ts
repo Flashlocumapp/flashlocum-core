@@ -21,7 +21,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     // 1. Load the coverage request — RLS scopes to requester or assigned doctor.
     const { data: reqRow, error: reqErr } = await supabase
       .from("coverage_requests")
-      .select("id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url, total_billed_amount, billing_locked_at")
+      .select("id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url, payment_account, total_billed_amount, billing_locked_at")
       .eq("id", data.requestId)
       .maybeSingle();
     if (reqErr || !reqRow) throw new Error("Coverage request not found");
@@ -40,6 +40,42 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     if (!reqRow.billing_locked_at || serverAmount <= 0) {
       throw new Error("Shift is not ready for payment — end the shift first.");
     }
+
+    // 1b. RESUME-IF-PENDING. If a pending reference + cached virtual-account
+    // is already attached to this row, return it verbatim instead of minting
+    // a new reference. Without this, every retry (sheet re-mount, double-tap,
+    // realtime-driven re-render) overwrote `payment_reference`, orphaning any
+    // Monnify webhook for the previous reference — the row stayed "pending"
+    // forever and the screen spun until timeout.
+    if (
+      reqRow.payment_status === "pending" &&
+      reqRow.payment_reference &&
+      reqRow.payment_account &&
+      typeof reqRow.payment_account === "object"
+    ) {
+      const acc = reqRow.payment_account as {
+        amount?: number;
+        accountNumber?: string;
+        accountName?: string;
+        bankName?: string;
+        expiresOn?: string | null;
+      };
+      if (acc.accountNumber && acc.bankName) {
+        const notExpired =
+          !acc.expiresOn || Date.parse(acc.expiresOn) > Date.now();
+        if (notExpired) {
+          return {
+            amount: Number(acc.amount ?? serverAmount),
+            accountNumber: acc.accountNumber,
+            accountName: acc.accountName ?? "FlashLocum",
+            bankName: acc.bankName,
+            expiresOn: acc.expiresOn ?? null,
+            paymentReference: reqRow.payment_reference,
+          };
+        }
+      }
+    }
+
 
 
 
@@ -149,7 +185,9 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
       throw new Error("Couldn't generate a transfer account. Please try again.");
     }
 
-    // 7. Persist reference + pending status.
+    // 7. Persist reference + cached virtual-account so a retry returns the
+    // SAME reference (see "RESUME-IF-PENDING" above) — protects against
+    // sheet re-mounts / double-taps overwriting an in-flight payment ref.
     await supabaseAdmin
       .from("coverage_requests")
       .update({
@@ -157,6 +195,13 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
         payment_reference: paymentReference,
         payment_status: "pending",
         payment_url: null,
+        payment_account: {
+          amount: account.amount,
+          accountNumber: account.accountNumber,
+          accountName: account.accountName,
+          bankName: account.bankName,
+          expiresOn: account.expiresOn ?? null,
+        },
       })
       .eq("id", reqRow.id);
 
@@ -169,6 +214,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
       paymentReference: account.paymentReference,
     };
   });
+
 
 
 // --- Dev-only: simulate Monnify webhook for sandbox testing ---

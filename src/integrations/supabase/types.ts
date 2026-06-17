@@ -43,6 +43,7 @@ export type Database = {
           last_extended_at: string | null
           note: string | null
           paid_at: string | null
+          payment_account: Json | null
           payment_due_at: string | null
           payment_extension_count: number
           payment_provider: string | null
@@ -94,6 +95,7 @@ export type Database = {
           last_extended_at?: string | null
           note?: string | null
           paid_at?: string | null
+          payment_account?: Json | null
           payment_due_at?: string | null
           payment_extension_count?: number
           payment_provider?: string | null
@@ -145,6 +147,7 @@ export type Database = {
           last_extended_at?: string | null
           note?: string | null
           paid_at?: string | null
+          payment_account?: Json | null
           payment_due_at?: string | null
           payment_extension_count?: number
           payment_provider?: string | null
@@ -976,6 +979,7 @@ export type Database = {
           last_extended_at: string | null
           note: string | null
           paid_at: string | null
+          payment_account: Json | null
           payment_due_at: string | null
           payment_extension_count: number
           payment_provider: string | null
