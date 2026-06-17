@@ -580,6 +580,8 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      expire_request: { Args: { _id: string }; Returns: Json }
+      expire_stale_searching_requests: { Args: never; Returns: undefined }
       extend_payment_window: { Args: { _request_id: string }; Returns: Json }
       get_assigned_doctor_profile: {
         Args: { _doctor: string }
