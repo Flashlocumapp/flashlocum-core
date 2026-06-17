@@ -46,9 +46,10 @@ type Row = {
   remitted_at: string | null;
   environment: string;
   rev: number | null;
-  broadcast_started_at: string | null;
+  broadcast_started_at: string;
   expired_at: string | null;
 };
+
 
 
 const TABLE = "coverage_requests";
