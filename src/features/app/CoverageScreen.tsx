@@ -698,6 +698,10 @@ function RequestCard({
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
   const identity = useDoctorIdentity(item.doctorSid ?? null);
+  const pending = useLifecyclePending(item.id);
+  const startLabel = pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
+  const pauseLabel = pending === "pausing" ? "Pausing…" : null;
+  const endLabel = pending === "ending" ? "Ending…" : null;
 
   const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
   const meta = isHistory
