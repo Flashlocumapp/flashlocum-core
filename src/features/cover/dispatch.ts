@@ -320,6 +320,18 @@ export function ensureDoctorSession(initialOnline = true) {
       return;
     }
 
+    // Server-confirmed accept for this doctor → open the Accepted sheet.
+    // This is the ONLY path that opens the sheet; the click handler never
+    // writes accept state locally, so the sheet never flashes for a
+    // request another doctor won.
+    if (ev.action === "accept" && ev.actor === "doctor" && r.acceptedBy === sid) {
+      processedEvents.set(eventKey, Date.now());
+      acceptedSheet = toCoverage(r);
+      shiftCue("request");
+      bump();
+      return;
+    }
+
     if (r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
     processedEvents.set(eventKey, Date.now());
@@ -400,8 +412,7 @@ function currentUpcomingForMe(): NetRequest[] {
   );
 }
 
-export function acceptIncoming() {
-  const sid = getSessionId();
+export async function acceptIncoming() {
   const idToAccept = pendingIncomingId();
   if (!idToAccept) return;
 
@@ -429,17 +440,24 @@ export function acceptIncoming() {
     return;
   }
 
-  const result = acceptRequest(idToAccept);
+  // Server-authoritative claim. We never optimistically flip local state;
+  // the realtime ingester is the single path that surfaces a confirmed
+  // acceptance, and `ensureDoctorSession` opens the Accepted sheet from
+  // that event (see the `action === "accept"` branch below).
+  const result = await acceptRequest(idToAccept);
   if (!result.ok) {
+    // Race-loss / no-longer-available: suppress the card for this rev so
+    // the feed derivation removes it idempotently, and surface a toast.
     markDeclined(idToAccept, incomingReq.rev);
-    pushToast({ tone: "warn", title: conflictMessage(result.reason) });
+    pushToast({
+      tone: "warn",
+      title: result.reason === "claimed" || result.reason === "unavailable"
+        ? "This request is no longer available"
+        : conflictMessage(result.reason),
+    });
     return;
   }
-  const req = currentRequest(idToAccept);
-  if (req && req.acceptedBy === sid) {
-    acceptedSheet = toCoverage(req);
-    bump();
-  }
+  // Success path is finalized by the realtime "accept" event handler.
 }
 
 
