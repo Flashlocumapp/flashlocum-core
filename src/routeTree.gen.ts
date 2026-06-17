@@ -36,6 +36,7 @@ import { Route as AdminAdminSupportRouteImport } from './routes/_admin.admin.sup
 import { Route as AdminAdminShiftsRouteImport } from './routes/_admin.admin.shifts'
 import { Route as AdminAdminRiskRouteImport } from './routes/_admin.admin.risk'
 import { Route as AdminAdminRequestersRouteImport } from './routes/_admin.admin.requesters'
+import { Route as AdminAdminPricingRouteImport } from './routes/_admin.admin.pricing'
 import { Route as AdminAdminFlashboardRouteImport } from './routes/_admin.admin.flashboard'
 import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.finance'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
@@ -173,6 +174,11 @@ const AdminAdminRequestersRoute = AdminAdminRequestersRouteImport.update({
   path: '/requesters',
   getParentRoute: () => AdminAdminRoute,
 } as any)
+const AdminAdminPricingRoute = AdminAdminPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => AdminAdminRoute,
+} as any)
 const AdminAdminFlashboardRoute = AdminAdminFlashboardRouteImport.update({
   id: '/flashboard',
   path: '/flashboard',
@@ -208,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/admin/finance': typeof AdminAdminFinanceRoute
   '/admin/flashboard': typeof AdminAdminFlashboardRoute
+  '/admin/pricing': typeof AdminAdminPricingRoute
   '/admin/requesters': typeof AdminAdminRequestersRoute
   '/admin/risk': typeof AdminAdminRiskRoute
   '/admin/shifts': typeof AdminAdminShiftsRoute
@@ -237,6 +244,7 @@ export interface FileRoutesByTo {
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/admin/finance': typeof AdminAdminFinanceRoute
   '/admin/flashboard': typeof AdminAdminFlashboardRoute
+  '/admin/pricing': typeof AdminAdminPricingRoute
   '/admin/requesters': typeof AdminAdminRequestersRoute
   '/admin/risk': typeof AdminAdminRiskRoute
   '/admin/shifts': typeof AdminAdminShiftsRoute
@@ -270,6 +278,7 @@ export interface FileRoutesById {
   '/onboarding/$role': typeof OnboardingRoleRoute
   '/_admin/admin/finance': typeof AdminAdminFinanceRoute
   '/_admin/admin/flashboard': typeof AdminAdminFlashboardRoute
+  '/_admin/admin/pricing': typeof AdminAdminPricingRoute
   '/_admin/admin/requesters': typeof AdminAdminRequestersRoute
   '/_admin/admin/risk': typeof AdminAdminRiskRoute
   '/_admin/admin/shifts': typeof AdminAdminShiftsRoute
@@ -302,6 +311,7 @@ export interface FileRouteTypes {
     | '/onboarding/$role'
     | '/admin/finance'
     | '/admin/flashboard'
+    | '/admin/pricing'
     | '/admin/requesters'
     | '/admin/risk'
     | '/admin/shifts'
@@ -331,6 +341,7 @@ export interface FileRouteTypes {
     | '/onboarding/$role'
     | '/admin/finance'
     | '/admin/flashboard'
+    | '/admin/pricing'
     | '/admin/requesters'
     | '/admin/risk'
     | '/admin/shifts'
@@ -363,6 +374,7 @@ export interface FileRouteTypes {
     | '/onboarding/$role'
     | '/_admin/admin/finance'
     | '/_admin/admin/flashboard'
+    | '/_admin/admin/pricing'
     | '/_admin/admin/requesters'
     | '/_admin/admin/risk'
     | '/_admin/admin/shifts'
@@ -582,6 +594,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdminRequestersRouteImport
       parentRoute: typeof AdminAdminRoute
     }
+    '/_admin/admin/pricing': {
+      id: '/_admin/admin/pricing'
+      path: '/pricing'
+      fullPath: '/admin/pricing'
+      preLoaderRoute: typeof AdminAdminPricingRouteImport
+      parentRoute: typeof AdminAdminRoute
+    }
     '/_admin/admin/flashboard': {
       id: '/_admin/admin/flashboard'
       path: '/flashboard'
@@ -609,6 +628,7 @@ declare module '@tanstack/react-router' {
 interface AdminAdminRouteChildren {
   AdminAdminFinanceRoute: typeof AdminAdminFinanceRoute
   AdminAdminFlashboardRoute: typeof AdminAdminFlashboardRoute
+  AdminAdminPricingRoute: typeof AdminAdminPricingRoute
   AdminAdminRequestersRoute: typeof AdminAdminRequestersRoute
   AdminAdminRiskRoute: typeof AdminAdminRiskRoute
   AdminAdminShiftsRoute: typeof AdminAdminShiftsRoute
@@ -623,6 +643,7 @@ interface AdminAdminRouteChildren {
 const AdminAdminRouteChildren: AdminAdminRouteChildren = {
   AdminAdminFinanceRoute: AdminAdminFinanceRoute,
   AdminAdminFlashboardRoute: AdminAdminFlashboardRoute,
+  AdminAdminPricingRoute: AdminAdminPricingRoute,
   AdminAdminRequestersRoute: AdminAdminRequestersRoute,
   AdminAdminRiskRoute: AdminAdminRiskRoute,
   AdminAdminShiftsRoute: AdminAdminShiftsRoute,
