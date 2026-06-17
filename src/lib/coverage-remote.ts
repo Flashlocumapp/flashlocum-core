@@ -305,6 +305,12 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 // cost if the searching pool ever spikes (load shedding > crashing the tab).
 const SNAPSHOT_LIMIT = 500;
 
+// Last successful pool fetch, kept so a transient `list_open_coverage_requests`
+// error doesn't blank Incoming Coverage for ~15s until the next poll. Rows
+// here are still subject to the doctor-side `broadcastingRequests` freshness
+// filter (180s TTL) so a stale row cannot resurrect indefinitely.
+let lastPoolRows: Row[] = [];
+
 async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   // Doctors can only directly read coverage_requests rows they accepted
   // (`accepted_by = auth.uid()`); the SELECT policy intentionally hides
@@ -326,14 +332,20 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
     console.warn("[coverage-remote] fetch error:", ownRes.error.message);
     return null;
   }
+  let poolRows: Row[];
   if (poolRes.error) {
-    // Non-fatal: own rows still render. Pool will be empty until the next
-    // refresh (e.g. invalidation broadcast) succeeds.
+    // Non-fatal: own rows still render and the previous pool snapshot is
+    // reused so a single transient RPC failure doesn't flicker Incoming
+    // Coverage off-screen between polls.
     console.warn("[coverage-remote] pool fetch error:", poolRes.error.message);
+    poolRows = lastPoolRows;
+  } else {
+    poolRows = (poolRes.data ?? []) as Row[];
+    lastPoolRows = poolRows;
   }
   const merged = new Map<string, Row>();
   for (const r of (ownRes.data ?? []) as Row[]) merged.set(r.id, r);
-  for (const r of (poolRes.data ?? []) as Row[]) {
+  for (const r of poolRows) {
     if (!merged.has(r.id)) merged.set(r.id, r);
   }
   // Phone is column-restricted in RLS: only the requester or the accepted
