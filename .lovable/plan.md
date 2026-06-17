@@ -1,28 +1,13 @@
-## Goal
-Wipe all coverage shift data across all users — history, active, and upcoming. Destructive and irreversible.
+Re-run the full coverage wipe across all users (in case new rows have appeared since the last clear).
 
-## What gets deleted (in order, to satisfy FK constraints)
-
-1. `public.ratings` — all rows (they reference `shift_id`)
-2. `public.shift_segments` — all rows (they reference `request_id`)
-3. `public.payment_underpayments` — all rows (they reference `request_id`)
+**Delete in a single transaction:**
+1. `public.ratings` — all rows
+2. `public.shift_segments` — all rows
+3. `public.payment_underpayments` — all rows
 4. `public.coverage_requests` — all rows
 
-Run inside a single transaction so a failure rolls back cleanly.
+**Not touched:** profiles, user_roles, doctor_presence, device_tokens, pricing tables, email infra, trust_blocks.
 
-## What is NOT touched
+**Verify:** count all four tables = 0 after commit.
 
-- `profiles`, `user_roles`, `doctor_presence`, `device_tokens`
-- Pricing tables (`pricing_versions`, `pricing_flats`, `pricing_rates`, `pricing_modifiers`)
-- Email infrastructure tables
-- `trust_blocks`
-- `profiles.trust_snapshot` — will recompute lazily on next read; not cleared
-
-## Execution
-Use the data-change (insert) tool with `DELETE` statements wrapped in a `BEGIN … COMMIT` block. Not a schema migration.
-
-## Verification
-After deletion, run a count on each affected table — all four should return 0. Hard-refresh the app and confirm Active, Upcoming, and History sections are empty for both requester and cover views.
-
-## Warning
-This cannot be undone. If anything is mid-flight (active shift, awaiting payment), it disappears with the rest.
+Cannot be undone.
