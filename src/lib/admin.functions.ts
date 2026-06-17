@@ -1050,4 +1050,107 @@ export const adminSystemHealth = createServerFn({ method: "POST" })
     };
   });
 
+// ---------- Ratings Feed ----------
+
+export type AdminRatingRow = {
+  id: string;
+  score: number;
+  feedback: string | null;
+  created_at: string;
+  shift_id: string | null;
+  rater_user_id: string;
+  ratee_entity_id: string;
+  ratee_user_id: string | null;
+  ratee_role: "doctor" | "requester" | null;
+  rater_name: string | null;
+  ratee_name: string | null;
+  shift_hospital: string | null;
+};
+
+export const adminListRatings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      ratee_entity_id?: string;
+      min_score?: number;
+      max_score?: number;
+      only_with_feedback?: boolean;
+      limit?: number;
+    } | undefined) => ({
+      ratee_entity_id: input?.ratee_entity_id,
+      min_score: input?.min_score,
+      max_score: input?.max_score,
+      only_with_feedback: !!input?.only_with_feedback,
+      limit: Math.min(Math.max(input?.limit ?? 200, 1), 500),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<AdminRatingRow[]> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let q = supabaseAdmin
+      .from("ratings")
+      .select("id,score,feedback,created_at,shift_id,rater_user_id,ratee_entity_id")
+      .order("created_at", { ascending: false })
+      .limit(data.limit);
+    if (data.ratee_entity_id) q = q.eq("ratee_entity_id", data.ratee_entity_id);
+    if (typeof data.min_score === "number") q = q.gte("score", data.min_score);
+    if (typeof data.max_score === "number") q = q.lte("score", data.max_score);
+    if (data.only_with_feedback) q = q.not("feedback", "is", null);
+
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const list = rows ?? [];
+
+    const userIds = new Set<string>();
+    const shiftIds = new Set<string>();
+    for (const r of list) {
+      userIds.add(r.rater_user_id);
+      const m = /^(doc|req):(.+)$/.exec(r.ratee_entity_id);
+      if (m) userIds.add(m[2]);
+      if (r.shift_id) shiftIds.add(r.shift_id);
+    }
+
+    const nameMap = new Map<string, string | null>();
+    if (userIds.size) {
+      const { data: profs } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", Array.from(userIds));
+      for (const p of profs ?? []) nameMap.set(p.id, p.full_name);
+    }
+
+    const shiftMap = new Map<string, string | null>();
+    if (shiftIds.size) {
+      const { data: shifts } = await supabaseAdmin
+        .from("coverage_requests")
+        .select("id, hospital")
+        .in("id", Array.from(shiftIds));
+      for (const s of shifts ?? []) shiftMap.set(s.id, s.hospital);
+    }
+
+    return list.map((r): AdminRatingRow => {
+      const m = /^(doc|req):(.+)$/.exec(r.ratee_entity_id);
+      const ratee_user_id = m ? m[2] : null;
+      const ratee_role: "doctor" | "requester" | null = m
+        ? m[1] === "doc"
+          ? "doctor"
+          : "requester"
+        : null;
+      return {
+        id: r.id,
+        score: r.score,
+        feedback: r.feedback,
+        created_at: r.created_at,
+        shift_id: r.shift_id,
+        rater_user_id: r.rater_user_id,
+        ratee_entity_id: r.ratee_entity_id,
+        ratee_user_id,
+        ratee_role,
+        rater_name: nameMap.get(r.rater_user_id) ?? null,
+        ratee_name: ratee_user_id ? (nameMap.get(ratee_user_id) ?? null) : null,
+        shift_hospital: r.shift_id ? (shiftMap.get(r.shift_id) ?? null) : null,
+      };
+    });
+  });
 

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -108,6 +108,18 @@ function TrustPage() {
                     <td className="px-3 py-2">
                       <div className="font-medium">{row.full_name || "—"}</div>
                       <div className="text-[11px] text-muted-foreground font-mono">{row.user_id.slice(0, 8)}…</div>
+                      <Link
+                        to="/admin/ratings"
+                        search={{
+                          ratee:
+                            row.role === "doctor"
+                              ? `doc:${row.user_id}`
+                              : `req:${row.user_id}`,
+                        }}
+                        className="text-[11px] underline text-muted-foreground hover:text-foreground"
+                      >
+                        View comments
+                      </Link>
                     </td>
                     <td className="px-3 py-2 capitalize">{row.role || "—"}</td>
                     <td className="px-3 py-2">

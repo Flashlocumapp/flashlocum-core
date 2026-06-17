@@ -13,6 +13,7 @@ import {
   Receipt,
   Coins,
   Gauge,
+  MessageSquare,
 } from "lucide-react";
 
 
@@ -40,6 +41,7 @@ const sections = [
   { title: "Requester Analytics", url: "/admin/requesters", icon: Building2, group: "Business" },
   { title: "Reliability & Risk", url: "/admin/risk", icon: AlertTriangle, group: "Trust & Safety" },
   { title: "Trust Snapshots", url: "/admin/trust", icon: Gauge, group: "Trust & Safety" },
+  { title: "Ratings & Comments", url: "/admin/ratings", icon: MessageSquare, group: "Trust & Safety" },
   { title: "Support Tools", url: "/admin/support", icon: LifeBuoy, group: "Trust & Safety" },
   { title: "System Health", url: "/admin/system", icon: HeartPulse, group: "Platform" },
 ] as const;
