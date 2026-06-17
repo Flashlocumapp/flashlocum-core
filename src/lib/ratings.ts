@@ -37,9 +37,10 @@ export async function recordRating(
   _entityId: string,
   value: number,
   shiftId?: string | null,
+  feedback?: string | null,
 ): Promise<SubmitResult | null> {
   if (!shiftId || value < 1 || value > 5) return null;
-  return submitShiftRating(shiftId, value);
+  return submitShiftRating(shiftId, value, feedback ?? null);
 }
 
 export function verifiedLabel(role: RatingRole): string {
