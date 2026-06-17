@@ -74,7 +74,10 @@ function toCoverage(r: NetRequest): Coverage {
     feePct: r.feePct,
     phone: r.phone,
     note: r.note,
-    active: r.status === "active",
+    // PAYMENT_PENDING (awaiting_payment) keeps the shift in Active Coverage.
+    // The completion transition (active|awaiting_payment → completed) is webhook-only.
+    active: r.status === "active" || r.status === "awaiting_payment",
+    paymentPending: r.status === "awaiting_payment",
     startedAt: r.startedAt,
     accumulatedMs: r.accumulatedMs ?? 0,
     days: Math.max(1, r.days ?? 1),
