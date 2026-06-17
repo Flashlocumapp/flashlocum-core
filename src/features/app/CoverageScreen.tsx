@@ -37,7 +37,7 @@ import {
   updateRequest as netUpdateRequest,
   useLifecyclePending,
   useNetwork,
-  type LifecyclePendingKind,
+  
   type NetRequest,
   type NetState,
 } from "@/lib/network";
