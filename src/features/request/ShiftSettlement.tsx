@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
+import { submitShiftRating } from "@/lib/trust";
+import { pushToast } from "@/lib/notifications";
 import { simNow, useSimClock } from "@/lib/clock";
 import {
   computeWorkedPricing,
@@ -1310,7 +1312,16 @@ function ConfirmedPane({
         open={ratingOpen}
         doctor={doctor}
         onDismiss={() => setRatingOpen(false)}
-        onSubmit={() => {
+        onSubmit={(rating, feedback) => {
+          const shiftId = tx?.id ?? null;
+          if (rating > 0 && shiftId) {
+            void (async () => {
+              const res = await submitShiftRating(shiftId, rating, feedback || null);
+              if (!res.ok && res.error !== "already_rated") {
+                pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+              }
+            })();
+          }
           setRated(true);
           setRatingOpen(false);
         }}
