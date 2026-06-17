@@ -463,8 +463,10 @@ function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "
 export function declineIncoming() {
   const id = pendingIncomingId();
   if (!id) return;
-  markDeclined(id);
+  const r = currentRequest(id);
+  markDeclined(id, r?.rev);
 }
+
 
 export function dismissAccepted() {
   acceptedSheet = null;
