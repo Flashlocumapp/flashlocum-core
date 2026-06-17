@@ -599,20 +599,42 @@ export function setDoctorAcceptedCount(n: number) {
   });
 }
 
-export function markDeclined(requestId: string) {
+/**
+ * Mark an incoming request as declined for THIS doctor session. The key is
+ * `${id}:${rev}` so that when the requester edits or re-broadcasts (rev is
+ * bumped server-side by the bump_request_rev trigger), the previously-stored
+ * decline no longer matches and the card re-enters Incoming. A bare `${id}`
+ * value is treated as rev=1 for backward compatibility with prior builds.
+ */
+export function markDeclined(requestId: string, rev?: number) {
   refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
-  if (d.declined.includes(requestId)) return;
+  const cur = state.requests[requestId];
+  const r = rev ?? cur?.rev ?? 1;
+  const key = `${requestId}:${r}`;
+  if (d.declined.includes(key)) return;
   save({
     ...state,
     doctors: {
       ...state.doctors,
-      [sid]: { ...d, declined: [...d.declined, requestId] },
+      [sid]: { ...d, declined: [...d.declined, key] },
     },
   });
 }
+
+/** Returns true if this session has declined the given (id, rev) pair.
+ *  Legacy decline entries stored as the bare id are treated as rev=1. */
+export function isDeclined(d: DoctorPresence | undefined, id: string, rev?: number): boolean {
+  if (!d) return false;
+  const r = rev ?? 1;
+  const key = `${id}:${r}`;
+  if (d.declined.includes(key)) return true;
+  if (r === 1 && d.declined.includes(id)) return true;
+  return false;
+}
+
 
 export function startHeartbeat() {
   if (typeof window === "undefined") return () => {};
