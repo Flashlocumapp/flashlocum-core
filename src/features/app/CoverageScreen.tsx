@@ -230,7 +230,28 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
-  const [settlingId, setSettlingId] = useState<string | null>(null);
+  // Settlement sheet lifecycle: snapshot the shift props the moment the
+  // sheet opens, then keep them stable for the entire payment flow. Driving
+  // the sheet from `items.find(settlingId)` would unmount it on every
+  // realtime row mutation (status flip, billing lock, webhook broadcast),
+  // which in turn re-fired `beginSettlementCheckout` and minted a new
+  // `payment_reference` — orphaning any webhook Monnify sent for the
+  // previous reference. Holding a captured snapshot decouples the sheet's
+  // identity from realtime churn on the row.
+  type SettlingSnapshot = {
+    id: string;
+    facility: string;
+    doctorSid: string | null;
+    coverage: string;
+    startedAt?: number;
+    accumulatedMs?: number;
+    startHHMM: string;
+    endHHMM?: string;
+    days?: number;
+    environment: "normal" | "busy";
+  };
+  const [settlingSnapshot, setSettlingSnapshot] = useState<SettlingSnapshot | null>(null);
+  const settlingId = settlingSnapshot?.id ?? null;
   const [pauseConfirmId, setPauseConfirmId] = useState<string | null>(null);
   const [endConfirmId, setEndConfirmId] = useState<string | null>(null);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -247,7 +268,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     [items, tab],
   );
 
-  const settling = items.find((i) => i.id === settlingId) ?? null;
   const historyItem = items.find((i) => i.id === historyId) ?? null;
   const historyDetail: HistoryDetail | null = historyItem
     ? {
@@ -291,7 +311,21 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    */
   const requestEnd = (id: string) => setEndConfirmId(id);
   const beginEndShift = (id: string) => {
-    setSettlingId(id);
+    const item = items.find((i) => i.id === id);
+    const r = net.requests[id];
+    if (!item) return;
+    setSettlingSnapshot({
+      id,
+      facility: "Lagoon Health",
+      doctorSid: item.doctorSid ?? null,
+      coverage: item.coverage,
+      startedAt: item.startedAt,
+      accumulatedMs: item.accumulatedMs,
+      startHHMM: ampmTo24h(item.start),
+      endHHMM: ampmTo24h(item.end),
+      days: item.days,
+      environment: (r?.environment ?? "normal") as "normal" | "busy",
+    });
   };
 
   const confirmEnd = async () => {
@@ -434,30 +468,31 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       </AnimatePresence>
 
       <ShiftSettlement
-        open={!!settling}
-        onClose={() => setSettlingId(null)}
+        open={!!settlingSnapshot}
+        onClose={() => setSettlingSnapshot(null)}
         initialPhase="settlement"
         intent="end"
         onConfirmed={confirmEnd}
-        onRebook={() => setSettlingId(null)}
-        requestId={settling?.id}
+        onRebook={() => setSettlingSnapshot(null)}
+        requestId={settlingSnapshot?.id}
         shift={
-          settling
+          settlingSnapshot
             ? {
-                facility: "Lagoon Health",
-                doctor: getDoctorIdentity(settling.doctorSid).fullName,
-                role: `${settling.coverage} · Active`,
-                startedAt: settling.startedAt,
-                accumulatedMs: settling.accumulatedMs,
-                startHHMM: ampmTo24h(settling.start),
-                endHHMM: ampmTo24h(settling.end),
-                days: settling.days,
-                coverageKind: coverageKindFromLabel(settling.coverage),
-                environment: (net.requests[settling.id]?.environment ?? "normal") as "normal" | "busy",
+                facility: settlingSnapshot.facility,
+                doctor: getDoctorIdentity(settlingSnapshot.doctorSid).fullName,
+                role: `${settlingSnapshot.coverage} · Active`,
+                startedAt: settlingSnapshot.startedAt,
+                accumulatedMs: settlingSnapshot.accumulatedMs,
+                startHHMM: settlingSnapshot.startHHMM,
+                endHHMM: settlingSnapshot.endHHMM,
+                days: settlingSnapshot.days,
+                coverageKind: coverageKindFromLabel(settlingSnapshot.coverage),
+                environment: settlingSnapshot.environment,
               }
             : undefined
         }
       />
+
 
       <ConfirmDialog
         open={!!pauseConfirmId}
