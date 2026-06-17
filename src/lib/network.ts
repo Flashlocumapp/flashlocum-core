@@ -11,7 +11,6 @@ import { useEffect, useState } from "react";
 import { getRole } from "./role";
 import { simNow } from "./clock";
 import {
-  billableMinutes,
   bookedMinutesFromWindow,
   computeWorkedPricing,
   coverageKindFromLabel,
