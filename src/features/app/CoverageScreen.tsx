@@ -297,7 +297,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
   const confirmEnd = async () => {
     if (!settlingId) return;
-    await netCompleteRequest(settlingId);
+    // Settlement sheet (ShiftSettlement.handleEndShift) is the single owner
+    // of the end_shift RPC. Do not call it here, or the second invocation
+    // throws "Shift is not in progress" against the already-flipped row.
     shiftCue("end");
   };
 
