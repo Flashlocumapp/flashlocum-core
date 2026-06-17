@@ -22,6 +22,7 @@ export type Database = {
           amount: number
           area: string
           billing_locked_at: string | null
+          broadcast_started_at: string
           cancelled_by: string | null
           coverage_type: string
           created_at: string
@@ -32,6 +33,7 @@ export type Database = {
           end_time: string
           end_ts: number | null
           environment: string
+          expired_at: string | null
           fee_pct: number
           hospital: string
           id: string
@@ -47,6 +49,7 @@ export type Database = {
           phone: string
           remitted_at: string | null
           requester_id: string
+          rev: number
           settled_amount: number | null
           start_time: string
           start_ts: number | null
@@ -62,6 +65,7 @@ export type Database = {
           amount?: number
           area: string
           billing_locked_at?: string | null
+          broadcast_started_at?: string
           cancelled_by?: string | null
           coverage_type: string
           created_at?: string
@@ -72,6 +76,7 @@ export type Database = {
           end_time: string
           end_ts?: number | null
           environment?: string
+          expired_at?: string | null
           fee_pct?: number
           hospital: string
           id?: string
@@ -87,6 +92,7 @@ export type Database = {
           phone?: string
           remitted_at?: string | null
           requester_id: string
+          rev?: number
           settled_amount?: number | null
           start_time: string
           start_ts?: number | null
@@ -102,6 +108,7 @@ export type Database = {
           amount?: number
           area?: string
           billing_locked_at?: string | null
+          broadcast_started_at?: string
           cancelled_by?: string | null
           coverage_type?: string
           created_at?: string
@@ -112,6 +119,7 @@ export type Database = {
           end_time?: string
           end_ts?: number | null
           environment?: string
+          expired_at?: string | null
           fee_pct?: number
           hospital?: string
           id?: string
@@ -127,6 +135,7 @@ export type Database = {
           phone?: string
           remitted_at?: string | null
           requester_id?: string
+          rev?: number
           settled_amount?: number | null
           start_time?: string
           start_ts?: number | null
@@ -631,6 +640,7 @@ export type Database = {
           amount: number
           area: string
           billing_locked_at: string | null
+          broadcast_started_at: string
           cancelled_by: string | null
           coverage_type: string
           created_at: string
@@ -641,6 +651,7 @@ export type Database = {
           end_time: string
           end_ts: number | null
           environment: string
+          expired_at: string | null
           fee_pct: number
           hospital: string
           id: string
@@ -656,6 +667,7 @@ export type Database = {
           phone: string
           remitted_at: string | null
           requester_id: string
+          rev: number
           settled_amount: number | null
           start_time: string
           start_ts: number | null
@@ -718,6 +730,7 @@ export type Database = {
         | "paused"
         | "completed"
         | "cancelled"
+        | "expired"
       verification_status:
         | "pending"
         | "approved"
@@ -859,6 +872,7 @@ export const Constants = {
         "paused",
         "completed",
         "cancelled",
+        "expired",
       ],
       verification_status: [
         "pending",
