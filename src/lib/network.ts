@@ -460,6 +460,13 @@ function init() {
   });
 }
 
+// Snapshots from the presence layer occasionally omit the local doctor
+// during the brief window between their presence row arriving and the
+// async approval check resolving. Dropping them outright would flip
+// `online` to false on the Incoming Coverage gate (and wipe the per-session
+// `declined` list), which read as a card flicker. We preserve any prior
+// entry whose last_seen is still fresh; the next snapshot replaces it.
+const PRESENCE_PRESERVE_MS = 2 * 60 * 1000;
 function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> {
   const out: Record<string, DoctorPresence> = {};
   for (const r of rows) {
@@ -473,6 +480,13 @@ function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> 
       lastSeen: new Date(r.last_seen).getTime(),
       declined: prev?.declined ?? [],
     };
+  }
+  const now = Date.now();
+  for (const [id, prev] of Object.entries(state.doctors)) {
+    if (out[id]) continue;
+    if (now - prev.lastSeen < PRESENCE_PRESERVE_MS) {
+      out[id] = prev;
+    }
   }
   return out;
 }
