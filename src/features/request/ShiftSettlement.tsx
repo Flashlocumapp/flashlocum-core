@@ -323,28 +323,34 @@ export function ShiftSettlement({
 
     if (requestId) {
       // Server-authoritative end_shift: locks the bill on the DB so the
-      // settlement RPC can read total_billed_amount. Without this the
-      // server returns 0 / "shift is not ready for payment".
+      // settlement RPC can read total_billed_amount. The wrapper always
+      // returns billing_locked_at + total_billed_amount (re-reads the row
+      // on the idempotent "already ended" branch), so the gate below is
+      // never opened on assumption.
       setEndingShift(true);
       setEndShiftError(null);
+      setPayError(null);
       try {
-        const res = await endShiftRpc({ data: { requestId } });
-        if (res && typeof (res as any).total_billed_amount === "number") {
-          frozenAmountRef.current = (res as any).total_billed_amount;
-        }
-        // Server confirmed end_shift — bill is locked. This is the ONLY
-        // place settlementReadyRef may flip true.
-        settlementReadyRef.current = true;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Could not end shift";
-        // Idempotent: if already ended, the row is locked server-side.
-        if (/already (ended|completed)/i.test(msg)) {
-          settlementReadyRef.current = true;
-        } else {
-          setEndShiftError(msg);
+        const res: any = await endShiftRpc({ data: { requestId } });
+        const total = Number(res?.total_billed_amount ?? 0);
+        const locked = !!res?.billing_locked_at;
+        if (!locked || !(total > 0)) {
+          // Server says the shift isn't ready for payment (e.g. never started).
+          // Keep the gate closed — DO NOT proceed to checkout.
+          setEndShiftError(
+            "This shift isn't ready for payment yet. Please retry — if it persists, contact support.",
+          );
           setEndingShift(false);
           return;
         }
+        frozenAmountRef.current = total;
+        // Server confirmed end_shift AND billing is locked — open the single gate.
+        settlementReadyRef.current = true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not end shift";
+        setEndShiftError(msg);
+        setEndingShift(false);
+        return;
       }
       setEndingShift(false);
     }
