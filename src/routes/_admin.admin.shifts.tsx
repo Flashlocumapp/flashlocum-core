@@ -219,7 +219,33 @@ function AdminShiftsPage() {
                       <div className="text-foreground">{r.doctor_name || "—"}</div>
                       <div className="text-[11.5px]">{r.doctor_phone || ""}</div>
                     </td>
-                    <td className="px-4 py-2.5">{fmtNaira(r.amount)}</td>
+                    <td className="px-4 py-2.5">
+                      {(() => {
+                        if (r.paid_at) {
+                          const v = r.settled_amount ?? r.total_billed_amount ?? 0;
+                          return (
+                            <>
+                              <div>{fmtNaira(v)}</div>
+                              <div className="text-[11px] text-muted-foreground">Paid</div>
+                            </>
+                          );
+                        }
+                        if (r.total_billed_amount != null) {
+                          return (
+                            <>
+                              <div>{fmtNaira(r.total_billed_amount)}</div>
+                              <div className="text-[11px] text-muted-foreground">Due</div>
+                            </>
+                          );
+                        }
+                        return (
+                          <>
+                            <div>{fmtNaira(r.amount)}</div>
+                            <div className="text-[11px] text-muted-foreground">Est.</div>
+                          </>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
                       {r.payment_status || "—"}
                     </td>
