@@ -157,6 +157,7 @@ const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   paused: "paused",
   completed: "completed",
   cancelled: "cancelled",
+  expired: "expired",
 };
 const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   broadcasting: "searching",
@@ -165,7 +166,9 @@ const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   paused: "paused",
   completed: "completed",
   cancelled: "cancelled",
+  expired: "expired",
 };
+
 
 export function rowToNet(r: Row): NetRequest {
   return {
