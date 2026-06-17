@@ -45,10 +45,11 @@ type Row = {
   paid_at: string | null;
   remitted_at: string | null;
   environment: string;
-  rev: number | null;
+  rev: number;
   broadcast_started_at: string;
   expired_at: string | null;
 };
+
 
 
 
