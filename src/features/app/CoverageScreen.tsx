@@ -35,15 +35,15 @@ import {
   startRequest as netStartRequest,
   subscribeNetwork,
   updateRequest as netUpdateRequest,
+  useLifecyclePending,
   useNetwork,
+  type LifecyclePendingKind,
   type NetRequest,
   type NetState,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
-import { useServerFn } from "@tanstack/react-start";
-import { pauseShift as serverPauseShift } from "@/lib/shift.functions";
 
 
 
