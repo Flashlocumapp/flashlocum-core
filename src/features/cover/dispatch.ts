@@ -400,8 +400,7 @@ function currentUpcomingForMe(): NetRequest[] {
   );
 }
 
-export function acceptIncoming() {
-  const sid = getSessionId();
+export async function acceptIncoming() {
   const idToAccept = pendingIncomingId();
   if (!idToAccept) return;
 
@@ -429,17 +428,24 @@ export function acceptIncoming() {
     return;
   }
 
-  const result = acceptRequest(idToAccept);
+  // Server-authoritative claim. We never optimistically flip local state;
+  // the realtime ingester is the single path that surfaces a confirmed
+  // acceptance, and `ensureDoctorSession` opens the Accepted sheet from
+  // that event (see the `action === "accept"` branch below).
+  const result = await acceptRequest(idToAccept);
   if (!result.ok) {
+    // Race-loss / no-longer-available: suppress the card for this rev so
+    // the feed derivation removes it idempotently, and surface a toast.
     markDeclined(idToAccept, incomingReq.rev);
-    pushToast({ tone: "warn", title: conflictMessage(result.reason) });
+    pushToast({
+      tone: "warn",
+      title: result.reason === "claimed" || result.reason === "unavailable"
+        ? "This request is no longer available"
+        : conflictMessage(result.reason),
+    });
     return;
   }
-  const req = currentRequest(idToAccept);
-  if (req && req.acceptedBy === sid) {
-    acceptedSheet = toCoverage(req);
-    bump();
-  }
+  // Success path is finalized by the realtime "accept" event handler.
 }
 
 
