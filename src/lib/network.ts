@@ -104,7 +104,9 @@ export type NetRequestStatus =
   | "accepted"
   | "active"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
+
 
 export type NetRequest = {
   id: string;
