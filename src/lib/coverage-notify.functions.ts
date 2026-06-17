@@ -105,3 +105,57 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
 
     return { ok: true, cancelledBy: actor };
   });
+
+/**
+ * Start a shift (calls start_shift RPC) AND push the assigned doctor so they
+ * see the active timer even if the app is backgrounded. Returns the
+ * server-authoritative `started_at_ms` for the client to anchor its timer on.
+ */
+export const startAndNotifyFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { requestId: string }) => {
+    if (!isUuid(input?.requestId)) throw new Error("Invalid request id");
+    return input;
+  })
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    let alreadyStarted = false;
+    const { error } = await supabase.rpc("start_shift", { _request_id: data.requestId });
+    if (error) {
+      if (/already started/i.test(error.message)) {
+        alreadyStarted = true;
+      } else {
+        throw new Error(error.message);
+      }
+    }
+
+    // Read the server-authoritative started_at (bigint epoch ms on the row).
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("coverage_requests")
+      .select("started_at, accepted_by, hospital, requester_id")
+      .eq("id", data.requestId)
+      .maybeSingle();
+    const startedAtMs = row?.started_at != null ? Number(row.started_at) : null;
+
+    // Fire-and-forget push to the doctor (skip on idempotent already-started).
+    if (!alreadyStarted && row?.accepted_by) {
+      try {
+        const { data: requester } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId)
+          .maybeSingle();
+        const { sendPushToUser } = await import("@/lib/push.server");
+        await sendPushToUser(row.accepted_by, {
+          title: "Shift started",
+          body: `${requester?.full_name ?? "The requester"} started your shift${row.hospital ? ` at ${row.hospital}` : ""}.`,
+          data: { type: "shift_started", requestId: data.requestId },
+        });
+      } catch (e) {
+        console.warn("[start-notify] push failed:", (e as Error).message);
+      }
+    }
+
+    return { ok: true as const, alreadyStarted, startedAtMs };
+  });

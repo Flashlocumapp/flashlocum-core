@@ -35,15 +35,15 @@ import {
   startRequest as netStartRequest,
   subscribeNetwork,
   updateRequest as netUpdateRequest,
+  useLifecyclePending,
   useNetwork,
+  
   type NetRequest,
   type NetState,
 } from "@/lib/network";
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
-import { useServerFn } from "@tanstack/react-start";
-import { pauseShift as serverPauseShift } from "@/lib/shift.functions";
 
 
 
@@ -262,10 +262,11 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       }
     : null;
 
-  const moveToActive = (id: string) => {
+  const moveToActive = async (id: string) => {
     const cur = net.requests[id];
     const isResume = (cur?.accumulatedMs ?? 0) > 0;
-    netStartRequest(id);
+    const res = await netStartRequest(id);
+    if (!res.ok) return; // pushToast already surfaced the error
     shiftCue(isResume ? "resume" : "start");
     setTab("active");
   };
@@ -273,22 +274,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   // Pause Shift → pause_shift RPC ONLY closes the open segment and flips
   // status to 'paused'. No billing, no Monnify. Multi-day shifts have a
   // single final payment at End Shift. Local state mirrors the server.
-  const callServerPauseShift = useServerFn(serverPauseShift);
-  const [pausing, setPausing] = useState(false);
   const requestPause = (id: string) => setPauseConfirmId(id);
   const beginPause = async (id: string) => {
-    if (pausing) return;
-    setPausing(true);
-    try {
-      await callServerPauseShift({ data: { requestId: id } });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Couldn't pause this shift";
-      pushToast({ tone: "warn", title: msg });
-      setPausing(false);
-      return;
-    }
-    setPausing(false);
-    netPauseShift(id);
+    const res = await netPauseShift(id);
+    if (!res.ok) return;
     shiftCue("pause");
     setTab("upcoming");
     setNotice("Shift paused");
@@ -306,11 +295,13 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setSettlingId(id);
   };
 
-  const confirmEnd = () => {
+  const confirmEnd = async () => {
     if (!settlingId) return;
-    netCompleteRequest(settlingId);
+    await netCompleteRequest(settlingId);
     shiftCue("end");
   };
+
+
 
 
 
@@ -565,6 +556,10 @@ function RequesterDetailSheet({
   onCancel: (id: string) => void;
 }) {
   const identity = useDoctorIdentity(item?.doctorSid ?? null);
+  const pending = useLifecyclePending(item?.id ?? null);
+  const startLabel = pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
+  const pauseLabel = pending === "pausing" ? "Pausing…" : null;
+  const endLabel = pending === "ending" ? "Ending…" : null;
   return (
     <AnimatePresence>
       {item && (
@@ -633,18 +628,20 @@ function RequesterDetailSheet({
             </a>
             {item.status === "upcoming" && (
               <button
-                onClick={() => onStart(item.id)}
-                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+                onClick={() => { if (!pending) onStart(item.id); }}
+                disabled={!!pending}
+                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
-                {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
+                {startLabel ?? (item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift")}
               </button>
             )}
             {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
               <button
-                onClick={() => onPause(item.id)}
-                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90"
+                onClick={() => { if (!pending) onPause(item.id); }}
+                disabled={!!pending}
+                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90 disabled:opacity-60"
               >
-                Pause Shift
+                {pauseLabel ?? "Pause Shift"}
               </button>
             )}
           </div>
@@ -653,10 +650,11 @@ function RequesterDetailSheet({
             (item.status === "upcoming" && item.accumulatedMs > 0)) && (
             <div className="mt-2">
               <button
-                onClick={() => onEnd(item.id)}
-                className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+                onClick={() => { if (!pending) onEnd(item.id); }}
+                disabled={!!pending}
+                className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
-                End Shift
+                {endLabel ?? "End Shift"}
               </button>
             </div>
           )}
@@ -707,6 +705,10 @@ function RequestCard({
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
   const identity = useDoctorIdentity(item.doctorSid ?? null);
+  const pending = useLifecyclePending(item.id);
+  const startLabel = pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
+  const pauseLabel = pending === "pausing" ? "Pausing…" : null;
+  const endLabel = pending === "ending" ? "Ending…" : null;
 
   const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
   const meta = isHistory
@@ -792,38 +794,41 @@ function RequestCard({
 
         {isUpcoming && (
           <button
-            onClick={(e) => { e.stopPropagation(); onStart(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
+            disabled={!!pending}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
             style={{
               background: "var(--color-foreground)",
               color: "var(--color-background)",
             }}
           >
-            {(item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift"}
+            {startLabel ?? ((item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
           </button>
         )}
         {isActive && item.days > 1 && (
           <button
-            onClick={(e) => { e.stopPropagation(); onPause(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
+            disabled={!!pending}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
               color: "var(--color-foreground)",
             }}
           >
-            Pause Shift
+            {pauseLabel ?? "Pause Shift"}
           </button>
         )}
         {isActive && (
           <button
-            onClick={(e) => { e.stopPropagation(); onEnd(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            onClick={(e) => { e.stopPropagation(); if (!pending) onEnd(); }}
+            disabled={!!pending}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
             style={{
               background: "var(--color-foreground)",
               color: "var(--color-background)",
             }}
           >
-            End Shift
+            {endLabel ?? "End Shift"}
           </button>
         )}
       </div>

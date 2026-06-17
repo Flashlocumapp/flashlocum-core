@@ -219,6 +219,21 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
       0,
       Math.round(Number(status.amountPaid ?? status.totalPayable ?? row.settled_amount ?? 0)),
     );
+
+    // SINGLE COMPLETION PATH: only the Monnify webhook is allowed to flip a
+    // production shift to paid. In production we return the Monnify status
+    // for UI display but never call mark_settlement_paid — the webhook is
+    // the authoritative trigger. The dev/sandbox triple guard mirrors the
+    // one in simulateSettlementPayment.
+    const base = (process.env.MONNIFY_BASE_URL ?? "").toLowerCase();
+    const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
+    const verifyEnabled = (process.env.ALLOW_PAYMENT_SIMULATION ?? "").toLowerCase() === "true";
+    const isSandboxHost = /(^|[./-])sandbox\.monnify\.com/i.test(base) || /sandbox-api\.monnify/i.test(base);
+    const isProdEnv = nodeEnv === "production";
+    if (isProdEnv || !isSandboxHost || !verifyEnabled) {
+      return { paid: false, reason: "webhook_only" as const, status: s };
+    }
+
     // Admin client only for the privileged RPC that flips payment_status.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: rpcErr } = await supabaseAdmin.rpc("mark_settlement_paid", {
