@@ -308,7 +308,8 @@ export function ensureDoctorSession(initialOnline = true) {
         (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active"),
       );
       if (mine.length >= 3) return;
-      if ((me.declined ?? []).includes(r.id)) return;
+      if (isDeclined(me, r.id, r.rev)) return;
+
       processedEvents.set(eventKey, Date.now());
       shiftCue("request");
       pushToast({
