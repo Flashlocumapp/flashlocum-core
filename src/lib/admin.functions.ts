@@ -834,7 +834,9 @@ export type RiskOverview = {
     duplicate_mdcn_groups: number;
     requests_cancelled_after_accept: number;
     requests_unfilled_24h: number;
+    requests_expired: number;
   };
+
   topDoctorCancellers: RiskActor[];
   topRequesterCancellers: RiskActor[];
   duplicateMdcn: DuplicateMdcn[];
