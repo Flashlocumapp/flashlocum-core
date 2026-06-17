@@ -320,6 +320,18 @@ export function ensureDoctorSession(initialOnline = true) {
       return;
     }
 
+    // Server-confirmed accept for this doctor → open the Accepted sheet.
+    // This is the ONLY path that opens the sheet; the click handler never
+    // writes accept state locally, so the sheet never flashes for a
+    // request another doctor won.
+    if (ev.action === "accept" && ev.actor === "doctor" && r.acceptedBy === sid) {
+      processedEvents.set(eventKey, Date.now());
+      acceptedSheet = toCoverage(r);
+      shiftCue("request");
+      bump();
+      return;
+    }
+
     if (r.acceptedBy !== sid) return;
     if (ev.actor !== "requester") return;
     processedEvents.set(eventKey, Date.now());
