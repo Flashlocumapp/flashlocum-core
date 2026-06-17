@@ -1,45 +1,28 @@
-## Goal
-Admin Shift Monitoring currently shows `coverage_requests.amount` (the original booking estimate) in the Amount column for every row, regardless of billing/payment state. Switch it to surface the *actual* number that matters at each stage.
+## Audit summary
 
-## Display rules (per row)
+**Backend (verified):** `pause_shift` and `resume_shift` do not touch any billing/payment fields (`total_billed_amount`, `settled_amount`, `payment_status`, `paid_at`, `billing_locked_at`). Segments are never deleted on pause; `end_shift` sums minutes across all segments (`sum_worked + seg_worked`), so the timer is continuous and billing happens exactly once. State machine is correct.
 
-| Stage | Trigger | Show | Label |
-|---|---|---|---|
-| Before billing locked | `billing_locked_at IS NULL` AND `total_billed_amount IS NULL` | `amount` | "Est." |
-| Billed, unpaid | `total_billed_amount` present AND `paid_at IS NULL` | `total_billed_amount` | "Due" |
-| Paid | `paid_at IS NOT NULL` | `settled_amount ?? total_billed_amount` | "Paid" |
+**Defect:** UI-only. In `src/features/app/CoverageScreen.tsx`, an active multi-day card renders Pause + End in the primary action row (lines 844–869) AND a second "End Shift" in the secondary row (lines 898–903) when `isActive && days > 1 && dayIndex < days`.
 
-The `payment_status` column stays as-is in its own column.
-
-## Changes
-
-### 1. `src/lib/admin.functions.ts`
-- Extend `AdminShiftRow` with `total_billed_amount: number | null`, `settled_amount: number | null`, `paid_at: string | null`, `billing_locked_at: string | null`.
-- Add those four columns to the `select(...)` string in `adminListShifts`.
-- Spread them into the returned row (already covered by `...r`).
-
-### 2. `src/routes/_admin.admin.shifts.tsx`
-Replace the single-line Amount cell:
+## Fix
+In `src/features/app/CoverageScreen.tsx`, change the secondary action block's condition from
 ```tsx
-<td className="px-4 py-2.5">{fmtNaira(r.amount)}</td>
+((isActive && item.days > 1 && item.dayIndex < item.days) ||
+ (isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1)))
 ```
-with a small helper that picks the value + label per the table above, rendered as:
+to
+```tsx
+(isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1))
 ```
-₦ 42,000
-Due
-```
-(amount on top, small muted label below — matches the existing two-line cell style used for Hospital/Schedule/Requester columns).
 
-No other columns change. Payment column already reads `payment_status`.
+Result on active multi-day cards: **1 Pause Shift + 1 End Shift** in the primary row, no duplicate. Upcoming-continuation cards still expose a secondary "End Shift" so the requester can end the whole assignment without first resuming.
 
-## Verification (post-edit)
-1. Read 3 rows from `coverage_requests` covering each stage and confirm the rendered cell matches:
-   - searching/accepted row → "Est." + `amount`
-   - completed-but-unpaid row → "Due" + `total_billed_amount`
-   - paid row → "Paid" + `settled_amount` (fallback to `total_billed_amount` if `settled_amount` is null)
-2. Visit `/admin/shifts` in preview, screenshot, confirm the three states render correctly.
-3. Provide a short audit report listing what changed and the verified states.
+## Verification (after edit)
+1. Active multi-day card in preview → exactly one Pause and one End button.
+2. Paused (upcoming) card → "Resume Shift" up top + secondary "End Shift" below.
+3. Query `coverage_requests` before/after Pause: billing fields unchanged, `status='paused'`, latest `shift_segments` row has `ended_at` set.
+4. Query after Resume: new `shift_segments` row with incremented `segment_index`, `ended_at IS NULL`, billing fields still untouched, `status='active'`.
+5. After End: `status='awaiting_payment'`, `total_billed_amount` populated, summed minutes across all segments equal the total worked time.
 
 ## Out of scope
-- `AdminUnpaidShiftRow` / unpaid-shifts table — already uses `total_billed_amount`.
-- Any change to how billing/settlement is calculated. This is display-only.
+Backend changes, single-day card layout, payment webhook flow.
