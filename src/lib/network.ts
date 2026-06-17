@@ -12,6 +12,7 @@ import { getRole } from "./role";
 import { simNow } from "./clock";
 import {
   billableMinutes,
+  bookedMinutesFromWindow,
   computeWorkedPricing,
   coverageKindFromLabel,
 } from "./pricing";
