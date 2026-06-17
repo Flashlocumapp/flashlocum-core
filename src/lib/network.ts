@@ -83,7 +83,12 @@ const SESSION_KEY = "flashlocum.session";
 // 4s cadence — critical at 500+ concurrent doctors.
 const HEARTBEAT_MS = 25000;
 const STALE_MS = 12000;
-const BROADCAST_TTL_MS = 30 * 60 * 1000;
+// Pre-acceptance broadcast lifetime. After this window the request transitions
+// to a persistent 'expired' state (server cron + client RPC). Doctor feeds use
+// broadcast_started_at, not createdAt, so edit re-publish and dismiss-resume
+// restart the window.
+const BROADCAST_TTL_MS = 180 * 1000;
+
 const MAX_CONFIRMED_SHIFTS = 3;
 const BUFFER_MS = 60 * 60 * 1000;
 
