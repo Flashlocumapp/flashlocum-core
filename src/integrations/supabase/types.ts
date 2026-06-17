@@ -150,7 +150,15 @@ export type Database = {
           total_billed_amount?: number | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "coverage_requests_pricing_version_id_fkey"
+            columns: ["pricing_version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_tokens: {
         Row: {
@@ -333,6 +341,126 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pricing_flats: {
+        Row: {
+          amount: number
+          id: string
+          product: string
+          version_id: string
+        }
+        Insert: {
+          amount: number
+          id?: string
+          product: string
+          version_id: string
+        }
+        Update: {
+          amount?: number
+          id?: string
+          product?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_flats_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_modifiers: {
+        Row: {
+          id: string
+          key: string
+          value: number
+          version_id: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          value: number
+          version_id: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          value?: number
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_modifiers_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_rates: {
+        Row: {
+          id: string
+          rate_day: number
+          rate_night: number
+          tier: string
+          version_id: string
+        }
+        Insert: {
+          id?: string
+          rate_day: number
+          rate_night: number
+          tier: string
+          version_id: string
+        }
+        Update: {
+          id?: string
+          rate_day?: number
+          rate_night?: number
+          tier?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_rates_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_at: string
+          id: string
+          is_active: boolean
+          label: string
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          notes?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -559,9 +687,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _active_pricing_version_id: { Args: never; Returns: string }
       _bill_segment: {
         Args: { _env: string; _kind: string; _seg_id: string }
         Returns: number
+      }
+      _pricing_flat: {
+        Args: { _product: string; _version: string }
+        Returns: number
+      }
+      _pricing_modifier: {
+        Args: { _key: string; _version: string }
+        Returns: number
+      }
+      _pricing_rate: {
+        Args: { _tier: string; _version: string }
+        Returns: {
+          rate_day: number
+          rate_night: number
+        }[]
       }
       _round_billable_minutes: { Args: { _worked: number }; Returns: number }
       _split_day_night_minutes: {
@@ -588,6 +732,16 @@ export type Database = {
         }[]
       }
       admin_overview_stats: { Args: never; Returns: Json }
+      admin_publish_pricing_version: {
+        Args: {
+          _flats: Json
+          _label: string
+          _modifiers: Json
+          _notes?: string
+          _rates: Json
+        }
+        Returns: string
+      }
       admin_risk_overview: { Args: { _days?: number }; Returns: Json }
       admin_system_health: { Args: never; Returns: Json }
       claim_coverage_request: {
