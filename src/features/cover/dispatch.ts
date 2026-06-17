@@ -227,20 +227,20 @@ export function useDispatch(): View {
   // list_open_coverage_requests. Login / refresh / reconnect / reopen all
   // reset this flag, so a stale broadcast cannot resurrect.
   if (online && upcoming.length < 3 && hasLiveSnapshot()) {
-    const declined = new Set<string>(me?.declined ?? []);
     const r = liveRequests.find(
       (x) =>
         x.status === "broadcasting" &&
         x.requesterSessionId !== sid &&
-        !declined.has(x.id),
+        !isDeclined(me, x.id, x.rev),
     );
     if (r) incoming = toCoverage(r);
   }
 
   useEffect(() => {
     if (!me || upcoming.length < 3 || liveRequests.length === 0) return;
-    liveRequests.forEach((r) => markDeclined(r.id));
-  }, [me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
+    liveRequests.forEach((r) => markDeclined(r.id, r.rev));
+  }, [me, upcoming.length, liveRequests.map((r) => `${r.id}:${r.rev ?? 1}`).join("|")]);
+
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
