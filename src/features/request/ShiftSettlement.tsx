@@ -108,6 +108,8 @@ export function ShiftSettlement({
 }) {
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
+  const settlementReadyRef = useRef(false);
+  const directEndStartedRef = useRef(false);
   // Anchor timestamps drive every elapsed/overtime computation so that a
   // simulation fast-forward instantly advances the visible state.
   const phaseStartedAtRef = useRef<number | null>(null);
@@ -200,6 +202,8 @@ export function ShiftSettlement({
   useEffect(() => {
     if (open) {
       setPhase(initialPhase);
+      directEndStartedRef.current = false;
+      settlementReadyRef.current = !(requestId && intent === "end" && initialPhase === "settlement");
       const now = simNow();
       phaseStartedAtRef.current =
         initialPhase === "active" || initialPhase === "confirmed" ? null : now;
@@ -230,7 +234,7 @@ export function ShiftSettlement({
         frozenAmountRef.current = 0;
       }
     }
-  }, [open, initialPhase, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days]);
+  }, [open, initialPhase, requestId, intent, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment]);
 
   const finalize = () => {
     onClose();
@@ -329,6 +333,7 @@ export function ShiftSettlement({
       }
       setEndingShift(false);
     }
+    settlementReadyRef.current = true;
 
     phaseStartedAtRef.current = now;
     endedAtRef.current = now;
@@ -340,6 +345,13 @@ export function ShiftSettlement({
       autoConfirmAt.current = simNow() + (8 + Math.random() * 6) * 1000;
     }
   };
+
+  useEffect(() => {
+    if (!open || !requestId || intent !== "end" || initialPhase !== "settlement") return;
+    if (settlementReadyRef.current || directEndStartedRef.current) return;
+    directEndStartedRef.current = true;
+    void handleEndShift();
+  }, [open, requestId, intent, initialPhase]);
 
   const handleMadePayment = () => {
     autoConfirmAt.current = simNow() + 2500;
@@ -365,6 +377,7 @@ export function ShiftSettlement({
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
+    if (intent === "end" && !settlementReadyRef.current) return;
     setPayError(null);
     setPayState("starting");
     try {
@@ -415,6 +428,7 @@ export function ShiftSettlement({
   useEffect(() => {
     if (!open || !requestId) return;
     if (phase !== "settlement") return;
+    if (intent === "end" && !settlementReadyRef.current) return;
     if (autoOpenedRef.current) return;
     if (payState !== "idle") return;
     autoOpenedRef.current = true;
