@@ -30,7 +30,7 @@ type Row = {
   phone: string;
   note: string | null;
   accommodation: string | null;
-  status: "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled";
+  status: "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled" | "expired";
   accepted_by: string | null;
   started_at: number | null;
   accumulated_ms: number;
@@ -45,7 +45,11 @@ type Row = {
   paid_at: string | null;
   remitted_at: string | null;
   environment: string;
+  rev: number | null;
+  broadcast_started_at: string | null;
+  expired_at: string | null;
 };
+
 
 const TABLE = "coverage_requests";
 // v2: cache is scoped to the doctor's OWN rows only. The open SEARCHING
