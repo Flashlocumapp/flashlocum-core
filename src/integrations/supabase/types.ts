@@ -1060,6 +1060,7 @@ export type Database = {
         | "cancelled"
         | "expired"
         | "no_show"
+        | "awaiting_payment"
       verification_status:
         | "pending"
         | "approved"
@@ -1203,6 +1204,7 @@ export const Constants = {
         "cancelled",
         "expired",
         "no_show",
+        "awaiting_payment",
       ],
       verification_status: [
         "pending",
