@@ -22,11 +22,13 @@ import {
   primeUserId,
   remoteClaimRequest,
   remoteDeleteRequest,
+  remoteExpireRequest,
   remoteInsertRequest,
   remoteUpdateRequest,
   subscribeCoverageRemote,
   type RemoteEvent,
 } from "./coverage-remote";
+
 import {
   clearMyPresence,
   heartbeatPresence,
