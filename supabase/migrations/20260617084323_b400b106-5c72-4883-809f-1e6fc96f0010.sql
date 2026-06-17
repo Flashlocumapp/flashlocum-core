@@ -1,0 +1,1 @@
+ALTER TYPE public.coverage_request_status ADD VALUE IF NOT EXISTS 'awaiting_payment';
