@@ -542,6 +542,19 @@ export function useNetwork() {
   return s;
 }
 
+/** Subscribe to per-id lifecycle pending state (Start/Pause/End RPC in flight). */
+export function useLifecyclePending(id: string | null | undefined): LifecyclePendingKind | null {
+  const [v, setV] = useState<LifecyclePendingKind | null>(() => (id ? lifecycleInFlight.get(id) ?? null : null));
+  useEffect(() => {
+    if (!id) { setV(null); return; }
+    const fn = () => setV(lifecycleInFlight.get(id) ?? null);
+    lifecycleListeners.add(fn);
+    fn();
+    return () => { lifecycleListeners.delete(fn); };
+  }, [id]);
+  return v;
+}
+
 /** Subscribe to network state outside of React. */
 export function subscribeNetwork(fn: (s: NetState) => void): () => void {
   init();
