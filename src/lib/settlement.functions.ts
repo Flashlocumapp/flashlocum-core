@@ -16,10 +16,15 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => InputSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { userId } = context;
 
-    // 1. Load the coverage request — RLS scopes to requester or assigned doctor.
-    const { data: reqRow, error: reqErr } = await supabase
+    // 1. Load the coverage request. `payment_account` (cached virtual bank-
+    //    account JSON) is restricted from the regular authenticated role at
+    //    the column-grant level — only service_role can read it. We use the
+    //    admin client here and re-assert authorization explicitly: the caller
+    //    MUST be the requester on this row.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: reqRow, error: reqErr } = await supabaseAdmin
       .from("coverage_requests")
       .select("id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url, payment_account, total_billed_amount, billing_locked_at")
       .eq("id", data.requestId)
@@ -79,8 +84,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
 
 
 
-    // 2. Load the doctor's profile (admin client; we already authorised via RLS above).
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // 2. Load the doctor's profile (admin client; we already authorised via explicit requester check above).
     const { data: doctor, error: docErr } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name, bank_name, bank_account, bank_account_name, monnify_sub_account_code")
