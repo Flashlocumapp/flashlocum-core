@@ -11,7 +11,7 @@ import {
   type Environment,
 } from "@/lib/pricing";
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
-import { getRequestBillingState, extendPaymentWindow } from "@/lib/shift.functions";
+import { getRequestBillingState, extendPaymentWindow, endShift as endShiftFn } from "@/lib/shift.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -286,12 +286,13 @@ export function ShiftSettlement({
   }, [elapsed, phase]);
 
 
-  const handleEndShift = () => {
+  const endShiftRpc = useServerFn(endShiftFn);
+  const [endingShift, setEndingShift] = useState(false);
+  const [endShiftError, setEndShiftError] = useState<string | null>(null);
+
+  const handleEndShift = async () => {
     const now = simNow();
-    phaseStartedAtRef.current = now;
-    endedAtRef.current = now;
-    overtimeStartedAtRef.current = null;
-    // Freeze the bill at the moment of End Shift.
+    // Freeze local UI billing snapshot (display fallback).
     const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
     const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
     const priced = computeWorkedPricing(
@@ -305,14 +306,39 @@ export function ShiftSettlement({
     );
     frozenBilledMinRef.current = priced.billableMinutes;
     frozenAmountRef.current = priced.amount;
+
+    if (requestId) {
+      // Server-authoritative end_shift: locks the bill on the DB so the
+      // settlement RPC can read total_billed_amount. Without this the
+      // server returns 0 / "shift is not ready for payment".
+      setEndingShift(true);
+      setEndShiftError(null);
+      try {
+        const res = await endShiftRpc({ data: { requestId } });
+        if (res && typeof (res as any).total_billed_amount === "number") {
+          frozenAmountRef.current = (res as any).total_billed_amount;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not end shift";
+        // Idempotent: if already ended, proceed to checkout (row is locked).
+        if (!/already (ended|completed)/i.test(msg)) {
+          setEndShiftError(msg);
+          setEndingShift(false);
+          return;
+        }
+      }
+      setEndingShift(false);
+    }
+
+    phaseStartedAtRef.current = now;
+    endedAtRef.current = now;
+    overtimeStartedAtRef.current = null;
     setPhase("settlement");
     if (requestId) {
-      // Auto-open Monnify checkout immediately after End Shift.
       setTimeout(() => { void startMonnifyCheckout(); }, 50);
     } else if (Math.random() < 0.35) {
       autoConfirmAt.current = simNow() + (8 + Math.random() * 6) * 1000;
     }
-
   };
 
   const handleMadePayment = () => {
