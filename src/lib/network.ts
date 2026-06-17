@@ -874,91 +874,128 @@ export function cancelRequest(id: string) {
   });
 }
 
-export function startRequest(id: string) {
+/**
+ * Server-confirmed start/resume. NO optimistic local writes: the UI is only
+ * mutated after the RPC succeeds, and `startedAt` is anchored on the
+ * server-returned epoch ms (NOT simNow()) so requester and doctor see the
+ * same baseline. Multi-tap is blocked via `lifecycleInFlight`.
+ */
+export async function startRequest(id: string): Promise<{ ok: boolean; error?: string }> {
   refreshState();
   const cur = state.requests[id];
-  if (!cur) return;
-  // Multi-day shifts reset accumulatedMs to 0 on pause so each new day's
-  // timer starts at zero. Use dayIndex > 1 as the secondary signal so the
-  // doctor still receives a "resume" cue (not "start") on Day 2+.
+  if (!cur) return { ok: false, error: "Shift not found" };
+  if (lifecycleInFlight.has(id)) return { ok: false, error: "Already in progress" };
   const isResume = (cur.accumulatedMs ?? 0) > 0 || (cur.dayIndex ?? 1) > 1;
-  // Anchor startedAt to simNow() so a brand-new shift always renders
-  // segment = simNow() - startedAt = 0, regardless of any prior simulation
-  // fast-forward offset. LiveTimer uses simNow() on both sides, so the
-  // computed elapsed remains in sync across requester/doctor.
-  const patch: Partial<NetRequest> = {
-    status: "active",
-    startedAt: simNow(),
-    accumulatedMs: cur.accumulatedMs ?? 0,
-  };
-  applyPatch(id, patch, {
-    actor: "requester",
-    actorId: getSessionId(),
-    action: isResume ? "resume" : "start",
-  });
-  callServerLifecycle(isResume ? "resume" : "start", id);
+  setLifecyclePending(id, isResume ? "resuming" : "starting");
+  try {
+    const res = await callServerLifecycle(isResume ? "resume" : "start", id);
+    if (!res.ok) {
+      const { pushToast } = await import("./notifications");
+      pushToast({ tone: "warn", title: res.error || "Couldn't start this shift" });
+      return { ok: false, error: res.error };
+    }
+    const startedAtMs =
+      typeof res.startedAtMs === "number" && Number.isFinite(res.startedAtMs)
+        ? res.startedAtMs
+        : simNow(); // fallback only if the server omitted it
+    applyPatch(
+      id,
+      {
+        status: "active",
+        startedAt: startedAtMs,
+        accumulatedMs: cur.accumulatedMs ?? 0,
+      },
+      { actor: "requester", actorId: getSessionId(), action: isResume ? "resume" : "start" },
+    );
+    return { ok: true };
+  } finally {
+    setLifecyclePending(id, null);
+  }
 }
 
-export function pauseShift(id: string) {
+/** Server-confirmed pause. No optimistic write. */
+export async function pauseShift(id: string): Promise<{ ok: boolean; error?: string }> {
   refreshState();
   const cur = state.requests[id];
-  if (!cur || cur.status !== "active") return;
-  // Pause closes the open segment server-side (pause_shift RPC). No billing,
-  // no payment state, no dayIndex change. Local mirror: stop the in-flight
-  // timer and FOLD the active segment into accumulatedMs so Resume picks up
-  // where we left off. The single bill is generated only at End Shift.
-  const segment =
-    cur.startedAt != null ? Math.max(0, simNow() - cur.startedAt) : 0;
-  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
-  applyLocalPatch(id, { status: "accepted", startedAt: undefined, accumulatedMs }, {
-    actor: "requester",
-    actorId: getSessionId(),
-    action: "pause",
-  });
-  void callServerLifecycle("pause", id).then(() => {
-    notifyCoverageChanged(id);
-  });
+  if (!cur || cur.status !== "active") return { ok: false, error: "Shift not active" };
+  if (lifecycleInFlight.has(id)) return { ok: false, error: "Already in progress" };
+  setLifecyclePending(id, "pausing");
+  try {
+    const res = await callServerLifecycle("pause", id);
+    if (!res.ok) {
+      const { pushToast } = await import("./notifications");
+      pushToast({ tone: "warn", title: res.error || "Couldn't pause this shift" });
+      return { ok: false, error: res.error };
+    }
+    // Fold the in-flight segment into accumulatedMs only after server confirms.
+    const segment = cur.startedAt != null ? Math.max(0, simNow() - cur.startedAt) : 0;
+    const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+    applyLocalPatch(
+      id,
+      { status: "accepted", startedAt: undefined, accumulatedMs },
+      { actor: "requester", actorId: getSessionId(), action: "pause" },
+    );
+    return { ok: true };
+  } finally {
+    setLifecyclePending(id, null);
+  }
 }
 
-
-
-export function completeRequest(id: string) {
+/** Server-confirmed end. No optimistic write — webhook flips to completed. */
+export async function completeRequest(id: string): Promise<{ ok: boolean; error?: string }> {
   refreshState();
   const cur = state.requests[id];
-  if (!cur) return;
-  const segment =
-    cur.status === "active" && cur.startedAt
-      ? Math.max(0, simNow() - cur.startedAt)
-      : 0;
-  const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
-  const toHHMM = (raw: string | undefined, fallback: string): string => {
-    const m = (raw ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-    if (!m) return fallback;
-    let h = parseInt(m[1], 10);
-    const ap = m[3]?.toUpperCase();
-    if (ap === "PM" && h < 12) h += 12;
-    if (ap === "AM" && h === 12) h = 0;
-    return `${String(h).padStart(2, "0")}:${m[2]}`;
-  };
-  const startHHMM = toHHMM(cur.start, "08:00");
-  const endHHMM = toHHMM(cur.end, "18:00");
-  const settledAmount = computeWorkedPricing(
-    coverageKindFromLabel(cur.coverage),
-    startHHMM,
-    accumulatedMs / 60000,
-    endHHMM,
-    Math.max(1, cur.days ?? 1),
-    cur.environment ?? "normal",
-    bookedMinutesFromWindow(startHHMM, endHHMM),
-  ).amount;
-  applyLocalPatch(id, { status: "completed", accumulatedMs, startedAt: undefined, settledAmount }, {
-    actor: "requester",
-    actorId: getSessionId(),
-    action: "complete",
-  });
-  void callServerLifecycle("end", id).then(() => {
-    notifyCoverageChanged(id);
-  });
+  if (!cur) return { ok: false, error: "Shift not found" };
+  if (lifecycleInFlight.has(id)) return { ok: false, error: "Already in progress" };
+  setLifecyclePending(id, "ending");
+  try {
+    const res = await callServerLifecycle("end", id);
+    if (!res.ok) {
+      const { pushToast } = await import("./notifications");
+      pushToast({ tone: "warn", title: res.error || "Couldn't end this shift" });
+      return { ok: false, error: res.error };
+    }
+    const segment =
+      cur.status === "active" && cur.startedAt
+        ? Math.max(0, simNow() - cur.startedAt)
+        : 0;
+    const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+    const toHHMM = (raw: string | undefined, fallback: string): string => {
+      const m = (raw ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+      if (!m) return fallback;
+      let h = parseInt(m[1], 10);
+      const ap = m[3]?.toUpperCase();
+      if (ap === "PM" && h < 12) h += 12;
+      if (ap === "AM" && h === 12) h = 0;
+      return `${String(h).padStart(2, "0")}:${m[2]}`;
+    };
+    const startHHMM = toHHMM(cur.start, "08:00");
+    const endHHMM = toHHMM(cur.end, "18:00");
+    // Prefer the server-returned total; fall back to local pricing only if
+    // the RPC didn't include it (e.g. idempotent already-ended branch).
+    const settledAmount =
+      typeof res.totalBilledAmount === "number"
+        ? res.totalBilledAmount
+        : computeWorkedPricing(
+            coverageKindFromLabel(cur.coverage),
+            startHHMM,
+            accumulatedMs / 60000,
+            endHHMM,
+            Math.max(1, cur.days ?? 1),
+            cur.environment ?? "normal",
+            bookedMinutesFromWindow(startHHMM, endHHMM),
+          ).amount;
+    // Status flips to 'awaiting_payment' (server already did this). Webhook
+    // moves it to 'completed' once paid — do NOT write 'completed' locally.
+    applyLocalPatch(
+      id,
+      { status: "awaiting_payment", accumulatedMs, startedAt: undefined, settledAmount },
+      { actor: "requester", actorId: getSessionId(), action: "complete" },
+    );
+    return { ok: true };
+  } finally {
+    setLifecyclePending(id, null);
+  }
 }
 
 
