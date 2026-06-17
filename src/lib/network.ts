@@ -774,11 +774,14 @@ function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "
  * UPDATE-with-WHERE is the authoritative claim — it only succeeds if the
  * row is still searching and unclaimed (race-safe).
  *
- * Returns synchronously based on local state. Backend reconciliation may
- * flip a local "ok" to a no-op when another doctor wins; the realtime
- * subscription will then refresh state.
+ * Server-authoritative: no optimistic local write. The row only flips to
+ * `accepted` in local state when the realtime/snapshot ingester sees the
+ * server-confirmed change. On a losing race the caller surfaces the failure
+ * reason; local feed state is never mutated here.
  */
-export function acceptRequest(id: string): AcceptRequestResult {
+const claimInFlight = new Map<string, number>();
+const CLAIM_INFLIGHT_TTL_MS = 8000;
+export async function acceptRequest(id: string): Promise<AcceptRequestResult> {
   refreshState();
   const cur = state.requests[id];
   const sid = getSessionId();
@@ -788,43 +791,37 @@ export function acceptRequest(id: string): AcceptRequestResult {
   if (mine.length >= MAX_CONFIRMED_SHIFTS) return { ok: false, reason: "max" };
   const conflict = conflictReason(mine, cur);
   if (conflict) return { ok: false, reason: conflict };
-  // Optimistic local
-  save(
-    {
-      ...state,
-      requests: {
-        ...state.requests,
-        [id]: { ...cur, status: "accepted", acceptedBy: sid, updatedAt: simNow() },
-      },
-    },
-    { actor: "doctor", actorId: sid, action: "accept", shiftId: id },
-  );
-  // Backend atomic claim
-  void remoteClaimRequest(id, sid).then((won) => {
-    if (!won) {
-      // Roll back local optimistic accept — another doctor won.
-      const now = state.requests[id];
-      if (now && now.acceptedBy === sid && now.status === "accepted") {
-        save({
-          ...state,
-          requests: {
-            ...state.requests,
-            [id]: { ...now, status: "broadcasting", acceptedBy: undefined, updatedAt: simNow() },
-          },
-        });
-      }
-    }
-  });
-  return { ok: true };
+  // UX guard: prevent double-tap on the same card from issuing parallel
+  // claims. This is purely an in-flight de-duplication; it never enters
+  // `state.requests`, so the server stays the only source of truth.
+  const now = Date.now();
+  const prev = claimInFlight.get(id);
+  if (prev && now - prev < CLAIM_INFLIGHT_TTL_MS) {
+    return { ok: false, reason: "claimed" };
+  }
+  claimInFlight.set(id, now);
+  try {
+    const won = await remoteClaimRequest(id, sid);
+    if (!won) return { ok: false, reason: "claimed" };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  } finally {
+    claimInFlight.delete(id);
+  }
 }
 
 export function cancelRequest(id: string) {
-  const actor = actorOf();
-  applyPatch(
-    id,
-    { status: "cancelled", cancelledBy: actor === "doctor" ? "doctor" : "requester" },
-    { actor, actorId: getSessionId(), action: "cancel" },
-  );
+  // Server-authoritative cancel. coverage-remote.ts routes the cancel
+  // through `cancelAndNotifyFn`, which authorizes the actor and updates
+  // the row server-side. The realtime ingester then flips local state to
+  // `cancelled` and synthesises the `cancel` event — no optimistic local
+  // write so a server rejection can never leave a phantom cancelled card
+  // in the feed.
+  void remoteUpdateRequest(id, {
+    status: "cancelled",
+    cancelledBy: actorOf() === "doctor" ? "doctor" : "requester",
+  });
 }
 
 export function startRequest(id: string) {
