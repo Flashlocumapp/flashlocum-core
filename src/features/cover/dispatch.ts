@@ -11,6 +11,7 @@ import {
   completeRequest,
   getNetworkSnapshot,
   getSessionId,
+  isDeclined,
   markDeclined,
   registerDoctor,
   setDoctorAcceptedCount,
@@ -21,6 +22,7 @@ import {
   subscribeNetwork,
   useNetwork,
 } from "@/lib/network";
+
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 
