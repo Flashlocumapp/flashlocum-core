@@ -628,18 +628,20 @@ function RequesterDetailSheet({
             </a>
             {item.status === "upcoming" && (
               <button
-                onClick={() => onStart(item.id)}
-                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+                onClick={() => { if (!pending) onStart(item.id); }}
+                disabled={!!pending}
+                className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
-                {item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift"}
+                {startLabel ?? (item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift")}
               </button>
             )}
             {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
               <button
-                onClick={() => onPause(item.id)}
-                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90"
+                onClick={() => { if (!pending) onPause(item.id); }}
+                disabled={!!pending}
+                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90 disabled:opacity-60"
               >
-                Pause Shift
+                {pauseLabel ?? "Pause Shift"}
               </button>
             )}
           </div>
@@ -648,10 +650,11 @@ function RequesterDetailSheet({
             (item.status === "upcoming" && item.accumulatedMs > 0)) && (
             <div className="mt-2">
               <button
-                onClick={() => onEnd(item.id)}
-                className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90"
+                onClick={() => { if (!pending) onEnd(item.id); }}
+                disabled={!!pending}
+                className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
-                End Shift
+                {endLabel ?? "End Shift"}
               </button>
             </div>
           )}
