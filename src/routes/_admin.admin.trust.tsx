@@ -41,7 +41,7 @@ function TrustPage() {
     mutationFn: async (vars: { userId: string; reason: string }) => {
       const { error } = await supabase.rpc("admin_apply_trust_restriction", {
         _user_id: vars.userId,
-        _reason: vars.reason || null,
+        _reason: vars.reason || undefined,
       });
       if (error) throw error;
     },
@@ -63,7 +63,7 @@ function TrustPage() {
       <AdminPageHeader
         title="Trust Snapshots"
         subtitle="Computed rating + reliability per user. Restriction is admin-controlled only — scores never auto-restrict."
-        actions={<RefreshButton onClick={() => q.refetch()} loading={q.isFetching} />}
+        right={<RefreshButton onClick={() => q.refetch()} busy={q.isFetching} />}
       />
 
       <div className="flex items-center gap-3 text-sm">
@@ -79,9 +79,9 @@ function TrustPage() {
       </div>
 
       {q.isLoading ? (
-        <Empty title="Loading…" />
+        <Empty>Loading…</Empty>
       ) : rows.length === 0 ? (
-        <Empty title={onlyFlagged ? "No flagged users" : "No users with snapshots yet"} />
+        <Empty>{onlyFlagged ? "No flagged users" : "No users with snapshots yet"}</Empty>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
