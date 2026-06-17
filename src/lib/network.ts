@@ -38,32 +38,68 @@ import {
 } from "./presence-remote";
 
 /**
- * Fire backend-authoritative shift lifecycle RPC. Errors are surfaced to the
- * console only — the optimistic local network state already gives UI feedback,
- * and the backend remains the source of truth for billing on settlement read.
+ * Fire backend-authoritative shift lifecycle RPC. Returns the server payload
+ * so callers can anchor local state (e.g. `started_at`) on server values
+ * instead of optimistically guessing from simNow(). UI must NOT mutate
+ * lifecycle state until this promise resolves successfully.
  */
-function callServerLifecycle(kind: "start" | "pause" | "resume" | "end", requestId: string) {
-  if (typeof window === "undefined") return Promise.resolve();
-  return import("./shift.functions")
-    .then((m) => {
-      const fn =
-        kind === "start" ? m.startShift
-        : kind === "pause" ? m.pauseShift
-        : kind === "resume" ? m.resumeShift
-        : m.endShift;
-      return fn({ data: { requestId } });
-    })
-    .then(() => {
-      // coverage_requests is excluded from supabase_realtime; without this
-      // explicit invalidate broadcast the OTHER party (e.g. the doctor when
-      // the requester starts the shift) never sees started_at / status flip
-      // and their LiveTimer never starts ticking.
+type LifecycleResult =
+  | { ok: true; startedAtMs?: number | null; totalBilledAmount?: number; paymentDueAt?: string; already?: boolean }
+  | { ok: false; error: string };
+
+async function callServerLifecycle(
+  kind: "start" | "pause" | "resume" | "end",
+  requestId: string,
+): Promise<LifecycleResult> {
+  if (typeof window === "undefined") return { ok: true };
+  try {
+    if (kind === "start") {
+      const m = await import("./coverage-notify.functions");
+      const res = await m.startAndNotifyFn({ data: { requestId } });
       notifyCoverageChanged(requestId);
-    })
-    .catch((err) => {
-      console.warn(`[network] ${kind}Shift RPC failed:`, err?.message ?? err);
-    });
+      return { ok: true, startedAtMs: res?.startedAtMs ?? null, already: !!res?.alreadyStarted };
+    }
+    const m = await import("./shift.functions");
+    if (kind === "pause") {
+      await m.pauseShift({ data: { requestId } });
+      notifyCoverageChanged(requestId);
+      return { ok: true };
+    }
+    if (kind === "resume") {
+      const res: any = await m.resumeShift({ data: { requestId } });
+      notifyCoverageChanged(requestId);
+      return { ok: true, startedAtMs: res?.startedAtMs ?? null, already: !!res?.alreadyActive };
+    }
+    // end
+    const res: any = await m.endShift({ data: { requestId } });
+    notifyCoverageChanged(requestId);
+    return {
+      ok: true,
+      totalBilledAmount: typeof res?.total_billed_amount === "number" ? res.total_billed_amount : undefined,
+      paymentDueAt: res?.payment_due_at,
+      already: !!res?.already,
+    };
+  } catch (err: any) {
+    const msg = err?.message ?? String(err);
+    console.warn(`[network] ${kind}Shift RPC failed:`, msg);
+    return { ok: false, error: msg };
+  }
 }
+
+/* ---------------- lifecycle pending tracker (per-tab, in-memory) ---------------- */
+
+export type LifecyclePendingKind = "starting" | "pausing" | "resuming" | "ending";
+const lifecycleInFlight = new Map<string, LifecyclePendingKind>();
+const lifecycleListeners = new Set<() => void>();
+function setLifecyclePending(id: string, kind: LifecyclePendingKind | null) {
+  if (kind) lifecycleInFlight.set(id, kind);
+  else lifecycleInFlight.delete(id);
+  lifecycleListeners.forEach((fn) => fn());
+}
+export function getLifecyclePending(id: string): LifecyclePendingKind | null {
+  return lifecycleInFlight.get(id) ?? null;
+}
+
 
 
 
