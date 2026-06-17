@@ -1,98 +1,197 @@
-# Pricing Hardening Plan
 
-Fixes the five gaps from the audit, in priority order. Each phase is independently shippable; later phases depend on earlier ones.
+# Trust Snapshot Layer + Re-Audit
 
----
-
-## Phase 1 — Close the financial gap in `mark_settlement_paid` (CRITICAL)
-
-**Problem:** Webhook-supplied `_amount` is accepted without comparison to `total_billed_amount`. A forged or replayed webhook with a smaller amount marks the shift fully paid.
-
-**Fix (migration):**
-- Rewrite `mark_settlement_paid(_payment_reference, _amount)`:
-  - Load row `FOR UPDATE`; read `expected := total_billed_amount`.
-  - If `_amount < expected` → do NOT set `payment_status='paid'`. Instead insert an audit row in a new `payment_underpayments` table and return `false`. The webhook handler logs and exits 200 (so Monnify stops retrying) but the shift stays unpaid.
-  - If `_amount >= expected` → proceed exactly as today; `settled_amount := expected` (never the caller's amount).
-- New table `public.payment_underpayments(id, request_id, payment_reference, expected_amount, received_amount, received_at, raw jsonb)` with RLS: only admin SELECT; service_role full; no anon. GRANTs included.
-
-**No client changes.** Monnify webhook keeps its current shape.
+Collapse every rating/reliability/eligibility path into a single, server-computed, versioned **Trust Snapshot**. Client code, admin UI, and any future API read this one object. No scattered scoring, no client-derived eligibility, no automatic restriction.
 
 ---
 
-## Phase 2 — Per-request rate snapshot (immutability)
+## 1. The Trust Snapshot (shape)
 
-**Problem:** Past requests preserve `total_billed_amount` only by accident; the rate table that produced it is not recorded, so a future rate change makes prior bills unauditable and silently re-prices in-flight quotes.
+One per user (and a small per-shift mini-snapshot for UI lock decisions).
 
-**Fix (migration):**
-- Add columns to `coverage_requests`:
-  - `pricing_version_id uuid` (FK to `pricing_versions.id`, nullable for legacy rows)
-  - `rate_snapshot jsonb` — `{tier, rate_day, rate_night, busy_mult, product, billable_min, booked_per_day_min, d_billable, n_billable, tolerance_fired}`
-- `end_shift` writes both alongside `total_billed_amount`.
-- `compute_quote` returns `pricing_version_id` in its breakdown so the UI can show "Quoted at rate vNNN".
-- Quotes recomputed on edit continue to use the **current active** `pricing_version_id`; that's correct (in-flight, unstarted). Once `end_shift` runs, the snapshot is frozen.
+```ts
+type TrustSnapshot = {
+  version: number;
+  computed_at: string;
+  user_id: string;
+  role: 'doctor' | 'requester';
+
+  rating: {
+    score: number;                 // last closed block avg, default 5.0
+    block_index: number;           // # of closed 20-blocks
+    block_size: 20;
+    in_progress_count: number;     // ratings since last closed block
+    last_block: { from: string; to: string; avg: number; samples: 20 } | null;
+  };
+
+  reliability: {
+    score: number;                 // 0–100, last closed block, default 100
+    block_index: number;
+    block_size: 20;
+    in_progress_count: number;
+    last_block: {
+      from: string; to: string;
+      completed: number; cancelled: number; no_show: number; total: 20;
+    } | null;
+  };
+
+  eligibility: {                            // computed signals only
+    rating_below_threshold: boolean;        // < 3.5
+    reliability_below_threshold: boolean;   // doctor < 85, requester < 75
+    any: boolean;
+    reasons: string[];
+  };
+
+  restriction: {                            // admin-controlled only
+    restricted: boolean;
+    restricted_at: string | null;
+    restricted_by: string | null;
+    reason: string | null;
+    source: 'admin_trust' | 'admin_manual' | 'payment_overdue' | null;
+  };
+};
+
+type ShiftRatingState = {
+  shift_id: string;
+  doctor_rating:    { submitted: boolean; score: number | null; at: string | null };
+  requester_rating: { submitted: boolean; score: number | null; at: string | null };
+};
+```
+
+---
+
+## 2. Database
+
+### 2.1 Schema (single migration)
+- `coverage_request_status` enum: add `no_show`.
+- `ratings`:
+  - `shift_id NOT NULL`
+  - drop the partial predicate on the unique index so duplicates are blocked on **every** row
+  - add `feedback text NULL`
+- `coverage_requests` adds, maintained by trigger on `ratings` insert:
+  - `requester_rating_submitted bool default false`
+  - `requester_rating_score smallint`
+  - `requester_rating_at timestamptz`
+  - mirrored `doctor_rating_*`
+- `profiles` adds:
+  - `trust_snapshot jsonb`
+  - `trust_snapshot_at timestamptz`
+  - `account_restricted_at timestamptz`
+  - `account_restricted_reason text`
+  - `account_restricted_by uuid`
+  (kept distinct from existing `payment_restricted_at`)
+- New `trust_blocks` (closed 20-block history):
+  ```
+  id, user_id, kind ('rating'|'reliability'),
+  block_index int, from_at, to_at, payload jsonb, created_at
+  unique(user_id, kind, block_index)
+  ```
+  Standard grants: `SELECT, INSERT` to `authenticated` via RLS (own rows + admin); `ALL` to `service_role`. RLS on, policies for self-read + admin-read.
+
+### 2.2 Functions (all `SECURITY DEFINER`, `search_path=public`)
+- `_terminal_shifts_for(user_id, role)` — completed, cancelled-after-accept, no_show, ordered.
+- `_ratings_received_for(user_id, role)` — ratings on terminal shifts, ordered.
+- `recompute_trust(_user_id uuid) → jsonb`
+  - Idempotent. Closes any new 20-blocks into `trust_blocks`, rebuilds `profiles.trust_snapshot`, returns the snapshot.
+  - **Pure compute. Never writes restriction fields.**
+- `get_trust(_user_id uuid) → jsonb`
+  - Returns current snapshot; inline-recomputes if stale or null.
+  - Authz: self, counterparty on a shared shift, or admin.
+- `get_shift_rating_state(_request_id uuid) → jsonb`
+  - Returns `ShiftRatingState`. Authz: requester, accepted doctor, or admin.
+- `submit_shift_rating(_request_id uuid, _score int, _feedback text) → jsonb`
+  - Validates rater is requester or accepted doctor; derives `ratee_entity_id` from the shift (no client-supplied slug); inserts into `ratings`; surfaces duplicate as a clean error; returns updated `ShiftRatingState`.
+- `admin_list_trust(_filter text, _limit int) → setof`
+  - Admin-only. Supports `eligibility.any = true` filter, sort by lowest score.
+- `admin_apply_trust_restriction(_user_id uuid, _reason text)` / `admin_clear_trust_restriction(_user_id uuid)`
+  - Admin-only. **The only writers of `account_restricted_*`.**
+- `admin_mark_no_show(_request_id uuid, _reason text)` — admin-only status flip; not auto.
+
+### 2.3 Triggers
+- `AFTER INSERT ON ratings` → mirror to `coverage_requests.*_rating_*`, call `recompute_trust(ratee)`.
+- `AFTER UPDATE OF status ON coverage_requests` when new status ∈ `('completed','cancelled','no_show')` → `recompute_trust` for requester and accepted doctor.
+- `BEFORE INSERT ON ratings` → rater/ratee counterparty check against `shift_id`.
+
+### 2.4 Explicit no-auto-restriction guard
+Migration includes a comment block enumerating every site that writes `account_restricted_at`: only the two admin RPCs. Future grep enforces.
 
 ---
 
-## Phase 3 — DB-backed pricing table (single source of truth + admin control)
+## 3. Client refactor
 
-**Problem:** Rates live in SQL literals and `src/lib/pricing.ts`. Two engines, manual sync, no admin control.
+### 3.1 New module `src/lib/trust.ts`
+- Replaces consumption of `src/lib/ratings.ts` and `src/lib/reliability.ts` (those files become thin re-exports backed by the snapshot, no scoring logic of their own).
+- API:
+  - `loadTrust(userId)` — fetch + cache.
+  - `useTrust(userId)` — subscriber; re-renders on `accept`/`complete`/`cancel`/`rating` network events.
+  - `useShiftRatingState(requestId)` — drives overlay + history sheet lock.
+- Reuses existing `subscribeNetwork`.
 
-**Fix (migration):**
-- New tables:
-  - `pricing_versions(id, label, effective_at, created_by, created_at, notes, is_active boolean)` — only one `is_active=true` row at a time, enforced by a partial unique index.
-  - `pricing_rates(id, version_id, tier text check in ('<4h','4-6h','>6h','home_flat'), rate_day int, rate_night int)` — unique `(version_id, tier)`.
-  - `pricing_flats(id, version_id, product text check in ('straight_24h','straight_48h','home_hour'), amount int)` — flat amounts (36000, 72000, 15000/hr).
-  - `pricing_modifiers(id, version_id, key text, value numeric)` — busy_mult (1.25), tolerance_min (15), block_min (15), first_hour_min (60), home_busy_applies bool.
-- Seed migration writes today's rates as `pricing_versions` row v1 with `is_active=true` so behavior is byte-identical on deploy.
-- RLS:
-  - Read: `GRANT SELECT TO authenticated, anon` (rates are not secret; quotes are computed client-side too).
-  - Write: admin only via SECURITY DEFINER `admin_publish_pricing_version(_label, _rates jsonb, _flats jsonb, _modifiers jsonb)` that inserts a new version row + children atomically and flips `is_active`. Rejects edits to an already-published version (immutable).
-- Rewrite `compute_quote` and `end_shift` to read from the active version (or a passed `pricing_version_id` for already-snapshotted rows). Logic order unchanged — only the rate lookup changes.
+### 3.2 UI wiring (presentation only, no business logic moves to client)
+- `RatingPill` / `ReliabilityPill` read `useTrust(userId).rating.score` / `.reliability.score`.
+- `RatingOverlay` callers (`ShiftSettlement`, `CoverDispatchPortal`): before opening, check `useShiftRatingState(requestId)`; if the relevant side is `submitted`, render a read-only "Already rated" panel instead of the form.
+- `HistoryDetailSheet`: same check; CTA hidden when submitted.
+- `recordRating` → `submitShiftRating({ requestId, score, feedback })`; surfaces duplicate errors with a toast and keeps the sheet open.
+- Remove client-side eligibility/threshold math everywhere.
 
-**Client (`src/lib/pricing.ts`):**
-- Convert from hardcoded constants to a `PricingTable` interface.
-- Add `usePricingTable()` hook + `pricingTableQueryOptions` that fetches the active version once and caches in TanStack Query (15-min stale time, realtime-invalidated on `pricing_versions` change).
-- All `computeCoveragePricing` / `computeWorkedPricing` callers pass the table explicitly. No fallback constants — if the table fails to load, the UI shows "Estimating…" instead of a stale number.
-
----
-
-## Phase 4 — Admin pricing UI
-
-New route `src/routes/_admin.admin.pricing.tsx`:
-- Read-only table of active version (tiers, flats, modifiers, effective date, published by).
-- "Draft new version" form pre-filled with active values; edits stage in local state; "Publish" calls `admin_publish_pricing_version`, which atomically creates v(n+1) and deactivates v(n).
-- History list of past versions (read-only).
-- No inline editing of past versions (enforces immutability from Phase 2).
-
-Sidebar entry added to `AdminSidebar.tsx`.
+### 3.3 Admin UI
+- New route `src/routes/_admin.admin.trust.tsx`:
+  - Tabs: Doctors / Requesters / All
+  - Default filter `eligibility.any = true`, sorted lowest first
+  - Row: user, role, rating, reliability, last-block breakdown, restriction state
+  - Actions (confirm-gated): Restrict / Clear restriction
+- "Trust" tab on `_admin.admin.users.tsx` detail showing full snapshot + last 3 blocks per kind.
+- `AdminSidebar` entry "Trust".
 
 ---
 
-## Phase 5 — `extend_payment_window` consistency
+## 4. Migration & rollout order
 
-`extend_payment_window` hardcodes `rate_per_hour := 2000`. Replace with a lookup of the request's snapshotted `>6h` day rate (or fall back to the active version's `>6h` day rate when snapshot is null). Same 15-min block math.
+1. **M1** schema: enum value, columns, tables, grants, triggers; backfill `coverage_requests.*_rating_*` from existing `ratings`; one-shot `recompute_trust` for every profile; migrate any `ratee_entity_id = 'hosp:<slug>'` to `req:<requester_id>` derived from the shift.
+2. **M2** RPCs (`get_trust`, `get_shift_rating_state`, `submit_shift_rating`, admin RPCs).
+3. **M3** `src/lib/trust.ts` + rewire pills, overlays, settlement, history.
+4. **M4** Admin Trust page + sidebar entry + user-detail Trust tab.
+5. **M5** Remove dead client paths (local "already rated" maps, client threshold constants).
+
+---
+
+## 5. Re-audit against the spec
+
+| Spec rule | Snapshot model |
+|---|---|
+| Doctor starts 5.0 / 100% | ✅ snapshot defaults |
+| Ratings batched every 20 completed shifts | ✅ `trust_blocks(kind='rating')` |
+| Rating < 3.5 → eligible | ✅ `eligibility.rating_below_threshold` |
+| Reliability batched every 20 terminal shifts | ✅ `trust_blocks(kind='reliability')` |
+| Terminal = completed \| cancelled-after-accept \| no_show | ✅ `_terminal_shifts_for` + new enum value |
+| Doctor reliability < 85% → eligible | ✅ role-aware threshold |
+| Requester reliability < 75% → eligible | ✅ role-aware threshold |
+| Requester ratings same rules | ✅ same path, role param |
+| No auto-restriction from scores | ✅ only `admin_apply_trust_restriction` writes restriction state |
+| Admin sees rating, reliability, block breakdown, flags | ✅ `admin_list_trust` + Trust page |
+| One rating per shift per user | ✅ full unique index + counterparty trigger |
+| UI lock after submission (cross-device, cross-session) | ✅ server-derived `ShiftRatingState` |
+| Shift-level submission flags | ✅ columns on `coverage_requests` maintained by trigger |
+| Timestamps + values preserved | ✅ `*_rating_at` / `*_rating_score` + original `ratings` row |
+
+### Residual risks called out
+- **No-show detection** is admin-only (`admin_mark_no_show`); no auto-mark policy. Out of scope to design here.
+- **Reliability backfill will shift historical scores** (denominator changes from "lifetime incl. in-progress" to "terminal-only, blocks of 20").
+- **Snapshot staleness**: triggers drive recompute; `get_trust` falls back to inline recompute when `trust_snapshot_at` predates the latest qualifying event.
 
 ---
 
-## Out of scope (explicitly)
-
-- Removing the client-side pricing mirror entirely (kept for instant estimates; now driven by DB table, so drift risk is gone).
-- Refunds / partial-payment workflow beyond logging underpayments.
-- Currency / multi-region.
-- Changing the strict ordered pipeline itself — only the rate **source** changes.
-
----
+## Out of scope
+- Pricing engine (shipped).
+- No-show auto-detection.
+- Feedback moderation.
+- Notification copy when admin restricts a user.
 
 ## Verification matrix
-
-After Phase 1: simulate webhook with `_amount = total - 1` → row stays `payment_status='pending'`, underpayment logged.
-After Phase 2: complete a shift, then publish a new version with different rates → old shift's `total_billed_amount` and `rate_snapshot` unchanged; new quote uses new rates.
-After Phase 3: publish v2 with `>6h` day rate 2,100 → 10h booked normal quote = 21,000 (was 20,000); UI updates within one realtime tick.
-After Phase 4: non-admin hitting `admin_publish_pricing_version` → "Not authorized".
-After Phase 5: extend on a `<4h` busy shift → block = (3000/4)*1.25 = 937.50 rounded, not the old 625.
-
----
-
-## Rollout
-
-Phases 1 and 2 ship together (one migration, no UI). Phase 3 ships next (one migration + client refactor). Phase 4 ships last. Phase 5 piggybacks on Phase 3's migration.
+1. Insert 20 ratings averaging 4.2 → snapshot `rating.score=4.2`, `block_index=1`; 21st does not move the score.
+2. Doctor with 18 completed + 2 cancelled-after-accept → reliability still 100; one more terminal closes the block.
+3. Duplicate `submit_shift_rating` → server error, toast shown, no second `ratings` row.
+4. Open History on a fresh device after rating → "Already rated" panel; no form.
+5. Doctor rating drops to 3.4 → appears in admin Trust list with `eligibility.any=true`; **no restriction applied**.
+6. Admin Restrict → `account_restricted_at` set, snapshot reflects, banner shows; Clear reverses.
+7. Grep DB functions → only `admin_apply_trust_restriction` writes `account_restricted_at`.

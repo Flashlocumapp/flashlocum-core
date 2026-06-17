@@ -29,6 +29,9 @@ export type Database = {
           day: string
           day_index: number
           days: number
+          doctor_rating_at: string | null
+          doctor_rating_score: number | null
+          doctor_rating_submitted: boolean
           duration_hrs: number
           end_time: string
           end_ts: number | null
@@ -51,6 +54,9 @@ export type Database = {
           rate_snapshot: Json | null
           remitted_at: string | null
           requester_id: string
+          requester_rating_at: string | null
+          requester_rating_score: number | null
+          requester_rating_submitted: boolean
           rev: number
           settled_amount: number | null
           start_time: string
@@ -74,6 +80,9 @@ export type Database = {
           day: string
           day_index?: number
           days?: number
+          doctor_rating_at?: string | null
+          doctor_rating_score?: number | null
+          doctor_rating_submitted?: boolean
           duration_hrs?: number
           end_time: string
           end_ts?: number | null
@@ -96,6 +105,9 @@ export type Database = {
           rate_snapshot?: Json | null
           remitted_at?: string | null
           requester_id: string
+          requester_rating_at?: string | null
+          requester_rating_score?: number | null
+          requester_rating_submitted?: boolean
           rev?: number
           settled_amount?: number | null
           start_time: string
@@ -119,6 +131,9 @@ export type Database = {
           day?: string
           day_index?: number
           days?: number
+          doctor_rating_at?: string | null
+          doctor_rating_score?: number | null
+          doctor_rating_submitted?: boolean
           duration_hrs?: number
           end_time?: string
           end_ts?: number | null
@@ -141,6 +156,9 @@ export type Database = {
           rate_snapshot?: Json | null
           remitted_at?: string | null
           requester_id?: string
+          requester_rating_at?: string | null
+          requester_rating_score?: number | null
+          requester_rating_submitted?: boolean
           rev?: number
           settled_amount?: number | null
           start_time?: string
@@ -464,6 +482,9 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_restricted_at: string | null
+          account_restricted_by: string | null
+          account_restricted_reason: string | null
           bank_account: string | null
           bank_account_name: string | null
           bank_name: string | null
@@ -484,6 +505,8 @@ export type Database = {
           phone: string | null
           role: string | null
           selfie_url: string | null
+          trust_snapshot: Json | null
+          trust_snapshot_at: string | null
           updated_at: string
           verification_action_at: string | null
           verification_action_note: string | null
@@ -494,6 +517,9 @@ export type Database = {
           years_experience: string | null
         }
         Insert: {
+          account_restricted_at?: string | null
+          account_restricted_by?: string | null
+          account_restricted_reason?: string | null
           bank_account?: string | null
           bank_account_name?: string | null
           bank_name?: string | null
@@ -514,6 +540,8 @@ export type Database = {
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
+          trust_snapshot?: Json | null
+          trust_snapshot_at?: string | null
           updated_at?: string
           verification_action_at?: string | null
           verification_action_note?: string | null
@@ -524,6 +552,9 @@ export type Database = {
           years_experience?: string | null
         }
         Update: {
+          account_restricted_at?: string | null
+          account_restricted_by?: string | null
+          account_restricted_reason?: string | null
           bank_account?: string | null
           bank_account_name?: string | null
           bank_name?: string | null
@@ -544,6 +575,8 @@ export type Database = {
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
+          trust_snapshot?: Json | null
+          trust_snapshot_at?: string | null
           updated_at?: string
           verification_action_at?: string | null
           verification_action_note?: string | null
@@ -558,27 +591,30 @@ export type Database = {
       ratings: {
         Row: {
           created_at: string
+          feedback: string | null
           id: string
           ratee_entity_id: string
           rater_user_id: string
           score: number
-          shift_id: string | null
+          shift_id: string
         }
         Insert: {
           created_at?: string
+          feedback?: string | null
           id?: string
           ratee_entity_id: string
           rater_user_id: string
           score: number
-          shift_id?: string | null
+          shift_id: string
         }
         Update: {
           created_at?: string
+          feedback?: string | null
           id?: string
           ratee_entity_id?: string
           rater_user_id?: string
           score?: number
-          shift_id?: string | null
+          shift_id?: string
         }
         Relationships: [
           {
@@ -661,6 +697,47 @@ export type Database = {
         }
         Relationships: []
       }
+      trust_blocks: {
+        Row: {
+          block_index: number
+          created_at: string
+          from_at: string
+          id: string
+          kind: string
+          payload: Json
+          to_at: string
+          user_id: string
+        }
+        Insert: {
+          block_index: number
+          created_at?: string
+          from_at: string
+          id?: string
+          kind: string
+          payload: Json
+          to_at: string
+          user_id: string
+        }
+        Update: {
+          block_index?: number
+          created_at?: string
+          from_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          to_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trust_blocks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -715,6 +792,38 @@ export type Database = {
           night_min: number
         }[]
       }
+      _trust_ratings_received: {
+        Args: { _user_id: string }
+        Returns: {
+          created_at: string
+          score: number
+        }[]
+      }
+      _trust_terminal_shifts: {
+        Args: { _role: string; _user_id: string }
+        Returns: {
+          outcome: string
+          shift_id: string
+          terminal_at: string
+        }[]
+      }
+      admin_apply_trust_restriction: {
+        Args: { _reason?: string; _user_id: string }
+        Returns: Json
+      }
+      admin_clear_trust_restriction: {
+        Args: { _user_id: string }
+        Returns: Json
+      }
+      admin_list_trust: {
+        Args: { _limit?: number; _only_flagged?: boolean }
+        Returns: {
+          full_name: string
+          role: string
+          snapshot: Json
+          user_id: string
+        }[]
+      }
       admin_list_users: {
         Args: { _limit?: number; _offset?: number }
         Returns: {
@@ -730,6 +839,10 @@ export type Database = {
           role: string
           verification_status: Database["public"]["Enums"]["verification_status"]
         }[]
+      }
+      admin_mark_no_show: {
+        Args: { _reason?: string; _request_id: string }
+        Returns: Json
       }
       admin_overview_stats: { Args: never; Returns: Json }
       admin_publish_pricing_version: {
@@ -813,6 +926,8 @@ export type Database = {
         Returns: Json
       }
       get_request_phone: { Args: { _request_id: string }; Returns: string }
+      get_shift_rating_state: { Args: { _request_id: string }; Returns: Json }
+      get_trust: { Args: { _user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -847,6 +962,9 @@ export type Database = {
           day: string
           day_index: number
           days: number
+          doctor_rating_at: string | null
+          doctor_rating_score: number | null
+          doctor_rating_submitted: boolean
           duration_hrs: number
           end_time: string
           end_ts: number | null
@@ -869,6 +987,9 @@ export type Database = {
           rate_snapshot: Json | null
           remitted_at: string | null
           requester_id: string
+          requester_rating_at: string | null
+          requester_rating_score: number | null
+          requester_rating_submitted: boolean
           rev: number
           settled_amount: number | null
           start_time: string
@@ -912,11 +1033,16 @@ export type Database = {
           read_ct: number
         }[]
       }
+      recompute_trust: { Args: { _user_id: string }; Returns: Json }
       resume_shift: { Args: { _request_id: string }; Returns: Json }
       server_now: { Args: never; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       start_shift: { Args: { _request_id: string }; Returns: Json }
+      submit_shift_rating: {
+        Args: { _feedback?: string; _request_id: string; _score: number }
+        Returns: Json
+      }
       touch_last_seen: { Args: never; Returns: undefined }
       validate_shift_schedule: {
         Args: { _end: string; _start: string }
@@ -933,6 +1059,7 @@ export type Database = {
         | "completed"
         | "cancelled"
         | "expired"
+        | "no_show"
       verification_status:
         | "pending"
         | "approved"
@@ -1075,6 +1202,7 @@ export const Constants = {
         "completed",
         "cancelled",
         "expired",
+        "no_show",
       ],
       verification_status: [
         "pending",

@@ -12,6 +12,7 @@ import {
   HeartPulse,
   Receipt,
   Coins,
+  Gauge,
 } from "lucide-react";
 
 
@@ -38,6 +39,7 @@ const sections = [
   { title: "Doctor Flashboard", url: "/admin/flashboard", icon: Activity, group: "Business" },
   { title: "Requester Analytics", url: "/admin/requesters", icon: Building2, group: "Business" },
   { title: "Reliability & Risk", url: "/admin/risk", icon: AlertTriangle, group: "Trust & Safety" },
+  { title: "Trust Snapshots", url: "/admin/trust", icon: Gauge, group: "Trust & Safety" },
   { title: "Support Tools", url: "/admin/support", icon: LifeBuoy, group: "Trust & Safety" },
   { title: "System Health", url: "/admin/system", icon: HeartPulse, group: "Platform" },
 ] as const;
