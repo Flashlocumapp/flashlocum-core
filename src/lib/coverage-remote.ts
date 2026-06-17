@@ -305,6 +305,12 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 // cost if the searching pool ever spikes (load shedding > crashing the tab).
 const SNAPSHOT_LIMIT = 500;
 
+// Last successful pool fetch, kept so a transient `list_open_coverage_requests`
+// error doesn't blank Incoming Coverage for ~15s until the next poll. Rows
+// here are still subject to the doctor-side `broadcastingRequests` freshness
+// filter (180s TTL) so a stale row cannot resurrect indefinitely.
+let lastPoolRows: Row[] = [];
+
 async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   // Doctors can only directly read coverage_requests rows they accepted
   // (`accepted_by = auth.uid()`); the SELECT policy intentionally hides
@@ -326,14 +332,20 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
     console.warn("[coverage-remote] fetch error:", ownRes.error.message);
     return null;
   }
+  let poolRows: Row[];
   if (poolRes.error) {
-    // Non-fatal: own rows still render. Pool will be empty until the next
-    // refresh (e.g. invalidation broadcast) succeeds.
+    // Non-fatal: own rows still render and the previous pool snapshot is
+    // reused so a single transient RPC failure doesn't flicker Incoming
+    // Coverage off-screen between polls.
     console.warn("[coverage-remote] pool fetch error:", poolRes.error.message);
+    poolRows = lastPoolRows;
+  } else {
+    poolRows = (poolRes.data ?? []) as Row[];
+    lastPoolRows = poolRows;
   }
   const merged = new Map<string, Row>();
   for (const r of (ownRes.data ?? []) as Row[]) merged.set(r.id, r);
-  for (const r of (poolRes.data ?? []) as Row[]) {
+  for (const r of poolRows) {
     if (!merged.has(r.id)) merged.set(r.id, r);
   }
   // Phone is column-restricted in RLS: only the requester or the accepted
@@ -530,19 +542,41 @@ function ensureChannelForUser(userId: string) {
       handlePayload,
     )
     .subscribe((status) => {
-      // Any disconnect / error invalidates the "live snapshot" guarantee.
-      // Incoming Coverage will stop rendering until the next refreshSnapshot
-      // succeeds, guaranteeing no stale broadcast resurrects across a drop.
+      // Treat brief reconnects as background refreshes — blanking the
+      // "live snapshot" guarantee on every flicker causes Incoming Coverage
+      // to disappear and reappear on mobile networks where the channel
+      // routinely cycles. We only invalidate the guarantee if the channel
+      // stays down past a grace window.
       if (status === "SUBSCRIBED") {
+        clearChannelDownGrace();
         void refreshSnapshot();
       } else if (
         status === "CHANNEL_ERROR" ||
         status === "TIMED_OUT" ||
         status === "CLOSED"
       ) {
-        setLiveSnapshotSeen(false);
+        scheduleChannelDownBlank();
       }
     });
+}
+
+// 10s grace before a dropped realtime channel invalidates the live snapshot.
+// Most disconnects on mobile reconnect well inside this window; without the
+// grace, every flap blanks Incoming Coverage for a full poll cycle.
+const CHANNEL_DOWN_GRACE_MS = 10_000;
+let channelDownTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleChannelDownBlank() {
+  if (channelDownTimer) return;
+  channelDownTimer = setTimeout(() => {
+    channelDownTimer = null;
+    setLiveSnapshotSeen(false);
+  }, CHANNEL_DOWN_GRACE_MS);
+}
+function clearChannelDownGrace() {
+  if (channelDownTimer) {
+    clearTimeout(channelDownTimer);
+    channelDownTimer = null;
+  }
 }
 
 
@@ -606,14 +640,17 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     }, 15_000);
   }
 
-  // Tab/app reopen: force a server fetch the moment the user returns so
-  // Incoming Coverage cannot show pre-blur state without revalidation.
+  // Tab/app reopen: refresh in the background so Incoming Coverage stays
+  // visible across the visibility flip. We intentionally do NOT blank the
+  // live-snapshot guarantee here — blanking caused a card flicker on every
+  // mobile visibility toggle even though the server snapshot was still fresh.
+  // If the refetch itself fails or returns nothing, the snapshot pipeline
+  // will surface that on its own.
   let onVisibility: (() => void) | null = null;
   let onOnline: (() => void) | null = null;
   if (typeof document !== "undefined") {
     onVisibility = () => {
       if (document.visibilityState === "visible") {
-        setLiveSnapshotSeen(false);
         void refreshSnapshot();
       }
     };
@@ -621,7 +658,6 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   }
   if (typeof window !== "undefined") {
     onOnline = () => {
-      setLiveSnapshotSeen(false);
       void refreshSnapshot();
     };
     window.addEventListener("online", onOnline);
