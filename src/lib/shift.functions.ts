@@ -207,6 +207,10 @@ export const getMyPaymentRestriction = createServerFn({ method: "POST" })
     return data as {
       restricted: boolean;
       restricted_at: string | null;
+      payment_restricted: boolean;
+      account_restricted: boolean;
+      account_restricted_at: string | null;
+      account_restricted_reason: string | null;
       overdue: Array<{
         id: string;
         hospital: string | null;
