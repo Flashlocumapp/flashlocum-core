@@ -31,6 +31,7 @@ import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public
 import { Route as AdminAdminVerificationRouteImport } from './routes/_admin.admin.verification'
 import { Route as AdminAdminUsersRouteImport } from './routes/_admin.admin.users'
 import { Route as AdminAdminUnpaidRouteImport } from './routes/_admin.admin.unpaid'
+import { Route as AdminAdminTrustRouteImport } from './routes/_admin.admin.trust'
 import { Route as AdminAdminSystemRouteImport } from './routes/_admin.admin.system'
 import { Route as AdminAdminSupportRouteImport } from './routes/_admin.admin.support'
 import { Route as AdminAdminShiftsRouteImport } from './routes/_admin.admin.shifts'
@@ -149,6 +150,11 @@ const AdminAdminUnpaidRoute = AdminAdminUnpaidRouteImport.update({
   path: '/unpaid',
   getParentRoute: () => AdminAdminRoute,
 } as any)
+const AdminAdminTrustRoute = AdminAdminTrustRouteImport.update({
+  id: '/trust',
+  path: '/trust',
+  getParentRoute: () => AdminAdminRoute,
+} as any)
 const AdminAdminSystemRoute = AdminAdminSystemRouteImport.update({
   id: '/system',
   path: '/system',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/admin/shifts': typeof AdminAdminShiftsRoute
   '/admin/support': typeof AdminAdminSupportRoute
   '/admin/system': typeof AdminAdminSystemRoute
+  '/admin/trust': typeof AdminAdminTrustRoute
   '/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/admin/shifts': typeof AdminAdminShiftsRoute
   '/admin/support': typeof AdminAdminSupportRoute
   '/admin/system': typeof AdminAdminSystemRoute
+  '/admin/trust': typeof AdminAdminTrustRoute
   '/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/_admin/admin/shifts': typeof AdminAdminShiftsRoute
   '/_admin/admin/support': typeof AdminAdminSupportRoute
   '/_admin/admin/system': typeof AdminAdminSystemRoute
+  '/_admin/admin/trust': typeof AdminAdminTrustRoute
   '/_admin/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/_admin/admin/users': typeof AdminAdminUsersRoute
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
@@ -317,6 +326,7 @@ export interface FileRouteTypes {
     | '/admin/shifts'
     | '/admin/support'
     | '/admin/system'
+    | '/admin/trust'
     | '/admin/unpaid'
     | '/admin/users'
     | '/admin/verification'
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/admin/shifts'
     | '/admin/support'
     | '/admin/system'
+    | '/admin/trust'
     | '/admin/unpaid'
     | '/admin/users'
     | '/admin/verification'
@@ -380,6 +391,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/shifts'
     | '/_admin/admin/support'
     | '/_admin/admin/system'
+    | '/_admin/admin/trust'
     | '/_admin/admin/unpaid'
     | '/_admin/admin/users'
     | '/_admin/admin/verification'
@@ -559,6 +571,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdminUnpaidRouteImport
       parentRoute: typeof AdminAdminRoute
     }
+    '/_admin/admin/trust': {
+      id: '/_admin/admin/trust'
+      path: '/trust'
+      fullPath: '/admin/trust'
+      preLoaderRoute: typeof AdminAdminTrustRouteImport
+      parentRoute: typeof AdminAdminRoute
+    }
     '/_admin/admin/system': {
       id: '/_admin/admin/system'
       path: '/system'
@@ -634,6 +653,7 @@ interface AdminAdminRouteChildren {
   AdminAdminShiftsRoute: typeof AdminAdminShiftsRoute
   AdminAdminSupportRoute: typeof AdminAdminSupportRoute
   AdminAdminSystemRoute: typeof AdminAdminSystemRoute
+  AdminAdminTrustRoute: typeof AdminAdminTrustRoute
   AdminAdminUnpaidRoute: typeof AdminAdminUnpaidRoute
   AdminAdminUsersRoute: typeof AdminAdminUsersRoute
   AdminAdminVerificationRoute: typeof AdminAdminVerificationRoute
@@ -649,6 +669,7 @@ const AdminAdminRouteChildren: AdminAdminRouteChildren = {
   AdminAdminShiftsRoute: AdminAdminShiftsRoute,
   AdminAdminSupportRoute: AdminAdminSupportRoute,
   AdminAdminSystemRoute: AdminAdminSystemRoute,
+  AdminAdminTrustRoute: AdminAdminTrustRoute,
   AdminAdminUnpaidRoute: AdminAdminUnpaidRoute,
   AdminAdminUsersRoute: AdminAdminUsersRoute,
   AdminAdminVerificationRoute: AdminAdminVerificationRoute,
