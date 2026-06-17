@@ -628,12 +628,14 @@ export function markDeclined(requestId: string, rev?: number) {
  *  Legacy decline entries stored as the bare id are treated as rev=1. */
 export function isDeclined(d: { declined?: string[] } | undefined, id: string, rev?: number): boolean {
   if (!d) return false;
+  const list = d.declined ?? [];
   const r = rev ?? 1;
   const key = `${id}:${r}`;
-  if (d.declined.includes(key)) return true;
-  if (r === 1 && d.declined.includes(id)) return true;
+  if (list.includes(key)) return true;
+  if (r === 1 && list.includes(id)) return true;
   return false;
 }
+
 
 
 export function startHeartbeat() {
