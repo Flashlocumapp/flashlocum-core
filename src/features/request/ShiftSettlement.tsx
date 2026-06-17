@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
+import { submitShiftRating } from "@/lib/trust";
+import { pushToast } from "@/lib/notifications";
 import { simNow, useSimClock } from "@/lib/clock";
 import {
   computeWorkedPricing,
