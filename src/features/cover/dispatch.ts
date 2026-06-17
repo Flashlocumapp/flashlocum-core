@@ -519,18 +519,34 @@ function readState(): RawState {
 function pendingIncomingId(): string | null {
   const s = readState();
   const sid = getSessionId();
-  const me = s.doctors?.[sid];
-  const declined = new Set<string>(me?.declined ?? []);
+  const me = s.doctors?.[sid] as
+    | { declined?: string[]; online?: boolean; sessionId?: string; acceptedCount?: number; top?: number; left?: number; lastSeen?: number }
+    | undefined;
   const first = Object.values(s.requests ?? {})
     .filter(
       (r) =>
         r.status === "broadcasting" &&
-        !declined.has(r.id) &&
-        r.requesterSessionId !== sid,
+        r.requesterSessionId !== sid &&
+        !isDeclined(
+          me
+            ? {
+                sessionId: me.sessionId ?? sid,
+                online: me.online ?? false,
+                acceptedCount: me.acceptedCount ?? 0,
+                top: me.top ?? 0,
+                left: me.left ?? 0,
+                lastSeen: me.lastSeen ?? 0,
+                declined: me.declined ?? [],
+              }
+            : undefined,
+          r.id,
+          r.rev,
+        ),
     )
-    .sort((a, b) => a.createdAt - b.createdAt)[0];
+    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt))[0];
   return first?.id ?? null;
 }
+
 
 function currentRequest(id: string): NetRequest | null {
   return readState().requests?.[id] ?? null;
