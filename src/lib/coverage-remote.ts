@@ -759,3 +759,19 @@ export async function remoteDeleteRequest(id: string): Promise<void> {
   }
   emitInvalidate(id);
 }
+
+/**
+ * Pre-acceptance expiry. The 180s broadcast window has elapsed without an
+ * acceptance — the row transitions to terminal `expired` (NOT deleted) so
+ * admin analytics can measure no-fill rate. Doctor feeds and requester
+ * history both treat `expired` as removed; only admin dashboards surface it.
+ */
+export async function remoteExpireRequest(id: string): Promise<void> {
+  const { error } = await supabase.rpc("expire_request", { _id: id });
+  if (error) {
+    console.warn("[coverage-remote] expire error:", error.message);
+    return;
+  }
+  emitInvalidate(id);
+}
+
