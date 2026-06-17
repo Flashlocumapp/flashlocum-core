@@ -913,17 +913,28 @@ export function pauseRequest(id: string) {
   );
 }
 
-/** Resume a paused request back to broadcasting. */
+/**
+ * Resume a paused request back to broadcasting. Treated as a fresh offer:
+ * we optimistically restart broadcastStartedAt and bump rev so the 180s
+ * expiry timer resets immediately and previously-declined doctors see the
+ * card again. The server-side bump_request_rev trigger applies the same
+ * change authoritatively when the UPDATE lands.
+ */
 export function resumeRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "paused") return;
   applyPatch(
     id,
-    { status: "broadcasting" },
+    {
+      status: "broadcasting",
+      broadcastStartedAt: simNow(),
+      rev: (cur.rev ?? 1) + 1,
+    },
     { actor: "requester", actorId: getSessionId(), action: "resume" },
   );
 }
+
 
 /** Hard-remove a request (use for pre-acceptance cancellation). */
 export function removeRequest(id: string) {
