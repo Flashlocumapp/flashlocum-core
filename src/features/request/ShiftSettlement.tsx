@@ -203,7 +203,10 @@ export function ShiftSettlement({
     if (open) {
       setPhase(initialPhase);
       directEndStartedRef.current = false;
-      settlementReadyRef.current = !(requestId && intent === "end" && initialPhase === "settlement");
+      // Single source of truth for settlement readiness: only the server's
+      // end_shift RPC success flips this true. Any settlement open with a
+      // requestId starts locked until end_shift resolves.
+      settlementReadyRef.current = !(requestId && initialPhase === "settlement");
       const now = simNow();
       phaseStartedAtRef.current =
         initialPhase === "active" || initialPhase === "confirmed" ? null : now;
@@ -322,10 +325,15 @@ export function ShiftSettlement({
         if (res && typeof (res as any).total_billed_amount === "number") {
           frozenAmountRef.current = (res as any).total_billed_amount;
         }
+        // Server confirmed end_shift — bill is locked. This is the ONLY
+        // place settlementReadyRef may flip true.
+        settlementReadyRef.current = true;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Could not end shift";
-        // Idempotent: if already ended, proceed to checkout (row is locked).
-        if (!/already (ended|completed)/i.test(msg)) {
+        // Idempotent: if already ended, the row is locked server-side.
+        if (/already (ended|completed)/i.test(msg)) {
+          settlementReadyRef.current = true;
+        } else {
           setEndShiftError(msg);
           setEndingShift(false);
           return;
@@ -333,25 +341,24 @@ export function ShiftSettlement({
       }
       setEndingShift(false);
     }
-    settlementReadyRef.current = true;
 
     phaseStartedAtRef.current = now;
     endedAtRef.current = now;
     overtimeStartedAtRef.current = null;
     setPhase("settlement");
-    if (requestId) {
-      setTimeout(() => { void startMonnifyCheckout(); }, 50);
-    } else if (Math.random() < 0.35) {
+    if (requestId && settlementReadyRef.current) {
+      void startMonnifyCheckout();
+    } else if (!requestId && Math.random() < 0.35) {
       autoConfirmAt.current = simNow() + (8 + Math.random() * 6) * 1000;
     }
   };
 
   useEffect(() => {
-    if (!open || !requestId || intent !== "end" || initialPhase !== "settlement") return;
+    if (!open || !requestId || initialPhase !== "settlement") return;
     if (settlementReadyRef.current || directEndStartedRef.current) return;
     directEndStartedRef.current = true;
     void handleEndShift();
-  }, [open, requestId, intent, initialPhase]);
+  }, [open, requestId, initialPhase]);
 
   const handleMadePayment = () => {
     autoConfirmAt.current = simNow() + 2500;
@@ -377,7 +384,8 @@ export function ShiftSettlement({
 
   const startMonnifyCheckout = async () => {
     if (!requestId) return;
-    if (intent === "end" && !settlementReadyRef.current) return;
+    // Single rule: server-confirmed end_shift is the only gate.
+    if (!settlementReadyRef.current) return;
     setPayError(null);
     setPayState("starting");
     try {
@@ -428,7 +436,7 @@ export function ShiftSettlement({
   useEffect(() => {
     if (!open || !requestId) return;
     if (phase !== "settlement") return;
-    if (intent === "end" && !settlementReadyRef.current) return;
+    if (!settlementReadyRef.current) return;
     if (autoOpenedRef.current) return;
     if (payState !== "idle") return;
     autoOpenedRef.current = true;
