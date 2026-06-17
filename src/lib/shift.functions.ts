@@ -114,15 +114,50 @@ export const endShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("end_shift", {
       _request_id: data.requestId,
     });
+    // Helper: re-read the authoritative billing fields so callers always
+    // receive total_billed_amount + billing_locked_at, even on the
+    // idempotent "already ended/completed" branch. The settlement gate
+    // depends on these being present — never on assumption.
+    const readBilling = async () => {
+      const { data: row } = await context.supabase
+        .from("coverage_requests")
+        .select("total_billed_amount, billing_locked_at, payment_due_at, payment_status")
+        .eq("id", data.requestId)
+        .maybeSingle();
+      return {
+        total_billed_amount: Number(row?.total_billed_amount ?? 0),
+        billing_locked_at: row?.billing_locked_at ?? null,
+        payment_due_at: row?.payment_due_at ?? null,
+        payment_status: row?.payment_status ?? null,
+      };
+    };
     if (error) {
-      // Idempotent: a shift already billed/completed is a real success. But
-      // "not in progress" means the shift was never started — billing_locked_at
-      // is null, so beginSettlementCheckout MUST NOT proceed. Surface the error.
-      if (/already (ended|completed)/i.test(error.message)) return { ok: true, already: true } as any;
+      // "not in progress" means the shift was never started — surface the error.
+      if (/already (ended|completed)/i.test(error.message)) {
+        const billing = await readBilling();
+        return { ok: true as const, already: true as const, ...billing };
+      }
       throw new Error(error.message);
     }
-    return r as { total_billed_amount: number; payment_due_at: string };
+    // Success path: prefer the RPC payload, but always backfill via a row
+    // re-read so the response shape is uniform and never missing the gate
+    // fields the client uses to authorize checkout.
+    const payload = (r ?? {}) as { total_billed_amount?: number; payment_due_at?: string };
+    if (typeof payload.total_billed_amount === "number" && payload.total_billed_amount > 0) {
+      const billing = await readBilling();
+      return {
+        ok: true as const,
+        already: false as const,
+        total_billed_amount: payload.total_billed_amount,
+        payment_due_at: payload.payment_due_at ?? billing.payment_due_at,
+        billing_locked_at: billing.billing_locked_at,
+        payment_status: billing.payment_status,
+      };
+    }
+    const billing = await readBilling();
+    return { ok: true as const, already: false as const, ...billing };
   });
+
 
 export const extendPaymentWindow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
