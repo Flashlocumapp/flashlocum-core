@@ -1,150 +1,98 @@
-# Pricing Engine — Strict Ordered Pipeline
+# Pricing Hardening Plan
 
-Tier selection and billable-duration calculation are independent.
-Tier is **only ever** derived from booked duration (or coverage
-product). Billable duration follows a strict, ordered sequence —
-no step may be reordered or skipped.
+Fixes the five gaps from the audit, in priority order. Each phase is independently shippable; later phases depend on earlier ones.
 
-## Strict execution order (do exactly in this sequence)
+---
 
-```text
-STEP 1 — Read inputs
-   coverage_type, environment, booked_min (per day), worked_min (per day)
+## Phase 1 — Close the financial gap in `mark_settlement_paid` (CRITICAL)
 
-STEP 2 — Resolve coverage product (early exit for specials)
-   if coverage_type == 24-Hour Straight → amount = 36,000 (×1.25 if busy); END
-   if coverage_type == 48-Hour Straight → amount = 72,000 (×1.25 if busy); END
-   if coverage_type == Home Care        → product = home; continue
-   else                                  → product = standard; continue
+**Problem:** Webhook-supplied `_amount` is accepted without comparison to `total_billed_amount`. A forged or replayed webhook with a smaller amount marks the shift fully paid.
 
-STEP 3 — Determine TIER  (from booked_min ONLY; never from worked, never from billable)
-   booked_hr = booked_min / 60
-   if product == home → tier = home_flat
-   elif booked_hr > 6  → tier = >6h
-   elif booked_hr >= 4 → tier = 4-6h
-   else                → tier = <4h
-   (Tier is now frozen for the rest of the pipeline. It must not be
-    recomputed in any later step.)
+**Fix (migration):**
+- Rewrite `mark_settlement_paid(_payment_reference, _amount)`:
+  - Load row `FOR UPDATE`; read `expected := total_billed_amount`.
+  - If `_amount < expected` → do NOT set `payment_status='paid'`. Instead insert an audit row in a new `payment_underpayments` table and return `false`. The webhook handler logs and exits 200 (so Monnify stops retrying) but the shift stays unpaid.
+  - If `_amount >= expected` → proceed exactly as today; `settled_amount := expected` (never the caller's amount).
+- New table `public.payment_underpayments(id, request_id, payment_reference, expected_amount, received_amount, received_at, raw jsonb)` with RLS: only admin SELECT; service_role full; no anon. GRANTs included.
 
-STEP 4 — Determine RATE  (from tier + environment ONLY)
-   if tier == home_flat:
-       rate_day = 15,000;  rate_night = 15,000;  busy_mult = 1.0
-   else:
-       (rate_day, rate_night) =
-           tier == <4h   → (3,000, 2,500)
-           tier == 4-6h  → (2,500, 2,000)
-           tier == >6h   → (2,000, 1,500)
-       busy_mult = 1.25 if environment == busy else 1.0
-   (Rate is frozen. Never re-derived from billable_min.)
+**No client changes.** Monnify webhook keeps its current shape.
 
-STEP 5 — Compute BILLABLE minutes from worked_min
-   STEP 5a — First-Hour Rule
-       if 0 < worked_min < 60:
-           working_min := 60
-       else:
-           working_min := worked_min
+---
 
-   STEP 5b — ±15-min Tolerance  (MUST run BEFORE any 15-min rounding)
-       if booked_min > 0 and abs(working_min − booked_min) ≤ 15:
-           billable_min := booked_min
-           GOTO STEP 6        # rounding is skipped entirely
+## Phase 2 — Per-request rate snapshot (immutability)
 
-   STEP 5c — 15-minute block rounding  (only if tolerance did NOT fire)
-       billable_min := ceil(working_min / 15) * 15
+**Problem:** Past requests preserve `total_billed_amount` only by accident; the rate table that produced it is not recorded, so a future rate change makes prior bills unauditable and silently re-prices in-flight quotes.
 
-STEP 6 — Compute day/night split of billable_min
-   if product == home OR special flat product → skip (not needed)
-   elif tolerance fired in 5b:
-       (day_min, night_min) := split_of(booked window)   # from booked, matches anchor
-   else:
-       (day_min, night_min) := proportional_rescale(
-           actual_worked_day_min, actual_worked_night_min, billable_min)
+**Fix (migration):**
+- Add columns to `coverage_requests`:
+  - `pricing_version_id uuid` (FK to `pricing_versions.id`, nullable for legacy rows)
+  - `rate_snapshot jsonb` — `{tier, rate_day, rate_night, busy_mult, product, billable_min, booked_per_day_min, d_billable, n_billable, tolerance_fired}`
+- `end_shift` writes both alongside `total_billed_amount`.
+- `compute_quote` returns `pricing_version_id` in its breakdown so the UI can show "Quoted at rate vNNN".
+- Quotes recomputed on edit continue to use the **current active** `pricing_version_id`; that's correct (in-flight, unstarted). Once `end_shift` runs, the snapshot is frozen.
 
-STEP 7 — Compute AMOUNT  (using rate from STEP 4, NEVER recomputed)
-   if product == home:
-       amount := round( (billable_min / 60) × 15,000 )
-   else:
-       base := (day_min / 60) × rate_day + (night_min / 60) × rate_night
-       amount := round( base × busy_mult )
+---
 
-STEP 8 — Return  { tier, rate_day, rate_night, busy_mult,
-                   billable_min, day_min, night_min, amount }
-```
+## Phase 3 — DB-backed pricing table (single source of truth + admin control)
 
-Invariants the implementation must enforce:
+**Problem:** Rates live in SQL literals and `src/lib/pricing.ts`. Two engines, manual sync, no admin control.
 
-- Tier is assigned exactly once, in STEP 3, from `booked_min` only.
-- STEP 5b runs before STEP 5c. If 5b fires, 5c is skipped.
-- STEP 7 reads `rate_day`/`rate_night`/`busy_mult` only — never
-  re-buckets based on `billable_min`.
-- Multi-day (`days > 1`): the entire pipeline runs **per day**
-  against that day's booked window. Per-day amounts sum to
-  `total_billed_amount`. Steps 2's Straight branches are never
-  triggered by accumulated multi-day totals.
-
-## Rate table
-
-| Tier      | Day      | Night    |
-|-----------|----------|----------|
-| <4h       | ₦3,000   | ₦2,500   |
-| 4-6h      | ₦2,500   | ₦2,000   |
-| >6h       | ₦2,000   | ₦1,500   |
-| Home Care | ₦15,000  | ₦15,000  |
-
-Busy ×1.25 for Standard only.
-
-## Files to change
-
-**SQL migration** (single migration, two functions):
-- `compute_quote` — implement STEPS 1–7. Tier from total booked
-  minutes. New <4h / 4-6h night rates.
-- `end_shift` — derive `booked_min` from `r.start_time`/`r.end_time`
-  (overnight +1 day). Run STEPS 1–7 per active day. Per-segment
-  billing fields stay nulled (already from P0). Last segment is
-  stamped with aggregate `billed_minutes`/`billed_amount` for display.
+**Fix (migration):**
+- New tables:
+  - `pricing_versions(id, label, effective_at, created_by, created_at, notes, is_active boolean)` — only one `is_active=true` row at a time, enforced by a partial unique index.
+  - `pricing_rates(id, version_id, tier text check in ('<4h','4-6h','>6h','home_flat'), rate_day int, rate_night int)` — unique `(version_id, tier)`.
+  - `pricing_flats(id, version_id, product text check in ('straight_24h','straight_48h','home_hour'), amount int)` — flat amounts (36000, 72000, 15000/hr).
+  - `pricing_modifiers(id, version_id, key text, value numeric)` — busy_mult (1.25), tolerance_min (15), block_min (15), first_hour_min (60), home_busy_applies bool.
+- Seed migration writes today's rates as `pricing_versions` row v1 with `is_active=true` so behavior is byte-identical on deploy.
+- RLS:
+  - Read: `GRANT SELECT TO authenticated, anon` (rates are not secret; quotes are computed client-side too).
+  - Write: admin only via SECURITY DEFINER `admin_publish_pricing_version(_label, _rates jsonb, _flats jsonb, _modifiers jsonb)` that inserts a new version row + children atomically and flips `is_active`. Rejects edits to an already-published version (immutable).
+- Rewrite `compute_quote` and `end_shift` to read from the active version (or a passed `pricing_version_id` for already-snapshotted rows). Logic order unchanged — only the rate lookup changes.
 
 **Client (`src/lib/pricing.ts`):**
-- `computeWorkedPricing` gains required `bookedMinutes` argument and
-  follows STEPS 1–7 identically.
-- `computeCoveragePricing` updated with new <4h / 4-6h night rates so
-  quote and end-of-shift agree.
+- Convert from hardcoded constants to a `PricingTable` interface.
+- Add `usePricingTable()` hook + `pricingTableQueryOptions` that fetches the active version once and caches in TanStack Query (15-min stale time, realtime-invalidated on `pricing_versions` change).
+- All `computeCoveragePricing` / `computeWorkedPricing` callers pass the table explicitly. No fallback constants — if the table fails to load, the UI shows "Estimating…" instead of a stale number.
 
-**Call sites** (`rg "computeWorkedPricing"`): pass `bookedMinutes`
-from already-in-scope `startHHMM`/`endHHMM`.
-- `src/features/request/ShiftSettlement.tsx` is the known consumer.
+---
 
-## Worked test matrix (post-change)
+## Phase 4 — Admin pricing UI
 
-Each row exercises the strict ordering; "tolerance?" shows whether
-STEP 5b fired (and therefore STEP 5c was skipped).
+New route `src/routes/_admin.admin.pricing.tsx`:
+- Read-only table of active version (tiers, flats, modifiers, effective date, published by).
+- "Draft new version" form pre-filled with active values; edits stage in local state; "Publish" calls `admin_publish_pricing_version`, which atomically creates v(n+1) and deactivates v(n).
+- History list of past versions (read-only).
+- No inline editing of past versions (enforces immutability from Phase 2).
 
-Standard, Normal:
+Sidebar entry added to `AdminSidebar.tsx`.
 
-| Booked | Worked   | Tier (STEP 3) | 5a→working | 5b tolerance? | billable | Rate (day) | Bill     |
-|--------|----------|---------------|------------|---------------|----------|------------|----------|
-| 10h    | 20 min   | >6h           | 60         | no (|60-600|=540) | 60 (ceil) | 2,000  | ₦2,000   |
-| 10h    | 9h 50m   | >6h           | 590        | yes           | 600      | 2,000      | ₦20,000  |
-| 10h    | 10h 14m  | >6h           | 614        | yes           | 600      | 2,000      | ₦20,000  |
-| 10h    | 10h 16m  | >6h           | 616        | no            | 630      | 2,000      | ₦21,000  |
-| 10h    | 10h 31m  | >6h           | 631        | no            | 645      | 2,000      | ₦21,500  |
-| 5h     | 20 min   | 4-6h          | 60         | no            | 60       | 2,500      | ₦2,500   |
-| 5h     | 5h 10m   | 4-6h          | 310        | yes           | 300      | 2,500      | ₦12,500  |
-| 3h     | 20 min   | <4h           | 60         | no            | 60       | 3,000      | ₦3,000   |
-| 3h     | 3h 05m   | <4h           | 185        | yes           | 180      | 3,000      | ₦9,000   |
+---
 
-Standard, Busy, 5h booked, 5h 10m worked → tier 4-6h frozen → 300 × 2,500 × 1.25 = ₦15,625.
+## Phase 5 — `extend_payment_window` consistency
 
-Home Care, 3h booked, 20 min worked → home_flat tier → 60 × 15,000 = ₦15,000.
-Home Care, 3h busy → busy_mult forced 1.0.
+`extend_payment_window` hardcodes `rate_per_hour := 2000`. Replace with a lookup of the request's snapshotted `>6h` day rate (or fall back to the active version's `>6h` day rate when snapshot is null). Same 15-min block math.
 
-24h Straight worked 23h 45m / 24h 15m → STEP 2 exits at ₦36,000 (₦45,000 busy).
-48h Straight worked 47h 45m / 48h 15m → STEP 2 exits at ₦72,000 (₦90,000 busy).
+---
 
-Multi-Day 3×8h booked, day 1 worked 8h 03m → tier >6h (8h booked) frozen for that day; tolerance fires → 480 min × 2,000 = ₦16,000 for that day. Total never collapses to flat.
+## Out of scope (explicitly)
 
-## Out of scope (unchanged)
+- Removing the client-side pricing mirror entirely (kept for instant estimates; now driven by DB table, so drift risk is gone).
+- Refunds / partial-payment workflow beyond logging underpayments.
+- Currency / multi-region.
+- Changing the strict ordered pipeline itself — only the rate **source** changes.
 
-- F2 underpayment enforcement in `mark_settlement_paid`.
-- `extend_payment_window` ₦2,000/hr hardcode.
-- DB-backed / admin pricing controls.
-- Removing the client-side pricing mirror (kept in lockstep instead).
+---
+
+## Verification matrix
+
+After Phase 1: simulate webhook with `_amount = total - 1` → row stays `payment_status='pending'`, underpayment logged.
+After Phase 2: complete a shift, then publish a new version with different rates → old shift's `total_billed_amount` and `rate_snapshot` unchanged; new quote uses new rates.
+After Phase 3: publish v2 with `>6h` day rate 2,100 → 10h booked normal quote = 21,000 (was 20,000); UI updates within one realtime tick.
+After Phase 4: non-admin hitting `admin_publish_pricing_version` → "Not authorized".
+After Phase 5: extend on a `<4h` busy shift → block = (3000/4)*1.25 = 937.50 rounded, not the old 625.
+
+---
+
+## Rollout
+
+Phases 1 and 2 ship together (one migration, no UI). Phase 3 ships next (one migration + client refactor). Phase 4 ships last. Phase 5 piggybacks on Phase 3's migration.
