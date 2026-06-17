@@ -1310,7 +1310,16 @@ function ConfirmedPane({
         open={ratingOpen}
         doctor={doctor}
         onDismiss={() => setRatingOpen(false)}
-        onSubmit={() => {
+        onSubmit={(rating, feedback) => {
+          const shiftId = tx?.id ?? null;
+          if (rating > 0 && shiftId) {
+            void (async () => {
+              const res = await submitShiftRating(shiftId, rating, feedback || null);
+              if (!res.ok && res.error !== "already_rated") {
+                pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+              }
+            })();
+          }
           setRated(true);
           setRatingOpen(false);
         }}
