@@ -895,14 +895,14 @@ export function completeRequest(id: string) {
   };
   const startHHMM = toHHMM(cur.start, "08:00");
   const endHHMM = toHHMM(cur.end, "18:00");
-  const billedMin = billableMinutes(accumulatedMs / 60000);
   const settledAmount = computeWorkedPricing(
     coverageKindFromLabel(cur.coverage),
     startHHMM,
-    billedMin,
+    accumulatedMs / 60000,
     endHHMM,
     Math.max(1, cur.days ?? 1),
     cur.environment ?? "normal",
+    bookedMinutesFromWindow(startHHMM, endHHMM),
   ).amount;
   applyLocalPatch(id, { status: "completed", accumulatedMs, startedAt: undefined, settledAmount }, {
     actor: "requester",
