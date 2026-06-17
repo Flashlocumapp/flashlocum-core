@@ -6,6 +6,7 @@ import { simNow, useSimClock } from "@/lib/clock";
 import {
   computeWorkedPricing,
   billableMinutes,
+  bookedMinutesFromWindow,
   type CoverageKind,
   type Environment,
 } from "@/lib/pricing";
