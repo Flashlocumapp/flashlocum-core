@@ -294,16 +294,17 @@ export function ShiftSettlement({
     // Freeze the bill at the moment of End Shift.
     const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
     const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-    const bm = billableMinutes(w);
-    frozenBilledMinRef.current = bm;
-    frozenAmountRef.current = computeWorkedPricing(
+    const priced = computeWorkedPricing(
       shift.coverageKind,
       shift.startHHMM,
-      bm,
+      w,
       shift.endHHMM,
       shift.days,
       shift.environment ?? "normal",
-    ).amount;
+      bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+    );
+    frozenBilledMinRef.current = priced.billableMinutes;
+    frozenAmountRef.current = priced.amount;
     setPhase("settlement");
     if (requestId) {
       // Auto-open Monnify checkout immediately after End Shift.
