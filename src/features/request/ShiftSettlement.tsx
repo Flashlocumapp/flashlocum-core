@@ -338,18 +338,11 @@ export function ShiftSettlement({
     setPayError(null);
     setPayState("starting");
     try {
-      // Always use the LIVE recomputed amount so the Payment page stays in
-      // sync with Settlement / Coverage History when the 15-min hold expires
-      // and pricing rolls forward.
-      const liveAmount = Math.max(frozenAmountRef.current, Math.round(totalAmount));
-      // Nothing to bill (e.g. pause fired before any segment time elapsed) —
-      // skip Monnify entirely and confirm immediately so the shift can move on.
-      if (liveAmount <= 0) {
-        confirmPaymentNow();
-        return;
-      }
+      // Server is the sole source of truth for the payment amount — it
+      // reads `total_billed_amount` set by end_shift. The client no longer
+      // submits an amount.
       const result = await beginCheckout({
-        data: { requestId, amount: liveAmount },
+        data: { requestId },
       });
       if ("alreadyPaid" in result && result.alreadyPaid) {
         confirmPaymentNow();
