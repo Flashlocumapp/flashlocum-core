@@ -198,14 +198,18 @@ export function ShiftSettlement({
   const extensionMin = Math.max(0, billedMin - frozenBilledMin);
   const extensionAmount = Math.max(0, totalAmount - frozenAmount);
 
-  // Reset whenever opened fresh.
+  // Reset whenever opened fresh. Deps are IDENTITY-ONLY (open + initialPhase
+  // + requestId + intent). Do NOT add shift.startedAt / shift.accumulatedMs —
+  // realtime patches mutate those mid-settlement, which would otherwise wipe
+  // settlementReadyRef / frozenAmountRef and re-fire End Shift, producing the
+  // "₦0 + shift is not ready" race.
   useEffect(() => {
     if (open) {
       setPhase(initialPhase);
       directEndStartedRef.current = false;
       // Single source of truth for settlement readiness: only the server's
-      // end_shift RPC success flips this true. Any settlement open with a
-      // requestId starts locked until end_shift resolves.
+      // end_shift RPC success (with billing_locked_at + total_billed_amount)
+      // flips this true. Any settlement open with a requestId starts locked.
       settlementReadyRef.current = !(requestId && initialPhase === "settlement");
       const now = simNow();
       phaseStartedAtRef.current =
@@ -215,9 +219,10 @@ export function ShiftSettlement({
         initialPhase === "settlement" || initialPhase === "grace" ? now : null;
       confirmedAtRef.current = null;
       autoConfirmAt.current = null;
-      // When opening directly into settlement (the standard path from
-      // Coverage → End Shift), freeze the bill immediately using the
-      // accumulated continuous timer so the page never shows ₦0.
+      // When opening directly into settlement, seed an interim frozen bill
+      // from the live timer so the UI never flashes ₦0 while end_shift is
+      // in flight. The server response will overwrite this with the
+      // authoritative total_billed_amount inside handleEndShift.
       if (initialPhase === "settlement" || initialPhase === "grace") {
         const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
         const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
@@ -237,7 +242,9 @@ export function ShiftSettlement({
         frozenAmountRef.current = 0;
       }
     }
-  }, [open, initialPhase, requestId, intent, shift.startedAt, shift.accumulatedMs, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPhase, requestId, intent]);
+
 
   const finalize = () => {
     onClose();
