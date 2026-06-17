@@ -626,7 +626,7 @@ export function markDeclined(requestId: string, rev?: number) {
 
 /** Returns true if this session has declined the given (id, rev) pair.
  *  Legacy decline entries stored as the bare id are treated as rev=1. */
-export function isDeclined(d: DoctorPresence | undefined, id: string, rev?: number): boolean {
+export function isDeclined(d: { declined?: string[] } | undefined, id: string, rev?: number): boolean {
   if (!d) return false;
   const r = rev ?? 1;
   const key = `${id}:${r}`;
