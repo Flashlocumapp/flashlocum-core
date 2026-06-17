@@ -6,6 +6,7 @@ import { simNow, useSimClock } from "@/lib/clock";
 import {
   computeWorkedPricing,
   billableMinutes,
+  bookedMinutesFromWindow,
   type CoverageKind,
   type Environment,
 } from "@/lib/pricing";
@@ -179,12 +180,13 @@ export function ShiftSettlement({
       computeWorkedPricing(
         shift.coverageKind,
         shift.startHHMM,
-        billedMin,
+        workedMin,
         shift.endHHMM,
         shift.days,
         shift.environment ?? "normal",
+        bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
       ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, billedMin],
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
@@ -212,16 +214,17 @@ export function ShiftSettlement({
       if (initialPhase === "settlement" || initialPhase === "grace") {
         const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
         const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-        const bm = billableMinutes(w);
-        frozenBilledMinRef.current = bm;
-        frozenAmountRef.current = computeWorkedPricing(
+        const priced = computeWorkedPricing(
           shift.coverageKind,
           shift.startHHMM,
-          bm,
+          w,
           shift.endHHMM,
           shift.days,
           shift.environment ?? "normal",
-        ).amount;
+          bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+        );
+        frozenBilledMinRef.current = priced.billableMinutes;
+        frozenAmountRef.current = priced.amount;
       } else {
         frozenBilledMinRef.current = 0;
         frozenAmountRef.current = 0;
@@ -291,16 +294,17 @@ export function ShiftSettlement({
     // Freeze the bill at the moment of End Shift.
     const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
     const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-    const bm = billableMinutes(w);
-    frozenBilledMinRef.current = bm;
-    frozenAmountRef.current = computeWorkedPricing(
+    const priced = computeWorkedPricing(
       shift.coverageKind,
       shift.startHHMM,
-      bm,
+      w,
       shift.endHHMM,
       shift.days,
       shift.environment ?? "normal",
-    ).amount;
+      bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+    );
+    frozenBilledMinRef.current = priced.billableMinutes;
+    frozenAmountRef.current = priced.amount;
     setPhase("settlement");
     if (requestId) {
       // Auto-open Monnify checkout immediately after End Shift.
