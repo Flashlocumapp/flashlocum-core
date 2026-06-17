@@ -184,7 +184,7 @@ export function ShiftSettlement({
         shift.endHHMM,
         shift.days,
         shift.environment ?? "normal",
-        bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM),
+        bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
       ).amount,
     [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin],
   );
