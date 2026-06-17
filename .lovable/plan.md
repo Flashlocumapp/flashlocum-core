@@ -1,27 +1,70 @@
-## Findings
-- A new live request exists in the backend and is still `searching` inside the 180-second broadcast window.
-- The approved doctor is online in backend presence.
-- The doctor card is currently gated by a separate local `online` value (`net.doctors[sid]`) and a live snapshot flag. If local presence/auth/session hydration lags or mismatches, the server-returned open request can be hidden even though the backend says the doctor is eligible.
-- The open request feed itself is already server-authoritative through `list_open_coverage_requests`; the risky part is the extra local visibility gate.
+## Evidence from the audit so far
 
-## Plan
-1. Keep accept/decline/assignment state strictly server-derived.
-   - Do not add optimistic accept/decline/assignment rendering.
-   - Keep the incoming card source as `list_open_coverage_requests` snapshot rows only.
+The chain currently breaks at the **doctor feed refresh RPC**:
 
-2. Patch the doctor incoming-card derivation.
-   - Treat `hasLiveSnapshot()` + server-returned broadcasting rows as the authority for whether an incoming request exists.
-   - Remove the local `online` dependency from hiding the incoming card after the server has already returned eligible open requests for the doctor.
-   - Keep capacity and per-doctor declined-revision checks.
+```text
+Requester creates request
+  -> coverage_requests row exists
+  -> trigger is installed to emit coverage_invalidations
+  -> doctor client refreshes feed
+  -> list_open_coverage_requests() fails with HTTP 400
+  -> fetchAll() reuses empty lastPoolRows
+  -> net.requests has no broadcasting pool row
+  -> useDispatch().incoming stays null
+  -> Incoming Coverage card never renders
+```
 
-3. Make the subscription refresh path robust.
-   - Ensure the invalidation broadcast always triggers a server refresh and component rerender.
-   - Avoid relying on direct open-pool realtime row delivery, since those rows are intentionally fetched through the safe RPC.
+Proven signals:
+- The doctor tab is authenticated as the approved doctor (`d01894fb...`), not the requester.
+- Browser network shows repeated calls to `rpc/list_open_coverage_requests` returning `400`.
+- Response body: `Number of returned columns (41) does not match expected column count (49)`.
+- Console logs show `[coverage-remote] pool fetch error: structure of query does not match function result type`.
+- Database definition confirms `list_open_coverage_requests()` returns `SETOF coverage_requests` but selects only 41 columns.
+- `coverage_requests` currently has 49 columns, so the function cannot return rows.
+- UI render condition is not the root failure: `incoming` only needs `upcoming.length < 3`, `hasLiveSnapshot()`, a broadcasting request, not own request, and not declined. The broadcasting request never enters the snapshot because the RPC fails.
 
-4. Add lightweight diagnostics only if needed.
-   - Add temporary, non-sensitive console warnings only around snapshot/eligibility failures if the issue remains after the patch.
+## Fix plan
 
-5. Validate.
-   - Confirm a current `searching` request appears in the doctor-side snapshot.
-   - Confirm the card renders from the server snapshot.
-   - Confirm accept still waits for server confirmation before showing the accepted state.
+1. **Repair the database RPC shape**
+   - Replace `public.list_open_coverage_requests()` so its `RETURN QUERY` returns all 49 `coverage_requests` columns in exact table order.
+   - Keep the approved-doctor gate.
+   - Keep the 180-second broadcast window.
+   - Keep sensitive fields redacted for doctors:
+     - phone, note, accommodation
+     - payment provider/reference/status/url
+     - paid/remitted timestamps
+     - billing/payment due/extension fields
+     - pricing/rate snapshot
+     - rating submission/score/timestamps
+
+2. **Keep the realtime architecture unchanged**
+   - Do not add fallback hacks.
+   - Do not add duplicate polling.
+   - Do not add optimistic/local incoming-card patches.
+   - Keep the card server-derived through `list_open_coverage_requests()`.
+
+3. **Verify every layer after migration**
+   - Confirm a fresh requester-created row exists with `status='searching'`, `accepted_by is null`, and `broadcast_started_at` inside 180 seconds.
+   - Confirm the trigger exists and is enabled for `coverage_requests_emit_invalidate`.
+   - Confirm `coverage_requests` is in the realtime publication.
+   - Confirm doctor session calls `list_open_coverage_requests()` and receives HTTP 200 with the open row.
+   - Confirm `fetchAll()` can merge the pool row into the network snapshot.
+   - Confirm `useDispatch()` can derive `incoming` from that row.
+   - Confirm the Incoming Coverage card appears without refresh during a real requester + doctor test.
+
+## Technical migration target
+
+The replacement function will still return `SETOF public.coverage_requests`, but will include the missing columns:
+
+```text
+pricing_version_id
+rate_snapshot
+requester_rating_submitted
+requester_rating_score
+requester_rating_at
+doctor_rating_submitted
+doctor_rating_score
+doctor_rating_at
+```
+
+Those will be returned as safe redacted/null/default values for the open doctor pool, matching the table's exact column count and types.
