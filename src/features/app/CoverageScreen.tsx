@@ -556,6 +556,10 @@ function RequesterDetailSheet({
   onCancel: (id: string) => void;
 }) {
   const identity = useDoctorIdentity(item?.doctorSid ?? null);
+  const pending = useLifecyclePending(item?.id ?? null);
+  const startLabel = pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
+  const pauseLabel = pending === "pausing" ? "Pausing…" : null;
+  const endLabel = pending === "ending" ? "Ending…" : null;
   return (
     <AnimatePresence>
       {item && (
