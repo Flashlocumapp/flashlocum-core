@@ -262,10 +262,11 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       }
     : null;
 
-  const moveToActive = (id: string) => {
+  const moveToActive = async (id: string) => {
     const cur = net.requests[id];
     const isResume = (cur?.accumulatedMs ?? 0) > 0;
-    netStartRequest(id);
+    const res = await netStartRequest(id);
+    if (!res.ok) return; // pushToast already surfaced the error
     shiftCue(isResume ? "resume" : "start");
     setTab("active");
   };
@@ -273,22 +274,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   // Pause Shift → pause_shift RPC ONLY closes the open segment and flips
   // status to 'paused'. No billing, no Monnify. Multi-day shifts have a
   // single final payment at End Shift. Local state mirrors the server.
-  const callServerPauseShift = useServerFn(serverPauseShift);
-  const [pausing, setPausing] = useState(false);
   const requestPause = (id: string) => setPauseConfirmId(id);
   const beginPause = async (id: string) => {
-    if (pausing) return;
-    setPausing(true);
-    try {
-      await callServerPauseShift({ data: { requestId: id } });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Couldn't pause this shift";
-      pushToast({ tone: "warn", title: msg });
-      setPausing(false);
-      return;
-    }
-    setPausing(false);
-    netPauseShift(id);
+    const res = await netPauseShift(id);
+    if (!res.ok) return;
     shiftCue("pause");
     setTab("upcoming");
     setNotice("Shift paused");
@@ -306,11 +295,13 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setSettlingId(id);
   };
 
-  const confirmEnd = () => {
+  const confirmEnd = async () => {
     if (!settlingId) return;
-    netCompleteRequest(settlingId);
+    await netCompleteRequest(settlingId);
     shiftCue("end");
   };
+
+
 
 
 
