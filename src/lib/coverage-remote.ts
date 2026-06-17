@@ -166,6 +166,7 @@ const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   accepted: "accepted",
   active: "active",
   paused: "paused",
+  awaiting_payment: "awaiting_payment",
   completed: "completed",
   cancelled: "cancelled",
   expired: "expired",

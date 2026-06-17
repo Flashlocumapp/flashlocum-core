@@ -110,6 +110,7 @@ export type NetRequestStatus =
   | "paused"
   | "accepted"
   | "active"
+  | "awaiting_payment"
   | "completed"
   | "cancelled"
   | "expired";
