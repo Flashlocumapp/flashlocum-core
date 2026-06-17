@@ -84,8 +84,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
 
 
 
-    // 2. Load the doctor's profile (admin client; we already authorised via RLS above).
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // 2. Load the doctor's profile (admin client; we already authorised via explicit requester check above).
     const { data: doctor, error: docErr } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name, bank_name, bank_account, bank_account_name, monnify_sub_account_code")
