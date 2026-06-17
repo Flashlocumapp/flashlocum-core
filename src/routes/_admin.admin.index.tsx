@@ -86,6 +86,8 @@ function AdminOverview() {
           { label: "Upcoming", value: stats?.coverage_upcoming },
           { label: "Completed", value: stats?.coverage_completed },
           { label: "Cancelled", value: stats?.coverage_cancelled, tone: "danger" as const },
+          { label: "Expired", value: stats?.coverage_expired, tone: "warn" as const },
+
         ],
       },
       {

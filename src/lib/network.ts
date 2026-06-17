@@ -22,11 +22,13 @@ import {
   primeUserId,
   remoteClaimRequest,
   remoteDeleteRequest,
+  remoteExpireRequest,
   remoteInsertRequest,
   remoteUpdateRequest,
   subscribeCoverageRemote,
   type RemoteEvent,
 } from "./coverage-remote";
+
 import {
   clearMyPresence,
   heartbeatPresence,
@@ -83,7 +85,12 @@ const SESSION_KEY = "flashlocum.session";
 // 4s cadence — critical at 500+ concurrent doctors.
 const HEARTBEAT_MS = 25000;
 const STALE_MS = 12000;
-const BROADCAST_TTL_MS = 30 * 60 * 1000;
+// Pre-acceptance broadcast lifetime. After this window the request transitions
+// to a persistent 'expired' state (server cron + client RPC). Doctor feeds use
+// broadcast_started_at, not createdAt, so edit re-publish and dismiss-resume
+// restart the window.
+const BROADCAST_TTL_MS = 180 * 1000;
+
 const MAX_CONFIRMED_SHIFTS = 3;
 const BUFFER_MS = 60 * 60 * 1000;
 
@@ -104,7 +111,9 @@ export type NetRequestStatus =
   | "accepted"
   | "active"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
+
 
 export type NetRequest = {
   id: string;
@@ -154,7 +163,19 @@ export type NetRequest = {
   remittedAt?: number;
   /** Environment toggle at booking time; multiplies pricing ×1.25 when 'busy'. */
   environment?: "normal" | "busy";
+  /** Monotonic offer revision. Bumped server-side whenever the requester edits
+   *  material fields while the row is pre-acceptance, or resumes after a
+   *  dismiss (paused → searching). Doctor decline keys are scoped to
+   *  `${id}:${rev}` so a new offer reaches doctors who previously declined.
+   */
+  rev?: number;
+  /** When this offer was last broadcast (publish, edit re-publish, or
+   *  dismiss-resume). Drives the 180s pre-acceptance expiry timer and the
+   *  doctor open-pool freshness gate.
+   */
+  broadcastStartedAt?: number;
 };
+
 
 
 export type Actor = "requester" | "doctor" | "system";
@@ -578,20 +599,44 @@ export function setDoctorAcceptedCount(n: number) {
   });
 }
 
-export function markDeclined(requestId: string) {
+/**
+ * Mark an incoming request as declined for THIS doctor session. The key is
+ * `${id}:${rev}` so that when the requester edits or re-broadcasts (rev is
+ * bumped server-side by the bump_request_rev trigger), the previously-stored
+ * decline no longer matches and the card re-enters Incoming. A bare `${id}`
+ * value is treated as rev=1 for backward compatibility with prior builds.
+ */
+export function markDeclined(requestId: string, rev?: number) {
   refreshState();
   const sid = getSessionId();
   const d = state.doctors[sid];
   if (!d) return;
-  if (d.declined.includes(requestId)) return;
+  const cur = state.requests[requestId];
+  const r = rev ?? cur?.rev ?? 1;
+  const key = `${requestId}:${r}`;
+  if (d.declined.includes(key)) return;
   save({
     ...state,
     doctors: {
       ...state.doctors,
-      [sid]: { ...d, declined: [...d.declined, requestId] },
+      [sid]: { ...d, declined: [...d.declined, key] },
     },
   });
 }
+
+/** Returns true if this session has declined the given (id, rev) pair.
+ *  Legacy decline entries stored as the bare id are treated as rev=1. */
+export function isDeclined(d: { declined?: string[] } | undefined, id: string, rev?: number): boolean {
+  if (!d) return false;
+  const list = d.declined ?? [];
+  const r = rev ?? 1;
+  const key = `${id}:${r}`;
+  if (list.includes(key)) return true;
+  if (r === 1 && list.includes(id)) return true;
+  return false;
+}
+
+
 
 export function startHeartbeat() {
   if (typeof window === "undefined") return () => {};
@@ -868,17 +913,28 @@ export function pauseRequest(id: string) {
   );
 }
 
-/** Resume a paused request back to broadcasting. */
+/**
+ * Resume a paused request back to broadcasting. Treated as a fresh offer:
+ * we optimistically restart broadcastStartedAt and bump rev so the 180s
+ * expiry timer resets immediately and previously-declined doctors see the
+ * card again. The server-side bump_request_rev trigger applies the same
+ * change authoritatively when the UPDATE lands.
+ */
 export function resumeRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "paused") return;
   applyPatch(
     id,
-    { status: "broadcasting" },
+    {
+      status: "broadcasting",
+      broadcastStartedAt: simNow(),
+      rev: (cur.rev ?? 1) + 1,
+    },
     { actor: "requester", actorId: getSessionId(), action: "resume" },
   );
 }
+
 
 /** Hard-remove a request (use for pre-acceptance cancellation). */
 export function removeRequest(id: string) {
@@ -892,6 +948,25 @@ export function removeRequest(id: string) {
   void remoteDeleteRequest(id);
 }
 
+/**
+ * Pre-acceptance expiry — 180s broadcast window elapsed with no doctor
+ * acceptance. The row is preserved server-side as `expired` (admin analytics
+ * only); locally we drop it so the requester overlay and doctor feeds clear.
+ */
+export function expireRequest(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  if (cur.status !== "broadcasting" && cur.status !== "paused") return;
+  if (cur.acceptedBy) return;
+  const { [id]: _gone, ...rest } = state.requests;
+  save(
+    { ...state, requests: rest },
+    { actor: "system", actorId: "system", action: "remove", shiftId: id },
+  );
+  void remoteExpireRequest(id);
+}
+
 /* ---------------- selectors ---------------- */
 
 export function onlineDoctors(s: NetState): DoctorPresence[] {
@@ -899,21 +974,20 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
-  // NOTE: createdAt/endTs come from the database as real wall-clock
-  // timestamps. A newly-published request must surface to doctors even if
-  // the requester chose a schedule window that has already ended today; the
-  // requester flow allowed publishing it, so silently filtering it here is
-  // what made the doctor-side accept/decline card disappear in the split-screen
-  // test. The freshness gate is the publish TTL, not the shift end time.
+  // Freshness gate uses broadcastStartedAt, NOT createdAt — edit re-publish
+  // and dismiss-resume (paused → searching) restart the 180s window
+  // server-side via the bump_request_rev trigger. Falls back to createdAt
+  // for any legacy row without a broadcast_started_at column populated.
   const now = Date.now();
   return Object.values(s.requests)
     .filter(
       (r) =>
         r.status === "broadcasting" &&
-        now - r.createdAt < BROADCAST_TTL_MS,
+        now - (r.broadcastStartedAt ?? r.createdAt) < BROADCAST_TTL_MS,
     )
-    .sort((a, b) => a.createdAt - b.createdAt);
+    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt));
 }
+
 
 
 export function getNetworkSnapshot(): NetState {

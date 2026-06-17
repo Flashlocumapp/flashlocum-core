@@ -30,7 +30,7 @@ type Row = {
   phone: string;
   note: string | null;
   accommodation: string | null;
-  status: "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled";
+  status: "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled" | "expired";
   accepted_by: string | null;
   started_at: number | null;
   accumulated_ms: number;
@@ -45,7 +45,13 @@ type Row = {
   paid_at: string | null;
   remitted_at: string | null;
   environment: string;
+  rev: number;
+  broadcast_started_at: string;
+  expired_at: string | null;
 };
+
+
+
 
 const TABLE = "coverage_requests";
 // v2: cache is scoped to the doctor's OWN rows only. The open SEARCHING
@@ -151,6 +157,7 @@ const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   paused: "paused",
   completed: "completed",
   cancelled: "cancelled",
+  expired: "expired",
 };
 const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   broadcasting: "searching",
@@ -159,7 +166,9 @@ const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   paused: "paused",
   completed: "completed",
   cancelled: "cancelled",
+  expired: "expired",
 };
+
 
 export function rowToNet(r: Row): NetRequest {
   return {
@@ -193,8 +202,13 @@ export function rowToNet(r: Row): NetRequest {
     paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,
     remittedAt: r.remitted_at ? new Date(r.remitted_at).getTime() : undefined,
     environment: r.environment === "busy" ? "busy" : "normal",
+    rev: r.rev ?? 1,
+    broadcastStartedAt: r.broadcast_started_at
+      ? new Date(r.broadcast_started_at).getTime()
+      : new Date(r.created_at).getTime(),
   };
 }
+
 
 function netPatchToRow(p: Partial<NetRequest>): Partial<Row> {
   const out: Partial<Row> = {};
@@ -745,3 +759,19 @@ export async function remoteDeleteRequest(id: string): Promise<void> {
   }
   emitInvalidate(id);
 }
+
+/**
+ * Pre-acceptance expiry. The 180s broadcast window has elapsed without an
+ * acceptance — the row transitions to terminal `expired` (NOT deleted) so
+ * admin analytics can measure no-fill rate. Doctor feeds and requester
+ * history both treat `expired` as removed; only admin dashboards surface it.
+ */
+export async function remoteExpireRequest(id: string): Promise<void> {
+  const { error } = await supabase.rpc("expire_request", { _id: id });
+  if (error) {
+    console.warn("[coverage-remote] expire error:", error.message);
+    return;
+  }
+  emitInvalidate(id);
+}
+

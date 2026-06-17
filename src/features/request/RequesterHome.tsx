@@ -17,11 +17,13 @@ import {
   pauseRequest,
   publishRequest,
   removeRequest,
+  expireRequest,
   resumeRequest,
   updateRequest,
   cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
+
 import { computeCoveragePricing, coverageKindFromLabel, type Environment } from "@/lib/pricing";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
@@ -1260,6 +1262,55 @@ function DispatchOverlay({
     if (paused) pauseRequest(requestId);
     else if (stage === "dispatch") resumeRequest(requestId);
   }, [paused, requestId, stage]);
+
+  // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
+  // re-publish and dismiss-resume (paused → searching) automatically restart
+  // the window. Timer is invisible — no countdown shown to the requester.
+  // On expiry the row transitions to terminal `expired` server-side (NOT
+  // deleted) so admin analytics can measure no-fill demand; the requester
+  // sees a single toast and returns to the home screen.
+  useEffect(() => {
+    if (stage !== "dispatch") return;
+    if (!requestId || requestId !== ownedIdRef.current) return;
+    const r = net.requests[requestId];
+    if (!r) return;
+    if (r.status !== "broadcasting" && r.status !== "paused") return;
+    if (r.acceptedBy) return;
+    const startedAt = r.broadcastStartedAt ?? r.createdAt;
+    const elapsed = Date.now() - startedAt;
+    const remaining = 180_000 - elapsed;
+    if (remaining <= 0) {
+      expireRequest(requestId);
+      ownedIdRef.current = null;
+      setRequestId(null);
+      setStage("collapsed");
+      pushToast({
+        tone: "warn",
+        title: "No doctor accepted this request in time.",
+      });
+      return;
+    }
+    const t = window.setTimeout(() => {
+      expireRequest(requestId);
+      ownedIdRef.current = null;
+      setRequestId(null);
+      setStage("collapsed");
+      pushToast({
+        tone: "warn",
+        title: "No doctor accepted this request in time.",
+      });
+    }, remaining);
+    return () => window.clearTimeout(t);
+  }, [
+    stage,
+    requestId,
+    setRequestId,
+    setStage,
+    net.requests[requestId ?? ""]?.broadcastStartedAt,
+    net.requests[requestId ?? ""]?.status,
+    net.requests[requestId ?? ""]?.acceptedBy,
+  ]);
+
 
   // React to acceptance OR doctor-side cancellation. Only ever act on the
   // request this dispatch session actually owns — never on a leftover id.

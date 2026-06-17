@@ -11,6 +11,7 @@ import {
   completeRequest,
   getNetworkSnapshot,
   getSessionId,
+  isDeclined,
   markDeclined,
   registerDoctor,
   setDoctorAcceptedCount,
@@ -21,6 +22,7 @@ import {
   subscribeNetwork,
   useNetwork,
 } from "@/lib/network";
+
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 
@@ -225,20 +227,20 @@ export function useDispatch(): View {
   // list_open_coverage_requests. Login / refresh / reconnect / reopen all
   // reset this flag, so a stale broadcast cannot resurrect.
   if (online && upcoming.length < 3 && hasLiveSnapshot()) {
-    const declined = new Set<string>(me?.declined ?? []);
     const r = liveRequests.find(
       (x) =>
         x.status === "broadcasting" &&
         x.requesterSessionId !== sid &&
-        !declined.has(x.id),
+        !isDeclined(me, x.id, x.rev),
     );
     if (r) incoming = toCoverage(r);
   }
 
   useEffect(() => {
     if (!me || upcoming.length < 3 || liveRequests.length === 0) return;
-    liveRequests.forEach((r) => markDeclined(r.id));
-  }, [me, upcoming.length, liveRequests.map((r) => r.id).join("|")]);
+    liveRequests.forEach((r) => markDeclined(r.id, r.rev));
+  }, [me, upcoming.length, liveRequests.map((r) => `${r.id}:${r.rev ?? 1}`).join("|")]);
+
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
@@ -306,7 +308,8 @@ export function ensureDoctorSession(initialOnline = true) {
         (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active"),
       );
       if (mine.length >= 3) return;
-      if ((me.declined ?? []).includes(r.id)) return;
+      if (isDeclined(me, r.id, r.rev)) return;
+
       processedEvents.set(eventKey, Date.now());
       shiftCue("request");
       pushToast({
@@ -409,7 +412,7 @@ export function acceptIncoming() {
   // Operational guards — block BEFORE touching any state.
   const mine = currentUpcomingForMe();
   if (mine.length >= 3) {
-    markDeclined(idToAccept);
+    markDeclined(idToAccept, incomingReq.rev);
     pushToast({
       tone: "warn",
       title: "You already have the maximum number of confirmed shifts.",
@@ -418,7 +421,7 @@ export function acceptIncoming() {
   }
   const localConflict = conflictReason(mine, incomingReq);
   if (localConflict) {
-    markDeclined(idToAccept);
+    markDeclined(idToAccept, incomingReq.rev);
     pushToast({
       tone: "warn",
       title: conflictMessage(localConflict),
@@ -428,7 +431,7 @@ export function acceptIncoming() {
 
   const result = acceptRequest(idToAccept);
   if (!result.ok) {
-    markDeclined(idToAccept);
+    markDeclined(idToAccept, incomingReq.rev);
     pushToast({ tone: "warn", title: conflictMessage(result.reason) });
     return;
   }
@@ -438,6 +441,7 @@ export function acceptIncoming() {
     bump();
   }
 }
+
 
 /**
  * Time-based conflict — coverage TYPE is ignored. Two shifts conflict if
@@ -459,8 +463,10 @@ function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "
 export function declineIncoming() {
   const id = pendingIncomingId();
   if (!id) return;
-  markDeclined(id);
+  const r = currentRequest(id);
+  markDeclined(id, r?.rev);
 }
+
 
 export function dismissAccepted() {
   acceptedSheet = null;
@@ -514,17 +520,18 @@ function pendingIncomingId(): string | null {
   const s = readState();
   const sid = getSessionId();
   const me = s.doctors?.[sid];
-  const declined = new Set<string>(me?.declined ?? []);
   const first = Object.values(s.requests ?? {})
     .filter(
       (r) =>
         r.status === "broadcasting" &&
-        !declined.has(r.id) &&
-        r.requesterSessionId !== sid,
+        r.requesterSessionId !== sid &&
+        !isDeclined(me, r.id, r.rev),
     )
-    .sort((a, b) => a.createdAt - b.createdAt)[0];
+    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt))[0];
   return first?.id ?? null;
 }
+
+
 
 function currentRequest(id: string): NetRequest | null {
   return readState().requests?.[id] ?? null;
