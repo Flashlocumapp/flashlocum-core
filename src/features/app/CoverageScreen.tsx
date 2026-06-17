@@ -1387,7 +1387,7 @@ function DoctorCoverageDetail({
               <button
                 disabled={!rating}
                 onClick={() => {
-                  void recordRating(hospitalEntityId(item.hospital), rating, item.id);
+                  void recordRating(hospitalEntityId(item.hospital), rating, item.id, feedback);
                   recordHistoryRating(item.id, rating);
                   onDismiss();
                 }}
