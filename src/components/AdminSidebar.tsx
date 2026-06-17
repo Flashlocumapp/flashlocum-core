@@ -13,6 +13,7 @@ import {
   Receipt,
   Coins,
   Gauge,
+  MessageSquare,
 } from "lucide-react";
 
 
