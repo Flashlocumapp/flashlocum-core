@@ -30,7 +30,7 @@ type Row = {
   phone: string;
   note: string | null;
   accommodation: string | null;
-  status: "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled" | "expired";
+  status: "searching" | "accepted" | "active" | "paused" | "awaiting_payment" | "completed" | "cancelled" | "expired";
   accepted_by: string | null;
   started_at: number | null;
   accumulated_ms: number;
@@ -155,9 +155,11 @@ const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   accepted: "accepted",
   active: "active",
   paused: "paused",
+  awaiting_payment: "awaiting_payment",
   completed: "completed",
   cancelled: "cancelled",
   expired: "expired",
+
 };
 const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   broadcasting: "searching",
