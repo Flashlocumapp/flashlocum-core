@@ -36,6 +36,8 @@ export function RestrictionBanner() {
 
   const overdue = state.overdue ?? [];
   const total = overdue.reduce((s, o) => s + (o.total_billed_amount ?? 0), 0);
+  const accountRestricted = state.account_restricted;
+  const paymentRestricted = state.payment_restricted;
 
   return (
     <div
@@ -54,14 +56,26 @@ export function RestrictionBanner() {
           <span className="font-semibold uppercase tracking-[0.14em] text-[10px]">
             Account restricted
           </span>
-          <span className="tabular-nums text-[11px]">
-            ₦{total.toLocaleString("en-NG")} due
-          </span>
+          {paymentRestricted && total > 0 && (
+            <span className="tabular-nums text-[11px]">
+              ₦{total.toLocaleString("en-NG")} due
+            </span>
+          )}
         </div>
-        <p className="mt-1 leading-snug">
-          You have {overdue.length} unpaid shift{overdue.length === 1 ? "" : "s"}.
-          Settle outstanding payments to create or end new shifts.
-        </p>
+        {accountRestricted ? (
+          <p className="mt-1 leading-snug">
+            Your account has been restricted by an administrator.
+            {state.account_restricted_reason
+              ? ` Reason: ${state.account_restricted_reason}.`
+              : ""}{" "}
+            Please contact support.
+          </p>
+        ) : (
+          <p className="mt-1 leading-snug">
+            You have {overdue.length} unpaid shift{overdue.length === 1 ? "" : "s"}.
+            Settle outstanding payments to create or end new shifts.
+          </p>
+        )}
       </div>
     </div>
   );
