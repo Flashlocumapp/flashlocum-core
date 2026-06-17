@@ -16,6 +16,7 @@ import { subscribeAuthState } from "@/lib/auth-ready";
 import { initNativeBridge } from "@/lib/native";
 import { unregisterDoctor } from "@/lib/network";
 import { usePushRegistration } from "@/lib/push-registration";
+import { loadPricingTable } from "@/lib/pricing";
 
 function NotFoundComponent() {
   return (
@@ -93,6 +94,7 @@ function RootComponent() {
   useEffect(() => {
     void initNativeBridge((path) => { void router.navigate({ to: path }); });
   }, [router]);
+  useEffect(() => { void loadPricingTable(); }, []);
   usePushRegistration();
   useEffect(() => {
     let sawSignOut = false;

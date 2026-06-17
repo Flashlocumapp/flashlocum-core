@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   HeartPulse,
   Receipt,
+  Coins,
 } from "lucide-react";
 
 
@@ -33,6 +34,7 @@ const sections = [
   { title: "Unpaid Shifts", url: "/admin/unpaid", icon: Receipt, group: "Operations" },
 
   { title: "Financial Analytics", url: "/admin/finance", icon: Wallet, group: "Business" },
+  { title: "Pricing", url: "/admin/pricing", icon: Coins, group: "Business" },
   { title: "Doctor Flashboard", url: "/admin/flashboard", icon: Activity, group: "Business" },
   { title: "Requester Analytics", url: "/admin/requesters", icon: Building2, group: "Business" },
   { title: "Reliability & Risk", url: "/admin/risk", icon: AlertTriangle, group: "Trust & Safety" },
