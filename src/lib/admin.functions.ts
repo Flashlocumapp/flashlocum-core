@@ -724,10 +724,13 @@ export const adminRequesterAnalytics = createServerFn({ method: "POST" })
         cancelled += 1;
       } else if (r.status === "active" || r.status === "paused" || r.status === "accepted") {
         cur.in_progress += 1;
-      } else if (r.status === "searching") {
+      } else if (r.status === "searching" || r.status === "expired") {
+        // Treat expired (no doctor accepted within 180s) as unfilled demand —
+        // surfaces in admin analytics alongside truly stuck searching rows.
         cur.unfilled += 1;
         unfilled += 1;
       }
+
       // Time-to-fill: created_at → updated_at when accepted_by is set.
       if (r.accepted_by && r.created_at && r.updated_at) {
         const mins =
