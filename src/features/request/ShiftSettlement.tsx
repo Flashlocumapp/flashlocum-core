@@ -179,12 +179,13 @@ export function ShiftSettlement({
       computeWorkedPricing(
         shift.coverageKind,
         shift.startHHMM,
-        billedMin,
+        workedMin,
         shift.endHHMM,
         shift.days,
         shift.environment ?? "normal",
+        bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM),
       ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, billedMin],
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
