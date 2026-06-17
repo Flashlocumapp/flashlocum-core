@@ -20,10 +20,11 @@ export type Environment = "normal" | "busy";
 
 const RATE_DAY_LONG = 2000;
 const RATE_NIGHT_LONG = 1500;
+// Spec §2: <4h and 4–6h have the SAME rate day & night; only >6h splits.
 const RATE_DAY_MID = 2500;
-const RATE_NIGHT_MID = 2000;
+const RATE_NIGHT_MID = 2500;
 const RATE_DAY_SHORT = 3000;
-const RATE_NIGHT_SHORT = 2500;
+const RATE_NIGHT_SHORT = 3000;
 const RATE_HOME = 15000;
 const FLAT_24H = 36000;
 const FLAT_48H = 72000;
@@ -109,12 +110,11 @@ export function computeCoveragePricing(
   const totalHrs = (totalDayMin + totalNightMin) / 60;
 
   if (coverage === "home") {
+    // Spec §4: Busy multiplier does NOT apply to Home Care.
     const base = totalHrs * RATE_HOME;
     return {
-      amount: applyEnvironment(base, environment),
-      explanation:
-        `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr in-home coverage.` +
-        envSuffix(environment),
+      amount: Math.round(base),
+      explanation: `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr in-home coverage.`,
     };
   }
 
@@ -183,11 +183,11 @@ export function computeWorkedPricing(
   const totalHrs = worked / 60;
 
   if (coverage === "home") {
+    // Spec §4: Busy multiplier does NOT apply to Home Care.
     const base = totalHrs * RATE_HOME;
     return {
-      amount: applyEnvironment(base, environment),
-      explanation:
-        `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr.` + envSuffix(environment),
+      amount: Math.round(base),
+      explanation: `Home Care · ₦${RATE_HOME.toLocaleString("en-NG")}/hr.`,
     };
   }
   if (d === 1 && Math.round(totalHrs) === 24) {

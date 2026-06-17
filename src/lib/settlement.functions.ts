@@ -5,9 +5,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+// Server is the SOLE source of truth for the payment amount. Clients
+// no longer submit an amount — we read `total_billed_amount`, written by
+// end_shift, directly from the row.
 const InputSchema = z.object({
   requestId: z.string().uuid(),
-  amount: z.number().int().nonnegative().max(50_000_000),
 });
 
 export const beginSettlementCheckout = createServerFn({ method: "POST" })
@@ -19,7 +21,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     // 1. Load the coverage request — RLS scopes to requester or assigned doctor.
     const { data: reqRow, error: reqErr } = await supabase
       .from("coverage_requests")
-      .select("id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url")
+      .select("id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url, total_billed_amount, billing_locked_at")
       .eq("id", data.requestId)
       .maybeSingle();
     if (reqErr || !reqRow) throw new Error("Coverage request not found");
@@ -31,6 +33,12 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
         paymentReference: reqRow.payment_reference ?? null,
         checkoutUrl: reqRow.payment_url ?? null,
       };
+    }
+
+    // SERVER-AUTHORITATIVE AMOUNT. end_shift must have run; no client input.
+    const serverAmount = Math.max(0, Math.round(Number(reqRow.total_billed_amount ?? 0)));
+    if (!reqRow.billing_locked_at || serverAmount <= 0) {
+      throw new Error("Shift is not ready for payment — end the shift first.");
     }
 
 
@@ -113,7 +121,7 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     let txRef: string;
     try {
       const tx = await initiateSplitTransaction({
-        amount: data.amount,
+        amount: serverAmount,
         paymentReference,
         paymentDescription: `FlashLocum cover — ${reqRow.hospital}`,
         customerEmail,
