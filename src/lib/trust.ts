@@ -184,11 +184,11 @@ export async function submitShiftRating(
   const { data, error } = await supabase.rpc("submit_shift_rating", {
     _request_id: requestId,
     _score: Math.round(score),
-    _feedback: feedback ?? null,
+    _feedback: feedback ?? undefined,
   });
   if (error) {
     const msg = error.message || "";
-    let code: SubmitResult extends { ok: false; error: infer E } ? E : never = "unknown";
+    let code: "already_rated" | "not_authorized" | "not_terminal" | "unknown" = "unknown";
     if (/already rated|unique/i.test(msg)) code = "already_rated";
     else if (/not authorized/i.test(msg)) code = "not_authorized";
     else if (/not yet terminal/i.test(msg)) code = "not_terminal";
