@@ -40,6 +40,8 @@ export type Coverage = {
   phone: string;
   note?: string;
   active?: boolean;
+  /** True when status is `awaiting_payment` — shift is active in Coverage but billing locked. */
+  paymentPending?: boolean;
   startedAt?: number;
   accumulatedMs: number;
   days: number;
