@@ -1,75 +1,76 @@
-# Make payment confirmation the sole gate for COMPLETED
+## Root cause (proven)
 
-## Rule we are enforcing
+Active/Upcoming shows shifts you closed days ago because the lifecycle migration's backfill silently flipped historical `completed`-but-unpaid rows into `awaiting_payment`. The dispatch + CoverageScreen filters then correctly route `awaiting_payment` into the Active (requester) and Upcoming (doctor) lanes. RLS, snapshot merge, cache, realtime, and optimistic state are all clean.
 
-```text
-ACTIVE → End Shift → AWAITING_PAYMENT (payment window) → Monnify webhook → COMPLETED
+### DB evidence
+
+All `awaiting_payment` rows in the system right now:
+
+| metric | value |
+|---|---|
+| total rows | 5 |
+| with `billing_locked_at` | 5 |
+| with `billing_locked_at IS NULL` | 0 |
+| min `updated_at` | `2026-06-17 08:45:05.053336+00` |
+| max `updated_at` | `2026-06-17 08:45:05.053336+00` |
+
+All five rows share an **identical microsecond `updated_at`** = the moment migration `20260617084506_…sql` ran. They were rewritten by a single SQL `UPDATE`. No real `end_shift()` call has produced an `awaiting_payment` row today — the only shift you ended (`9b1ef578…`) is still `status='active'` because the End Shift button wasn't wired to the server when you ran the test.
+
+Row identities (all owned by `requester_id=ce06e7f8…`, `accepted_by=d01894fb…`):
+`67b51afc-f7aa-4eb5-a0ad-1ca4207b2ad8`, `1b932a9c-94e4-4ffa-8358-6d601f0d827a`, `e82a1560-f213-479a-887c-28ad1d6e3e8d`, `cfd06d74-27cf-4237-9c17-7de6d1e348f3`, `269b38b6-e400-4975-a3c7-6b0c7f37528c`.
+
+### Classification
+
+- RLS bug? No.
+- Backend query bug? No.
+- Cache bug? No.
+- Realtime merge bug? No.
+- Optimistic state bug? No.
+- **Data bug** caused by an over-broad backfill in the lifecycle migration.
+
+## Fix plan (data-only, one statement)
+
+No code or schema changes. The new lifecycle rule is correct going forward.
+
+### Step 1 — Re-verify the backfill set (read-only)
+
+```sql
+SELECT id, requester_id, accepted_by, created_at, updated_at, payment_status, billing_locked_at
+  FROM public.coverage_requests
+ WHERE status = 'awaiting_payment'
+   AND updated_at = '2026-06-17 08:45:05.053336+00';
 ```
 
-`completed` must be reachable **only** from `mark_settlement_paid` (webhook / verify path). End Shift must never write `completed`.
+Expect 5 rows, all owned by the same requester/doctor pair shown above.
 
-## What's wrong today (observed)
+### Step 2 — Revert the backfill
 
-- `end_shift()` writes `status='completed'` + `payment_status='pending'` in one UPDATE.
-- DB trigger `_cr_after_status_change` recomputes trust for both parties on that flip.
-- Client `dispatch.ts` + `network.ts` arm the rating overlay + PaymentSummary on the same flip.
-- `CoverageScreen`, `EarningsScreen`, and dispatch history all treat `status='completed'` as "done / counted as earnings", so the shift jumps to history before the money lands.
+Run via the data tool:
 
-## Fix
+```sql
+UPDATE public.coverage_requests
+   SET status = 'completed'
+ WHERE status = 'awaiting_payment'
+   AND updated_at = '2026-06-17 08:45:05.053336+00';
+```
 
-### 1. DB — introduce `awaiting_payment` status
+Discriminator rationale: that microsecond stamp is the migration's signature. Any genuine `awaiting_payment` row produced by `end_shift()` after this audit will carry a different `updated_at`, so this surgical filter cannot touch real in-flight shifts.
 
-A single migration that:
+### Step 3 — Verify zero unintended rows remain
 
-1. Adds `'awaiting_payment'` to whatever constraint/check governs `coverage_requests.status` (today it's a text column; verify and either extend the CHECK or, if it's an enum, `ALTER TYPE … ADD VALUE 'awaiting_payment'`).
-2. Rewrites `public.end_shift(_request_id uuid)` so the final UPDATE uses `status = 'awaiting_payment'` instead of `'completed'`. Everything else in `end_shift` is unchanged (segment closing, `billing_locked_at`, `total_billed_amount`, `payment_due_at`, `settled_amount`, `payment_status='pending'`, snapshot).
-3. Updates `public.mark_settlement_paid(_payment_reference text, _amount int)` so that, in addition to flipping `payment_status='paid'`, it now also performs the status promotion:
+```sql
+SELECT id, status, billing_locked_at, payment_status, updated_at
+  FROM public.coverage_requests
+ WHERE status = 'awaiting_payment'
+ ORDER BY updated_at DESC;
+```
 
-   ```sql
-   UPDATE coverage_requests
-      SET status = 'completed',
-          paid_at = now()
-    WHERE payment_reference = _payment_reference
-      AND status = 'awaiting_payment';
-   ```
+Pass criteria:
+- Either 0 rows, or only rows whose `updated_at` postdates this audit (i.e. real new End Shift flows).
+- Active tab (requester) and Upcoming tab (doctor) drop the resurrected historical shifts on next snapshot refresh.
 
-   The existing day-rollover branch (paused multi-day shifts that flip back to `accepted`) stays intact — those rows are not in `awaiting_payment` so the new clause won't fight it.
-4. Leaves `_cr_after_status_change` unchanged. It already fires on `completed | cancelled | no_show`. Because `end_shift` no longer writes `completed`, **trust recalculation now happens only on the webhook-driven `awaiting_payment → completed` transition**, exactly as required.
-5. Data backfill (one-off, same migration): rows currently in `status='completed' AND payment_status <> 'paid'` are mid-flow under the old behaviour. Move them to `awaiting_payment` so the new gate is consistent. Rows with `payment_status='paid'` stay `completed`.
+### Out of scope (deliberately)
 
-### 2. Generated types
-
-After the migration runs, `src/integrations/supabase/types.ts` is regenerated automatically. No manual edit.
-
-### 3. Client — teach the app about `awaiting_payment`
-
-Goal: the doctor's rating overlay, the PaymentSummary, the move-to-history, and the earnings counter must all wait for `status='completed'`, not for End Shift.
-
-Files to touch:
-
-- `src/lib/network.ts`
-  - Add `awaiting_payment` to the `NetRequest` status union.
-  - In the postgres-changes branch (line ~317): keep `newStatus === 'completed'` as the `complete` action trigger. **Do not** treat `awaiting_payment` as `complete`. Add a new no-op (or `update`) branch for `* → awaiting_payment` so we don't synthesize a `complete` event prematurely. Same change for the snapshot-diff branch (line ~401): only synthesize `complete` when the new status is `completed`.
-- `src/features/cover/dispatch.ts`
-  - History pile filter (line ~188) and `pendingRating` arming (line ~259) already key off `status === 'completed'` — leave them. Add `awaiting_payment` to whatever lane represents "shift finished, awaiting payment" so the doctor card still shows the right state but does not move to history or trigger the rating overlay yet.
-  - The `ev.action === 'complete'` handler at line ~368 stays gated on the real `complete` action, which now only fires post-webhook.
-- `src/features/app/CoverageScreen.tsx`
-  - Lines 109, 115, 191, 705, 1014, 1248: anywhere it groups by `status === 'completed'` for history/earnings, ensure `awaiting_payment` is shown in the active/settlement lane, not history.
-- `src/features/app/EarningsScreen.tsx`
-  - Line 113: keep `outcome === 'completed'` for the earnings total so unpaid shifts don't inflate earnings.
-- `src/lib/admin.functions.ts`
-  - Admin counters (lines 555, 558, 719): keep `'completed'` as the "done & paid" bucket. Add an `awaiting_payment` bucket if useful for ops visibility, but do not collapse the two.
-- `src/features/request/ShiftSettlement.tsx`
-  - Now that End Shift is wired to the `endShift` server fn (separate plan), the post-end UI path stays on the settlement screen until `payment_status === 'paid'` (which now also flips status to `completed`). No new logic needed beyond exposing `awaiting_payment` in any status-guarded copy ("Shift finished — awaiting payment").
-
-### 4. Verification after deploy
-
-1. New shift: start → end. Expect row: `status='awaiting_payment'`, `payment_status='pending'`, `billing_locked_at` set, `shift_segments[1].ended_at` set. **No** trust recompute fires (audit `recompute_trust` log / `trust_blocks` last-touched).
-2. Doctor's app: rating overlay does **not** appear; shift does **not** jump to history; earnings do **not** increment. Settlement screen shows real amount.
-3. Pay via Monnify (or call `verifySettlementPayment`). Expect: `payment_status='paid'`, `status='completed'`, `paid_at` set. **Now** trust recompute fires, rating overlay appears, shift moves to history, earnings increment.
-4. Cancel path (`status='cancelled'`) and no-show path (`status='no_show'`) still trigger trust recompute as before — unchanged.
-
-## Out of scope
-
-- The separate fix that wires the End Shift button to the `endShift` server fn (already planned). Both changes are needed; this one is independent and can ship in either order, but the "shift not ready for payment" error only goes away once both are in.
-- No fallbacks, no client-side status forcing, no optimistic completion.
+- No change to `end_shift()`, `mark_settlement_paid()`, or the `coverage_request_status` enum.
+- No change to `dispatch.ts` or `CoverageScreen.tsx` filters — they correctly route `awaiting_payment` and were not the cause.
+- No change to RLS or to rows where `billing_locked_at IS NOT NULL` *outside* the backfill batch — the filter is keyed on the migration's `updated_at` fingerprint, not on the lock column.
