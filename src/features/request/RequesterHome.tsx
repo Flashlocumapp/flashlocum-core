@@ -17,11 +17,13 @@ import {
   pauseRequest,
   publishRequest,
   removeRequest,
+  expireRequest,
   resumeRequest,
   updateRequest,
   cancelRequest as netCancel,
   useNetwork,
 } from "@/lib/network";
+
 import { computeCoveragePricing, coverageKindFromLabel, type Environment } from "@/lib/pricing";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
