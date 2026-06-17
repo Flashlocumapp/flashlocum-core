@@ -1,50 +1,54 @@
 ## Goal
-Close two gaps found in the audit:
-1. Doctor-side rating comments are collected in the UI but dropped before reaching the database.
-2. Rating comments are never shown anywhere in the Admin Dashboard.
+Close the three restriction-enforcement gaps surfaced by Priority 2 verification:
+1. Restricted doctors can still go online (`doctor_presence`).
+2. Restricted requesters can still call `start_shift`.
+3. Restricted requesters can still call `resume_shift`.
 
-## Scope
-Frontend + one admin server function. No DB schema change needed — `public.ratings.feedback text` already exists and the `submit_shift_rating(_request_id,_score,_feedback)` RPC already writes it.
+Scope is database-only. No client changes — existing call sites already surface thrown RPC errors via toasts, and the banner already renders admin-applied restrictions.
 
----
+## Changes (single migration)
 
-## Part A — Persist doctor comments
+### 1. Block "Go Online" for restricted doctors
+Extend the existing helper `public.current_user_is_approved_doctor()` to also require `account_restricted_at IS NULL`:
 
-**File: `src/lib/ratings.ts`**
-- Extend `recordRating(entityId, value, shiftId, feedback?)` with an optional `feedback: string | null` param and forward it: `submitShiftRating(shiftId, value, feedback)`.
+```sql
+CREATE OR REPLACE FUNCTION public.current_user_is_approved_doctor()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+     WHERE id = auth.uid()
+       AND verification_status = 'approved'
+       AND account_restricted_at IS NULL
+  )
+$$;
+```
 
-**File: `src/features/app/CoverageScreen.tsx`** (line ~1390)
-- The component already has a `feedback` state (line 1282) bound to the textarea. Pass it into the call:
-  `void recordRating(hospitalEntityId(item.hospital), rating, item.id, feedback)`.
+Effect: the existing `doctor_presence` INSERT/UPDATE policies that gate on this helper start rejecting writes from restricted doctors, so the presence upsert fails and `[presence-remote] upsert error` is logged. The existing online/offline toggle handler already treats upsert failure as "stay offline".
 
-**File: `src/features/cover/CoverDispatchPortal.tsx`** (line ~89)
-- Pass `pendingRating.feedback ?? null` (add a `feedback` field to the `pendingRating` state shape if the overlay collects one; otherwise pass `null` so the signature stays consistent). Confirm the overlay used here exposes feedback — if not, leave `null` and only the CoverageScreen path persists comments. (No new overlay UI in this plan.)
+### 2. Block `start_shift` for restricted requesters
+Add an early guard mirroring `claim_coverage_request`:
 
-Requester path (`ShiftSettlement.tsx`) already passes feedback — no change.
+```sql
+-- inside start_shift, after the requester_id check
+IF EXISTS (
+  SELECT 1 FROM public.profiles
+   WHERE id = auth.uid() AND account_restricted_at IS NOT NULL
+) THEN
+  RAISE EXCEPTION 'Account restricted';
+END IF;
+```
 
-## Part B — Surface comments in Admin Dashboard
+### 3. Block `resume_shift` for restricted requesters
+Same guard, inserted after the requester_id check in `resume_shift`. `end_shift` and `pause_shift` are intentionally left alone so active shifts can be safely closed.
 
-**Backend: `src/lib/admin.functions.ts`**
-- Add `adminListRatings` server fn (`requireSupabaseAuth` + admin role check, matching the existing admin fn pattern in that file). Returns most-recent ratings with: `id, score, feedback, created_at, shift_id, rater_user_id, ratee_entity_id`, plus joined display names for rater and ratee (look up via `profiles` for `doc:`/`req:` prefixed ratee ids).
-- Filters: `ratee_entity_id?`, `min_score?`, `only_with_feedback?: boolean`, pagination (`limit`, `cursor`).
-
-**Frontend: new `src/features/admin/RatingsFeed.tsx`**
-- Table/list of ratings showing stars, comment (when present), reviewer → reviewee, shift id (link to existing admin shift drawer), timestamp.
-- Toggle "Only with comments".
-- Wire into the existing Admin Dashboard navigation alongside Trust Snapshots (add a tab/link — follow the existing admin shell pattern).
-
-**Per-user drawer enrichment (Trust Snapshots)**
-- In the existing user drawer on the Trust Snapshots page, add a "Recent comments" section that calls `adminListRatings({ ratee_entity_id, only_with_feedback: true, limit: 20 })`.
-
-## Verification
-1. Submit a doctor rating with a comment from CoverageScreen → confirm row in `public.ratings` with non-null `feedback`.
-2. Submit a requester rating with a comment from ShiftSettlement → same confirmation.
-3. Open Admin → Ratings feed → comment is visible with stars and names.
-4. Open Trust Snapshots drawer for that user → "Recent comments" lists the new entry.
-5. Build clean; no regressions in existing rating submission path (already-rated path still silent).
+## Verification after migration
+- Apply restriction to a test doctor → toggle Go Online → expect failure (presence row does not flip to `online=true`) and no opportunities pushed.
+- Apply restriction to a test doctor with a pending assignment → call `claim_coverage_request` → expect `Account restricted` (already verified).
+- Apply restriction to a test requester → tap Start Shift on an accepted shift → expect toast with `Account restricted`.
+- Pause an active shift, then apply restriction, then tap Resume → expect `Account restricted` toast; shift stays paused.
+- Confirm End Shift / payment / rating still work on a shift that was already active when restriction was applied.
+- Confirm banner renders with admin reason (already verified).
 
 ## Out of scope
-- Editing/deleting ratings from admin.
-- Moderating or flagging comments.
-- Any schema change to `ratings` (column already exists).
-- Adding a feedback textarea to `CoverDispatchPortal` if its current overlay doesn't have one (separate UX decision).
+- Forcing already-online doctors offline at restriction time (next presence heartbeat naturally fails to upsert; the row stays at its last value until the existing cleanup sweeps it). If a hard kick is needed, that's a follow-up.
+- Cancelling shifts that were created before the restriction.
