@@ -412,7 +412,7 @@ export function acceptIncoming() {
   // Operational guards — block BEFORE touching any state.
   const mine = currentUpcomingForMe();
   if (mine.length >= 3) {
-    markDeclined(idToAccept);
+    markDeclined(idToAccept, incomingReq.rev);
     pushToast({
       tone: "warn",
       title: "You already have the maximum number of confirmed shifts.",
@@ -421,7 +421,7 @@ export function acceptIncoming() {
   }
   const localConflict = conflictReason(mine, incomingReq);
   if (localConflict) {
-    markDeclined(idToAccept);
+    markDeclined(idToAccept, incomingReq.rev);
     pushToast({
       tone: "warn",
       title: conflictMessage(localConflict),
@@ -431,7 +431,7 @@ export function acceptIncoming() {
 
   const result = acceptRequest(idToAccept);
   if (!result.ok) {
-    markDeclined(idToAccept);
+    markDeclined(idToAccept, incomingReq.rev);
     pushToast({ tone: "warn", title: conflictMessage(result.reason) });
     return;
   }
@@ -441,6 +441,7 @@ export function acceptIncoming() {
     bump();
   }
 }
+
 
 /**
  * Time-based conflict — coverage TYPE is ignored. Two shifts conflict if
