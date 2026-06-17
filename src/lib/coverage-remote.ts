@@ -202,8 +202,13 @@ export function rowToNet(r: Row): NetRequest {
     paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,
     remittedAt: r.remitted_at ? new Date(r.remitted_at).getTime() : undefined,
     environment: r.environment === "busy" ? "busy" : "normal",
+    rev: r.rev ?? 1,
+    broadcastStartedAt: r.broadcast_started_at
+      ? new Date(r.broadcast_started_at).getTime()
+      : new Date(r.created_at).getTime(),
   };
 }
+
 
 function netPatchToRow(p: Partial<NetRequest>): Partial<Row> {
   const out: Partial<Row> = {};
