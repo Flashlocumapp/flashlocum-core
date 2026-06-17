@@ -1,54 +1,42 @@
 ## Goal
-Close the three restriction-enforcement gaps surfaced by Priority 2 verification:
-1. Restricted doctors can still go online (`doctor_presence`).
-2. Restricted requesters can still call `start_shift`.
-3. Restricted requesters can still call `resume_shift`.
+When an admin restricts a doctor, remove them from the online pool **immediately** instead of waiting up to ~2 minutes for their heartbeat to go stale. Also tighten the staleness window so unrestricted-but-disconnected doctors fade faster.
 
-Scope is database-only. No client changes — existing call sites already surface thrown RPC errors via toasts, and the banner already renders admin-applied restrictions.
+## Current behavior
+- `doctor_presence.online` is never flipped when a restriction is applied.
+- The browser heartbeats every 25s; after Priority 2, heartbeats from a restricted doctor are rejected by RLS, so `last_seen` freezes.
+- Map (`presence-remote.ts`) and admin dashboard (`admin.functions.ts`) both treat a presence row as "online" only if `last_seen` is within **120s**.
+- Net effect: a restricted doctor lingers in the pool up to ~2 min.
 
-## Changes (single migration)
+## Changes
 
-### 1. Block "Go Online" for restricted doctors
-Extend the existing helper `public.current_user_is_approved_doctor()` to also require `account_restricted_at IS NULL`:
-
-```sql
-CREATE OR REPLACE FUNCTION public.current_user_is_approved_doctor()
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles
-     WHERE id = auth.uid()
-       AND verification_status = 'approved'
-       AND account_restricted_at IS NULL
-  )
-$$;
-```
-
-Effect: the existing `doctor_presence` INSERT/UPDATE policies that gate on this helper start rejecting writes from restricted doctors, so the presence upsert fails and `[presence-remote] upsert error` is logged. The existing online/offline toggle handler already treats upsert failure as "stay offline".
-
-### 2. Block `start_shift` for restricted requesters
-Add an early guard mirroring `claim_coverage_request`:
+### 1. Migration — force offline on restriction
+Add a trigger on `public.profiles` that fires `AFTER UPDATE OF account_restricted_at`. When the column transitions from `NULL` to a non-null value, run:
 
 ```sql
--- inside start_shift, after the requester_id check
-IF EXISTS (
-  SELECT 1 FROM public.profiles
-   WHERE id = auth.uid() AND account_restricted_at IS NOT NULL
-) THEN
-  RAISE EXCEPTION 'Account restricted';
-END IF;
+UPDATE public.doctor_presence
+   SET online = false,
+       last_seen = now() - interval '10 minutes'
+ WHERE user_id = NEW.id;
 ```
 
-### 3. Block `resume_shift` for restricted requesters
-Same guard, inserted after the requester_id check in `resume_shift`. `end_shift` and `pause_shift` are intentionally left alone so active shifts can be safely closed.
+Pushing `last_seen` into the past guarantees every freshness check (current and tightened) treats the row as offline, regardless of `online` flag drift. The existing `doctor_presence_changes` realtime channel propagates the UPDATE to all connected clients within ~1s.
 
-## Verification after migration
-- Apply restriction to a test doctor → toggle Go Online → expect failure (presence row does not flip to `online=true`) and no opportunities pushed.
-- Apply restriction to a test doctor with a pending assignment → call `claim_coverage_request` → expect `Account restricted` (already verified).
-- Apply restriction to a test requester → tap Start Shift on an accepted shift → expect toast with `Account restricted`.
-- Pause an active shift, then apply restriction, then tap Resume → expect `Account restricted` toast; shift stays paused.
-- Confirm End Shift / payment / rating still work on a shift that was already active when restriction was applied.
-- Confirm banner renders with admin reason (already verified).
+No new GRANTs needed — function is `SECURITY DEFINER` owned by postgres, and `doctor_presence` already has the right grants.
+
+### 2. Tighten freshness window
+Change `STALE_MS` in `src/lib/presence-remote.ts` from `2 * 60 * 1000` to `60 * 1000` (60s). With a 25s heartbeat, a healthy doctor still has 2 heartbeats of slack; a disconnected one drops out at ~60s instead of ~120s.
+
+Mirror the same threshold in `src/lib/admin.functions.ts` (line 597: `120_000` → `60_000`) so the admin dashboard "online now" badge matches the map.
+
+### 3. No client code beyond the threshold change
+Realtime UPDATE from the trigger already triggers a re-render through the existing `doctor_presence_changes` subscription. No new client wiring required.
+
+## Verification
+1. As admin, restrict a doctor who is currently online. Within ~1s, their marker disappears from the live map and their badge flips to "offline" on the admin dashboard.
+2. Unrestrict, then have the doctor toggle Go Online (already blocked while restricted; succeeds after unrestrict). Confirm they reappear on the map within one heartbeat (~25s).
+3. With an unrestricted doctor, kill the tab. Confirm they fade out of the pool at ~60s (not 120s).
+4. Confirm End Shift / payment / rating remain functional on any active shift (no change to those paths).
 
 ## Out of scope
-- Forcing already-online doctors offline at restriction time (next presence heartbeat naturally fails to upsert; the row stays at its last value until the existing cleanup sweeps it). If a hard kick is needed, that's a follow-up.
-- Cancelling shifts that were created before the restriction.
+- Notifying the restricted doctor's device in real time ("you have been restricted") — separate work.
+- Cancelling any in-flight shifts the restricted doctor is currently working — Priority 2 already decided in-flight shifts close cleanly.
