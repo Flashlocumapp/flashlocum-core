@@ -787,38 +787,41 @@ function RequestCard({
 
         {isUpcoming && (
           <button
-            onClick={(e) => { e.stopPropagation(); onStart(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
+            disabled={!!pending}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
             style={{
               background: "var(--color-foreground)",
               color: "var(--color-background)",
             }}
           >
-            {(item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift"}
+            {startLabel ?? ((item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
           </button>
         )}
         {isActive && item.days > 1 && (
           <button
-            onClick={(e) => { e.stopPropagation(); onPause(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
+            disabled={!!pending}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
             style={{
               background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
               color: "var(--color-foreground)",
             }}
           >
-            Pause Shift
+            {pauseLabel ?? "Pause Shift"}
           </button>
         )}
         {isActive && (
           <button
-            onClick={(e) => { e.stopPropagation(); onEnd(); }}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+            onClick={(e) => { e.stopPropagation(); if (!pending) onEnd(); }}
+            disabled={!!pending}
+            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
             style={{
               background: "var(--color-foreground)",
               color: "var(--color-background)",
             }}
           >
-            End Shift
+            {endLabel ?? "End Shift"}
           </button>
         )}
       </div>
