@@ -47,6 +47,8 @@ export type Database = {
           payment_status: string | null
           payment_url: string | null
           phone: string
+          pricing_version_id: string | null
+          rate_snapshot: Json | null
           remitted_at: string | null
           requester_id: string
           rev: number
@@ -90,6 +92,8 @@ export type Database = {
           payment_status?: string | null
           payment_url?: string | null
           phone?: string
+          pricing_version_id?: string | null
+          rate_snapshot?: Json | null
           remitted_at?: string | null
           requester_id: string
           rev?: number
@@ -133,6 +137,8 @@ export type Database = {
           payment_status?: string | null
           payment_url?: string | null
           phone?: string
+          pricing_version_id?: string | null
+          rate_snapshot?: Json | null
           remitted_at?: string | null
           requester_id?: string
           rev?: number
@@ -289,6 +295,44 @@ export type Database = {
           used_at?: string | null
         }
         Relationships: []
+      }
+      payment_underpayments: {
+        Row: {
+          expected_amount: number
+          id: string
+          payment_reference: string
+          raw: Json | null
+          received_amount: number
+          received_at: string
+          request_id: string | null
+        }
+        Insert: {
+          expected_amount: number
+          id?: string
+          payment_reference: string
+          raw?: Json | null
+          received_amount: number
+          received_at?: string
+          request_id?: string | null
+        }
+        Update: {
+          expected_amount?: number
+          id?: string
+          payment_reference?: string
+          raw?: Json | null
+          received_amount?: number
+          received_at?: string
+          request_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_underpayments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "coverage_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -667,6 +711,8 @@ export type Database = {
           payment_status: string | null
           payment_url: string | null
           phone: string
+          pricing_version_id: string | null
+          rate_snapshot: Json | null
           remitted_at: string | null
           requester_id: string
           rev: number
