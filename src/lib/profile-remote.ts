@@ -47,9 +47,11 @@ export type AdminOverviewStats = {
   coverage_upcoming: number;
   coverage_completed: number;
   coverage_cancelled: number;
+  coverage_expired: number;
   active_today: number;
   active_week: number;
 };
+
 
 export type AdminUserRow = {
   id: string;
