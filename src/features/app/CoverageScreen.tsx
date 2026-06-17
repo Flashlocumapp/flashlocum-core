@@ -29,7 +29,6 @@ import { getDoctorIdentity, useDoctorIdentity } from "@/lib/doctor-identity";
 
 import {
   cancelRequest as netCancelRequest,
-  completeRequest as netCompleteRequest,
   pauseShift as netPauseShift,
   getSessionId,
   startRequest as netStartRequest,
