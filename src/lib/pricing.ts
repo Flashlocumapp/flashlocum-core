@@ -232,8 +232,8 @@ export function roundedOverrunMinutes(workedMin: number): number {
   return Math.ceil(total / block) * block;
 }
 export function billableMinutes(workedMin: number): number {
-  if (!Number.isFinite(workedMin) || workedMin <= 0) return 0;
-  return Math.max(CURRENT.modifiers.first_hour_min, roundedOverrunMinutes(workedMin));
+  const safe = Number.isFinite(workedMin) ? Math.max(0, Math.floor(workedMin)) : 0;
+  return Math.max(CURRENT.modifiers.first_hour_min, roundedOverrunMinutes(safe));
 }
 
 export function computeWorkedPricing(
@@ -280,15 +280,15 @@ export function computeWorkedPricing(
     };
   }
 
-  let working = worked;
-  if (working > 0 && working < t.modifiers.first_hour_min) working = t.modifiers.first_hour_min;
+  // HARD 1-HOUR MINIMUM: any started shift bills at least first_hour_min
+  const working = Math.max(worked, t.modifiers.first_hour_min);
 
   let billable = 0;
   let toleranceFired = false;
-  if (bookedPerDay > 0 && working > 0 && Math.abs(working - bookedPerDay) <= t.modifiers.tolerance_min) {
+  if (bookedPerDay > 0 && Math.abs(working - bookedPerDay) <= t.modifiers.tolerance_min) {
     billable = bookedPerDay;
     toleranceFired = true;
-  } else if (working > 0) {
+  } else {
     billable = Math.ceil(working / t.modifiers.block_min) * t.modifiers.block_min;
   }
 
