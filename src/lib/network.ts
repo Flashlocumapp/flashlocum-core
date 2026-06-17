@@ -913,6 +913,25 @@ export function removeRequest(id: string) {
   void remoteDeleteRequest(id);
 }
 
+/**
+ * Pre-acceptance expiry — 180s broadcast window elapsed with no doctor
+ * acceptance. The row is preserved server-side as `expired` (admin analytics
+ * only); locally we drop it so the requester overlay and doctor feeds clear.
+ */
+export function expireRequest(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  if (cur.status !== "broadcasting" && cur.status !== "paused") return;
+  if (cur.acceptedBy) return;
+  const { [id]: _gone, ...rest } = state.requests;
+  save(
+    { ...state, requests: rest },
+    { actor: "system", actorId: "system", action: "remove", shiftId: id },
+  );
+  void remoteExpireRequest(id);
+}
+
 /* ---------------- selectors ---------------- */
 
 export function onlineDoctors(s: NetState): DoctorPresence[] {
@@ -920,21 +939,20 @@ export function onlineDoctors(s: NetState): DoctorPresence[] {
 }
 
 export function broadcastingRequests(s: NetState): NetRequest[] {
-  // NOTE: createdAt/endTs come from the database as real wall-clock
-  // timestamps. A newly-published request must surface to doctors even if
-  // the requester chose a schedule window that has already ended today; the
-  // requester flow allowed publishing it, so silently filtering it here is
-  // what made the doctor-side accept/decline card disappear in the split-screen
-  // test. The freshness gate is the publish TTL, not the shift end time.
+  // Freshness gate uses broadcastStartedAt, NOT createdAt — edit re-publish
+  // and dismiss-resume (paused → searching) restart the 180s window
+  // server-side via the bump_request_rev trigger. Falls back to createdAt
+  // for any legacy row without a broadcast_started_at column populated.
   const now = Date.now();
   return Object.values(s.requests)
     .filter(
       (r) =>
         r.status === "broadcasting" &&
-        now - r.createdAt < BROADCAST_TTL_MS,
+        now - (r.broadcastStartedAt ?? r.createdAt) < BROADCAST_TTL_MS,
     )
-    .sort((a, b) => a.createdAt - b.createdAt);
+    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt));
 }
+
 
 
 export function getNetworkSnapshot(): NetState {
