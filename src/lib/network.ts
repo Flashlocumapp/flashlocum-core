@@ -161,7 +161,19 @@ export type NetRequest = {
   remittedAt?: number;
   /** Environment toggle at booking time; multiplies pricing ×1.25 when 'busy'. */
   environment?: "normal" | "busy";
+  /** Monotonic offer revision. Bumped server-side whenever the requester edits
+   *  material fields while the row is pre-acceptance, or resumes after a
+   *  dismiss (paused → searching). Doctor decline keys are scoped to
+   *  `${id}:${rev}` so a new offer reaches doctors who previously declined.
+   */
+  rev?: number;
+  /** When this offer was last broadcast (publish, edit re-publish, or
+   *  dismiss-resume). Drives the 180s pre-acceptance expiry timer and the
+   *  doctor open-pool freshness gate.
+   */
+  broadcastStartedAt?: number;
 };
+
 
 
 export type Actor = "requester" | "doctor" | "system";
