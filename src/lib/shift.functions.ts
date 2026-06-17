@@ -86,11 +86,25 @@ export const resumeShift = createServerFn({ method: "POST" })
     const { data: r, error } = await context.supabase.rpc("resume_shift", {
       _request_id: data.requestId,
     });
+    let alreadyActive = false;
     if (error) {
-      if (/already (active|started|in progress)|not paused/i.test(error.message)) return { ok: true, already: true } as any;
-      throw new Error(error.message);
+      if (/already (active|started|in progress)|not paused/i.test(error.message)) {
+        alreadyActive = true;
+      } else {
+        throw new Error(error.message);
+      }
     }
-    return r as any;
+    // Read the latest segment's started_at so the client can anchor its timer
+    // on the server timestamp (not a local simNow()).
+    const { data: seg } = await context.supabase
+      .from("shift_segments")
+      .select("started_at")
+      .eq("request_id", data.requestId)
+      .order("segment_index", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const startedAtMs = seg?.started_at ? Date.parse(seg.started_at) : null;
+    return { ok: true as const, alreadyActive, startedAtMs, raw: r as any };
   });
 
 export const endShift = createServerFn({ method: "POST" })
