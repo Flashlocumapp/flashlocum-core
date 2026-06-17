@@ -640,14 +640,17 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     }, 15_000);
   }
 
-  // Tab/app reopen: force a server fetch the moment the user returns so
-  // Incoming Coverage cannot show pre-blur state without revalidation.
+  // Tab/app reopen: refresh in the background so Incoming Coverage stays
+  // visible across the visibility flip. We intentionally do NOT blank the
+  // live-snapshot guarantee here — blanking caused a card flicker on every
+  // mobile visibility toggle even though the server snapshot was still fresh.
+  // If the refetch itself fails or returns nothing, the snapshot pipeline
+  // will surface that on its own.
   let onVisibility: (() => void) | null = null;
   let onOnline: (() => void) | null = null;
   if (typeof document !== "undefined") {
     onVisibility = () => {
       if (document.visibilityState === "visible") {
-        setLiveSnapshotSeen(false);
         void refreshSnapshot();
       }
     };
@@ -655,7 +658,6 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   }
   if (typeof window !== "undefined") {
     onOnline = () => {
-      setLiveSnapshotSeen(false);
       void refreshSnapshot();
     };
     window.addEventListener("online", onOnline);
