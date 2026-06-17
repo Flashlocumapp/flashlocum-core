@@ -115,7 +115,10 @@ export const endShift = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) {
-      if (/already (ended|completed)|not in progress/i.test(error.message)) return { ok: true, already: true } as any;
+      // Idempotent: a shift already billed/completed is a real success. But
+      // "not in progress" means the shift was never started — billing_locked_at
+      // is null, so beginSettlementCheckout MUST NOT proceed. Surface the error.
+      if (/already (ended|completed)/i.test(error.message)) return { ok: true, already: true } as any;
       throw new Error(error.message);
     }
     return r as { total_billed_amount: number; payment_due_at: string };
