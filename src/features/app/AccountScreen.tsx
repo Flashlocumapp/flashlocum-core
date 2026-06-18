@@ -35,6 +35,36 @@ function deriveInitials(name: string, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
+function useSelfieUrl(pathOrUrl: string | null): string | null {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!pathOrUrl) {
+      setSrc(null);
+      return;
+    }
+    if (/^(https?:|data:|blob:)/i.test(pathOrUrl)) {
+      setSrc(pathOrUrl);
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase.storage
+        .from("doctors")
+        .createSignedUrl(pathOrUrl, 60 * 60);
+      if (cancelled) return;
+      if (error || !data?.signedUrl) {
+        setSrc(null);
+        return;
+      }
+      setSrc(data.signedUrl);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathOrUrl]);
+  return src;
+}
+
 export function AccountScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
