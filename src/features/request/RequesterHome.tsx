@@ -57,6 +57,8 @@ const COVERAGE_SUBTEXT: Partial<Record<CoverageId, string>> = {
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
 
+const MAX_BOOKING_DAYS = 14;
+
 /* ---------------------- Draft (real timing) ---------------------- */
 
 type Draft = {
