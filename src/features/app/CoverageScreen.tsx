@@ -191,6 +191,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           r.requesterSessionId === sid &&
           (r.status === "accepted" ||
             r.status === "active" ||
+            r.status === "paused" ||
             r.status === "awaiting_payment" ||
             r.status === "completed" ||
             r.status === "cancelled"),
