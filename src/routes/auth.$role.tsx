@@ -573,9 +573,9 @@ function AuthScreen() {
           {mode === "signup" && (
             <p className="text-center text-[11px] text-muted-foreground">
               By creating an account, you agree to our{" "}
-              <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms of Service</Link>{" "}
+              <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">{" "}</Link>{" "}
               and{" "}
-              <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy Policy</Link>.
+              <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">{" "}</Link>.
             </p>
           )}
         </form>
