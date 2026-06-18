@@ -5,7 +5,8 @@ import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
-import { recordRating } from "@/lib/ratings";
+import { submitShiftRating } from "@/lib/trust";
+import { pushToast } from "@/lib/notifications";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
 
