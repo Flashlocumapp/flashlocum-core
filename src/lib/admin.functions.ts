@@ -149,6 +149,8 @@ export type AdminShiftRow = {
   requester_email: string | null;
   doctor_name: string | null;
   doctor_phone: string | null;
+  requester_to_doctor: { score: number; feedback: string | null; created_at: string } | null;
+  doctor_to_requester: { score: number; feedback: string | null; created_at: string } | null;
 };
 
 /** Admin-only: list all coverage_requests with requester/doctor names joined.
