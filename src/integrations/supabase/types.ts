@@ -1044,8 +1044,6 @@ export type Database = {
       recompute_trust: { Args: { _user_id: string }; Returns: Json }
       resume_shift: { Args: { _request_id: string }; Returns: Json }
       server_now: { Args: never; Returns: string }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       start_shift: { Args: { _request_id: string }; Returns: Json }
       submit_shift_rating: {
         Args: { _feedback?: string; _request_id: string; _score: number }
