@@ -44,6 +44,7 @@ export function AccountScreen() {
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
   const { profile, loading: profileLoading } = useMyProfile();
+  const selfieSrc = useSelfieUrl(profile?.selfie_url ?? null);
 
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
 
