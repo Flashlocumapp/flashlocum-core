@@ -71,6 +71,8 @@ type RequestItem = {
   days: number;
   dayIndex: number;
   environment?: "normal" | "busy";
+  /** Monotonic flag — true once the shift has ever entered Active. */
+  everStarted: boolean;
 };
 
 
