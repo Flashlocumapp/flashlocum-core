@@ -255,10 +255,132 @@ function AdminShiftsPage() {
                       {r.payment_status || "—"}
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
+                      <RatingsCell row={r} />
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
                       <div>{fmtRelative(r.updated_at)}</div>
                       <div className="text-[11px]">{fmt(r.created_at)}</div>
                     </td>
                   </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {openRow && <RatingDetailDrawer row={openRow} onClose={() => setOpenRow(null)} />}
+    </div>
+  );
+}
+
+function RatingsCell({ row }: { row: AdminShiftRow }) {
+  const r2d = row.requester_to_doctor;
+  const d2r = row.doctor_to_requester;
+  if (!r2d && !d2r) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="space-y-0.5 text-[12px]">
+      <div>
+        <span className="text-muted-foreground">R→D:</span>{" "}
+        {r2d ? (
+          <span className="text-foreground">
+            ★{r2d.score}
+            {r2d.feedback ? ` "${truncate(r2d.feedback, 28)}"` : ""}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </div>
+      <div>
+        <span className="text-muted-foreground">D→R:</span>{" "}
+        {d2r ? (
+          <span className="text-foreground">
+            ★{d2r.score}
+            {d2r.feedback ? ` "${truncate(d2r.feedback, 28)}"` : ""}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + "…";
+}
+
+function RatingDetailDrawer({ row, onClose }: { row: AdminShiftRow; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-foreground/30" />
+      <div
+        className="relative z-10 h-full w-full max-w-md overflow-y-auto p-6"
+        style={{ background: "var(--color-surface-elevated)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Shift</div>
+            <div className="text-[15px] font-medium">{row.hospital}</div>
+            <div className="text-[12px] text-muted-foreground">
+              {row.day} · {row.start_time}–{row.end_time}
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-full px-3 py-1 text-[12px] bg-secondary">
+            Close
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-5">
+          <RatingBlock
+            title="Requester → Doctor"
+            rater={row.requester_name}
+            ratee={row.doctor_name}
+            rating={row.requester_to_doctor}
+          />
+          <RatingBlock
+            title="Doctor → Requester"
+            rater={row.doctor_name}
+            ratee={row.requester_name}
+            rating={row.doctor_to_requester}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RatingBlock({
+  title,
+  rater,
+  ratee,
+  rating,
+}: {
+  title: string;
+  rater: string | null;
+  ratee: string | null;
+  rating: { score: number; feedback: string | null; created_at: string } | null;
+}) {
+  return (
+    <div className="rounded-xl border p-4">
+      <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{title}</div>
+      <div className="mt-1 text-[12.5px] text-muted-foreground">
+        {rater || "—"} <span className="opacity-50">→</span> {ratee || "—"}
+      </div>
+      {rating ? (
+        <>
+          <div className="mt-2 text-[20px] font-semibold tracking-tight">★ {rating.score}/5</div>
+          <div className="mt-2 whitespace-pre-wrap text-[13px]">
+            {rating.feedback || <span className="text-muted-foreground">No comment.</span>}
+          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground">{fmt(rating.created_at)}</div>
+        </>
+      ) : (
+        <div className="mt-2 text-[13px] text-muted-foreground">Not yet rated.</div>
+      )}
+    </div>
+  );
+}
                 ))}
               </tbody>
             </table>
