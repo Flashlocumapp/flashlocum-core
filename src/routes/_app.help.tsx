@@ -77,7 +77,7 @@ function RequesterContent() {
             <p className="font-medium text-foreground">A request can be:</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Single-day</li>
-              <li>Multi-day (up to 7 days)</li>
+              <li>Multi-day (up to 14 days)</li>
             </ul>
           </div>
         </AccordionContent>
@@ -268,7 +268,7 @@ function DoctorContent() {
             <p>Shifts can be:</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Single-day</li>
-              <li>Multi-day (up to 7 days)</li>
+              <li>Multi-day (up to 14 days)</li>
             </ul>
             <p>Once a shift is accepted, it appears in the doctor&apos;s coverage list.</p>
           </div>
@@ -407,7 +407,7 @@ function DoctorContent() {
         </AccordionTrigger>
         <AccordionContent className="pb-4">
           <div className="space-y-2 text-[13.5px] leading-relaxed text-muted-foreground">
-            <p>One assignment can last multiple days (max 7 days). Same doctor stays for the entire assignment.</p>
+            <p>One assignment can last multiple days (max 14 days). Same doctor stays for the entire assignment.</p>
             <p className="font-medium text-foreground">Flow</p>
             <p>Start Shift → Resume/Pause → End Shift</p>
             <p>Only the final End Shift closes the entire assignment. Ratings happen only once at the end.</p>

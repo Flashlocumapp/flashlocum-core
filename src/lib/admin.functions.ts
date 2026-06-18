@@ -764,7 +764,7 @@ export const adminRequesterAnalytics = createServerFn({ method: "POST" })
       if (r.accepted_by && r.created_at && r.updated_at) {
         const mins =
           (new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / 60_000;
-        if (mins > 0 && mins < 7 * 24 * 60) {
+        if (mins > 0 && mins < 14 * 24 * 60) {
           cur.fillTimes.push(mins);
           fillTimes.push(mins);
         }

@@ -57,6 +57,8 @@ const COVERAGE_SUBTEXT: Partial<Record<CoverageId, string>> = {
 
 const NOTE_PLACEHOLDER = "Female doctor needed; accommodation available; Mon, Tue, Weds";
 
+const MAX_BOOKING_DAYS = 14;
+
 /* ---------------------- Draft (real timing) ---------------------- */
 
 type Draft = {
@@ -255,7 +257,7 @@ function HomeScreen({ active }: { active: boolean }) {
     setCoverageRaw(c);
     setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
     if (c === "24h") setDays(1);
-    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
+    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > MAX_BOOKING_DAYS ? 1 : d));
   };
 
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -836,7 +838,7 @@ function dateBounds(): { min: string; max: string } {
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const today = new Date();
   const max = new Date(today);
-  max.setDate(max.getDate() + 6);
+  max.setDate(max.getDate() + (MAX_BOOKING_DAYS - 1));
   return { min: fmt(today), max: fmt(max) };
 }
 
@@ -856,7 +858,7 @@ function CoverageFields({
   beforeNoteSlot?: React.ReactNode;
 }) {
   const bounds = dateBounds();
-  // Clamp start date into the 7-day operational window if it drifts.
+  // Clamp start date into the 14-day operational window if it drifts.
   useEffect(() => {
     if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
     else if (draft.startDate > bounds.max) patchDraft({ startDate: bounds.max });
@@ -993,7 +995,7 @@ const CtrlField = memo(function CtrlField({
             if (max && v > max) {
               pushToast({
                 tone: "info",
-                title: "Coverage requests are limited to 7 days maximum.",
+                title: "Coverage requests are limited to 14 days maximum.",
               });
               onChange?.(max);
               return;
@@ -1065,12 +1067,12 @@ const DaysStepper = memo(function DaysStepper({ value, setValue }: { value: numb
       value={value}
       setValue={setValue}
       min={1}
-      max={7}
+      max={MAX_BOOKING_DAYS}
       unit={(n) => (n === 1 ? "day" : "days")}
       onCap={() =>
         pushToast({
           tone: "info",
-          title: "Coverage requests are limited to 7 days maximum.",
+          title: "Coverage requests are limited to 14 days maximum.",
         })
       }
     />
