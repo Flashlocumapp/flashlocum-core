@@ -641,6 +641,11 @@ function RequesterDetailSheet({
 
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
             {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
+            {item.days > 1 && (
+              <span className="ml-2 inline-flex h-4 items-center rounded-full bg-secondary/80 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
+                Day {Math.min(item.dayIndex, item.days)} of {item.days}
+              </span>
+            )}
           </div>
 
           {item.note && (
@@ -821,6 +826,11 @@ function RequestCard({
             }}
           >
             {meta}
+            {!isHistory && item.days > 1 && (
+              <span className="ml-2 inline-flex h-4 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
+                Day {Math.min(item.dayIndex, item.days)} of {item.days}
+              </span>
+            )}
           </div>
           {isActive && (
             <div className="mt-0.5">

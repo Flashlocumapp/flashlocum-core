@@ -44,8 +44,8 @@ import {
  * lifecycle state until this promise resolves successfully.
  */
 type LifecycleResult =
-  | { ok: true; startedAtMs?: number | null; totalBilledAmount?: number; paymentDueAt?: string; already?: boolean }
-  | { ok: false; error: string };
+  | { ok: true; startedAtMs?: number | null; totalBilledAmount?: number; paymentDueAt?: string; already?: boolean; dayIndex?: number }
+  | { ok: false; error: string; finalDay?: boolean };
 
 async function callServerLifecycle(
   kind: "start" | "pause" | "resume" | "end",
@@ -61,9 +61,12 @@ async function callServerLifecycle(
     }
     const m = await import("./shift.functions");
     if (kind === "pause") {
-      await m.pauseShift({ data: { requestId } });
+      const res: any = await m.pauseShift({ data: { requestId } });
+      if (res && res.ok === false && res.finalDay) {
+        return { ok: false, error: "Final day - use End Shift to complete this booking", finalDay: true };
+      }
       notifyCoverageChanged(requestId);
-      return { ok: true };
+      return { ok: true, dayIndex: typeof res?.day_index === "number" ? res.day_index : undefined };
     }
     if (kind === "resume") {
       const res: any = await m.resumeShift({ data: { requestId } });
@@ -949,14 +952,20 @@ export async function pauseShift(id: string): Promise<{ ok: boolean; error?: str
     const res = await callServerLifecycle("pause", id);
     if (!res.ok) {
       const { pushToast } = await import("./notifications");
-      pushToast({ tone: "warn", title: res.error || "Couldn't pause this shift" });
+      pushToast({
+        tone: "warn",
+        title: res.finalDay
+          ? "Final day — use End Shift to complete this booking"
+          : res.error || "Couldn't pause this shift",
+      });
       return { ok: false, error: res.error };
     }
     const segment = cur.startedAt != null ? Math.max(0, simNow() - cur.startedAt) : 0;
     const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+    const nextDayIndex = res.dayIndex ?? (cur.dayIndex ?? 1) + 1;
     applyLocalPatch(
       id,
-      { status: "paused", startedAt: undefined, accumulatedMs, everStarted: true },
+      { status: "paused", startedAt: undefined, accumulatedMs, everStarted: true, dayIndex: nextDayIndex },
       { actor: "requester", actorId: getSessionId(), action: "pause" },
     );
     return { ok: true };
