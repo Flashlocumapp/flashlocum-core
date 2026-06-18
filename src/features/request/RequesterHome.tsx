@@ -838,7 +838,7 @@ function dateBounds(): { min: string; max: string } {
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const today = new Date();
   const max = new Date(today);
-  max.setDate(max.getDate() + 6);
+  max.setDate(max.getDate() + (MAX_BOOKING_DAYS - 1));
   return { min: fmt(today), max: fmt(max) };
 }
 
