@@ -381,12 +381,3 @@ function RatingBlock({
     </div>
   );
 }
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
