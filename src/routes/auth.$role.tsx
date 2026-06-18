@@ -575,7 +575,7 @@ function AuthScreen() {
               By creating an account, you agree to our{" "}
               <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms of Service</Link>{" "}
               and{" "}
-              <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy Policy</Link>.
+              <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">{"\n"}</Link>.
             </p>
           )}
         </form>
