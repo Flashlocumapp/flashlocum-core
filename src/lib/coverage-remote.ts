@@ -210,6 +210,7 @@ export function rowToNet(r: Row): NetRequest {
     broadcastStartedAt: r.broadcast_started_at
       ? new Date(r.broadcast_started_at).getTime()
       : new Date(r.created_at).getTime(),
+    everStarted: !!r.first_started_at,
   };
 }
 
