@@ -121,8 +121,8 @@ export function AccountScreen() {
               color: "var(--color-primary)",
             }}
           >
-            {isDoctor && profile?.selfie_url ? (
-              <img src={profile.selfie_url} alt="" className="h-full w-full object-cover" />
+            {isDoctor && selfieSrc ? (
+              <img src={selfieSrc} alt="" className="h-full w-full object-cover" />
             ) : (
               identity.initials
             )}
