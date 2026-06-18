@@ -194,7 +194,11 @@ function AdminShiftsPage() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.id} className="border-t hover:bg-secondary/30 align-top">
+                  <tr
+                    key={r.id}
+                    className="border-t hover:bg-secondary/30 align-top cursor-pointer"
+                    onClick={() => setOpenRow(r)}
+                  >
                     <td className="px-4 py-2.5">
                       <Chip color={statusColor(r.status)}>{r.status}</Chip>
                     </td>
