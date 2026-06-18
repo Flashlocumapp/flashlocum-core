@@ -932,7 +932,7 @@ export async function pauseShift(id: string): Promise<{ ok: boolean; error?: str
     const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
     applyLocalPatch(
       id,
-      { status: "accepted", startedAt: undefined, accumulatedMs },
+      { status: "paused", startedAt: undefined, accumulatedMs },
       { actor: "requester", actorId: getSessionId(), action: "pause" },
     );
     return { ok: true };
