@@ -794,10 +794,12 @@ function ConfigureBody({
             draft={draft}
             patchDraft={patchDraft}
             beforeNoteSlot={
-              <EnvironmentSelector
-                value={environment}
-                onChange={setEnvironment}
-              />
+              coverage === "home" ? null : (
+                <EnvironmentSelector
+                  value={environment}
+                  onChange={setEnvironment}
+                />
+              )
             }
           />
         </motion.div>
