@@ -232,11 +232,12 @@ export function useDispatch(): View {
   // list_open_coverage_requests. Login / refresh / reconnect / reopen all
   // reset this flag, so a stale broadcast cannot resurrect.
   //
-  // Eligibility (approved doctor + online) is enforced SERVER-SIDE in the
-  // RPC and via the role gate in CoverDispatchPortal — we intentionally do
-  // NOT gate this on the local `online` mirror, which can lag the backend
-  // presence row on cold start / reconnect and would hide a valid card.
-  if (upcoming.length < 3 && hasLiveSnapshot()) {
+  // Eligibility is enforced server-side in `list_open_coverage_requests`
+  // (approved + online + not restricted) AND defended client-side here so a
+  // doctor who toggles offline mid-session never sees a leftover card from a
+  // pre-toggle snapshot. The local `online` mirror is the doctor's most
+  // recent intent — when false, suppress unconditionally.
+  if (online && upcoming.length < 3 && hasLiveSnapshot()) {
     const r = liveRequests.find(
       (x) =>
         x.status === "broadcasting" &&
