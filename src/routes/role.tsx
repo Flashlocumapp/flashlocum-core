@@ -54,9 +54,9 @@ function RoleScreen() {
             FLASHLOCUM · REALTIME COVERAGE NETWORK
           </div>
           <div className="mt-3 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
-            <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms</Link>
-            <span className="text-hairline">·</span>
-            <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy</Link>
+            <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">{"\n"}</Link>
+            <span className="text-hairline">{"\n"}</span>
+            <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">{"\n"}</Link>
           </div>
         </div>
       </div>
