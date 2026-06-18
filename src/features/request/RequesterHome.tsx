@@ -1200,7 +1200,12 @@ function DispatchOverlay({
   useEffect(() => {
     if (stage !== "dispatch") return;
     const cur = requestId ? net.requests[requestId] : undefined;
-    const canReuseRequest = cur?.status === "broadcasting" || cur?.status === "paused";
+    // Pre-acceptance reuse only. A multi-day shift that has already been
+    // accepted / started shares the `paused` enum value but is owned by the
+    // shift_segments lifecycle — never auto-resume it here, or the paused
+    // shift would flip back to broadcasting → accepted → active on its own.
+    const isPreAcceptance = !!cur && !cur.acceptedBy && cur.startedAt == null && (cur.accumulatedMs ?? 0) === 0;
+    const canReuseRequest = isPreAcceptance && (cur?.status === "broadcasting" || cur?.status === "paused");
     if (cur && canReuseRequest) {
       // Coming back from configure: sync any edits then resume.
       updateRequest(cur.id, {
@@ -1222,7 +1227,8 @@ function DispatchOverlay({
       ownedIdRef.current = cur.id;
       return;
     }
-    // Stale or missing id (e.g. left over from a completed/cancelled flow)
+    // Stale or missing id (e.g. left over from a completed/cancelled flow,
+    // or an accepted multi-day shift the requester opened the sheet over)
     // — discard it and publish a fresh request so the requester is never
     // attached to a previous doctor acceptance.
     if (cur && !canReuseRequest) {
@@ -1257,11 +1263,16 @@ function DispatchOverlay({
   }, [stage]);
 
   // Pause / resume broadcasting whenever the cancel or edit sheet is open.
+  // Pre-acceptance only — pauseRequest/resumeRequest themselves refuse to
+  // touch accepted shifts, but we also gate here so a leftover requestId
+  // pointing at an accepted multi-day shift never even attempts the call.
   useEffect(() => {
     if (!requestId) return;
+    const cur = net.requests[requestId];
+    if (!cur || cur.acceptedBy || cur.startedAt != null) return;
     if (paused) pauseRequest(requestId);
     else if (stage === "dispatch") resumeRequest(requestId);
-  }, [paused, requestId, stage]);
+  }, [paused, requestId, stage, net]);
 
   // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
   // re-publish and dismiss-resume (paused → searching) automatically restart
