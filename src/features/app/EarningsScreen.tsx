@@ -97,7 +97,7 @@ export function EarningsScreen({ active = true }: { active?: boolean }) {
   const navigate = useNavigate();
   const { history } = useDispatch();
   const [role, setLocalRole] = useState<Role | null>(() => getRole());
-  const [range, setRange] = useState<RangeKey>("last_month");
+  const [range, setRange] = useState<RangeKey>("this_week");
   const [expanded, setExpanded] = useState<string | null>(null);
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
   const isDoctor = role === "cover";
