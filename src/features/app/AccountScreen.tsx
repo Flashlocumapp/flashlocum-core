@@ -35,6 +35,36 @@ function deriveInitials(name: string, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
+function useSelfieUrl(pathOrUrl: string | null): string | null {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!pathOrUrl) {
+      setSrc(null);
+      return;
+    }
+    if (/^(https?:|data:|blob:)/i.test(pathOrUrl)) {
+      setSrc(pathOrUrl);
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase.storage
+        .from("doctors")
+        .createSignedUrl(pathOrUrl, 60 * 60);
+      if (cancelled) return;
+      if (error || !data?.signedUrl) {
+        setSrc(null);
+        return;
+      }
+      setSrc(data.signedUrl);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathOrUrl]);
+  return src;
+}
+
 export function AccountScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -44,6 +74,7 @@ export function AccountScreen() {
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
   const { profile, loading: profileLoading } = useMyProfile();
+  const selfieSrc = useSelfieUrl(profile?.selfie_url ?? null);
 
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
 
@@ -120,8 +151,8 @@ export function AccountScreen() {
               color: "var(--color-primary)",
             }}
           >
-            {isDoctor && profile?.selfie_url ? (
-              <img src={profile.selfie_url} alt="" className="h-full w-full object-cover" />
+            {isDoctor && selfieSrc ? (
+              <img src={selfieSrc} alt="" className="h-full w-full object-cover" />
             ) : (
               identity.initials
             )}
@@ -133,27 +164,47 @@ export function AccountScreen() {
         </div>
 
         <Section title={isDoctor ? "Professional Information" : "Personal Information"}>
-          <button
-            onClick={() => setProfileOpen(true)}
-            className="w-full overflow-hidden rounded-2xl text-left active:bg-accent"
-            style={{ background: "var(--color-surface-elevated)" }}
-          >
-            {personalRows.map((r, i) => (
-              <div
-                key={r.label}
-                className="flex items-center justify-between px-4 py-3.5"
-                style={{
-                  borderTop:
-                    i === 0
-                      ? "none"
-                      : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
-                }}
+          {isDoctor ? (
+            <ListGroup>
+              {personalRows.map((r) => (
+                <DetailRow key={r.label} label={r.label} value={r.value} />
+              ))}
+            </ListGroup>
+          ) : (
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="w-full overflow-hidden rounded-2xl text-left active:bg-accent"
+              style={{ background: "var(--color-surface-elevated)" }}
+            >
+              {personalRows.map((r, i) => (
+                <div
+                  key={r.label}
+                  className="flex items-center justify-between px-4 py-3.5"
+                  style={{
+                    borderTop:
+                      i === 0
+                        ? "none"
+                        : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
+                  }}
+                >
+                  <span className="text-[14.5px]">{r.label}</span>
+                  <span className="ml-3 truncate text-[13px] text-muted-foreground">{r.value}</span>
+                </div>
+              ))}
+            </button>
+          )}
+          {isDoctor && (
+            <p className="mt-2 px-1 text-[12px] text-muted-foreground">
+              To update your account information, please{" "}
+              <button
+                onClick={() => navigate({ to: "/support" })}
+                className="underline underline-offset-2 hover:text-foreground"
               >
-                <span className="text-[14.5px]">{r.label}</span>
-                <span className="ml-3 truncate text-[13px] text-muted-foreground">{r.value}</span>
-              </div>
-            ))}
-          </button>
+                contact support
+              </button>
+              .
+            </p>
+          )}
         </Section>
 
         {isDoctor && (
