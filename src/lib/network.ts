@@ -952,14 +952,20 @@ export async function pauseShift(id: string): Promise<{ ok: boolean; error?: str
     const res = await callServerLifecycle("pause", id);
     if (!res.ok) {
       const { pushToast } = await import("./notifications");
-      pushToast({ tone: "warn", title: res.error || "Couldn't pause this shift" });
+      pushToast({
+        tone: "warn",
+        title: res.finalDay
+          ? "Final day — use End Shift to complete this booking"
+          : res.error || "Couldn't pause this shift",
+      });
       return { ok: false, error: res.error };
     }
     const segment = cur.startedAt != null ? Math.max(0, simNow() - cur.startedAt) : 0;
     const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
+    const nextDayIndex = res.dayIndex ?? (cur.dayIndex ?? 1) + 1;
     applyLocalPatch(
       id,
-      { status: "paused", startedAt: undefined, accumulatedMs, everStarted: true },
+      { status: "paused", startedAt: undefined, accumulatedMs, everStarted: true, dayIndex: nextDayIndex },
       { actor: "requester", actorId: getSessionId(), action: "pause" },
     );
     return { ok: true };
