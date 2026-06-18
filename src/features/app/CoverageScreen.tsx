@@ -689,7 +689,7 @@ function RequesterDetailSheet({
           </div>
 
           {(item.status === "active" ||
-            (item.status === "upcoming" && item.accumulatedMs > 0)) && (
+            (item.status === "upcoming" && item.everStarted)) && (
             <div className="mt-2">
               <button
                 onClick={() => { if (!pending) onEnd(item.id); }}
@@ -701,7 +701,7 @@ function RequesterDetailSheet({
             </div>
           )}
 
-          {item.status === "upcoming" && item.accumulatedMs === 0 && (
+          {item.status === "upcoming" && !item.everStarted && (
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 onClick={() => onEdit(item.id)}
