@@ -51,7 +51,7 @@ function RoleScreen() {
 
         <div className="mt-auto pt-10 text-center">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            FLASHLOCUM · REEEALTIME COVERAGE NETWORK
+            FLASHLOCUM · REALTIME COVERAGE NETWORK
           </div>
           <div className="mt-3 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
             <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms</Link>
