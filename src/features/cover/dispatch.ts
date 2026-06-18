@@ -88,6 +88,7 @@ function toCoverage(r: NetRequest): Coverage {
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     settledAmount: r.settledAmount,
     environment: r.environment ?? "normal",
+    everStarted: !!r.everStarted,
   };
 }
 
