@@ -77,7 +77,7 @@ function RequesterContent() {
             <p className="font-medium text-foreground">A request can be:</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Single-day</li>
-              <li>Multi-day (up to 7 days)</li>
+              <li>Multi-day (up to 14 days)</li>
             </ul>
           </div>
         </AccordionContent>
