@@ -366,10 +366,16 @@ export function ensureDoctorSession(initialOnline = true) {
       });
     } else if (ev.action === "pause") {
       shiftCue("pause");
+      const isMulti = (r.days ?? 1) > 1;
+      const completedDay = Math.max(1, (r.dayIndex ?? 1) - 1);
       pushToast({
         tone: "presence",
-        title: `Your shift with ${r.hospital} has been paused.`,
-        body: "Coverage timer is preserved and will resume when restarted.",
+        title: isMulti
+          ? `Day ${completedDay} of ${r.days} complete — shift with ${r.hospital} moved to Upcoming.`
+          : `Your shift with ${r.hospital} has been paused.`,
+        body: isMulti
+          ? "Resume on the next scheduled day to continue."
+          : "Coverage timer is preserved and will resume when restarted.",
         ttl: 5200,
       });
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
