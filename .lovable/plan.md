@@ -1,85 +1,102 @@
-# Multi-Day Workflow — Implementation Plan
+## Audit findings
 
-Builds directly on the audit. Reuses `day_index`, no schema additions.
+I traced every rating from overlay → client adapter → RPC → table → trigger → admin view. Three real defects, all data-visible.
 
-## Semantics (locked)
+### 1. Doctor → Requester comments are silently dropped (data-loss bug)
 
-- `day_index` = the scheduled day currently in progress or just paused. Starts at `1`.
-- On a successful **Pause** of Day N: increment `day_index` from N to N+1 atomically with closing the segment. The pause itself marks Day N complete.
-- On **Resume** from `paused`: no `day_index` change — Resume just opens the next segment for the already-advanced day.
-- "Completed days" displayed in the UI = `day_index - 1` while `active`, `day_index - 1` while `paused` (because Pause already advanced it).
-- Timers stay **cumulative** across all days (`accumulated_ms` keeps growing; `shift_segments` keeps appending). End Shift billing untouched.
-- **Final-day rule**: Pause is forbidden when `day_index >= days`. Enforced both in the DB and in the UI.
+`RatingOverlay.onSubmit` is typed `(rating, feedback) => void` and the requester side passes both. The **cover (doctor) side** doesn't:
 
-## 1. Database — `pause_shift` RPC
-
-Edit `public.pause_shift(_request_id uuid)`:
-
-1. After `IF r.status <> 'active'` check, add:
-   ```sql
-   IF COALESCE(r.day_index, 1) >= COALESCE(r.days, 1) THEN
-     RAISE EXCEPTION 'Final day — use End Shift to complete this booking';
-   END IF;
-   ```
-2. In the final `UPDATE coverage_requests` set:
-   ```sql
-   day_index = COALESCE(day_index, 1) + 1
-   ```
-   alongside the existing `status`, `started_at`, `accumulated_ms` assignments.
-3. Return the new `day_index` in the JSON result for client confirmation.
-
-`resume_shift`, `start_shift`, `end_shift` are NOT modified. `end_shift` already settles from `shift_segments` regardless of `day_index`, so early termination (Example 3) continues to work.
-
-A grant refresh is not needed (function signature unchanged).
-
-## 2. Client — error handling for the new guard
-
-`src/lib/shift.functions.ts` `pauseShift`: extend the swallowed-error regex to also treat the new final-day exception as a benign no-op, surfacing a toast instead of a hard error:
-
-```ts
-if (/final day/i.test(error.message)) {
-  return { ok: false, finalDay: true } as any;
-}
+```tsx
+// src/features/cover/CoverDispatchPortal.tsx:87
+onSubmit={(rating) => {                               // ← feedback arg omitted
+  if (rating > 0 && pendingRating) {
+    void recordRating(pendingRating.hospitalId, rating, pendingRating.requestId);
+    // feedback never reaches recordRating, so submit_shift_rating(_feedback => undefined)
+  }
+}}
 ```
 
-`src/lib/network.ts` `pauseShift(id)`: when the server returns `finalDay`, skip the local state mutation and push a warn toast: "This is the final scheduled day — use End Shift to complete."
+`recordRating` forwards `feedback ?? null`, and `submit_shift_rating` inserts `NULLIF(_feedback,'')` into `ratings.feedback`. End result: every comment a doctor types is discarded before it leaves the browser. Database confirms — of 3 ratings in `public.ratings`, **0** are `ratee_entity_id LIKE 'req:%'` and only 1 of the 3 doctor-side rows has feedback. The doctor side has never written a comment.
 
-## 3. Client — UI guards & labels
+### 2. `recordRating` adapter swallows errors
 
-`src/features/app/CoverageScreen.tsx`:
+The requester path uses `submitShiftRating` directly and toasts non-`already_rated` failures. The cover path uses the legacy `recordRating` wrapper, which returns `SubmitResult | null` but is fired with `void` — any `not_terminal` / `unknown` / network error is silently lost. No console log, no toast, no retry.
 
-- The existing Pause guard (`item.status === "active" && item.days > 1 && item.dayIndex < item.days`) already does the right thing once `day_index` advances — no change needed.
-- Add a small "Day X of Y" pill on both active and upcoming multi-day cards:
-  - On active: `Day ${item.dayIndex} of ${item.days}`
-  - On paused/upcoming after Day N pause: `Day ${item.dayIndex} of ${item.days}` (because Pause already advanced the counter, this naturally reads "Day 2 of 3" once Day 1 is complete).
-- Render only when `item.days > 1`.
+### 3. Admin Shift Monitoring does not show per-shift ratings or comments
 
-Doctor side — `src/features/cover/CoverDispatchPortal.tsx` (and any incoming/active card it renders): show the same `Day X of Y` pill on accepted/active/paused coverage when `days > 1`. The `dayIndex` field already flows through `coverage-remote.ts` → `network.ts` `NetRequest` → dispatch store, so it's just a render addition.
+`/_admin/admin/shifts` renders columns: Status, Hospital, Schedule, Requester, Doctor, Amount, Payment, Updated. There is **no** rating column, no comment cell, no detail drawer. `admin_list_shifts` (`src/lib/admin.functions.ts`) doesn't even select the existing `requester_rating_score / requester_rating_at / doctor_rating_score / doctor_rating_at` columns that the `_ratings_after_insert` trigger already maintains on `coverage_requests`, and it never joins `ratings.feedback`. The standalone `/_admin/admin/ratings` page lists ratings flat, not per-shift, so an admin opening a specific shift cannot see either side's rating or comment.
 
-## 4. Network event handling
+### Things that ARE correct (no changes needed)
 
-`src/features/cover/dispatch.ts` already handles `pause` and `resume` actions for toasts. Update the pause toast copy for multi-day shifts to read:
+- `ratings` schema: `shift_id`, `rater_user_id`, `ratee_entity_id`, `score` are all `NOT NULL`; `feedback` is nullable text. A unique index prevents double-rating.
+- `submit_shift_rating` (SECURITY DEFINER) derives `ratee_entity_id` from the shift row + caller — clients **cannot** spoof the ratee. Authorization is enforced (caller must be `requester_id` or `accepted_by`).
+- `_ratings_after_insert` trigger updates `coverage_requests.{doctor,requester}_rating_*` and calls `recompute_trust(ratee)`. Trust snapshot pipeline works.
+- DB integrity: `count(*) FILTER (WHERE shift_id IS NULL) = 0` — no orphan ratings.
+- RLS: previous migration scoped `ratings` SELECT to participants + admins (`has_role(admin)`), so the admin view can read every row via the admin client.
 
-> "Day {prevDayIndex} of {days} complete — shift moved to Upcoming."
+## Plan
 
-(`prevDayIndex = newDayIndex - 1`.) Single-day shifts keep the existing copy.
+### Step 1 — Persist the doctor's comment (fix the data-loss bug)
 
-## 5. Non-changes (explicit)
+`src/features/cover/CoverDispatchPortal.tsx`
 
-- No new columns. No migration beyond editing the `pause_shift` function.
-- `end_shift` settlement, Monnify payment flow, ratings flow: untouched.
-- `first_started_at` and the Start-vs-Resume label: untouched.
-- `accumulated_ms`: stays cumulative; per-day timer reset is **not** introduced.
+- Change `onSubmit={(rating) => ...}` to `onSubmit={(rating, feedback) => ...}`.
+- Replace the `recordRating(...)` call with a direct `submitShiftRating(requestId, rating, feedback || null)` (mirror the requester side), and surface non-`already_rated` errors via `pushToast({ tone: "warn", title: res.message })`. Keep the local `recordHistoryRating` mirror.
+- Remove the now-unused `recordRating` import from this file.
 
-## 6. Verification steps after implementation
+No DB change is needed — `submit_shift_rating` already accepts `_feedback`.
 
-1. 3-day booking: Start → Pause (expect `day_index=2`, status `paused`, Pause button hidden on the resumed Day 2? No — Day 2 < 3 so Pause still shown). Resume → Pause (expect `day_index=3`). Resume → Pause should now be rejected by DB and the button hidden; only End Shift available.
-2. 1-day booking: Pause must remain hidden throughout (existing `days > 1` guard).
-3. Early termination: Start Day 1 → Pause → Resume Day 2 → End Shift mid-Day-2 settles normally; `total_billed_amount` reflects only worked segments.
-4. Doctor app shows "Day 2 of 3" after first pause.
+### Step 2 — Extend `admin_list_shifts` payload with rating data
 
-## Order of operations
+`src/lib/admin.functions.ts` (`adminListShifts`):
 
-1. Migration: edit `pause_shift` RPC.
-2. After migration approval and types regen: update `shift.functions.ts`, `network.ts`, `CoverageScreen.tsx`, `CoverDispatchPortal.tsx`, `dispatch.ts`.
-3. Smoke-test via Playwright against the running preview.
+- Add to the `.select(...)` on `coverage_requests`: `requester_rating_submitted, requester_rating_score, requester_rating_at, doctor_rating_submitted, doctor_rating_score, doctor_rating_at`.
+- After fetching shifts, fire one extra `supabaseAdmin.from("ratings").select("shift_id, ratee_entity_id, score, feedback, created_at").in("shift_id", shiftIds)` query, then attach to each row:
+  - `requester_to_doctor: { score, feedback, created_at } | null` (the row where `ratee_entity_id LIKE 'doc:%'`)
+  - `doctor_to_requester: { score, feedback, created_at } | null` (the row where `ratee_entity_id LIKE 'req:%'`)
+- Update the exported `AdminShiftRow` type accordingly.
+
+### Step 3 — Render ratings in Admin Shift Monitoring
+
+`src/routes/_admin.admin.shifts.tsx`:
+
+- Add a **Ratings** column to the table. Each cell shows two compact lines:
+  - `R→D: ★4 "comment…"` (requester rated the doctor)
+  - `D→R: ★5 "comment…"` (doctor rated the requester)
+  - Missing side renders as a muted "—".
+- Clicking the row opens a lightweight `<RatingDetail>` drawer (reuses existing `Chip` styling) showing each side's full feedback text, score, timestamp, and rater name. No new route — drawer state lives in the page component.
+
+### Step 4 — Drop the dead `recordRating` adapter
+
+`src/lib/ratings.ts`:
+
+- After Step 1, no caller passes a real feedback through `recordRating`. Mark it `@deprecated` in JSDoc and forward to `submitShiftRating` (already does). No behavior change, but documents the path so the next maintainer doesn't reintroduce the lossy callsite.
+
+### Step 5 — Verification
+
+After Step 1, do a complete shift, doctor rates with a comment, requester rates with a comment. Verify in DB:
+
+```sql
+SELECT ratee_entity_id, score, feedback, shift_id
+FROM public.ratings
+WHERE shift_id = '<test-shift>'
+ORDER BY created_at;
+```
+
+Two rows must appear, both with `feedback` non-null, `shift_id` set, `rater_user_id` matching the respective caller. Then open `/_admin/admin/shifts`, find the shift, confirm the Ratings column shows both sides and the drawer shows both comments.
+
+### Out of scope
+
+- The "account details not loading" Monnify spinner from the previous turn — separate issue.
+- Reliability score formula (`reliability` in trust snapshot) — already computed server-side correctly; this audit only addresses ratings + comments + admin visibility.
+- Migrating legacy `hosp:<slug>` ratings — none exist (`count = 0`).
+- Reworking the standalone `/_admin/admin/ratings` page — it already shows rater/ratee/shift; the deficit was per-shift visibility, fixed by Step 3.
+
+### Files to change
+
+- `src/features/cover/CoverDispatchPortal.tsx` — pass feedback, use `submitShiftRating`, toast errors.
+- `src/lib/admin.functions.ts` — extend `adminListShifts` select + join ratings.
+- `src/routes/_admin.admin.shifts.tsx` — Ratings column + detail drawer.
+- `src/lib/ratings.ts` — JSDoc deprecation note on `recordRating`.
+
+No database migration. No new dependencies.
