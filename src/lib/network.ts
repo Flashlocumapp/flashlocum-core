@@ -999,11 +999,16 @@ export async function completeRequest(id: string): Promise<{ ok: boolean; error?
 }
 
 
-/** Pause broadcasting (hides from doctors) without losing request. */
+/** Pause broadcasting (hides from doctors) without losing request.
+ *  Pre-acceptance only — refuses to act on shifts already accepted by a
+ *  doctor or already started. Post-acceptance pause is owned by the
+ *  `pause_shift` RPC via `pauseShift()` below.
+ */
 export function pauseRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "broadcasting") return;
+  if (cur.acceptedBy || cur.startedAt != null) return;
   applyPatch(
     id,
     { status: "paused" },
@@ -1017,11 +1022,18 @@ export function pauseRequest(id: string) {
  * expiry timer resets immediately and previously-declined doctors see the
  * card again. The server-side bump_request_rev trigger applies the same
  * change authoritatively when the UPDATE lands.
+ *
+ * Pre-acceptance only. A post-acceptance multi-day shift uses the same
+ * `paused` enum value but its lifecycle is owned by the `resume_shift` RPC
+ * (invoked from CoverageScreen → startRequest). Refuse to flip such rows
+ * to `broadcasting` here or we resurrect the accepted shift in the open
+ * pool and auto-unpause it.
  */
 export function resumeRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
   if (!cur || cur.status !== "paused") return;
+  if (cur.acceptedBy || cur.startedAt != null || (cur.accumulatedMs ?? 0) > 0) return;
   applyPatch(
     id,
     {
