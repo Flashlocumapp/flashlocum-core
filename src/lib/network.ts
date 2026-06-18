@@ -470,12 +470,19 @@ function init() {
             shiftId: r.id,
             action: (old.accumulatedMs ?? 0) > 0 ? "resume" : "start",
           };
-        } else if (old.status === "active" && r.status === "accepted") {
+        } else if (old.status === "active" && (r.status === "accepted" || r.status === "paused")) {
           netEvent = {
             actor: "requester",
             actorId: r.requesterSessionId,
             shiftId: r.id,
             action: "pause",
+          };
+        } else if (old.status === "paused" && r.status === "active") {
+          netEvent = {
+            actor: "requester",
+            actorId: r.requesterSessionId,
+            shiftId: r.id,
+            action: "resume",
           };
         }
       }
