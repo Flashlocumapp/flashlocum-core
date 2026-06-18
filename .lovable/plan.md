@@ -1,102 +1,98 @@
-## Audit findings
+# 14-Day Booking Limit — Audit Report
 
-I traced every rating from overlay → client adapter → RPC → table → trigger → admin view. Three real defects, all data-visible.
+## Findings: every location that enforces or mentions the 7-day cap
 
-### 1. Doctor → Requester comments are silently dropped (data-loss bug)
+### 1. Database (Supabase)
+Result: **no DB enforcement of a 7-day booking maximum.**
 
-`RatingOverlay.onSubmit` is typed `(rating, feedback) => void` and the requester side passes both. The **cover (doctor) side** doesn't:
+Checked:
+- `coverage_requests` CHECK constraints → only `environment_check` exists; nothing on `days`.
+- All `public` functions whose source contains `7` — none gate booking duration on 7.
+- `validate_shift_schedule(_start, _end)` → only enforces "end > start" and 30-min lead time. No max-duration check.
+- `compute_quote(...)` → no day cap; prices any duration.
+- `end_shift`, `pause_shift`, `start_shift`, `resume_shift`, `bump_request_rev_on_change` → use `r.days` as data (loop/total), never compare to 7.
+- Triggers: none reference 7.
 
-```tsx
-// src/features/cover/CoverDispatchPortal.tsx:87
-onSubmit={(rating) => {                               // ← feedback arg omitted
-  if (rating > 0 && pendingRating) {
-    void recordRating(pendingRating.hospitalId, rating, pendingRating.requestId);
-    // feedback never reaches recordRating, so submit_shift_rating(_feedback => undefined)
-  }
-}}
+Unrelated `7` hits (analytics windows, not booking limit — leave alone):
+- `supabase/migrations/20260604082111_…sql:60` and `20260617000353_…sql:218` — `interval '7 days'` for `active_week` profile counter.
+
+### 2. Request Creation UI
+- **`src/features/request/RequesterHome.tsx:833–841`** `dateBounds()` returns `min = today`, `max = today + 6` (the 7-day window). Used at lines 858, 876–877 as `min/max` on the start-date input and as a clamp in the `useEffect` at 860–867.
+- **`src/features/request/RequesterHome.tsx:859`** comment: `// Clamp start date into the 7-day operational window if it drifts.`
+- **`src/features/request/RequesterHome.tsx:992–999`** date input cap toast: `"Coverage requests are limited to 7 days maximum."`
+- **`src/features/request/RequesterHome.tsx:1061–1078`** `DaysStepper` — Stepper `min={1}, max={7}` plus cap toast `"Coverage requests are limited to 7 days maximum."`
+- **`src/features/request/RequesterHome.tsx:258`** coverage switch clamp: `setDays((d) => (d < 1 || d > 7 ? 1 : d))`.
+
+No calendar component (`react-day-picker`) is used in the request flow — it's a native `<input type="date">`.
+
+### 3. Multi-day workflow
+- No `day_index <= 7` checks. `dayLabel`, `durationHrsOf`, `shiftWindow`, `computePricing` in `RequesterHome.tsx` (171–206) and `EarningsScreen/CoverageScreen` use `days` as a numeric multiplier with no upper bound.
+- `end_shift` server function loops through all `shift_segments` for a request regardless of count.
+- Pause/Resume/Final-day detection (`shift.functions.ts`) is segment-based; no 7 assumption.
+
+### 4. Pricing system
+- `compute_quote` SQL and `src/lib/pricing.ts` are per-period. Multi-day totals are computed client-side as `perDay × days` (e.g. `RequesterHome.tsx:1389`, `CoverageScreen.tsx:372`). No 7-day ceiling.
+
+### 5. Doctor-side experience
+- `src/features/cover/CoverDispatchPortal.tsx`, `CoverHome.tsx`, `CoverageScreen.tsx` — no 7-day text or logic. They render `days` directly from `coverage_requests.days`.
+
+### 6. Requester-side experience
+- Covered under §2. The only requester-facing 7-day strings are the two toasts at `RequesterHome.tsx:996` and `:1073`.
+
+### 7. Admin dashboard
+- **`src/routes/_admin.admin.risk.tsx:50`** — filter option `<option value={7}>Last 7 days</option>`. This is an analytics time-range, **not** the booking limit. Leave alone.
+- **`src/lib/admin.functions.ts:767`** — `if (mins > 0 && mins < 7 * 24 * 60)` caps the time-to-fill sample at 7 days. Analytics sanity guard, **not** a booking-limit rule. Should be widened to 14 days to keep matching the new max (recommended, low risk).
+- No admin table/report enforces a 7-day max on the booking itself.
+
+### 8. Help center & documentation
+- **`src/routes/_app.help.tsx:80`** — `<li>Multi-day (up to 7 days)</li>`
+- **`src/routes/_app.help.tsx:271`** — `<li>Multi-day (up to 7 days)</li>`
+- **`src/routes/_app.help.tsx:410`** — `<p>One assignment can last multiple days (max 7 days). …</p>`
+
+### Unrelated 7s (do NOT change)
+- `src/features/app/EarningsScreen.tsx:86` — "this week" range, last 7 days.
+- `src/components/ui/sidebar.tsx:22` — sidebar cookie max-age (7 days).
+- Various SVG path coords containing `7`.
+
+---
+
+## Implementation Plan: raise the cap from 7 → 14 days
+
+Scope is small — there is no DB constraint to migrate. All changes are frontend.
+
+### Step 1 — Single source of truth
+In `src/features/request/RequesterHome.tsx`, introduce a module-level constant:
+
+```ts
+const MAX_BOOKING_DAYS = 14;
 ```
 
-`recordRating` forwards `feedback ?? null`, and `submit_shift_rating` inserts `NULLIF(_feedback,'')` into `ratings.feedback`. End result: every comment a doctor types is discarded before it leaves the browser. Database confirms — of 3 ratings in `public.ratings`, **0** are `ratee_entity_id LIKE 'req:%'` and only 1 of the 3 doctor-side rows has feedback. The doctor side has never written a comment.
+Use it everywhere instead of literal `7` / `6`.
 
-### 2. `recordRating` adapter swallows errors
+### Step 2 — `dateBounds()` (lines 833–841)
+Change `max.setDate(max.getDate() + 6)` → `max.setDate(max.getDate() + (MAX_BOOKING_DAYS - 1))`. Update the comment on line 859 to say "14-day operational window".
 
-The requester path uses `submitShiftRating` directly and toasts non-`already_rated` failures. The cover path uses the legacy `recordRating` wrapper, which returns `SubmitResult | null` but is fired with `void` — any `not_terminal` / `unknown` / network error is silently lost. No console log, no toast, no retry.
+### Step 3 — `DaysStepper` (lines 1061–1078)
+- `max={MAX_BOOKING_DAYS}`
+- Toast title → `"Coverage requests are limited to 14 days maximum."`
 
-### 3. Admin Shift Monitoring does not show per-shift ratings or comments
+### Step 4 — Date input cap toast (lines 992–999)
+Update the toast string to `"Coverage requests are limited to 14 days maximum."`
 
-`/_admin/admin/shifts` renders columns: Status, Hospital, Schedule, Requester, Doctor, Amount, Payment, Updated. There is **no** rating column, no comment cell, no detail drawer. `admin_list_shifts` (`src/lib/admin.functions.ts`) doesn't even select the existing `requester_rating_score / requester_rating_at / doctor_rating_score / doctor_rating_at` columns that the `_ratings_after_insert` trigger already maintains on `coverage_requests`, and it never joins `ratings.feedback`. The standalone `/_admin/admin/ratings` page lists ratings flat, not per-shift, so an admin opening a specific shift cannot see either side's rating or comment.
+### Step 5 — Days clamp on coverage switch (line 258)
+`setDays((d) => (d < 1 || d > MAX_BOOKING_DAYS ? 1 : d))`.
 
-### Things that ARE correct (no changes needed)
+### Step 6 — Help center copy (`src/routes/_app.help.tsx`)
+Lines 80, 271, 410 — replace "7 days" with "14 days".
 
-- `ratings` schema: `shift_id`, `rater_user_id`, `ratee_entity_id`, `score` are all `NOT NULL`; `feedback` is nullable text. A unique index prevents double-rating.
-- `submit_shift_rating` (SECURITY DEFINER) derives `ratee_entity_id` from the shift row + caller — clients **cannot** spoof the ratee. Authorization is enforced (caller must be `requester_id` or `accepted_by`).
-- `_ratings_after_insert` trigger updates `coverage_requests.{doctor,requester}_rating_*` and calls `recompute_trust(ratee)`. Trust snapshot pipeline works.
-- DB integrity: `count(*) FILTER (WHERE shift_id IS NULL) = 0` — no orphan ratings.
-- RLS: previous migration scoped `ratings` SELECT to participants + admins (`has_role(admin)`), so the admin view can read every row via the admin client.
+### Step 7 — Admin analytics time-to-fill guard (optional, recommended)
+`src/lib/admin.functions.ts:767` — change `7 * 24 * 60` → `14 * 24 * 60` so genuinely long fills aren't filtered out of admin metrics.
 
-## Plan
+### Step 8 — Verification (no DB migration needed)
+- Confirm `validate_shift_schedule`, `compute_quote`, `end_shift` already accept arbitrary `days` (they do — verified above).
+- Manual QA: create a 14-day standard and 14-day home-care request; verify pricing, dispatch, pause/resume across day boundaries, end-shift settlement.
 
-### Step 1 — Persist the doctor's comment (fix the data-loss bug)
-
-`src/features/cover/CoverDispatchPortal.tsx`
-
-- Change `onSubmit={(rating) => ...}` to `onSubmit={(rating, feedback) => ...}`.
-- Replace the `recordRating(...)` call with a direct `submitShiftRating(requestId, rating, feedback || null)` (mirror the requester side), and surface non-`already_rated` errors via `pushToast({ tone: "warn", title: res.message })`. Keep the local `recordHistoryRating` mirror.
-- Remove the now-unused `recordRating` import from this file.
-
-No DB change is needed — `submit_shift_rating` already accepts `_feedback`.
-
-### Step 2 — Extend `admin_list_shifts` payload with rating data
-
-`src/lib/admin.functions.ts` (`adminListShifts`):
-
-- Add to the `.select(...)` on `coverage_requests`: `requester_rating_submitted, requester_rating_score, requester_rating_at, doctor_rating_submitted, doctor_rating_score, doctor_rating_at`.
-- After fetching shifts, fire one extra `supabaseAdmin.from("ratings").select("shift_id, ratee_entity_id, score, feedback, created_at").in("shift_id", shiftIds)` query, then attach to each row:
-  - `requester_to_doctor: { score, feedback, created_at } | null` (the row where `ratee_entity_id LIKE 'doc:%'`)
-  - `doctor_to_requester: { score, feedback, created_at } | null` (the row where `ratee_entity_id LIKE 'req:%'`)
-- Update the exported `AdminShiftRow` type accordingly.
-
-### Step 3 — Render ratings in Admin Shift Monitoring
-
-`src/routes/_admin.admin.shifts.tsx`:
-
-- Add a **Ratings** column to the table. Each cell shows two compact lines:
-  - `R→D: ★4 "comment…"` (requester rated the doctor)
-  - `D→R: ★5 "comment…"` (doctor rated the requester)
-  - Missing side renders as a muted "—".
-- Clicking the row opens a lightweight `<RatingDetail>` drawer (reuses existing `Chip` styling) showing each side's full feedback text, score, timestamp, and rater name. No new route — drawer state lives in the page component.
-
-### Step 4 — Drop the dead `recordRating` adapter
-
-`src/lib/ratings.ts`:
-
-- After Step 1, no caller passes a real feedback through `recordRating`. Mark it `@deprecated` in JSDoc and forward to `submitShiftRating` (already does). No behavior change, but documents the path so the next maintainer doesn't reintroduce the lossy callsite.
-
-### Step 5 — Verification
-
-After Step 1, do a complete shift, doctor rates with a comment, requester rates with a comment. Verify in DB:
-
-```sql
-SELECT ratee_entity_id, score, feedback, shift_id
-FROM public.ratings
-WHERE shift_id = '<test-shift>'
-ORDER BY created_at;
-```
-
-Two rows must appear, both with `feedback` non-null, `shift_id` set, `rater_user_id` matching the respective caller. Then open `/_admin/admin/shifts`, find the shift, confirm the Ratings column shows both sides and the drawer shows both comments.
-
-### Out of scope
-
-- The "account details not loading" Monnify spinner from the previous turn — separate issue.
-- Reliability score formula (`reliability` in trust snapshot) — already computed server-side correctly; this audit only addresses ratings + comments + admin visibility.
-- Migrating legacy `hosp:<slug>` ratings — none exist (`count = 0`).
-- Reworking the standalone `/_admin/admin/ratings` page — it already shows rater/ratee/shift; the deficit was per-shift visibility, fixed by Step 3.
-
-### Files to change
-
-- `src/features/cover/CoverDispatchPortal.tsx` — pass feedback, use `submitShiftRating`, toast errors.
-- `src/lib/admin.functions.ts` — extend `adminListShifts` select + join ratings.
-- `src/routes/_admin.admin.shifts.tsx` — Ratings column + detail drawer.
-- `src/lib/ratings.ts` — JSDoc deprecation note on `recordRating`.
-
-No database migration. No new dependencies.
+### Out of scope (explicitly leave unchanged)
+- All `interval '7 days'` analytics windows in DB and UI (`active_week`, "Last 7 days" filter, earnings "this week").
+- Sidebar cookie max-age.
+- Any database CHECK constraint or trigger (none exist for this rule).
