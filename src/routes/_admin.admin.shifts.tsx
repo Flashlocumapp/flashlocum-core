@@ -188,6 +188,7 @@ function AdminShiftsPage() {
                   <th className="px-4 py-2.5 font-medium">Doctor</th>
                   <th className="px-4 py-2.5 font-medium">Amount</th>
                   <th className="px-4 py-2.5 font-medium">Payment</th>
+                  <th className="px-4 py-2.5 font-medium">Ratings</th>
                   <th className="px-4 py-2.5 font-medium">Updated</th>
                 </tr>
               </thead>
