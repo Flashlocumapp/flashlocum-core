@@ -901,7 +901,7 @@ function RequestCard({
           </a>
         </div>
       )}
-      {isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1) && (
+      {isUpcoming && (item.everStarted || item.dayIndex > 1) && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
         </div>
