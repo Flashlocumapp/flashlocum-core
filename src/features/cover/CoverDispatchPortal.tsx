@@ -5,7 +5,8 @@ import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
-import { recordRating } from "@/lib/ratings";
+import { submitShiftRating } from "@/lib/trust";
+import { pushToast } from "@/lib/notifications";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
 
@@ -84,9 +85,15 @@ function CoverDispatchOverlays() {
         onDismiss={() => {
           if (pendingRating) setRatingDismissed(pendingRating.requestId);
         }}
-        onSubmit={(rating) => {
+        onSubmit={(rating, feedback) => {
           if (rating > 0 && pendingRating) {
-            void recordRating(pendingRating.hospitalId, rating, pendingRating.requestId);
+            const requestId = pendingRating.requestId;
+            void (async () => {
+              const res = await submitShiftRating(requestId, rating, feedback || null);
+              if (!res.ok && res.error !== "already_rated") {
+                pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+              }
+            })();
             recordHistoryRating(pendingRating.requestId, rating);
           }
           if (pendingRating) setRatingDismissed(pendingRating.requestId);

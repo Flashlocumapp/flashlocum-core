@@ -29,6 +29,11 @@ export function useRating(entityId: string | null | undefined): RatingView {
 }
 
 /**
+ * @deprecated Call `submitShiftRating` from `@/lib/trust` directly so the
+ * caller can pass `feedback` and react to `SubmitResult` errors. This wrapper
+ * accepts `feedback` for backwards compatibility but the legacy call sites
+ * that used it dropped the comment text before reaching here.
+ *
  * Submit a rating for a completed shift.
  * The server derives ratee from the shift; the entityId arg is ignored
  * (kept for call-site compatibility) but the shiftId is required.
