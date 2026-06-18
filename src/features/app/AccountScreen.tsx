@@ -134,27 +134,47 @@ export function AccountScreen() {
         </div>
 
         <Section title={isDoctor ? "Professional Information" : "Personal Information"}>
-          <button
-            onClick={() => setProfileOpen(true)}
-            className="w-full overflow-hidden rounded-2xl text-left active:bg-accent"
-            style={{ background: "var(--color-surface-elevated)" }}
-          >
-            {personalRows.map((r, i) => (
-              <div
-                key={r.label}
-                className="flex items-center justify-between px-4 py-3.5"
-                style={{
-                  borderTop:
-                    i === 0
-                      ? "none"
-                      : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
-                }}
+          {isDoctor ? (
+            <ListGroup>
+              {personalRows.map((r) => (
+                <DetailRow key={r.label} label={r.label} value={r.value} />
+              ))}
+            </ListGroup>
+          ) : (
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="w-full overflow-hidden rounded-2xl text-left active:bg-accent"
+              style={{ background: "var(--color-surface-elevated)" }}
+            >
+              {personalRows.map((r, i) => (
+                <div
+                  key={r.label}
+                  className="flex items-center justify-between px-4 py-3.5"
+                  style={{
+                    borderTop:
+                      i === 0
+                        ? "none"
+                        : "1px solid color-mix(in oklab, var(--color-foreground) 5%, transparent)",
+                  }}
+                >
+                  <span className="text-[14.5px]">{r.label}</span>
+                  <span className="ml-3 truncate text-[13px] text-muted-foreground">{r.value}</span>
+                </div>
+              ))}
+            </button>
+          )}
+          {isDoctor && (
+            <p className="mt-2 px-1 text-[12px] text-muted-foreground">
+              To update your account information, please{" "}
+              <button
+                onClick={() => navigate({ to: "/support" })}
+                className="underline underline-offset-2 hover:text-foreground"
               >
-                <span className="text-[14.5px]">{r.label}</span>
-                <span className="ml-3 truncate text-[13px] text-muted-foreground">{r.value}</span>
-              </div>
-            ))}
-          </button>
+                contact support
+              </button>
+              .
+            </p>
+          )}
         </Section>
 
         {isDoctor && (
