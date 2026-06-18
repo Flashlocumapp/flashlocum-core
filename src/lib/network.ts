@@ -211,6 +211,11 @@ export type NetRequest = {
    *  doctor open-pool freshness gate.
    */
   broadcastStartedAt?: number;
+  /** True once the shift has ever been activated (server-owned, monotonic).
+   *  Drives Start-Shift-vs-Resume-Shift label deterministically — never
+   *  cleared by pause/resume. Sourced from `coverage_requests.first_started_at`.
+   */
+  everStarted?: boolean;
 };
 
 
