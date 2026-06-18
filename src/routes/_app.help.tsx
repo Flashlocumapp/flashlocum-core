@@ -268,7 +268,7 @@ function DoctorContent() {
             <p>Shifts can be:</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Single-day</li>
-              <li>Multi-day (up to 7 days)</li>
+              <li>Multi-day (up to 14 days)</li>
             </ul>
             <p>Once a shift is accepted, it appears in the doctor&apos;s coverage list.</p>
           </div>
