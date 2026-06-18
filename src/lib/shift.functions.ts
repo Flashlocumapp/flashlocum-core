@@ -74,6 +74,7 @@ export const pauseShift = createServerFn({ method: "POST" })
     });
     if (error) {
       if (/not in progress|already paused|not active|no open segment/i.test(error.message)) return { ok: true, already: true } as any;
+      if (/final day/i.test(error.message)) return { ok: false, finalDay: true } as any;
       throw new Error(error.message);
     }
     return r as any;
