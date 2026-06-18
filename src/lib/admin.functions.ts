@@ -218,15 +218,38 @@ export const adminListShifts = createServerFn({ method: "POST" })
       }
     }
 
+    const shiftIds = shifts.map((s) => s.id);
+    const ratingsByShift = new Map<
+      string,
+      { r2d: { score: number; feedback: string | null; created_at: string } | null;
+        d2r: { score: number; feedback: string | null; created_at: string } | null }
+    >();
+    if (shiftIds.length) {
+      const { data: ratingRows } = await supabaseAdmin
+        .from("ratings")
+        .select("shift_id, ratee_entity_id, score, feedback, created_at")
+        .in("shift_id", shiftIds);
+      for (const r of ratingRows ?? []) {
+        const cur = ratingsByShift.get(r.shift_id) ?? { r2d: null, d2r: null };
+        const entry = { score: r.score, feedback: r.feedback, created_at: r.created_at };
+        if (r.ratee_entity_id?.startsWith("doc:")) cur.r2d = entry;
+        else if (r.ratee_entity_id?.startsWith("req:")) cur.d2r = entry;
+        ratingsByShift.set(r.shift_id, cur);
+      }
+    }
+
     const out: AdminShiftRow[] = shifts.map((r) => {
       const req = profileMap.get(r.requester_id);
       const doc = r.accepted_by ? profileMap.get(r.accepted_by) : undefined;
+      const rt = ratingsByShift.get(r.id);
       return {
         ...r,
         requester_name: req?.full_name ?? null,
         requester_email: emailMap.get(r.requester_id) ?? null,
         doctor_name: doc?.full_name ?? null,
         doctor_phone: doc?.phone ?? null,
+        requester_to_doctor: rt?.r2d ?? null,
+        doctor_to_requester: rt?.d2r ?? null,
       };
     });
     return out;
