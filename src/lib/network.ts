@@ -351,6 +351,10 @@ function applyRemoteEvent(ev: RemoteEvent) {
       action = (ev.old?.accumulatedMs ?? 0) > 0 ? "resume" : "start";
     } else if (oldStatus === "active" && newStatus === "accepted") {
       action = "pause";
+    } else if (oldStatus === "active" && newStatus === "paused") {
+      action = "pause";
+    } else if (oldStatus === "paused" && newStatus === "active") {
+      action = "resume";
     } else if (newStatus === "completed" && oldStatus !== "completed") {
       action = "complete";
     } else if (newStatus === "cancelled" && oldStatus !== "cancelled") {
