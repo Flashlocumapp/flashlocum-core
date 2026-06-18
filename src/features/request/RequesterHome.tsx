@@ -858,7 +858,7 @@ function CoverageFields({
   beforeNoteSlot?: React.ReactNode;
 }) {
   const bounds = dateBounds();
-  // Clamp start date into the 7-day operational window if it drifts.
+  // Clamp start date into the 14-day operational window if it drifts.
   useEffect(() => {
     if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
     else if (draft.startDate > bounds.max) patchDraft({ startDate: bounds.max });
