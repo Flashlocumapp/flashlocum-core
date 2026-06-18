@@ -7,7 +7,7 @@ import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { ToastHost } from "@/components/ToastHost";
-import { SimClockPanel } from "@/components/SimClockPanel";
+
 import { RestrictionBanner } from "@/components/RestrictionBanner";
 import { clearRole, getRole, hasRole, setRole, type Role } from "@/lib/role";
 import {
@@ -183,7 +183,7 @@ function AppShell() {
       </AnimatePresence>
       <CoverDispatchPortal />
       <ToastHost />
-      <SimClockPanel />
+      
       <RestrictionBanner />
     </div>
   );
