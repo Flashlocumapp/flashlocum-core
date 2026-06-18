@@ -844,7 +844,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {startLabel ?? ((item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
+            {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
           </button>
         )}
         {isActive && item.days > 1 && (
