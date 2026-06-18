@@ -52,6 +52,7 @@ function AdminShiftsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState<Status>("all");
   const [q, setQ] = useState("");
+  const [openRow, setOpenRow] = useState<AdminShiftRow | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
