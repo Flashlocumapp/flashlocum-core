@@ -151,6 +151,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     days: settledDays,
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     environment: r.environment ?? "normal",
+    everStarted: !!r.everStarted || (r.accumulatedMs ?? 0) > 0 || (r.dayIndex ?? 1) > 1,
   };
 }
 
