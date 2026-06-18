@@ -674,7 +674,7 @@ function RequesterDetailSheet({
                 disabled={!!pending}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
-                {startLabel ?? (item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift")}
+                {startLabel ?? (item.everStarted ? "Resume Shift" : "Start Shift")}
               </button>
             )}
             {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
