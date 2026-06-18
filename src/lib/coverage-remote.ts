@@ -48,6 +48,7 @@ type Row = {
   rev: number;
   broadcast_started_at: string;
   expired_at: string | null;
+  first_started_at: string | null;
 };
 
 
@@ -209,6 +210,7 @@ export function rowToNet(r: Row): NetRequest {
     broadcastStartedAt: r.broadcast_started_at
       ? new Date(r.broadcast_started_at).getTime()
       : new Date(r.created_at).getTime(),
+    everStarted: !!r.first_started_at,
   };
 }
 

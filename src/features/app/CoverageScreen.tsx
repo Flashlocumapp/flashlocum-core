@@ -71,6 +71,8 @@ type RequestItem = {
   days: number;
   dayIndex: number;
   environment?: "normal" | "busy";
+  /** Monotonic flag — true once the shift has ever entered Active. */
+  everStarted: boolean;
 };
 
 
@@ -149,6 +151,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     days: settledDays,
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     environment: r.environment ?? "normal",
+    everStarted: !!r.everStarted || (r.accumulatedMs ?? 0) > 0 || (r.dayIndex ?? 1) > 1,
   };
 }
 
@@ -671,7 +674,7 @@ function RequesterDetailSheet({
                 disabled={!!pending}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
-                {startLabel ?? (item.accumulatedMs > 0 ? "Resume Shift" : "Start Shift")}
+                {startLabel ?? (item.everStarted ? "Resume Shift" : "Start Shift")}
               </button>
             )}
             {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
@@ -686,7 +689,7 @@ function RequesterDetailSheet({
           </div>
 
           {(item.status === "active" ||
-            (item.status === "upcoming" && item.accumulatedMs > 0)) && (
+            (item.status === "upcoming" && item.everStarted)) && (
             <div className="mt-2">
               <button
                 onClick={() => { if (!pending) onEnd(item.id); }}
@@ -698,7 +701,7 @@ function RequesterDetailSheet({
             </div>
           )}
 
-          {item.status === "upcoming" && item.accumulatedMs === 0 && (
+          {item.status === "upcoming" && !item.everStarted && (
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 onClick={() => onEdit(item.id)}
@@ -841,7 +844,7 @@ function RequestCard({
               color: "var(--color-background)",
             }}
           >
-            {startLabel ?? ((item.accumulatedMs > 0 || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
+            {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
           </button>
         )}
         {isActive && item.days > 1 && (
@@ -872,7 +875,7 @@ function RequestCard({
         )}
       </div>
 
-      {isUpcoming && item.accumulatedMs === 0 && item.dayIndex <= 1 && (
+      {isUpcoming && !item.everStarted && item.dayIndex <= 1 && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
@@ -898,7 +901,7 @@ function RequestCard({
           </a>
         </div>
       )}
-      {isUpcoming && (item.accumulatedMs > 0 || item.dayIndex > 1) && (
+      {isUpcoming && (item.everStarted || item.dayIndex > 1) && (
         <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
           <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
         </div>

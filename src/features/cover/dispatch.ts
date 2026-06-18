@@ -49,6 +49,8 @@ export type Coverage = {
   settledAmount?: number;
   /** Captured at booking; surfaced in every doctor-facing view. */
   environment?: "normal" | "busy";
+  /** True once the shift has ever been activated. Server-owned, monotonic. */
+  everStarted?: boolean;
 };
 
 
@@ -86,6 +88,7 @@ function toCoverage(r: NetRequest): Coverage {
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     settledAmount: r.settledAmount,
     environment: r.environment ?? "normal",
+    everStarted: !!r.everStarted,
   };
 }
 

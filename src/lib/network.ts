@@ -211,6 +211,11 @@ export type NetRequest = {
    *  doctor open-pool freshness gate.
    */
   broadcastStartedAt?: number;
+  /** True once the shift has ever been activated (server-owned, monotonic).
+   *  Drives Start-Shift-vs-Resume-Shift label deterministically — never
+   *  cleared by pause/resume. Sourced from `coverage_requests.first_started_at`.
+   */
+  everStarted?: boolean;
 };
 
 
@@ -896,7 +901,11 @@ export async function startRequest(id: string): Promise<{ ok: boolean; error?: s
   const cur = state.requests[id];
   if (!cur) return { ok: false, error: "Shift not found" };
   if (lifecycleInFlight.has(id)) return { ok: false, error: "Already in progress" };
-  const isResume = (cur.accumulatedMs ?? 0) > 0 || (cur.dayIndex ?? 1) > 1;
+  // everStarted is the authoritative "has this shift ever been activated?" flag.
+  // Fall back to legacy signals (accumulatedMs / dayIndex) only when the server
+  // snapshot has not yet been seen by this client.
+  const isResume =
+    !!cur.everStarted || (cur.accumulatedMs ?? 0) > 0 || (cur.dayIndex ?? 1) > 1;
   setLifecyclePending(id, isResume ? "resuming" : "starting");
   try {
     const res = await callServerLifecycle(isResume ? "resume" : "start", id);
@@ -915,6 +924,8 @@ export async function startRequest(id: string): Promise<{ ok: boolean; error?: s
         status: "active",
         startedAt: startedAtMs,
         accumulatedMs: cur.accumulatedMs ?? 0,
+        // Monotonic once true — the server has now persisted first_started_at.
+        everStarted: true,
       },
       { actor: "requester", actorId: getSessionId(), action: isResume ? "resume" : "start" },
     );
@@ -924,7 +935,10 @@ export async function startRequest(id: string): Promise<{ ok: boolean; error?: s
   }
 }
 
-/** Server-confirmed pause. No optimistic write. */
+/** Server-confirmed pause. The server is the source of truth for accumulated_ms
+ *  (the pause_shift RPC folds the open segment into the column atomically); we
+ *  only mirror the visible status + a best-effort accumulator for instant UI
+ *  feedback. The next snapshot overwrites with the authoritative value. */
 export async function pauseShift(id: string): Promise<{ ok: boolean; error?: string }> {
   refreshState();
   const cur = state.requests[id];
@@ -938,12 +952,11 @@ export async function pauseShift(id: string): Promise<{ ok: boolean; error?: str
       pushToast({ tone: "warn", title: res.error || "Couldn't pause this shift" });
       return { ok: false, error: res.error };
     }
-    // Fold the in-flight segment into accumulatedMs only after server confirms.
     const segment = cur.startedAt != null ? Math.max(0, simNow() - cur.startedAt) : 0;
     const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
     applyLocalPatch(
       id,
-      { status: "paused", startedAt: undefined, accumulatedMs },
+      { status: "paused", startedAt: undefined, accumulatedMs, everStarted: true },
       { actor: "requester", actorId: getSessionId(), action: "pause" },
     );
     return { ok: true };
