@@ -257,7 +257,7 @@ function HomeScreen({ active }: { active: boolean }) {
     setCoverageRaw(c);
     setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
     if (c === "24h") setDays(1);
-    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > 7 ? 1 : d));
+    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > MAX_BOOKING_DAYS ? 1 : d));
   };
 
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
