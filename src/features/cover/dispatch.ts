@@ -315,7 +315,7 @@ export function ensureDoctorSession(initialOnline = true) {
       const me = s.doctors[sid];
       if (!me?.online) return;
       const mine = Object.values(s.requests).filter(
-        (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active"),
+        (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active" || x.status === "paused"),
       );
       if (mine.length >= 3) return;
       if (isDeclined(me, r.id, r.rev)) return;
