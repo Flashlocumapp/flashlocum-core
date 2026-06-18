@@ -38,6 +38,7 @@ export type Database = {
           environment: string
           expired_at: string | null
           fee_pct: number
+          first_started_at: string | null
           hospital: string
           id: string
           last_extended_at: string | null
@@ -90,6 +91,7 @@ export type Database = {
           environment?: string
           expired_at?: string | null
           fee_pct?: number
+          first_started_at?: string | null
           hospital: string
           id?: string
           last_extended_at?: string | null
@@ -142,6 +144,7 @@ export type Database = {
           environment?: string
           expired_at?: string | null
           fee_pct?: number
+          first_started_at?: string | null
           hospital?: string
           id?: string
           last_extended_at?: string | null
@@ -974,6 +977,7 @@ export type Database = {
           environment: string
           expired_at: string | null
           fee_pct: number
+          first_started_at: string | null
           hospital: string
           id: string
           last_extended_at: string | null
