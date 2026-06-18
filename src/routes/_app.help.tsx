@@ -112,7 +112,7 @@ function RequesterContent() {
 
             <p className="font-medium text-foreground">Multi-day shifts</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>A multi-day shift can last up to 7 consecutive days</li>
+              <li>A multi-day shift can last up to 14 consecutive days</li>
               <li>Payment is made only at the end of the entire shift</li>
               <li>There is no daily payment</li>
               <li>There is no payment during pause or resume</li>
@@ -294,7 +294,7 @@ function DoctorContent() {
             </ul>
             <p className="font-medium text-foreground">Multi-day shifts</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>A multi-day shift can last up to 7 consecutive days</li>
+              <li>A multi-day shift can last up to 14 consecutive days</li>
               <li>Payment is collected only at the end of the entire shift</li>
               <li>There is no daily payment</li>
               <li>There is no payment when pausing or resuming</li>
