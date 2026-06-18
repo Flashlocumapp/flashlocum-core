@@ -185,7 +185,7 @@ export function useDispatch(): View {
   const online = !!me?.online;
 
   const upcoming: Coverage[] = Object.values(net.requests)
-    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "awaiting_payment"))
+    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "paused" || r.status === "awaiting_payment"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
   const liveRequests = broadcastingRequests(net);
