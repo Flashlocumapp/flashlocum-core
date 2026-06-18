@@ -418,7 +418,7 @@ function currentUpcomingForMe(): NetRequest[] {
   const s = readState();
   const sid = getSessionId();
   return Object.values(s.requests ?? {}).filter(
-    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
+    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "paused"),
   );
 }
 
