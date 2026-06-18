@@ -1067,12 +1067,12 @@ const DaysStepper = memo(function DaysStepper({ value, setValue }: { value: numb
       value={value}
       setValue={setValue}
       min={1}
-      max={7}
+      max={MAX_BOOKING_DAYS}
       unit={(n) => (n === 1 ? "day" : "days")}
       onCap={() =>
         pushToast({
           tone: "info",
-          title: "Coverage requests are limited to 7 days maximum.",
+          title: "Coverage requests are limited to 14 days maximum.",
         })
       }
     />
