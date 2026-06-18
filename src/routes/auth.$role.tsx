@@ -649,7 +649,7 @@ function Shell({
             </svg>
           </Link>
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            {roleLabel}
+            {roleLabel.toUpperCase()}
           </div>
           <div className="h-9 w-9" />
         </div>
