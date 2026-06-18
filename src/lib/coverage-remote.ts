@@ -48,6 +48,7 @@ type Row = {
   rev: number;
   broadcast_started_at: string;
   expired_at: string | null;
+  first_started_at: string | null;
 };
 
 
