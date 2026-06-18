@@ -61,9 +61,12 @@ async function callServerLifecycle(
     }
     const m = await import("./shift.functions");
     if (kind === "pause") {
-      await m.pauseShift({ data: { requestId } });
+      const res: any = await m.pauseShift({ data: { requestId } });
+      if (res && res.ok === false && res.finalDay) {
+        return { ok: false, error: "Final day - use End Shift to complete this booking", finalDay: true };
+      }
       notifyCoverageChanged(requestId);
-      return { ok: true };
+      return { ok: true, dayIndex: typeof res?.day_index === "number" ? res.day_index : undefined };
     }
     if (kind === "resume") {
       const res: any = await m.resumeShift({ data: { requestId } });
