@@ -49,6 +49,8 @@ export type Coverage = {
   settledAmount?: number;
   /** Captured at booking; surfaced in every doctor-facing view. */
   environment?: "normal" | "busy";
+  /** True once the shift has ever been activated. Server-owned, monotonic. */
+  everStarted?: boolean;
 };
 
 
