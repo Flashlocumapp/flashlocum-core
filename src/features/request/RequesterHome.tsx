@@ -995,7 +995,7 @@ const CtrlField = memo(function CtrlField({
             if (max && v > max) {
               pushToast({
                 tone: "info",
-                title: "Coverage requests are limited to 7 days maximum.",
+                title: "Coverage requests are limited to 14 days maximum.",
               });
               onChange?.(max);
               return;
