@@ -103,9 +103,11 @@ function toRequestItem(r: NetRequest): RequestItem {
       ? "active"
       : r.status === "accepted"
         ? "upcoming"
-        : r.status === "awaiting_payment"
-          ? "active"
-          : "completed";
+        : r.status === "paused"
+          ? "upcoming"
+          : r.status === "awaiting_payment"
+            ? "active"
+            : "completed";
   const outcome =
     r.status === "completed"
       ? "completed"
@@ -189,6 +191,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           r.requesterSessionId === sid &&
           (r.status === "accepted" ||
             r.status === "active" ||
+            r.status === "paused" ||
             r.status === "awaiting_payment" ||
             r.status === "completed" ||
             r.status === "cancelled"),

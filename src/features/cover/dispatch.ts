@@ -185,7 +185,7 @@ export function useDispatch(): View {
   const online = !!me?.online;
 
   const upcoming: Coverage[] = Object.values(net.requests)
-    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "awaiting_payment"))
+    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "paused" || r.status === "awaiting_payment"))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
   const liveRequests = broadcastingRequests(net);
@@ -315,7 +315,7 @@ export function ensureDoctorSession(initialOnline = true) {
       const me = s.doctors[sid];
       if (!me?.online) return;
       const mine = Object.values(s.requests).filter(
-        (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active"),
+        (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active" || x.status === "paused"),
       );
       if (mine.length >= 3) return;
       if (isDeclined(me, r.id, r.rev)) return;
@@ -418,7 +418,7 @@ function currentUpcomingForMe(): NetRequest[] {
   const s = readState();
   const sid = getSessionId();
   return Object.values(s.requests ?? {}).filter(
-    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active"),
+    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "paused"),
   );
 }
 
