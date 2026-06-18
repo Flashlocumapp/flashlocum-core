@@ -44,8 +44,8 @@ import {
  * lifecycle state until this promise resolves successfully.
  */
 type LifecycleResult =
-  | { ok: true; startedAtMs?: number | null; totalBilledAmount?: number; paymentDueAt?: string; already?: boolean }
-  | { ok: false; error: string };
+  | { ok: true; startedAtMs?: number | null; totalBilledAmount?: number; paymentDueAt?: string; already?: boolean; dayIndex?: number }
+  | { ok: false; error: string; finalDay?: boolean };
 
 async function callServerLifecycle(
   kind: "start" | "pause" | "resume" | "end",
