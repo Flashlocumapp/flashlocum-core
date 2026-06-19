@@ -283,6 +283,89 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function FeedbackPrefsSection() {
+  const [haptics, setHaptics] = useState(() => hapticsEnabled());
+  const [push, setPush] = useState(() => pushEnabled());
+  useEffect(
+    () =>
+      subscribeFeedbackPrefs((key, value) => {
+        if (key === "haptics") setHaptics(value);
+        else setPush(value);
+      }),
+    [],
+  );
+  return (
+    <Section title="Haptics & notifications">
+      <ListGroup>
+        <ToggleRow
+          title="Haptics"
+          subtitle="Subtle vibration on shift start, pause, resume, end."
+          value={haptics}
+          onChange={(v) => {
+            setHaptics(v);
+            setHapticsEnabled(v);
+          }}
+        />
+        <ToggleRow
+          title="Push notifications"
+          subtitle="In-app alerts for new offers, shift updates, and reminders."
+          value={push}
+          onChange={(v) => {
+            setPush(v);
+            setPushEnabled(v);
+          }}
+        />
+      </ListGroup>
+      <p className="mt-2 px-1 text-[12px] text-muted-foreground">
+        Disabling push here mutes in-app alerts. To stop banners on your lock screen, change notification permission in your device settings.
+      </p>
+    </Section>
+  );
+}
+
+function ToggleRow({
+  title,
+  subtitle,
+  value,
+  onChange,
+}: {
+  title: string;
+  subtitle?: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left active:bg-accent"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14.5px]">{title}</span>
+        {subtitle && (
+          <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">
+            {subtitle}
+          </span>
+        )}
+      </span>
+      <span
+        aria-hidden
+        className="relative h-[28px] w-[46px] shrink-0 rounded-full transition-colors"
+        style={{
+          background: value
+            ? "var(--color-primary)"
+            : "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
+        }}
+      >
+        <span
+          className="absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-sm transition-[left]"
+          style={{ left: value ? "21px" : "3px" }}
+        />
+      </span>
+    </button>
+  );
+}
+
 function ListGroup({ children }: { children: React.ReactNode }) {
   return (
     <div
