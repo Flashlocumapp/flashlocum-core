@@ -24,7 +24,7 @@ import {
 } from "@/lib/network";
 
 import { pushToast } from "@/lib/notifications";
-import { shiftCue } from "@/lib/feedback";
+import { fromRealtime, ingest } from "@/lib/feedback";
 
 export type Coverage = {
   id: string;
@@ -313,7 +313,7 @@ export function ensureDoctorSession(initialOnline = true) {
     const r = s.requests[ev.shiftId];
     if (!r) return;
 
-    // New request reached this doctor → calm notification cue.
+    // New request reached this doctor → canonical offer.new event.
     // Only fire when the doctor is online and has capacity to accept.
     if (ev.action === "publish" && ev.actor === "requester") {
       const me = s.doctors[sid];
@@ -325,23 +325,36 @@ export function ensureDoctorSession(initialOnline = true) {
       if (isDeclined(me, r.id, r.rev)) return;
 
       processedEvents.set(eventKey, Date.now());
-      shiftCue("request");
-      pushToast({
-        tone: "presence",
-        title: `New coverage request · ${r.hospital}`,
-        body: `${r.coverage} · ${r.day} · ${r.start}`,
-      });
+      ingest(
+        fromRealtime({
+          kind: "offer.new",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: {
+            hospitalName: r.hospital,
+            title: `New coverage request · ${r.hospital}`,
+            body: `${r.coverage} · ${r.day} · ${r.start}`,
+            suppressToast: false,
+          },
+        }),
+      );
       return;
     }
 
     // Server-confirmed accept for this doctor → open the Accepted sheet.
-    // This is the ONLY path that opens the sheet; the click handler never
-    // writes accept state locally, so the sheet never flashes for a
-    // request another doctor won.
     if (ev.action === "accept" && ev.actor === "doctor" && r.acceptedBy === sid) {
       processedEvents.set(eventKey, Date.now());
       acceptedSheet = toCoverage(r);
-      shiftCue("request");
+      ingest(
+        fromRealtime({
+          kind: "offer.accepted",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
       bump();
       return;
     }
@@ -351,57 +364,68 @@ export function ensureDoctorSession(initialOnline = true) {
     processedEvents.set(eventKey, Date.now());
 
     if (ev.action === "start") {
-      shiftCue("start");
-      pushToast({
-        tone: "presence",
-        title: `Your shift with ${r.hospital} has started.`,
-        body: "Tap the active card for shift details.",
-      });
+      ingest(
+        fromRealtime({
+          kind: "shift.started",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
     } else if (ev.action === "resume") {
-      shiftCue("resume");
-      pushToast({
-        tone: "presence",
-        title: `Your shift with ${r.hospital} has resumed.`,
-        body: "Coverage timer continues from where it paused.",
-      });
+      ingest(
+        fromRealtime({
+          kind: "shift.resumed",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
     } else if (ev.action === "pause") {
-      shiftCue("pause");
       const isMulti = (r.days ?? 1) > 1;
       const completedDay = Math.max(1, (r.dayIndex ?? 1) - 1);
-      pushToast({
-        tone: "presence",
-        title: isMulti
-          ? `Day ${completedDay} of ${r.days} complete — shift with ${r.hospital} moved to Upcoming.`
-          : `Your shift with ${r.hospital} has been paused.`,
-        body: isMulti
-          ? "Resume on the next scheduled day to continue."
-          : "Coverage timer is preserved and will resume when restarted.",
-        ttl: 5200,
-      });
+      ingest(
+        fromRealtime({
+          kind: "shift.paused",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: {
+            hospitalName: r.hospital,
+            title: isMulti
+              ? `Day ${completedDay} of ${r.days} complete — shift with ${r.hospital} moved to Upcoming.`
+              : undefined,
+            body: isMulti ? "Resume on the next scheduled day to continue." : undefined,
+          },
+        }),
+      );
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "complete") {
-      shiftCue("end");
-      pushToast({
-        tone: "presence",
-        title: `Your shift with ${r.hospital} has ended.`,
-        body: "Payment will be remitted to your account by 10PM today.",
-        ttl: 5200,
-      });
-      // Tie the PaymentSummary to the EXACT transaction that just completed.
-      // Live details (hospital/coverage/total/feePct) are derived in
-      // useDispatch() from the current request row so post-webhook
-      // settled_amount updates flow into the card automatically.
+      ingest(
+        fromRealtime({
+          kind: "shift.ended",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
       pendingRatingRequestId = r.id;
-
-
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "cancel") {
-      pushToast({
-        tone: "warn",
-        title: `${r.hospital} cancelled this shift.`,
-      });
+      ingest(
+        fromRealtime({
+          kind: "shift.cancelled",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
     } else if (ev.action === "update") {
@@ -409,11 +433,15 @@ export function ensureDoctorSession(initialOnline = true) {
         acceptedSheet = toCoverage(r);
         bump();
       }
-      pushToast({
-        tone: "presence",
-        title: `${r.hospital} updated this shift.`,
-        body: `${r.coverage} · ${r.day} · ${r.start} - ${r.end} · ${r.durationHrs}hr · ₦${r.amount.toLocaleString("en-NG")}`,
-      });
+      ingest(
+        fromRealtime({
+          kind: "shift.updated",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
     }
   });
 }
