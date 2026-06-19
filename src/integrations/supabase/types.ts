@@ -788,6 +788,7 @@ export type Database = {
           billed_amount: number | null
           billed_minutes: number | null
           created_at: string
+          day_index: number
           ended_at: string | null
           id: string
           payment_reference: string | null
@@ -800,6 +801,7 @@ export type Database = {
           billed_amount?: number | null
           billed_minutes?: number | null
           created_at?: string
+          day_index?: number
           ended_at?: string | null
           id?: string
           payment_reference?: string | null
@@ -812,6 +814,7 @@ export type Database = {
           billed_amount?: number | null
           billed_minutes?: number | null
           created_at?: string
+          day_index?: number
           ended_at?: string | null
           id?: string
           payment_reference?: string | null
@@ -922,6 +925,7 @@ export type Database = {
     }
     Functions: {
       _active_pricing_version_id: { Args: never; Returns: string }
+      _auto_advance_day_boundary: { Args: never; Returns: Json }
       _bill_segment: {
         Args: { _env: string; _kind: string; _seg_id: string }
         Returns: number
@@ -930,11 +934,29 @@ export type Database = {
         Args: { _end_hhmm: string; _start_hhmm: string }
         Returns: number
       }
+      _build_locked_snapshot: {
+        Args: {
+          _coverage_type: string
+          _days: number
+          _end_hhmm: string
+          _environment: string
+          _start_hhmm: string
+        }
+        Returns: Json
+      }
       _classify_product: {
         Args: { _coverage_type: string; _days: number }
         Returns: string
       }
       _hhmm_to_min: { Args: { _s: string }; Returns: number }
+      _price_segment_locked: {
+        Args: { _snapshot: Json; _worked_min: number }
+        Returns: {
+          amount: number
+          billable_min: number
+          tolerance_fired: boolean
+        }[]
+      }
       _price_standard_day: {
         Args: {
           _block_min: number
