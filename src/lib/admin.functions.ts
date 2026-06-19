@@ -986,6 +986,11 @@ export const adminSendPushFn = createServerFn({ method: "POST" })
     await sendPushToUser(data.userId, {
       title: data.title,
       body: data.body,
+      kind: "admin.broadcast",
+      entityId: data.userId,
+      version: Date.now(),
+      occurredAt: Date.now(),
+      audience: "doctor",
       data: { type: "admin_broadcast" },
     });
     return { ok: true };
