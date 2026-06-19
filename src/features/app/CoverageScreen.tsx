@@ -857,7 +857,7 @@ function RequestCard({
             {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
           </button>
         )}
-        {isActive && item.days > 1 && (
+        {isActive && item.days > 1 && item.dayIndex < item.days && (
           <button
             onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
             disabled={!!pending}

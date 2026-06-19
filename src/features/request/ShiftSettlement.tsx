@@ -1158,8 +1158,38 @@ function ConfirmedPane({
   onClose: () => void;
 }) {
   void billedMin;
-  const [ratingOpen, setRatingOpen] = useState(true);
+  // Gate the overlay until the transaction row has landed AND payment is
+  // confirmed paid. Opening before `tx?.id` exists means a submitted star
+  // would silently drop (no shiftId → RPC skipped). See ratings audit.
+  const canRate = !!tx?.id;
+  const [ratingOpen, setRatingOpen] = useState(false);
   const [rated, setRated] = useState(false);
+  useEffect(() => {
+    if (canRate && !rated) setRatingOpen(true);
+  }, [canRate, rated]);
+
+  // Group persisted shift_segments per day for the Payment Summary card.
+  // Each day's row is the FROZEN billing record written at Pause/End time —
+  // never recomputed from totals.
+  type DayRow = { day: number; actualMin: number; billableMin: number; amount: number };
+  const dayRows: DayRow[] = (() => {
+    const map = new Map<number, DayRow>();
+    for (const s of segments) {
+      const day = typeof s.day_index === "number" && s.day_index > 0 ? s.day_index : 1;
+      const startMs = s.started_at ? Date.parse(s.started_at) : NaN;
+      const endMs = s.ended_at ? Date.parse(s.ended_at) : NaN;
+      const actualMin =
+        Number.isFinite(startMs) && Number.isFinite(endMs)
+          ? Math.max(0, Math.round((endMs - startMs) / 60000))
+          : 0;
+      const row = map.get(day) ?? { day, actualMin: 0, billableMin: 0, amount: 0 };
+      row.actualMin += actualMin;
+      row.billableMin += s.billed_minutes ?? 0;
+      row.amount += s.billed_amount ?? 0;
+      map.set(day, row);
+    }
+    return Array.from(map.values()).sort((a, b) => a.day - b.day);
+  })();
 
   const fmtSegTime = (iso: string | null) => {
     if (!iso) return "—";
@@ -1227,35 +1257,36 @@ function ConfirmedPane({
         </div>
 
 
-        {segments.length > 1 && (
+        {dayRows.length > 0 && (
           <div className="mt-4 rounded-2xl bg-surface-elevated p-5">
-            <div className="mb-2 text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground">
-              Session breakdown
+            <div className="mb-3 text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground">
+              Payment summary
             </div>
-            <ul className="space-y-2">
-              {segments.map((s) => (
-                <li key={s.id} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0">
-                  <div className="min-w-0">
-                    <div className="text-[12.5px] font-medium">
-                      {typeof s.day_index === "number" && s.day_index > 0
-                        ? `Day ${s.day_index} · Session ${s.segment_index}`
-                        : `Session ${s.segment_index}`}
-                    </div>
-                    <div className="text-[11.5px] text-muted-foreground">
-                      {fmtSegTime(s.started_at)} → {fmtSegTime(s.ended_at)}
-                    </div>
+            <ul className="space-y-3">
+              {dayRows.map((d) => (
+                <li key={d.day} className="border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                  <div className="mb-1.5 text-[13px] font-semibold">Day {d.day}</div>
+                  <div className="flex items-center justify-between text-[12px] text-muted-foreground">
+                    <span>Actual Duration</span>
+                    <span className="tabular-nums text-foreground/80">{fmtHrMin(d.actualMin)}</span>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[12.5px] font-semibold tabular-nums">
-                      {fmtNaira(s.billed_amount ?? 0)}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground tabular-nums">
-                      {fmtHrMin(s.billed_minutes ?? 0)}
-                    </div>
+                  <div className="flex items-center justify-between text-[12px] text-muted-foreground">
+                    <span>Billable Duration</span>
+                    <span className="tabular-nums text-foreground/80">{fmtHrMin(d.billableMin)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12.5px]">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="font-semibold tabular-nums">{fmtNaira(d.amount)}</span>
                   </div>
                 </li>
               ))}
             </ul>
+            <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3 text-[13.5px]">
+              <span className="font-medium">Total</span>
+              <span className="font-semibold tabular-nums">
+                {fmtNaira(dayRows.reduce((acc, d) => acc + d.amount, 0))}
+              </span>
+            </div>
           </div>
         )}
 
@@ -1281,13 +1312,19 @@ function ConfirmedPane({
         onDismiss={() => setRatingOpen(false)}
         onSubmit={(rating, feedback) => {
           const shiftId = tx?.id ?? null;
-          if (rating > 0 && shiftId) {
-            void (async () => {
-              const res = await submitShiftRating(shiftId, rating, feedback || null);
-              if (!res.ok && res.error !== "already_rated") {
-                pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
-              }
-            })();
+          console.info("[RatingOverlay] submit fired", { rating, shiftId, hasFeedback: !!feedback });
+          if (rating > 0) {
+            if (!shiftId) {
+              console.error("[RatingOverlay] no shiftId — rating dropped");
+              pushToast({ tone: "warn", title: "Couldn't save rating — please try again in a moment." });
+            } else {
+              void (async () => {
+                const res = await submitShiftRating(shiftId, rating, feedback || null);
+                if (!res.ok && res.error !== "already_rated") {
+                  pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+                }
+              })();
+            }
           }
           setRated(true);
           setRatingOpen(false);

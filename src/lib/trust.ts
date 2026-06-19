@@ -180,13 +180,19 @@ export async function submitShiftRating(
   score: number,
   feedback?: string | null,
 ): Promise<SubmitResult> {
-  if (!requestId) return { ok: false, error: "unknown", message: "Missing shift" };
-  const { data, error } = await supabase.rpc("submit_shift_rating", {
+  if (!requestId) {
+    console.error("[submitShiftRating] missing requestId");
+    return { ok: false, error: "unknown", message: "Missing shift" };
+  }
+  const args = {
     _request_id: requestId,
     _score: Math.round(score),
-    _feedback: feedback ?? undefined,
-  });
+    _feedback: feedback ?? null,
+  };
+  console.info("[submitShiftRating] calling RPC", { requestId, score: args._score, hasFeedback: !!feedback });
+  const { data, error } = await supabase.rpc("submit_shift_rating", args as never);
   if (error) {
+    console.error("[submitShiftRating] RPC error", { code: error.code, message: error.message, details: error.details });
     const msg = error.message || "";
     let code: "already_rated" | "not_authorized" | "not_terminal" | "unknown" = "unknown";
     if (/already rated|unique/i.test(msg)) code = "already_rated";
@@ -194,6 +200,7 @@ export async function submitShiftRating(
     else if (/not yet terminal/i.test(msg)) code = "not_terminal";
     return { ok: false, error: code, message: msg };
   }
+  console.info("[submitShiftRating] RPC success", { requestId });
   const state = data as ShiftRatingState;
   shiftCache.set(requestId, { state, ts: Date.now() });
   notify(shiftListeners, requestId);
