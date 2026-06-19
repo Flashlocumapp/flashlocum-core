@@ -42,6 +42,39 @@ async function setupListeners(
   PushNotifications.addListener("registrationError", (err) => {
     console.warn("[push] registration error:", err);
   });
+
+  // G10 — foreground push routing. When the app is visible, OS pushes are
+  // funnelled through the canonical-event engine so they dedupe against any
+  // realtime/local arrival within the 6 s window. iOS shows no banner in
+  // foreground by default; on Android the OS may briefly show one — that's
+  // fine since the engine also produces the in-app toast/haptic deterministically.
+  PushNotifications.addListener("pushNotificationReceived", (n) => {
+    try {
+      const raw = (n.data ?? {}) as Record<string, unknown>;
+      const kind = typeof raw.kind === "string" ? (raw.kind as EventKind) : null;
+      const entityId = typeof raw.entityId === "string" ? raw.entityId : null;
+      const audience: EventAudience =
+        raw.audience === "requester" ? "requester" : "doctor";
+      const version = Number(raw.version);
+      const occurredAt = Number(raw.occurredAt);
+      if (!kind || !entityId || !Number.isFinite(version)) return;
+      ingest(
+        fromPush({
+          kind,
+          entityId,
+          audience,
+          version,
+          occurredAt: Number.isFinite(occurredAt) ? occurredAt : Date.now(),
+          ctx: {
+            title: typeof n.title === "string" ? n.title : undefined,
+            body: typeof n.body === "string" ? n.body : undefined,
+          },
+        }),
+      );
+    } catch (e) {
+      console.warn("[push] foreground ingest failed:", (e as Error).message);
+    }
+  });
 }
 
 async function requestAndRegister() {
