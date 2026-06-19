@@ -1,35 +1,30 @@
-## Realtime Visibility Fix — `coverage_requests` Publication Repair
+## Clear All Coverage Data (All Users)
 
-### Root cause (recap)
-The v3 pricing migration added columns (`rate_snapshot`, `pricing_version_id`, etc.) to `public.coverage_requests`, but the `supabase_realtime` publication was created with an explicit column allow-list that does not include them. Postgres now rejects every write with:
+### Scope
+Wipe every coverage request and its dependent rows from the database. Affects all users (requesters and doctors), all environments (live + test rows), and every status — active, paused, searching, accepted, completed, cancelled, expired, no_show.
 
-> cannot update table "coverage_requests" — Column list used by the publication does not cover the replica identity.
+### What gets deleted
+1. **`shift_segments`** — every row (FK child of `coverage_requests`).
+2. **`payment_surcharge_log`** — every row (per-request surcharge history).
+3. **`payment_underpayments`** — every row (per-request underpayment records).
+4. **`ratings`** — every row tied to a shift.
+5. **`admin_payment_actions`** — left intact (audit trail; not coverage data). *Confirm if you also want these wiped.*
+6. **`coverage_requests`** — every row.
+7. **`profiles.payment_flagged_at` / `payment_flagged_reason`** — cleared (since the underlying overdue shifts are gone). `account_restricted_at` and `payment_restricted_at` are **left alone** (those are admin-imposed sanctions, not auto-derived from shift data).
+8. **`trust_blocks`** — left intact unless you say otherwise (these are admin/abuse blocks, not shift records).
 
-Result: INSERTs from "Find Cover" and all state-transition UPDATEs fail at the DB layer, so the doctor-side realtime broadcast never fires. This is a backend/replication issue, not a frontend or RLS bug.
+### What is NOT touched
+- User accounts, profiles, roles, verification status, doctor presence.
+- Pricing versions, rates, modifiers.
+- Email logs / device tokens / notification outbox.
 
-### Fix scope
-One migration, no rollback, no app code changes.
+### Execution
+One `DELETE` migration in the correct FK order, followed by the profile flag reset. No schema changes.
 
-1. **Drop the column allow-list** on `coverage_requests` in `supabase_realtime`:
-   - `ALTER PUBLICATION supabase_realtime DROP TABLE public.coverage_requests;`
-   - `ALTER PUBLICATION supabase_realtime ADD TABLE public.coverage_requests;` (no column list → publishes all columns, future-proof against new columns).
-2. **Normalize replica identity** so realtime payloads carry full row data:
-   - `ALTER TABLE public.coverage_requests REPLICA IDENTITY FULL;`
-3. **Sanity-sweep sibling tables** touched by v3 (`shift_segments`, `pricing_versions`) — re-add to publication without column lists and set `REPLICA IDENTITY FULL` only if they are currently in the publication with a stale list. Skip otherwise.
-4. **Unblock the queue**: run `SELECT public.expire_stale_searching_requests();` once after the migration so any stuck "searching" rows that failed to update during the outage get reconciled.
+### Reversibility
+**This is destructive and permanent.** There is no soft-delete or backup snapshot taken as part of this operation.
 
-### Verification
-- `supabase--read_query` against `pg_publication_tables` to confirm no `attnames` filter remains on `coverage_requests`.
-- Read recent Postgres logs to confirm the "Column list" error has stopped.
-- Manual end-to-end check via Playwright: create a request as a requester, confirm the row lands and an online doctor's dashboard receives the invalidation broadcast within seconds.
-
-### Acceptance
-- New `coverage_requests` INSERT succeeds.
-- `pause_shift` / `resume_shift` / `end_shift` UPDATEs succeed.
-- Online doctors see new incoming request cards without refresh.
-- No new "Column list used by the publication…" errors in logs.
-
-### Out of scope
-- No changes to frontend subscription code (already correct).
-- No changes to RLS, pricing logic, or v3 schema.
-- No changes to doctor presence system.
+### Confirm before I proceed
+- Wipe **all environments** (both `live` and `test` rows)? Default: yes, all.
+- Also clear `admin_payment_actions` audit log? Default: **no, keep it**.
+- Also clear `trust_blocks`? Default: **no, keep it**.
