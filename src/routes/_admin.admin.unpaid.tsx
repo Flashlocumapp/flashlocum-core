@@ -68,19 +68,21 @@ function AdminUnpaidPage() {
 
   const totals = useMemo(() => {
     let outstanding = 0;
-    let restrictedAccounts = 0;
+    let cappedCount = 0;
     for (const r of rows) {
       outstanding += r.total_billed_amount ?? 0;
-      if (r.payment_extension_count >= 2) restrictedAccounts += 1;
+      const cap = (r as unknown as { surcharge_capped_at?: string | null })
+        .surcharge_capped_at;
+      if (cap) cappedCount += 1;
     }
-    return { outstanding, restrictedAccounts };
+    return { outstanding, cappedCount };
   }, [rows]);
 
   return (
     <div className="p-6 lg:p-8">
       <AdminPageHeader
         title="Unpaid Shifts"
-        subtitle={`${filtered.length} of ${rows.length} outstanding · ${fmtNaira(totals.outstanding)} · ${totals.restrictedAccounts} restricted`}
+        subtitle={`${filtered.length} of ${rows.length} outstanding · ${fmtNaira(totals.outstanding)} · ${totals.cappedCount} at 24h cap`}
         right={<RefreshButton onClick={() => void refresh()} busy={refreshing} />}
       />
 
@@ -118,7 +120,9 @@ function AdminUnpaidPage() {
               <tbody>
                 {filtered.map((r) => {
                   const ds = dueState(r.payment_due_at);
-                  const restricted = r.payment_extension_count >= 2;
+                  const cap = (r as unknown as { surcharge_capped_at?: string | null })
+                    .surcharge_capped_at;
+                  const capped = !!cap;
                   return (
                     <tr key={r.id} className="border-t hover:bg-secondary/30 align-top">
                       <td className="px-4 py-2.5">
@@ -145,14 +149,14 @@ function AdminUnpaidPage() {
                         <span
                           className="rounded-full px-2 py-0.5 text-[11.5px] font-medium"
                           style={{
-                            color: restricted ? "#b91c1c" : "var(--color-muted-foreground)",
-                            background: restricted
+                            color: capped ? "#b91c1c" : "var(--color-muted-foreground)",
+                            background: capped
                               ? "color-mix(in oklab, #b91c1c 14%, transparent)"
                               : "var(--color-secondary)",
                           }}
                         >
                           {r.payment_extension_count} × 15min
-                          {restricted ? " · restricted" : ""}
+                          {capped ? " · 24h cap" : ""}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">
