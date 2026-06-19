@@ -15,6 +15,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { pushToast } from "@/lib/notifications";
 import { unregisterDoctor } from "@/lib/network";
 import { BankPayoutFields } from "@/components/BankPayoutFields";
+import {
+  hapticsEnabled,
+  pushEnabled,
+  setHapticsEnabled,
+  setPushEnabled,
+  subscribeFeedbackPrefs,
+} from "@/lib/feedback-prefs";
 
 function verificationLabel(s: string): string {
   if (s === "approved") return "Verified";
