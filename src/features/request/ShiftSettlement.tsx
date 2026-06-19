@@ -125,6 +125,7 @@ export function ShiftSettlement({
   type SegmentRow = {
     id: string;
     segment_index: number;
+    day_index?: number | null;
     started_at: string;
     ended_at: string | null;
     billed_minutes: number | null;
@@ -1134,6 +1135,7 @@ function ConfirmedPane({
   segments?: Array<{
     id: string;
     segment_index: number;
+    day_index?: number | null;
     started_at: string;
     ended_at: string | null;
     billed_minutes: number | null;
@@ -1235,7 +1237,9 @@ function ConfirmedPane({
                 <li key={s.id} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0">
                   <div className="min-w-0">
                     <div className="text-[12.5px] font-medium">
-                      Session {s.segment_index}
+                      {typeof s.day_index === "number" && s.day_index > 0
+                        ? `Day ${s.day_index} · Session ${s.segment_index}`
+                        : `Session ${s.segment_index}`}
                     </div>
                     <div className="text-[11.5px] text-muted-foreground">
                       {fmtSegTime(s.started_at)} → {fmtSegTime(s.ended_at)}
