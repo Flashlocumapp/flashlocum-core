@@ -370,28 +370,39 @@ export function computeWorkedPricing(
     };
   }
 
-  // === HOME CARE ===
+  // === HOME CARE === (per-day independent billing; `worked` represents the
+  // current day. Prior days are estimated at booked length — Settlement re-reads
+  // the authoritative per-day ledger from get_request_billing_state.)
   if (coverage === "home") {
-    const totalBooked = bookedPerDay * d;
     const homeRate = t.flats.home_hour;
     const homeTol = t.modifiers.home_tolerance_min;
     const homeBlock = t.modifiers.home_block_min;
-    let remaining = Math.max(worked, t.modifiers.first_hour_min);
-    let bill: number;
-    if (totalBooked > 0 && Math.abs(remaining - totalBooked) <= homeTol) {
-      bill = totalBooked;
-    } else {
-      bill = Math.ceil(remaining / homeBlock) * homeBlock;
-    }
-    const amount = Math.round((bill / 60) * homeRate * busyMult);
+    const priceHomeDay = (workedMin: number): number => {
+      let w = Math.max(workedMin, t.modifiers.first_hour_min);
+      let bill: number;
+      if (bookedPerDay > 0 && Math.abs(w - bookedPerDay) <= homeTol) {
+        bill = bookedPerDay;
+      } else {
+        bill = Math.ceil(w / homeBlock) * homeBlock;
+      }
+      return Math.round((bill / 60) * homeRate * busyMult);
+    };
+    const todayAmount = priceHomeDay(worked);
+    const priorDaysAmount = (d - 1) * priceHomeDay(bookedPerDay);
     return {
-      amount,
-      billableMinutes: bill,
-      explanation: `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr.`,
+      amount: todayAmount + priorDaysAmount,
+      billableMinutes: Math.ceil(worked / homeBlock) * homeBlock,
+      explanation:
+        `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr` +
+        (d > 1 ? ` · ${d} days (per-day)` : "") +
+        busySuffix(environment, busyApplies, t.modifiers.busy_mult),
     };
   }
 
-  // === STANDARD (per-day partitioning) ===
+  // === STANDARD (per-day independent billing) ===
+  // `worked` is the CURRENT day's worked minutes. Prior days estimated at
+  // booked length using the LOCKED tier. Settlement re-reads the authoritative
+  // per-day ledger from get_request_billing_state.days_breakdown.
   const tier = tierFor(bookedPerDay > 0 ? bookedPerDay / 60 : worked / 60, t);
   let dWin = 0;
   let nWin = 0;
@@ -403,32 +414,35 @@ export function computeWorkedPricing(
     dWin = bookedPerDay;
   }
 
-  let remaining = worked;
-  let total = 0;
-  let billable = 0;
-  for (let i = 1; i <= d; i++) {
-    let dayWorked: number;
-    if (i < d) {
-      dayWorked = Math.min(remaining, bookedPerDay + t.modifiers.tolerance_min);
-    } else {
-      dayWorked = remaining;
-    }
-    remaining -= dayWorked;
-    const r = priceStandardDay(
-      bookedPerDay,
-      dayWorked,
-      dWin,
-      nWin,
-      tier.day,
-      tier.night,
-      busyMult,
-      t.modifiers.tolerance_min,
-      t.modifiers.block_min,
-      t.modifiers.first_hour_min,
-    );
-    total += r.amount;
-    billable += r.billable;
-  }
+  const today = priceStandardDay(
+    bookedPerDay,
+    worked,
+    dWin,
+    nWin,
+    tier.day,
+    tier.night,
+    busyMult,
+    t.modifiers.tolerance_min,
+    t.modifiers.block_min,
+    t.modifiers.first_hour_min,
+  );
+  const priorDay = d > 1
+    ? priceStandardDay(
+        bookedPerDay,
+        bookedPerDay,
+        dWin,
+        nWin,
+        tier.day,
+        tier.night,
+        busyMult,
+        t.modifiers.tolerance_min,
+        t.modifiers.block_min,
+        t.modifiers.first_hour_min,
+      )
+    : { billable: 0, amount: 0, toleranceFired: false };
+
+  const total = today.amount + (d - 1) * priorDay.amount;
+  const billable = today.billable + (d - 1) * priorDay.billable;
 
   const parts: string[] = [];
   if (dWin > 0) parts.push(`₦${tier.day.toLocaleString("en-NG")}/hr day`);
@@ -436,6 +450,9 @@ export function computeWorkedPricing(
   return {
     amount: total,
     billableMinutes: billable,
-    explanation: (parts.join(" + ") || "Standard coverage rate.") + (d > 1 ? ` · ${d} days` : "") + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    explanation:
+      (parts.join(" + ") || "Standard coverage rate.") +
+      (d > 1 ? ` · ${d} days (per-day)` : "") +
+      busySuffix(environment, busyApplies, t.modifiers.busy_mult),
   };
 }
