@@ -23,6 +23,7 @@
 // In-app sound is intentionally absent. Push is the only sound surface.
 
 import { pushToast, type ToastTone } from "@/lib/notifications";
+import { hapticsEnabled } from "@/lib/feedback-prefs";
 
 /* ---------- Types ---------- */
 
