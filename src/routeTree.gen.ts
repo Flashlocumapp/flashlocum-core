@@ -43,6 +43,7 @@ import { Route as AdminAdminFlashboardRouteImport } from './routes/_admin.admin.
 import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.finance'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as ApiPublicHooksShiftRemindersRouteImport } from './routes/api/public/hooks/shift-reminders'
+import { Route as ApiPublicHooksOutboxDrainRouteImport } from './routes/api/public/hooks/outbox-drain'
 
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   id: '/terms-of-service',
@@ -214,6 +215,12 @@ const ApiPublicHooksShiftRemindersRoute =
     path: '/api/public/hooks/shift-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksOutboxDrainRoute =
+  ApiPublicHooksOutboxDrainRouteImport.update({
+    id: '/api/public/hooks/outbox-drain',
+    path: '/api/public/hooks/outbox-drain',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -246,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin/': typeof AdminAdminIndexRoute
+  '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
@@ -279,6 +287,7 @@ export interface FileRoutesByTo {
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin': typeof AdminAdminIndexRoute
+  '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
@@ -316,6 +325,7 @@ export interface FileRoutesById {
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/_admin/admin/': typeof AdminAdminIndexRoute
+  '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api/public/monnify-webhook'
     | '/admin/'
+    | '/api/public/hooks/outbox-drain'
     | '/api/public/hooks/shift-reminders'
     | '/lovable/email/queue/process'
   fileRoutesByTo: FileRoutesByTo
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api/public/monnify-webhook'
     | '/admin'
+    | '/api/public/hooks/outbox-drain'
     | '/api/public/hooks/shift-reminders'
     | '/lovable/email/queue/process'
   id:
@@ -421,6 +433,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/verification'
     | '/api/public/monnify-webhook'
     | '/_admin/admin/'
+    | '/api/public/hooks/outbox-drain'
     | '/api/public/hooks/shift-reminders'
     | '/lovable/email/queue/process'
   fileRoutesById: FileRoutesById
@@ -437,6 +450,7 @@ export interface RootRouteChildren {
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
+  ApiPublicHooksOutboxDrainRoute: typeof ApiPublicHooksOutboxDrainRoute
   ApiPublicHooksShiftRemindersRoute: typeof ApiPublicHooksShiftRemindersRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
 }
@@ -681,6 +695,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksShiftRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/outbox-drain': {
+      id: '/api/public/hooks/outbox-drain'
+      path: '/api/public/hooks/outbox-drain'
+      fullPath: '/api/public/hooks/outbox-drain'
+      preLoaderRoute: typeof ApiPublicHooksOutboxDrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -764,6 +785,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
+  ApiPublicHooksOutboxDrainRoute: ApiPublicHooksOutboxDrainRoute,
   ApiPublicHooksShiftRemindersRoute: ApiPublicHooksShiftRemindersRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
 }
