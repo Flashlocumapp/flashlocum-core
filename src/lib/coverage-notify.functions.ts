@@ -46,6 +46,11 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
         await sendPushToUser(req.requester_id, {
           title: "Shift accepted",
           body: `${doc?.full_name ?? "A doctor"} accepted your shift${req.hospital ? ` at ${req.hospital}` : ""}.`,
+          kind: "offer.accepted",
+          entityId: data.requestId,
+          version: Date.now(),
+          occurredAt: Date.now(),
+          audience: "requester",
           data: { type: "coverage_accepted", requestId: data.requestId },
         });
       }
