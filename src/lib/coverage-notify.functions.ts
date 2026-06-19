@@ -160,6 +160,11 @@ export const startAndNotifyFn = createServerFn({ method: "POST" })
         await sendPushToUser(row.accepted_by, {
           title: "Shift started",
           body: `${requester?.full_name ?? "The requester"} started your shift${row.hospital ? ` at ${row.hospital}` : ""}.`,
+          kind: "shift.started",
+          entityId: data.requestId,
+          version: startedAtMs ?? Date.now(),
+          occurredAt: startedAtMs ?? Date.now(),
+          audience: "doctor",
           data: { type: "shift_started", requestId: data.requestId },
         });
       } catch (e) {
