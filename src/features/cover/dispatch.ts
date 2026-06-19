@@ -24,7 +24,7 @@ import {
 } from "@/lib/network";
 
 import { pushToast } from "@/lib/notifications";
-import { fromRealtime, ingest, shiftCue } from "@/lib/feedback";
+import { fromRealtime, ingest } from "@/lib/feedback";
 
 export type Coverage = {
   id: string;
