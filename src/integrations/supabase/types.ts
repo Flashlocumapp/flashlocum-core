@@ -835,6 +835,34 @@ export type Database = {
         Args: { _env: string; _kind: string; _seg_id: string }
         Returns: number
       }
+      _booked_per_day_min: {
+        Args: { _end_hhmm: string; _start_hhmm: string }
+        Returns: number
+      }
+      _classify_product: {
+        Args: { _coverage_type: string; _days: number }
+        Returns: string
+      }
+      _hhmm_to_min: { Args: { _s: string }; Returns: number }
+      _price_standard_day: {
+        Args: {
+          _block_min: number
+          _booked_per_day_min: number
+          _busy_mult: number
+          _day_window_min: number
+          _first_hour_min: number
+          _night_window_min: number
+          _rate_day: number
+          _rate_night: number
+          _tolerance_min: number
+          _worked_min: number
+        }
+        Returns: {
+          amount: number
+          billable_min: number
+          tolerance_fired: boolean
+        }[]
+      }
       _pricing_flat: {
         Args: { _product: string; _version: string }
         Returns: number
@@ -858,6 +886,7 @@ export type Database = {
           night_min: number
         }[]
       }
+      _tier_for_per_day_hours: { Args: { _booked_hr: number }; Returns: string }
       _trust_ratings_received: {
         Args: { _user_id: string }
         Returns: {
@@ -871,6 +900,13 @@ export type Database = {
           outcome: string
           shift_id: string
           terminal_at: string
+        }[]
+      }
+      _window_day_night_min: {
+        Args: { _end_hhmm: string; _start_hhmm: string }
+        Returns: {
+          day_min: number
+          night_min: number
         }[]
       }
       admin_apply_trust_restriction: {
