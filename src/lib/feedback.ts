@@ -183,6 +183,7 @@ function vibrate(pattern: number | number[]) {
 
 function emitHaptic(intensity: HapticIntensity) {
   if (reducedMotion()) return;
+  if (!hapticsEnabled()) return;
   switch (intensity) {
     case "light":
       vibrate(15);
