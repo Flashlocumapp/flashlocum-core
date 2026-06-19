@@ -235,6 +235,8 @@ export function AccountScreen() {
           </ListGroup>
         </Section>
 
+        <FeedbackPrefsSection />
+
         <Section title="Account">
           <ListGroup>
             <NavRow
