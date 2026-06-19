@@ -190,7 +190,7 @@ export async function submitShiftRating(
     _feedback: feedback ?? null,
   };
   console.info("[submitShiftRating] calling RPC", { requestId, score: args._score, hasFeedback: !!feedback });
-  const { data, error } = await supabase.rpc("submit_shift_rating", args);
+  const { data, error } = await supabase.rpc("submit_shift_rating", args as never);
   if (error) {
     console.error("[submitShiftRating] RPC error", { code: error.code, message: error.message, details: error.details });
     const msg = error.message || "";
