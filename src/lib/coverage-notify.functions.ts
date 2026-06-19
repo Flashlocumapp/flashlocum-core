@@ -101,6 +101,11 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
         await sendPushToUser(notifyUserId, {
           title: "Shift cancelled",
           body: `${actor === "doctor" ? "The doctor" : "The requester"} cancelled${row.hospital ? ` the shift at ${row.hospital}` : " this shift"}.`,
+          kind: "shift.cancelled",
+          entityId: data.requestId,
+          version: Date.now(),
+          occurredAt: Date.now(),
+          audience: actor === "doctor" ? "requester" : "doctor",
           data: { type: "coverage_cancelled", requestId: data.requestId },
         });
       }
