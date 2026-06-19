@@ -42,6 +42,7 @@ import { Route as AdminAdminPricingRouteImport } from './routes/_admin.admin.pri
 import { Route as AdminAdminFlashboardRouteImport } from './routes/_admin.admin.flashboard'
 import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.finance'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as ApiPublicHooksSurchargeDrainRouteImport } from './routes/api/public/hooks/surcharge-drain'
 import { Route as ApiPublicHooksShiftRemindersRouteImport } from './routes/api/public/hooks/shift-reminders'
 import { Route as ApiPublicHooksOutboxDrainRouteImport } from './routes/api/public/hooks/outbox-drain'
 
@@ -209,6 +210,12 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksSurchargeDrainRoute =
+  ApiPublicHooksSurchargeDrainRouteImport.update({
+    id: '/api/public/hooks/surcharge-drain',
+    path: '/api/public/hooks/surcharge-drain',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksShiftRemindersRoute =
   ApiPublicHooksShiftRemindersRouteImport.update({
     id: '/api/public/hooks/shift-reminders',
@@ -255,6 +262,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
+  '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesByTo {
@@ -289,6 +297,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
+  '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesById {
@@ -327,6 +336,7 @@ export interface FileRoutesById {
   '/_admin/admin/': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
+  '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRouteTypes {
@@ -364,6 +374,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/api/public/hooks/outbox-drain'
     | '/api/public/hooks/shift-reminders'
+    | '/api/public/hooks/surcharge-drain'
     | '/lovable/email/queue/process'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -398,6 +409,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/api/public/hooks/outbox-drain'
     | '/api/public/hooks/shift-reminders'
+    | '/api/public/hooks/surcharge-drain'
     | '/lovable/email/queue/process'
   id:
     | '__root__'
@@ -435,6 +447,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/'
     | '/api/public/hooks/outbox-drain'
     | '/api/public/hooks/shift-reminders'
+    | '/api/public/hooks/surcharge-drain'
     | '/lovable/email/queue/process'
   fileRoutesById: FileRoutesById
 }
@@ -452,6 +465,7 @@ export interface RootRouteChildren {
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
   ApiPublicHooksOutboxDrainRoute: typeof ApiPublicHooksOutboxDrainRoute
   ApiPublicHooksShiftRemindersRoute: typeof ApiPublicHooksShiftRemindersRoute
+  ApiPublicHooksSurchargeDrainRoute: typeof ApiPublicHooksSurchargeDrainRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
 }
 
@@ -688,6 +702,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/surcharge-drain': {
+      id: '/api/public/hooks/surcharge-drain'
+      path: '/api/public/hooks/surcharge-drain'
+      fullPath: '/api/public/hooks/surcharge-drain'
+      preLoaderRoute: typeof ApiPublicHooksSurchargeDrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/shift-reminders': {
       id: '/api/public/hooks/shift-reminders'
       path: '/api/public/hooks/shift-reminders'
@@ -787,6 +808,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
   ApiPublicHooksOutboxDrainRoute: ApiPublicHooksOutboxDrainRoute,
   ApiPublicHooksShiftRemindersRoute: ApiPublicHooksShiftRemindersRoute,
+  ApiPublicHooksSurchargeDrainRoute: ApiPublicHooksSurchargeDrainRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
 }
 export const routeTree = rootRouteImport
