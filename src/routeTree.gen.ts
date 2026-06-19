@@ -42,6 +42,7 @@ import { Route as AdminAdminPricingRouteImport } from './routes/_admin.admin.pri
 import { Route as AdminAdminFlashboardRouteImport } from './routes/_admin.admin.flashboard'
 import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.finance'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as ApiPublicHooksShiftRemindersRouteImport } from './routes/api/public/hooks/shift-reminders'
 
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   id: '/terms-of-service',
@@ -207,6 +208,12 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksShiftRemindersRoute =
+  ApiPublicHooksShiftRemindersRouteImport.update({
+    id: '/api/public/hooks/shift-reminders',
+    path: '/api/public/hooks/shift-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin/': typeof AdminAdminIndexRoute
+  '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesByTo {
@@ -271,6 +279,7 @@ export interface FileRoutesByTo {
   '/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin': typeof AdminAdminIndexRoute
+  '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesById {
@@ -307,6 +316,7 @@ export interface FileRoutesById {
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/_admin/admin/': typeof AdminAdminIndexRoute
+  '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRouteTypes {
@@ -342,6 +352,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api/public/monnify-webhook'
     | '/admin/'
+    | '/api/public/hooks/shift-reminders'
     | '/lovable/email/queue/process'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api/public/monnify-webhook'
     | '/admin'
+    | '/api/public/hooks/shift-reminders'
     | '/lovable/email/queue/process'
   id:
     | '__root__'
@@ -409,6 +421,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/verification'
     | '/api/public/monnify-webhook'
     | '/_admin/admin/'
+    | '/api/public/hooks/shift-reminders'
     | '/lovable/email/queue/process'
   fileRoutesById: FileRoutesById
 }
@@ -424,6 +437,7 @@ export interface RootRouteChildren {
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
+  ApiPublicHooksShiftRemindersRoute: typeof ApiPublicHooksShiftRemindersRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
 }
 
@@ -660,6 +674,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/shift-reminders': {
+      id: '/api/public/hooks/shift-reminders'
+      path: '/api/public/hooks/shift-reminders'
+      fullPath: '/api/public/hooks/shift-reminders'
+      preLoaderRoute: typeof ApiPublicHooksShiftRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -743,6 +764,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
+  ApiPublicHooksShiftRemindersRoute: ApiPublicHooksShiftRemindersRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
 }
 export const routeTree = rootRouteImport

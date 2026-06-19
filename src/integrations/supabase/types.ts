@@ -54,6 +54,7 @@ export type Database = {
           phone: string
           pricing_version_id: string | null
           rate_snapshot: Json | null
+          reminder_sent_at: string | null
           remitted_at: string | null
           requester_id: string
           requester_rating_at: string | null
@@ -107,6 +108,7 @@ export type Database = {
           phone?: string
           pricing_version_id?: string | null
           rate_snapshot?: Json | null
+          reminder_sent_at?: string | null
           remitted_at?: string | null
           requester_id: string
           requester_rating_at?: string | null
@@ -160,6 +162,7 @@ export type Database = {
           phone?: string
           pricing_version_id?: string | null
           rate_snapshot?: Json | null
+          reminder_sent_at?: string | null
           remitted_at?: string | null
           requester_id?: string
           requester_rating_at?: string | null
@@ -325,6 +328,63 @@ export type Database = {
           id?: string
           token?: string
           used_at?: string | null
+        }
+        Relationships: []
+      }
+      notification_outbox: {
+        Row: {
+          attempts: number
+          audience: string
+          body: string
+          created_at: string
+          delivered_at: string | null
+          entity_id: string
+          id: string
+          kind: string
+          last_error: string | null
+          next_attempt_at: string
+          occurred_at: number
+          payload: Json
+          title: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          attempts?: number
+          audience: string
+          body: string
+          created_at?: string
+          delivered_at?: string | null
+          entity_id: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          next_attempt_at?: string
+          occurred_at: number
+          payload?: Json
+          title: string
+          updated_at?: string
+          user_id: string
+          version: number
+        }
+        Update: {
+          attempts?: number
+          audience?: string
+          body?: string
+          created_at?: string
+          delivered_at?: string | null
+          entity_id?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          occurred_at?: number
+          payload?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
         }
         Relationships: []
       }
@@ -993,6 +1053,7 @@ export type Database = {
           phone: string
           pricing_version_id: string | null
           rate_snapshot: Json | null
+          reminder_sent_at: string | null
           remitted_at: string | null
           requester_id: string
           requester_rating_at: string | null
