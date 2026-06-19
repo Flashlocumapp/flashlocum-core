@@ -1135,6 +1135,7 @@ function ConfirmedPane({
   segments?: Array<{
     id: string;
     segment_index: number;
+    day_index?: number | null;
     started_at: string;
     ended_at: string | null;
     billed_minutes: number | null;
