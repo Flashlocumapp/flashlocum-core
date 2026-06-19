@@ -339,11 +339,6 @@ export function ensureDoctorSession(initialOnline = true) {
           },
         }),
       );
-      pushToast({
-        tone: "presence",
-        title: `New coverage request · ${r.hospital}`,
-        body: `${r.coverage} · ${r.day} · ${r.start}`,
-      });
       return;
     }
 
