@@ -106,18 +106,24 @@ async function getAccessToken(sa: ServiceAccount): Promise<string | null> {
  * offer.new + shift.cancelled per the spec.
  *
  * Removes tokens that FCM reports as UNREGISTERED / INVALID_ARGUMENT.
- * No-ops with a log when FCM credentials are not configured.
+ *
+ * Transient failures (FCM 5xx, network error, missing FCM credentials with
+ * tokens present) enqueue the payload into `notification_outbox` so the
+ * drain cron can retry with exponential backoff. Pass `skipOutbox: true`
+ * from the drain itself to avoid re-enqueueing.
+ *
+ * No-ops with a log when FCM credentials are not configured AND no devices
+ * are registered for the user.
  */
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
-  const sa = loadServiceAccount();
-  if (!sa) {
-    console.warn("[push] FCM_SERVICE_ACCOUNT_JSON missing — skipping push to", userId);
-    return;
-  }
-  const token = await getAccessToken(sa);
-  if (!token) return;
-
+export async function sendPushToUser(
+  userId: string,
+  payload: PushPayload,
+  opts: { skipOutbox?: boolean } = {},
+): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const sa = loadServiceAccount();
+
   const { data: rows, error } = await supabaseAdmin
     .from("device_tokens")
     .select("id, token, platform")
@@ -128,16 +134,26 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   }
   if (!rows?.length) return;
 
+  if (!sa) {
+    console.warn("[push] FCM_SERVICE_ACCOUNT_JSON missing — enqueueing for", userId);
+    if (!opts.skipOutbox) await enqueueOutbox(userId, payload, "fcm credentials missing");
+    return;
+  }
+  const token = await getAccessToken(sa);
+  if (!token) {
+    if (!opts.skipOutbox) await enqueueOutbox(userId, payload, "fcm token exchange failed");
+    return;
+  }
+
   const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
   const stale: string[] = [];
+  let transientFailure: string | null = null;
+  let anySuccess = false;
 
   const highPriority = HIGH_PRIORITY_KINDS.has(payload.kind);
-  // iOS: branded chime for offer/cancel; soft default otherwise.
   const apnsSound = BRANDED_CHIME_KINDS.has(payload.kind) ? "offer.caf" : "default";
-  // Android: matching channel sound name (file under res/raw/offer).
   const androidSound = BRANDED_CHIME_KINDS.has(payload.kind) ? "offer" : "default";
 
-  // Canonical-event data envelope. FCM `data` values must be strings.
   const dataEnvelope: Record<string, string> = {
     ...(payload.data ?? {}),
     kind: payload.kind,
@@ -169,20 +185,74 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify(body),
       }).catch((e: unknown) => {
-        console.warn("[push] send failed:", (e as Error).message);
+        const msg = (e as Error).message;
+        console.warn("[push] send failed:", msg);
+        transientFailure = transientFailure ?? `network: ${msg}`;
         return null;
       });
       if (!res) return;
       if (res.status === 404 || res.status === 400) {
-        // UNREGISTERED or INVALID_ARGUMENT — prune the token.
+        // UNREGISTERED or INVALID_ARGUMENT — prune the token. Permanent.
         stale.push(row.id);
+      } else if (res.status >= 500 || res.status === 429) {
+        const text = await res.text().catch(() => "");
+        console.warn("[push] FCM transient", res.status, text);
+        transientFailure = transientFailure ?? `fcm ${res.status}: ${text.slice(0, 200)}`;
       } else if (!res.ok) {
-        console.warn("[push] FCM responded", res.status, await res.text().catch(() => ""));
+        const text = await res.text().catch(() => "");
+        console.warn("[push] FCM responded", res.status, text);
+      } else {
+        anySuccess = true;
       }
     }),
   );
 
   if (stale.length) {
     await supabaseAdmin.from("device_tokens").delete().in("id", stale);
+  }
+
+  if (!anySuccess && transientFailure && !opts.skipOutbox) {
+    await enqueueOutbox(userId, payload, transientFailure);
+  }
+}
+
+/**
+ * Insert a payload into notification_outbox for retry. Idempotent per
+ * (user_id, kind, entity_id, version): if a row already exists undelivered
+ * we leave it alone so attempts/backoff are owned by the drain.
+ */
+async function enqueueOutbox(
+  userId: string,
+  payload: PushPayload,
+  reason: string,
+): Promise<void> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: existing } = await supabaseAdmin
+      .from("notification_outbox")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("kind", payload.kind)
+      .eq("entity_id", payload.entityId)
+      .eq("version", payload.version)
+      .is("delivered_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (existing) return;
+
+    await supabaseAdmin.from("notification_outbox").insert({
+      user_id: userId,
+      kind: payload.kind,
+      entity_id: payload.entityId,
+      version: payload.version,
+      occurred_at: payload.occurredAt,
+      audience: payload.audience,
+      title: payload.title,
+      body: payload.body,
+      payload: (payload.data ?? {}) as Record<string, string>,
+      last_error: reason.slice(0, 500),
+    });
+  } catch (e) {
+    console.warn("[push] outbox enqueue failed:", (e as Error).message);
   }
 }
