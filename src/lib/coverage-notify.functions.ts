@@ -46,6 +46,11 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
         await sendPushToUser(req.requester_id, {
           title: "Shift accepted",
           body: `${doc?.full_name ?? "A doctor"} accepted your shift${req.hospital ? ` at ${req.hospital}` : ""}.`,
+          kind: "offer.accepted",
+          entityId: data.requestId,
+          version: Date.now(),
+          occurredAt: Date.now(),
+          audience: "requester",
           data: { type: "coverage_accepted", requestId: data.requestId },
         });
       }
@@ -96,6 +101,11 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
         await sendPushToUser(notifyUserId, {
           title: "Shift cancelled",
           body: `${actor === "doctor" ? "The doctor" : "The requester"} cancelled${row.hospital ? ` the shift at ${row.hospital}` : " this shift"}.`,
+          kind: "shift.cancelled",
+          entityId: data.requestId,
+          version: Date.now(),
+          occurredAt: Date.now(),
+          audience: actor === "doctor" ? "requester" : "doctor",
           data: { type: "coverage_cancelled", requestId: data.requestId },
         });
       }
@@ -150,6 +160,11 @@ export const startAndNotifyFn = createServerFn({ method: "POST" })
         await sendPushToUser(row.accepted_by, {
           title: "Shift started",
           body: `${requester?.full_name ?? "The requester"} started your shift${row.hospital ? ` at ${row.hospital}` : ""}.`,
+          kind: "shift.started",
+          entityId: data.requestId,
+          version: startedAtMs ?? Date.now(),
+          occurredAt: startedAtMs ?? Date.now(),
+          audience: "doctor",
           data: { type: "shift_started", requestId: data.requestId },
         });
       } catch (e) {

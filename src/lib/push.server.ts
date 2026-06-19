@@ -12,11 +12,33 @@ type ServiceAccount = {
   token_uri?: string;
 };
 
+/**
+ * Canonical-event push payload. Mirrors the engine's CanonicalEvent shape so
+ * the foreground push listener can rehydrate it as `fromPush(payload)` and
+ * collapse with any realtime / local arrival inside the dedup window.
+ *
+ * `kind`, `entityId`, `version`, `occurredAt`, `audience` are required so the
+ * client engine can enforce G2/G3/G4 regardless of arrival order.
+ */
 export type PushPayload = {
   title: string;
   body: string;
+  /** Canonical event kind (e.g. "shift.started", "offer.new"). */
+  kind: string;
+  /** Coverage request id (or offer id for offer.new). */
+  entityId: string;
+  /** Monotonic version per (kind, entityId). Usually row updated_at ms. */
+  version: number;
+  /** Server timestamp ms. */
+  occurredAt: number;
+  /** Recipient role. */
+  audience: "doctor" | "requester";
+  /** Free-form extras forwarded to the client. */
   data?: Record<string, string>;
 };
+
+const HIGH_PRIORITY_KINDS = new Set<string>(["offer.new", "shift.cancelled"]);
+const BRANDED_CHIME_KINDS = new Set<string>(["offer.new", "shift.cancelled"]);
 
 let cachedToken: { token: string; exp: number } | null = null;
 let cachedSA: ServiceAccount | null = null;
@@ -79,7 +101,10 @@ async function getAccessToken(sa: ServiceAccount): Promise<string | null> {
 }
 
 /**
- * Send a push to every device registered for `userId`.
+ * Send a push to every device registered for `userId`. Per-kind priority
+ * and sound are derived from `payload.kind`; HIGH priority is reserved for
+ * offer.new + shift.cancelled per the spec.
+ *
  * Removes tokens that FCM reports as UNREGISTERED / INVALID_ARGUMENT.
  * No-ops with a log when FCM credentials are not configured.
  */
@@ -106,15 +131,37 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
   const stale: string[] = [];
 
+  const highPriority = HIGH_PRIORITY_KINDS.has(payload.kind);
+  // iOS: branded chime for offer/cancel; soft default otherwise.
+  const apnsSound = BRANDED_CHIME_KINDS.has(payload.kind) ? "offer.caf" : "default";
+  // Android: matching channel sound name (file under res/raw/offer).
+  const androidSound = BRANDED_CHIME_KINDS.has(payload.kind) ? "offer" : "default";
+
+  // Canonical-event data envelope. FCM `data` values must be strings.
+  const dataEnvelope: Record<string, string> = {
+    ...(payload.data ?? {}),
+    kind: payload.kind,
+    entityId: payload.entityId,
+    version: String(payload.version),
+    occurredAt: String(payload.occurredAt),
+    audience: payload.audience,
+  };
+
   await Promise.all(
     rows.map(async (row) => {
       const body = {
         message: {
           token: row.token,
           notification: { title: payload.title, body: payload.body },
-          data: payload.data ?? {},
-          android: { priority: "HIGH" as const },
-          apns: { headers: { "apns-priority": "10" }, payload: { aps: { sound: "default" } } },
+          data: dataEnvelope,
+          android: {
+            priority: highPriority ? ("HIGH" as const) : ("NORMAL" as const),
+            notification: { sound: androidSound },
+          },
+          apns: {
+            headers: { "apns-priority": highPriority ? "10" : "5" },
+            payload: { aps: { sound: apnsSound } },
+          },
         },
       };
       const res = await fetch(url, {

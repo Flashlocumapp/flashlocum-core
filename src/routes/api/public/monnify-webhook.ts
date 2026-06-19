@@ -118,6 +118,11 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
             await sendPushToUser(row.accepted_by, {
               title: "Payment received",
               body: `You've been paid${naira > 0 ? ` ₦${naira.toLocaleString()}` : ""}${row.hospital ? ` for ${row.hospital}` : ""}.`,
+              kind: "payment.settled",
+              entityId: ref,
+              version: Date.now(),
+              occurredAt: Date.now(),
+              audience: "doctor",
               data: { type: "payment_settled", paymentReference: ref },
             });
           }

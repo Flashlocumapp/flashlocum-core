@@ -110,6 +110,11 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
       await sendPushToUser(data.doctorId, {
         title: titleByStatus[data.status],
         body: bodyByStatus[data.status],
+        kind: "verification.result",
+        entityId: data.doctorId,
+        version: Date.now(),
+        occurredAt: Date.now(),
+        audience: "doctor",
         data: { type: "verification_status", status: data.status },
       });
     } catch (e) {
@@ -981,6 +986,11 @@ export const adminSendPushFn = createServerFn({ method: "POST" })
     await sendPushToUser(data.userId, {
       title: data.title,
       body: data.body,
+      kind: "admin.broadcast",
+      entityId: data.userId,
+      version: Date.now(),
+      occurredAt: Date.now(),
+      audience: "doctor",
       data: { type: "admin_broadcast" },
     });
     return { ok: true };
