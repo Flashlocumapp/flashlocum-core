@@ -7,6 +7,7 @@ import { Capacitor } from "@capacitor/core";
 import { subscribeAuthState, type AuthReadySnapshot } from "@/lib/auth-ready";
 import { registerDeviceTokenFn, unregisterDeviceTokenFn } from "@/lib/push.functions";
 import { fromPush, ingest, type EventAudience, type EventKind } from "@/lib/feedback";
+import { pushEnabled } from "@/lib/feedback-prefs";
 
 type Platform = "ios" | "android";
 
