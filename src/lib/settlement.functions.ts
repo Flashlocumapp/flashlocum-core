@@ -65,19 +65,26 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
         bankName?: string;
         expiresOn?: string | null;
       };
-      if (acc.accountNumber && acc.bankName) {
-        const notExpired =
-          !acc.expiresOn || Date.parse(acc.expiresOn) > Date.now();
-        if (notExpired) {
-          return {
-            amount: Number(acc.amount ?? serverAmount),
-            accountNumber: acc.accountNumber,
-            accountName: acc.accountName ?? "FlashLocum",
-            bankName: acc.bankName,
-            expiresOn: acc.expiresOn ?? null,
-            paymentReference: reqRow.payment_reference,
-          };
-        }
+      const cachedAmount = Math.round(Number(acc.amount ?? 0));
+      const amountMatches = cachedAmount === serverAmount;
+      const notExpired = !acc.expiresOn || Date.parse(acc.expiresOn) > Date.now();
+      if (acc.accountNumber && acc.bankName && amountMatches && notExpired) {
+        return {
+          amount: serverAmount,
+          accountNumber: acc.accountNumber,
+          accountName: acc.accountName ?? "FlashLocum",
+          bankName: acc.bankName,
+          expiresOn: acc.expiresOn ?? null,
+          paymentReference: reqRow.payment_reference,
+        };
+      }
+      // Cache stale (amount changed or expired) — fall through and mint a fresh
+      // reference + virtual account against the current server amount.
+      if (!amountMatches) {
+        console.info("[settlement] cached payment_account amount mismatch — minting fresh", {
+          cachedAmount,
+          serverAmount,
+        });
       }
     }
 
