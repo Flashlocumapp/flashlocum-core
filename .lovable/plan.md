@@ -1,30 +1,15 @@
-## Clear All Coverage Data (All Users)
+Root cause found: the request card is not reaching online doctors because the new request is failing to save to the backend.
 
-### Scope
-Wipe every coverage request and its dependent rows from the database. Affects all users (requesters and doctors), all environments (live + test rows), and every status — active, paused, searching, accepted, completed, cancelled, expired, no_show.
+Evidence:
+- The latest request insert returned `400` with: `invalid input syntax for type integer: "00 AM"`.
+- The attempted request sent `start_time: "08:00 AM"` and `end_time: "06:00 PM"`.
+- `coverage_requests` currently has no recent rows, so there is nothing for online doctors to receive or render.
+- Realtime publication is enabled for `coverage_requests`; this is not the current blocking point.
 
-### What gets deleted
-1. **`shift_segments`** — every row (FK child of `coverage_requests`).
-2. **`payment_surcharge_log`** — every row (per-request surcharge history).
-3. **`payment_underpayments`** — every row (per-request underpayment records).
-4. **`ratings`** — every row tied to a shift.
-5. **`admin_payment_actions`** — left intact (audit trail; not coverage data). *Confirm if you also want these wiped.*
-6. **`coverage_requests`** — every row.
-7. **`profiles.payment_flagged_at` / `payment_flagged_reason`** — cleared (since the underlying overdue shifts are gone). `account_restricted_at` and `payment_restricted_at` are **left alone** (those are admin-imposed sanctions, not auto-derived from shift data).
-8. **`trust_blocks`** — left intact unless you say otherwise (these are admin/abuse blocks, not shift records).
-
-### What is NOT touched
-- User accounts, profiles, roles, verification status, doctor presence.
-- Pricing versions, rates, modifiers.
-- Email logs / device tokens / notification outbox.
-
-### Execution
-One `DELETE` migration in the correct FK order, followed by the profile flag reset. No schema changes.
-
-### Reversibility
-**This is destructive and permanent.** There is no soft-delete or backup snapshot taken as part of this operation.
-
-### Confirm before I proceed
-- Wipe **all environments** (both `live` and `test` rows)? Default: yes, all.
-- Also clear `admin_payment_actions` audit log? Default: **no, keep it**.
-- Also clear `trust_blocks`? Default: **no, keep it**.
+Plan:
+1. Update the backend time parser used by pricing/locking functions so it accepts both:
+   - `HH:MM` 24-hour values, e.g. `08:00`, `18:00`
+   - `HH:MM AM/PM` values, e.g. `08:00 AM`, `06:00 PM`
+2. Keep realtime publication as-is because it is already configured for `coverage_requests`, `shift_segments`, and `doctor_presence`.
+3. Verify the fix by checking that a request insert no longer fails and that `list_open_coverage_requests()` can return newly saved searching requests for eligible online doctors.
+4. No rollback is required; this is a narrow compatibility fix for request creation, not a rollback of the realtime publication changes.
