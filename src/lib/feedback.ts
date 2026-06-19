@@ -23,6 +23,7 @@
 // In-app sound is intentionally absent. Push is the only sound surface.
 
 import { pushToast, type ToastTone } from "@/lib/notifications";
+import { hapticsEnabled } from "@/lib/feedback-prefs";
 
 /* ---------- Types ---------- */
 
@@ -182,6 +183,7 @@ function vibrate(pattern: number | number[]) {
 
 function emitHaptic(intensity: HapticIntensity) {
   if (reducedMotion()) return;
+  if (!hapticsEnabled()) return;
   switch (intensity) {
     case "light":
       vibrate(15);

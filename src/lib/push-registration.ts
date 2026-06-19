@@ -7,6 +7,7 @@ import { Capacitor } from "@capacitor/core";
 import { subscribeAuthState, type AuthReadySnapshot } from "@/lib/auth-ready";
 import { registerDeviceTokenFn, unregisterDeviceTokenFn } from "@/lib/push.functions";
 import { fromPush, ingest, type EventAudience, type EventKind } from "@/lib/feedback";
+import { pushEnabled } from "@/lib/feedback-prefs";
 
 type Platform = "ios" | "android";
 
@@ -50,6 +51,7 @@ async function setupListeners(
   // fine since the engine also produces the in-app toast/haptic deterministically.
   PushNotifications.addListener("pushNotificationReceived", (n) => {
     try {
+      if (!pushEnabled()) return;
       const raw = (n.data ?? {}) as Record<string, unknown>;
       const kind = typeof raw.kind === "string" ? (raw.kind as EventKind) : null;
       const entityId = typeof raw.entityId === "string" ? raw.entityId : null;
