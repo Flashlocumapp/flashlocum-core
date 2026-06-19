@@ -1,18 +1,17 @@
 // FlashLocum pricing — frontend mirror of the SQL `compute_quote` / `end_shift`
-// engines. Rates are loaded from the DB-backed pricing_versions table at app
-// boot; seed defaults match the v1 seed so synchronous estimates work even
-// before the network fetch resolves. The server is always authoritative.
+// engines (v2). Rates are loaded from the DB-backed pricing tables at app
+// boot; seed defaults match the v2 spec so estimates are correct before
+// the network fetch resolves. The server is always authoritative.
 //
-// Strict ordered pipeline (mirrors SQL exactly):
-//   STEP 1  read inputs
-//   STEP 2  resolve coverage product (early-exit for 24h / 48h Straight)
-//   STEP 3  TIER from booked_min ONLY (never from worked, never from billable)
-//   STEP 4  RATE from tier + environment (frozen)
-//   STEP 5a First-Hour Rule (worked < first_hour_min → first_hour_min)
-//   STEP 5b ±tolerance_min Tolerance — applied BEFORE any rounding
-//   STEP 5c block_min CEILING rounding — only if 5b did NOT fire
-//   STEP 6  day/night split of billable
-//   STEP 7  amount from frozen rate
+// Spec rules implemented:
+//   STANDARD     tier from booked per-day hours (<4h | 4-6h | >6h, locked);
+//                two-sided 15-min grace; ceil to 15-min block; first-hour floor;
+//                multi-day = each day priced independently and summed.
+//   HOME CARE    ₦12,000/hr; 30-min grace; round up to next FULL HOUR.
+//   STRAIGHT 24h flat ₦36,000 within 22h..25h; below → ₦1,500/hr (ceil hr);
+//                above → flat + ₦1,500/extra-hour (ceil hr).
+//   STRAIGHT 48h flat ₦72,000 within 46h..49h; same below/above math.
+//   BUSY ×1.25   on Standard / Straight only; never Home Care.
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -34,25 +33,40 @@ export type PricingTable = {
     block_min: number;
     first_hour_min: number;
     home_busy_applies: boolean;
+    home_tolerance_min: number;
+    home_block_min: number;
+    straight24_lo_min: number;
+    straight24_hi_min: number;
+    straight48_lo_min: number;
+    straight48_hi_min: number;
+    straight_per_hour: number;
+    surcharge_cap_blocks: number;
   };
 };
 
-// Seed defaults — must match the seeded v1 row in pricing_versions.
 const SEED_TABLE: PricingTable = {
   versionId: null,
   rates: {
     "<4h": { day: 3000, night: 2500 },
     "4-6h": { day: 2500, night: 2000 },
     ">6h": { day: 2000, night: 1500 },
-    home_flat: { day: 15000, night: 15000 },
+    home_flat: { day: 12000, night: 12000 },
   },
-  flats: { straight_24h: 36000, straight_48h: 72000, home_hour: 15000 },
+  flats: { straight_24h: 36000, straight_48h: 72000, home_hour: 12000 },
   modifiers: {
     busy_mult: 1.25,
     tolerance_min: 15,
     block_min: 15,
     first_hour_min: 60,
     home_busy_applies: false,
+    home_tolerance_min: 30,
+    home_block_min: 60,
+    straight24_lo_min: 1320,
+    straight24_hi_min: 1500,
+    straight48_lo_min: 2760,
+    straight48_hi_min: 2940,
+    straight_per_hour: 1500,
+    surcharge_cap_blocks: 96,
   },
 };
 
@@ -91,11 +105,22 @@ export async function loadPricingTable(): Promise<PricingTable> {
       if (f.product in next.flats) next.flats[f.product] = f.amount;
     }
     for (const m of (modsRes.data ?? []) as Array<{ key: string; value: number }>) {
-      if (m.key === "busy_mult") next.modifiers.busy_mult = Number(m.value);
-      else if (m.key === "tolerance_min") next.modifiers.tolerance_min = Number(m.value);
-      else if (m.key === "block_min") next.modifiers.block_min = Number(m.value);
-      else if (m.key === "first_hour_min") next.modifiers.first_hour_min = Number(m.value);
-      else if (m.key === "home_busy_applies") next.modifiers.home_busy_applies = Number(m.value) === 1;
+      const v = Number(m.value);
+      switch (m.key) {
+        case "busy_mult": next.modifiers.busy_mult = v; break;
+        case "tolerance_min": next.modifiers.tolerance_min = v; break;
+        case "block_min": next.modifiers.block_min = v; break;
+        case "first_hour_min": next.modifiers.first_hour_min = v; break;
+        case "home_busy_applies": next.modifiers.home_busy_applies = v === 1; break;
+        case "home_tolerance_min": next.modifiers.home_tolerance_min = v; break;
+        case "home_block_min": next.modifiers.home_block_min = v; break;
+        case "straight24_lo_min": next.modifiers.straight24_lo_min = v; break;
+        case "straight24_hi_min": next.modifiers.straight24_hi_min = v; break;
+        case "straight48_lo_min": next.modifiers.straight48_lo_min = v; break;
+        case "straight48_hi_min": next.modifiers.straight48_hi_min = v; break;
+        case "straight_per_hour": next.modifiers.straight_per_hour = v; break;
+        case "surcharge_cap_blocks": next.modifiers.surcharge_cap_blocks = v; break;
+      }
     }
     CURRENT = next;
     listeners.forEach((fn) => fn(CURRENT));
@@ -106,14 +131,14 @@ export async function loadPricingTable(): Promise<PricingTable> {
   }
 }
 
-export const BUSY_MULTIPLIER = 1.25; // legacy export — UI strings only
+export const BUSY_MULTIPLIER = 1.25; // legacy UI string only
 export const MIN_BILLABLE_MINUTES = 60;
 
 export function coverageKindFromLabel(label: string): CoverageKind {
   const s = (label ?? "").trim().toLowerCase();
   if (s.startsWith("home")) return "home";
   if (s.startsWith("24")) return "straight24";
-  if (s.startsWith("weekend")) return "straight48";
+  if (s.startsWith("48") || s.startsWith("weekend")) return "straight48";
   return "standard";
 }
 
@@ -122,7 +147,6 @@ function minsFromHHMM(s: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-/** Per-day booked minutes from start/end HH:MM (handles overnight). */
 export function bookedMinutesFromWindow(startHHMM: string, endHHMM: string): number {
   const start = minsFromHHMM(startHHMM);
   let end = minsFromHHMM(endHHMM);
@@ -152,14 +176,51 @@ export type PricingResult = {
   explanation: string;
 };
 
-function tierFor(bookedHr: number, table: PricingTable): { day: number; night: number; label: "<4h" | "4-6h" | ">6h" } {
-  if (bookedHr > 6) return { ...table.rates[">6h"], label: ">6h" };
-  if (bookedHr >= 4) return { ...table.rates["4-6h"], label: "4-6h" };
+function tierFor(perDayHr: number, table: PricingTable): { day: number; night: number; label: "<4h" | "4-6h" | ">6h" } {
+  if (perDayHr > 6) return { ...table.rates[">6h"], label: ">6h" };
+  if (perDayHr >= 4) return { ...table.rates["4-6h"], label: "4-6h" };
   return { ...table.rates["<4h"], label: "<4h" };
 }
 
-function envSuffix(env: Environment, product: "standard" | "home", mult: number): string {
-  return env === "busy" && product === "standard" ? ` · Busy ×${mult}` : "";
+function busySuffix(env: Environment, applies: boolean, mult: number): string {
+  return env === "busy" && applies ? ` · Busy ×${mult}` : "";
+}
+
+/** Per-day price for a Standard shift: two-sided grace, first-hour, 15-min ceil. */
+function priceStandardDay(
+  bookedPerDayMin: number,
+  workedMin: number,
+  dayWin: number,
+  nightWin: number,
+  rateDay: number,
+  rateNight: number,
+  busyMult: number,
+  toleranceMin: number,
+  blockMin: number,
+  firstHourMin: number,
+): { billable: number; amount: number; toleranceFired: boolean } {
+  let working = Math.max(0, Math.floor(workedMin));
+  if (working < firstHourMin) working = firstHourMin;
+
+  let bill: number;
+  let fired = false;
+  if (bookedPerDayMin > 0 && Math.abs(working - bookedPerDayMin) <= toleranceMin) {
+    bill = bookedPerDayMin;
+    fired = true;
+  } else {
+    bill = Math.ceil(working / blockMin) * blockMin;
+  }
+  const winTotal = dayWin + nightWin;
+  let dBill = 0;
+  let nBill = 0;
+  if (winTotal > 0) {
+    dBill = Math.round((bill * dayWin) / winTotal);
+    nBill = bill - dBill;
+  } else {
+    dBill = bill;
+  }
+  const amount = Math.round(((dBill / 60) * rateDay + (nBill / 60) * rateNight) * busyMult);
+  return { billable: bill, amount, toleranceFired: fired };
 }
 
 /** Booked-window quote (no worked input). */
@@ -175,49 +236,52 @@ export function computeCoveragePricing(
   const perDay = splitPerDayMinutes(startHHMM, endHHMM);
   const perDayMin = perDay.dayMinutes + perDay.nightMinutes;
   const totalMin = perDayMin * d;
-  const busyMult = environment === "busy" ? t.modifiers.busy_mult : 1.0;
-  const homeRate = t.rates.home_flat.day;
+  const busyApplies = environment === "busy" && coverage !== "home";
+  const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
+  const homeRate = t.flats.home_hour;
 
   if (coverage === "home") {
     const amount = Math.round((totalMin / 60) * homeRate);
     return {
       amount,
       billableMinutes: totalMin,
-      explanation: `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr in-home coverage.`,
+      explanation: `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr.`,
     };
   }
-  if (coverage === "straight24" || (d === 1 && totalMin === 1440)) {
+  if (coverage === "straight24") {
     return {
       amount: Math.round(t.flats.straight_24h * busyMult),
       billableMinutes: 1440,
       explanation:
-        `Continuous 24-hour coverage · flat ₦${t.flats.straight_24h.toLocaleString("en-NG")}.` +
-        envSuffix(environment, "standard", t.modifiers.busy_mult),
+        `24-hour straight · flat ₦${t.flats.straight_24h.toLocaleString("en-NG")} (22h–25h window).` +
+        busySuffix(environment, busyApplies, t.modifiers.busy_mult),
     };
   }
-  if (coverage === "straight48" || totalMin === 2880) {
+  if (coverage === "straight48") {
     return {
       amount: Math.round(t.flats.straight_48h * busyMult),
       billableMinutes: 2880,
       explanation:
-        `48-hour block · flat ₦${t.flats.straight_48h.toLocaleString("en-NG")}.` +
-        envSuffix(environment, "standard", t.modifiers.busy_mult),
+        `48-hour straight · flat ₦${t.flats.straight_48h.toLocaleString("en-NG")} (46h–49h window).` +
+        busySuffix(environment, busyApplies, t.modifiers.busy_mult),
     };
   }
 
+  // Standard: per-day tier, day/night split, multi-day = sum of independent days.
   const tier = tierFor(perDayMin / 60, t);
-  const totalDay = perDay.dayMinutes * d;
-  const totalNight = perDay.nightMinutes * d;
-  const base = (totalDay / 60) * tier.day + (totalNight / 60) * tier.night;
-  const amount = Math.round(base * busyMult);
+  const dayMin = perDay.dayMinutes;
+  const nightMin = perDay.nightMinutes;
+  const perDayAmount = Math.round(((dayMin / 60) * tier.day + (nightMin / 60) * tier.night) * busyMult);
+  const amount = perDayAmount * d;
+
   const parts: string[] = [];
-  if (totalDay > 0) parts.push(`${trim(totalDay / 60)}h day · ₦${tier.day.toLocaleString("en-NG")}/hr`);
-  if (totalNight > 0)
-    parts.push(`${trim(totalNight / 60)}h night · ₦${tier.night.toLocaleString("en-NG")}/hr`);
+  if (dayMin > 0) parts.push(`${trim(dayMin / 60)}h day · ₦${tier.day.toLocaleString("en-NG")}/hr`);
+  if (nightMin > 0) parts.push(`${trim(nightMin / 60)}h night · ₦${tier.night.toLocaleString("en-NG")}/hr`);
+  const perDayLabel = d > 1 ? ` × ${d} days` : "";
   return {
     amount,
     billableMinutes: totalMin,
-    explanation: (parts.join(" + ") || "Standard coverage rate.") + envSuffix(environment, "standard", t.modifiers.busy_mult),
+    explanation: (parts.join(" + ") || "Standard coverage rate.") + perDayLabel + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
   };
 }
 
@@ -225,7 +289,7 @@ function trim(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-/** Worked minutes → block-min ceiling. */
+/** Worked minutes → block-min ceiling (used by live estimators). */
 export function roundedOverrunMinutes(workedMin: number): number {
   const block = CURRENT.modifiers.block_min;
   const total = Math.max(0, Math.floor(workedMin));
@@ -236,6 +300,7 @@ export function billableMinutes(workedMin: number): number {
   return Math.max(CURRENT.modifiers.first_hour_min, roundedOverrunMinutes(safe));
 }
 
+/** Worked-time estimator mirroring the SQL end_shift pipeline. */
 export function computeWorkedPricing(
   coverage: CoverageKind,
   startHHMM: string,
@@ -248,11 +313,9 @@ export function computeWorkedPricing(
   const t = CURRENT;
   const worked = Math.max(0, Math.floor(workedMinutes));
   const d = Math.max(1, Math.round(days));
-  const busyMult =
-    environment === "busy" && (coverage !== "home" || t.modifiers.home_busy_applies)
-      ? t.modifiers.busy_mult
-      : 1.0;
-  const homeRate = t.rates.home_flat.day;
+  const busyApplies =
+    environment === "busy" && (coverage !== "home" || t.modifiers.home_busy_applies);
+  const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
 
   const bookedPerDay =
     bookedMinutesPerDay && bookedMinutesPerDay > 0
@@ -261,80 +324,118 @@ export function computeWorkedPricing(
         ? bookedMinutesFromWindow(startHHMM, endHHMM)
         : 0;
 
+  // === STRAIGHT 24H ===
   if (coverage === "straight24") {
-    return {
-      amount: Math.round(t.flats.straight_24h * busyMult),
-      billableMinutes: 1440,
-      explanation:
-        `Continuous 24-hour coverage · flat ₦${t.flats.straight_24h.toLocaleString("en-NG")}.` +
-        envSuffix(environment, "standard", t.modifiers.busy_mult),
-    };
-  }
-  if (coverage === "straight48") {
-    return {
-      amount: Math.round(t.flats.straight_48h * busyMult),
-      billableMinutes: 2880,
-      explanation:
-        `48-hour block · flat ₦${t.flats.straight_48h.toLocaleString("en-NG")}.` +
-        envSuffix(environment, "standard", t.modifiers.busy_mult),
-    };
-  }
-
-  // HARD 1-HOUR MINIMUM: any started shift bills at least first_hour_min
-  const working = Math.max(worked, t.modifiers.first_hour_min);
-
-  let billable = 0;
-  let toleranceFired = false;
-  if (bookedPerDay > 0 && Math.abs(working - bookedPerDay) <= t.modifiers.tolerance_min) {
-    billable = bookedPerDay;
-    toleranceFired = true;
-  } else {
-    billable = Math.ceil(working / t.modifiers.block_min) * t.modifiers.block_min;
-  }
-
-  if (coverage === "home") {
-    const amount = Math.round((billable / 60) * homeRate * busyMult);
+    const flat = t.flats.straight_24h;
+    const lo = t.modifiers.straight24_lo_min;
+    const hi = t.modifiers.straight24_hi_min;
+    const perHr = t.modifiers.straight_per_hour;
+    let amount: number;
+    if (worked >= lo && worked <= hi) {
+      amount = Math.round(flat * busyMult);
+    } else if (worked < lo) {
+      const hrs = Math.ceil(worked / 60);
+      amount = Math.round(hrs * perHr * busyMult);
+    } else {
+      const extraHr = Math.ceil((worked - hi) / 60);
+      amount = Math.round((flat + extraHr * perHr) * busyMult);
+    }
     return {
       amount,
-      billableMinutes: billable,
+      billableMinutes: worked,
+      explanation: `24-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    };
+  }
+
+  // === STRAIGHT 48H ===
+  if (coverage === "straight48") {
+    const flat = t.flats.straight_48h;
+    const lo = t.modifiers.straight48_lo_min;
+    const hi = t.modifiers.straight48_hi_min;
+    const perHr = t.modifiers.straight_per_hour;
+    let amount: number;
+    if (worked >= lo && worked <= hi) {
+      amount = Math.round(flat * busyMult);
+    } else if (worked < lo) {
+      const hrs = Math.ceil(worked / 60);
+      amount = Math.round(hrs * perHr * busyMult);
+    } else {
+      const extraHr = Math.ceil((worked - hi) / 60);
+      amount = Math.round((flat + extraHr * perHr) * busyMult);
+    }
+    return {
+      amount,
+      billableMinutes: worked,
+      explanation: `48-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    };
+  }
+
+  // === HOME CARE ===
+  if (coverage === "home") {
+    const totalBooked = bookedPerDay * d;
+    const homeRate = t.flats.home_hour;
+    const homeTol = t.modifiers.home_tolerance_min;
+    const homeBlock = t.modifiers.home_block_min;
+    let remaining = Math.max(worked, t.modifiers.first_hour_min);
+    let bill: number;
+    if (totalBooked > 0 && Math.abs(remaining - totalBooked) <= homeTol) {
+      bill = totalBooked;
+    } else {
+      bill = Math.ceil(remaining / homeBlock) * homeBlock;
+    }
+    const amount = Math.round((bill / 60) * homeRate * busyMult);
+    return {
+      amount,
+      billableMinutes: bill,
       explanation: `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr.`,
     };
   }
 
-  const tier = tierFor(bookedPerDay > 0 ? bookedPerDay / 60 : working / 60, t);
-
-  let dayMin = 0;
-  let nightMin = 0;
-  if (billable > 0) {
-    if (toleranceFired && endHHMM) {
-      const split = splitPerDayMinutes(startHHMM, endHHMM);
-      const total = split.dayMinutes + split.nightMinutes || 1;
-      dayMin = Math.round((billable * split.dayMinutes) / total);
-      nightMin = billable - dayMin;
-    } else if (d > 1 && endHHMM) {
-      const split = splitPerDayMinutes(startHHMM, endHHMM);
-      const total = split.dayMinutes + split.nightMinutes || 1;
-      dayMin = Math.round((billable * split.dayMinutes) / total);
-      nightMin = billable - dayMin;
-    } else {
-      const start = minsFromHHMM(startHHMM);
-      for (let i = 0; i < billable; i++) {
-        const h = Math.floor(((start + i) % (24 * 60)) / 60);
-        if (h >= 6 && h < 22) dayMin++;
-        else nightMin++;
-      }
-    }
+  // === STANDARD (per-day partitioning) ===
+  const tier = tierFor(bookedPerDay > 0 ? bookedPerDay / 60 : worked / 60, t);
+  let dWin = 0;
+  let nWin = 0;
+  if (endHHMM) {
+    const split = splitPerDayMinutes(startHHMM, endHHMM);
+    dWin = split.dayMinutes;
+    nWin = split.nightMinutes;
+  } else {
+    dWin = bookedPerDay;
   }
 
-  const base = (dayMin / 60) * tier.day + (nightMin / 60) * tier.night;
-  const amount = Math.round(base * busyMult);
+  let remaining = worked;
+  let total = 0;
+  let billable = 0;
+  for (let i = 1; i <= d; i++) {
+    let dayWorked: number;
+    if (i < d) {
+      dayWorked = Math.min(remaining, bookedPerDay + t.modifiers.tolerance_min);
+    } else {
+      dayWorked = remaining;
+    }
+    remaining -= dayWorked;
+    const r = priceStandardDay(
+      bookedPerDay,
+      dayWorked,
+      dWin,
+      nWin,
+      tier.day,
+      tier.night,
+      busyMult,
+      t.modifiers.tolerance_min,
+      t.modifiers.block_min,
+      t.modifiers.first_hour_min,
+    );
+    total += r.amount;
+    billable += r.billable;
+  }
 
   const parts: string[] = [];
-  if (dayMin > 0) parts.push(`${trim(dayMin / 60)}h day · ₦${tier.day.toLocaleString("en-NG")}/hr`);
-  if (nightMin > 0) parts.push(`${trim(nightMin / 60)}h night · ₦${tier.night.toLocaleString("en-NG")}/hr`);
+  if (dWin > 0) parts.push(`₦${tier.day.toLocaleString("en-NG")}/hr day`);
+  if (nWin > 0) parts.push(`₦${tier.night.toLocaleString("en-NG")}/hr night`);
   return {
-    amount,
+    amount: total,
     billableMinutes: billable,
-    explanation: (parts.join(" + ") || "Standard coverage rate.") + envSuffix(environment, "standard", t.modifiers.busy_mult),
+    explanation: (parts.join(" + ") || "Standard coverage rate.") + (d > 1 ? ` · ${d} days` : "") + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
   };
 }

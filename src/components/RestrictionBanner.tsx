@@ -1,8 +1,11 @@
 // Mounted globally in the app shell. Polls the server for the current user's
-// payment-restriction status (set when a shift has gone through two payment
-// extensions without being paid) and renders a non-dismissable banner with
-// the list of overdue settlements. Backend is the source of truth — this
-// component never decides whether the user is restricted, it only displays.
+// payment-flag and restriction status. Backend is the source of truth — this
+// component never decides flag/restrict state, it only displays.
+//
+// Three states surfaced (in priority order):
+//   1. ACCOUNT RESTRICTED   — admin set account_restricted_at
+//   2. PAYMENT RESTRICTED   — admin set payment_restricted_at
+//   3. PAYMENT FLAGGED      — system reached 24h surcharge cap; awaiting admin
 
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -32,12 +35,23 @@ export function RestrictionBanner() {
     };
   }, [fetchRestriction]);
 
-  if (!state?.restricted) return null;
+  const restricted = !!state?.restricted;
+  const flagged = !!(state as { payment_flagged?: boolean } | null)?.payment_flagged;
+  if (!restricted && !flagged) return null;
 
-  const overdue = state.overdue ?? [];
+  const overdue = state?.overdue ?? [];
   const total = overdue.reduce((s, o) => s + (o.total_billed_amount ?? 0), 0);
-  const accountRestricted = state.account_restricted;
-  const paymentRestricted = state.payment_restricted;
+  const accountRestricted = !!state?.account_restricted;
+  const paymentRestricted = !!state?.payment_restricted;
+
+  // Color: red for restricted, amber for flagged-only.
+  const tone = restricted ? "#dc2626" : "#d97706";
+  const text = restricted ? "#7f1d1d" : "#78350f";
+  const label = accountRestricted
+    ? "Account restricted"
+    : paymentRestricted
+      ? "Payment restricted"
+      : "Payment flagged for review";
 
   return (
     <div
@@ -47,16 +61,16 @@ export function RestrictionBanner() {
       <div
         className="rounded-2xl border px-3 py-2.5 text-[12px] font-medium shadow-sm"
         style={{
-          background: "color-mix(in oklab, #dc2626 12%, var(--color-surface-elevated, #fff))",
-          borderColor: "color-mix(in oklab, #dc2626 30%, transparent)",
-          color: "#7f1d1d",
+          background: `color-mix(in oklab, ${tone} 12%, var(--color-surface-elevated, #fff))`,
+          borderColor: `color-mix(in oklab, ${tone} 30%, transparent)`,
+          color: text,
         }}
       >
         <div className="flex items-center justify-between gap-2">
           <span className="font-semibold uppercase tracking-[0.14em] text-[10px]">
-            Account restricted
+            {label}
           </span>
-          {paymentRestricted && total > 0 && (
+          {total > 0 && (
             <span className="tabular-nums text-[11px]">
               ₦{total.toLocaleString("en-NG")} due
             </span>
@@ -65,15 +79,23 @@ export function RestrictionBanner() {
         {accountRestricted ? (
           <p className="mt-1 leading-snug">
             Your account has been restricted by an administrator.
-            {state.account_restricted_reason
+            {state?.account_restricted_reason
               ? ` Reason: ${state.account_restricted_reason}.`
               : ""}{" "}
-            Please contact support.
+            You can still log in, view your dashboard, pay outstanding
+            balances, and contact support.
+          </p>
+        ) : paymentRestricted ? (
+          <p className="mt-1 leading-snug">
+            An administrator has restricted booking until your{" "}
+            {overdue.length} outstanding shift
+            {overdue.length === 1 ? "" : "s"} {overdue.length === 1 ? "is" : "are"}{" "}
+            paid.
           </p>
         ) : (
           <p className="mt-1 leading-snug">
-            You have {overdue.length} unpaid shift{overdue.length === 1 ? "" : "s"}.
-            Settle outstanding payments to create or end new shifts.
+            A shift exceeded the 24-hour payment window and is awaiting admin
+            review. Pay outstanding balances to clear the flag.
           </p>
         )}
       </div>

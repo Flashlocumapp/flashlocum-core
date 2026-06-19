@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_payment_actions: {
+        Row: {
+          action: string
+          admin_id: string
+          created_at: string
+          id: string
+          reason: string | null
+          request_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          request_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          request_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_payment_actions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "coverage_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coverage_requests: {
         Row: {
           accepted_by: string | null
@@ -21,6 +59,7 @@ export type Database = {
           accumulated_ms: number
           amount: number
           area: string
+          base_amount: number | null
           billing_locked_at: string | null
           broadcast_started_at: string
           cancelled_by: string | null
@@ -66,6 +105,8 @@ export type Database = {
           start_ts: number | null
           started_at: number | null
           status: Database["public"]["Enums"]["coverage_request_status"]
+          surcharge_amount: number
+          surcharge_capped_at: string | null
           total_billed_amount: number | null
           updated_at: string
         }
@@ -75,6 +116,7 @@ export type Database = {
           accumulated_ms?: number
           amount?: number
           area: string
+          base_amount?: number | null
           billing_locked_at?: string | null
           broadcast_started_at?: string
           cancelled_by?: string | null
@@ -120,6 +162,8 @@ export type Database = {
           start_ts?: number | null
           started_at?: number | null
           status?: Database["public"]["Enums"]["coverage_request_status"]
+          surcharge_amount?: number
+          surcharge_capped_at?: string | null
           total_billed_amount?: number | null
           updated_at?: string
         }
@@ -129,6 +173,7 @@ export type Database = {
           accumulated_ms?: number
           amount?: number
           area?: string
+          base_amount?: number | null
           billing_locked_at?: string | null
           broadcast_started_at?: string
           cancelled_by?: string | null
@@ -174,6 +219,8 @@ export type Database = {
           start_ts?: number | null
           started_at?: number | null
           status?: Database["public"]["Enums"]["coverage_request_status"]
+          surcharge_amount?: number
+          surcharge_capped_at?: string | null
           total_billed_amount?: number | null
           updated_at?: string
         }
@@ -388,6 +435,44 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_surcharge_log: {
+        Row: {
+          applied_at: string
+          block_amount: number
+          block_index: number
+          id: string
+          request_id: string
+          running_total: number
+          source: string
+        }
+        Insert: {
+          applied_at?: string
+          block_amount: number
+          block_index: number
+          id?: string
+          request_id: string
+          running_total: number
+          source?: string
+        }
+        Update: {
+          applied_at?: string
+          block_amount?: number
+          block_index?: number
+          id?: string
+          request_id?: string
+          running_total?: number
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_surcharge_log_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "coverage_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_underpayments: {
         Row: {
           expected_amount: number
@@ -567,6 +652,8 @@ export type Database = {
           onboarded_at: string | null
           onboarded_cover_at: string | null
           onboarded_request_at: string | null
+          payment_flagged_at: string | null
+          payment_flagged_reason: string | null
           payment_restricted_at: string | null
           phone: string | null
           role: string | null
@@ -602,6 +689,8 @@ export type Database = {
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
+          payment_flagged_at?: string | null
+          payment_flagged_reason?: string | null
           payment_restricted_at?: string | null
           phone?: string | null
           role?: string | null
@@ -637,6 +726,8 @@ export type Database = {
           onboarded_at?: string | null
           onboarded_cover_at?: string | null
           onboarded_request_at?: string | null
+          payment_flagged_at?: string | null
+          payment_flagged_reason?: string | null
           payment_restricted_at?: string | null
           phone?: string | null
           role?: string | null
@@ -835,6 +926,34 @@ export type Database = {
         Args: { _env: string; _kind: string; _seg_id: string }
         Returns: number
       }
+      _booked_per_day_min: {
+        Args: { _end_hhmm: string; _start_hhmm: string }
+        Returns: number
+      }
+      _classify_product: {
+        Args: { _coverage_type: string; _days: number }
+        Returns: string
+      }
+      _hhmm_to_min: { Args: { _s: string }; Returns: number }
+      _price_standard_day: {
+        Args: {
+          _block_min: number
+          _booked_per_day_min: number
+          _busy_mult: number
+          _day_window_min: number
+          _first_hour_min: number
+          _night_window_min: number
+          _rate_day: number
+          _rate_night: number
+          _tolerance_min: number
+          _worked_min: number
+        }
+        Returns: {
+          amount: number
+          billable_min: number
+          tolerance_fired: boolean
+        }[]
+      }
       _pricing_flat: {
         Args: { _product: string; _version: string }
         Returns: number
@@ -858,6 +977,7 @@ export type Database = {
           night_min: number
         }[]
       }
+      _tier_for_per_day_hours: { Args: { _booked_hr: number }; Returns: string }
       _trust_ratings_received: {
         Args: { _user_id: string }
         Returns: {
@@ -873,7 +993,26 @@ export type Database = {
           terminal_at: string
         }[]
       }
+      _window_day_night_min: {
+        Args: { _end_hhmm: string; _start_hhmm: string }
+        Returns: {
+          day_min: number
+          night_min: number
+        }[]
+      }
+      admin_apply_payment_restriction: {
+        Args: { _reason?: string; _user_id: string }
+        Returns: Json
+      }
       admin_apply_trust_restriction: {
+        Args: { _reason?: string; _user_id: string }
+        Returns: Json
+      }
+      admin_clear_payment_flag: {
+        Args: { _reason?: string; _user_id: string }
+        Returns: Json
+      }
+      admin_clear_payment_restriction: {
         Args: { _reason?: string; _user_id: string }
         Returns: Json
       }
@@ -881,6 +1020,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Json
       }
+      admin_list_flagged_accounts: { Args: never; Returns: Json }
       admin_list_trust: {
         Args: { _limit?: number; _only_flagged?: boolean }
         Returns: {
@@ -928,6 +1068,10 @@ export type Database = {
         Returns: boolean
       }
       claim_first_admin: { Args: never; Returns: boolean }
+      clear_payment_flag_on_settlement: {
+        Args: { _request_id: string }
+        Returns: undefined
+      }
       compute_quote: {
         Args: {
           _coverage_kind?: string
@@ -944,6 +1088,7 @@ export type Database = {
       }
       dispatch_email_queue_processing: { Args: never; Returns: undefined }
       doctor_resubmit_verification: { Args: never; Returns: boolean }
+      drain_surcharge_due: { Args: never; Returns: Json }
       email_queue_depth: {
         Args: never
         Returns: {
@@ -1020,6 +1165,7 @@ export type Database = {
           accumulated_ms: number
           amount: number
           area: string
+          base_amount: number | null
           billing_locked_at: string | null
           broadcast_started_at: string
           cancelled_by: string | null
@@ -1065,6 +1211,8 @@ export type Database = {
           start_ts: number | null
           started_at: number | null
           status: Database["public"]["Enums"]["coverage_request_status"]
+          surcharge_amount: number
+          surcharge_capped_at: string | null
           total_billed_amount: number | null
           updated_at: string
         }[]
