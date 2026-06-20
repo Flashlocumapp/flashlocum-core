@@ -69,7 +69,8 @@ function AuthScreen() {
       return;
     }
     if (onboardedOther) {
-      await supabase.auth.signOut();
+      const { signOutAndClearPresence } = await import("@/lib/sign-out");
+      await signOutAndClearPresence();
       const otherLabel = normalizedRole === "cover" ? "Request Coverage" : "Cover & Earn";
       setError(
         `This account is not registered under ${roleLabel}. It belongs to ${otherLabel}. Please create an account.`,
