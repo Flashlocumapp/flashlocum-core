@@ -920,7 +920,7 @@ function SettlementPane({
   if (onPayWithMonnify) {
     return (
       <CustomTransferPane
-        amount={liveAmount ?? amount}
+        amount={amount}
         account={account}
         payState={payState}
         payError={payError}
