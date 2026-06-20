@@ -8,6 +8,7 @@ import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
 import { EnvironmentBadge } from "@/components/EnvironmentBadge";
 import { submitShiftRating } from "@/lib/trust";
 import { pushToast } from "@/lib/notifications";
+import { fromLocal, ingest } from "@/lib/feedback";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
 
