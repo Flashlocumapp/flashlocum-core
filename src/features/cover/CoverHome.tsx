@@ -52,6 +52,23 @@ export function CoverHome({ active = true }: { active?: boolean }) {
     if (active && !approved && online) setOnline(false);
   }, [active, approved, online]);
 
+  // Refresh GPS once on mount/sign-in when this doctor is approved. No
+  // continuous tracking — see lib/doctor-gps.ts.
+  useEffect(() => {
+    if (!approved) return;
+    refreshDoctorLocation(online);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approved]);
+
+  // Start / stop the 20-minute foreground refresh tick alongside online.
+  useEffect(() => {
+    if (online && approved) {
+      startDoctorLocationRefresh();
+      return () => stopDoctorLocationRefresh();
+    }
+    stopDoctorLocationRefresh();
+  }, [online, approved]);
+
   const handleToggleOnline = () => {
     if (!approved) {
       pushToast({
@@ -66,7 +83,17 @@ export function CoverHome({ active = true }: { active?: boolean }) {
       });
       return;
     }
-    setOnline(!online);
+    const next = !online;
+    setOnline(next);
+    // Refresh GPS on the going-online edge so the marker appears at the
+    // doctor's real coordinates immediately.
+    if (next) refreshDoctorLocation(true);
+  };
+
+  const handleRefreshLocation = () => {
+    if (!approved || !online) return;
+    refreshDoctorLocation(true);
+    pushToast({ tone: "presence", title: "Refreshing your location…" });
   };
 
   return (
