@@ -1,114 +1,141 @@
-## FLASHLOCUM AUDIT — FIX PLAN (revised)
+## AUDITS 5–9 — DIAGNOSIS & FIX PLAN
 
-Audit 4 origin confirmed by user: the ₦62,000 the UI displayed was a **stale cached Monnify virtual account from a prior pre-quoted booking**. Monnify accepted the actual ₦8,000 transfer because it matched on `paymentReference`, not amount. No further reproduction work needed.
+### AUDIT 5 — Doctor → Requester rating fails: `record 'new' has no field 'location'`
 
----
+**Root cause (confirmed against live DB).**
+`submit_shift_rating` (SECURITY DEFINER) inserts a row into `public.ratings`. The `trg_ratings_after_insert` trigger then runs `_ratings_after_insert()`, which `UPDATE`s `public.coverage_requests` to set `doctor_rating_*` / `requester_rating_*`. That UPDATE fires the BEFORE-UPDATE trigger `prevent_requester_sensitive_change()`.
 
-### AUDIT 1 — Online doctors not visible to some requesters
+The function — verified live via `pg_get_functiondef` — contains a doctor-branch block that assigns six fields that **do not exist** on `coverage_requests`:
 
-**Root cause.** RLS on `public.doctor_presence` requires the viewing requester to already have a `coverage_requests` row with `accepted_by = doctor_presence.user_id`. New requesters never satisfy the EXISTS clause, so `subscribePresence()` returns 0 rows. Compounding: `public.profiles` SELECT is self/admin-only, so `presence-remote.ts`'s lazy `verification_status` lookup also returns nothing → `approvedIds` stays empty → `buildSnapshot()` filters every doctor out.
+```sql
+NEW.location        := OLD.location;
+NEW.lat             := OLD.lat;
+NEW.lng             := OLD.lng;
+NEW.scheduled_start := OLD.scheduled_start;
+NEW.scheduled_end   := OLD.scheduled_end;
+NEW.notes           := OLD.notes;
+```
+
+`information_schema.columns` confirms only `phone` exists from that group. The doctor branch executes whenever `OLD.accepted_by = auth.uid()`. When a doctor rates, `auth.uid()` is still the doctor (SECURITY DEFINER bypasses RLS, not `auth.uid()`), so the branch fires and PostgreSQL raises `record "new" has no field "location"`. Requester→Doctor rating works because it takes the *first* branch (`NEW.requester_id = auth.uid()`), which only touches columns that exist.
+
+Two more issues found while inspecting:
+- The trigger is registered **twice** on `coverage_requests` (`coverage_requests_prevent_requester_sensitive_change` and `prevent_requester_sensitive_change_trg`). Harmless when correct, but doubles the failure surface — drop the duplicate.
+- `_ratings_after_insert` runs as the caller. Combined with `prevent_requester_sensitive_change`, a doctor rating that *did* succeed would silently reset `requester_rating_*` if the function ever got expanded — pin the rating-recording UPDATE behind `app.lifecycle_bypass = on` so it cannot be undone.
 
 **Fix.**
-1. New `SECURITY DEFINER` RPC `public.list_online_approved_doctors()` returning only safe presence columns (`user_id, online, last_seen, lat, lng`) joined to `profiles.verification_status='approved'`.
-2. Replace the `doctor_presence` SELECT policy with one that allows any authenticated user to read `online=true` rows for approved doctors only (still restrictive for offline rows and unapproved doctors).
-3. `presence-remote.ts` switches its initial fetch to the RPC and drops the lazy `profiles` batch lookup.
+1. `CREATE OR REPLACE FUNCTION public.prevent_requester_sensitive_change` — keep the requester branch unchanged; in the doctor branch, drop the six nonexistent columns and the `accumulated_ms`/`started_at` reset (those already lifecycle-bypass), keep `requester_id`, `accepted_by`, `settled_amount`, `payment_status`, `payment_reference`, `payment_provider`, `payment_url`, `paid_at`, `fee_pct`, `remitted_at`, `hospital`, `phone`.
+2. `DROP TRIGGER prevent_requester_sensitive_change_trg ON public.coverage_requests` (keep `coverage_requests_prevent_requester_sensitive_change`).
+3. Wrap the UPDATE in `_ratings_after_insert` with `set_config('app.lifecycle_bypass','on',true)` / `''` so future expansions of the prevent-trigger can never strip rating fields.
 
 ---
 
-### AUDIT 2 — User location icons change after request creation  *(revised per user constraints)*
+### AUDIT 6 — Reliability not updating
 
-**Root cause.** `doctor_presence` carries no real geolocation. `GoogleMapBackground.tsx:328-334` synthesizes marker positions **relative to `center`**:
-```
-lat = center.lat + (0.5 - m.top) * 0.03
-lng = center.lng + (m.left - 0.5) * 0.03
-```
-`center` flips from the requester's GPS fix to the selected hospital when a request is created (`RequesterHome.tsx:358-361`), so every doctor marker re-anchors around the hospital even though no doctor moved.
+**Root causes.**
 
-**Fix — event-driven only. No continuous GPS, no `watchPosition`, no background tracking, no Capacitor background-geolocation plugins.**
+(a) **Counts the wrong party.** `_trust_terminal_shifts(_user_id, _role)` includes every cancelled row where `accepted_by IS NOT NULL`, with `outcome = 'cancelled'`, regardless of `cancelled_by`. So when a *doctor* cancels an accepted shift, the *requester's* reliability denominator gets a "cancelled" entry too. Violates the stated rule: "Reliability changes only when YOU cancel."
 
-1. Schema: add `lat double precision`, `lng double precision` to `doctor_presence` (nullable).
-2. Doctor app captures GPS via a single `navigator.geolocation.getCurrentPosition` call and writes via `upsertMyPresence({ lat, lng })` on **exactly** these triggers:
-   - **App open / mount** of the doctor home screen.
-   - **Sign-in** (after auth resolves to a `cover` role).
-   - **Doctor toggles Online** on.
-   - **Manual "Refresh location" control** on the online card (new small button).
-   - **Optional low-frequency tick: every 20 minutes** while `online=true` AND `document.visibilityState==='visible'`. `setInterval` is cleared on offline, unmount, sign-out, and `visibilitychange→hidden`. No timer faster than this.
-3. If GPS permission is denied or `getCurrentPosition` errors, presence still writes `online=true` with `lat/lng = NULL`. The map simply omits that doctor's marker — no fake/synthesized position.
-4. `GoogleMapBackground.tsx` renders each doctor marker at its **absolute** `lat/lng`. `center` becomes camera-only — selecting a hospital pans the camera but **never relocates any user icon**. The requester's self-marker stays anchored to `userCenter` (their own GPS), not to `center`.
+(b) **Score doesn't move until a block closes.** `recompute_trust` only writes `rl_score` from the *last closed block* (`rl_blocks_closed > 0`). Before the first 20 terminal shifts complete, score stays at the default 100 and never reflects current cancellations. Same problem at counts 21–39 (still showing block 1 = oldest 20).
 
-### Sign-out → Offline (new, per user request)
-
-5. On `SIGNED_OUT` (and on explicit sign-out button), call `clearMyPresence()` which already flips `online=false` and bumps `last_seen`. Add: also send a synchronous best-effort `online=false` write on `beforeunload`/`pagehide` using `navigator.sendBeacon` so a tab close also removes the doctor.
-6. `STALE_MS` stay-fresh window in `presence-remote.ts` remains 60 s — combined with (5), a signed-out doctor disappears from every requester's "Online Doctors" within at most one realtime tick (sub-second in practice) and, worst case, within 60 s if the network drops the offline write.
-7. Auth listener in `__root.tsx` already runs `unregisterDoctor()` on SIGNED_OUT; we wire `clearMyPresence()` into that same path so presence is always cleared before the cache teardown.
-
----
-
-### AUDIT 3 — Edit Request only hides the doctor card once
-
-**Root cause.** Stale guards in `network.ts:1040-1079`.
-
-1. First Edit open → `pauseRequest` writes `status='paused'`. ✅
-2. Close + save → `resumeRequest` sets `status='broadcasting'`, then `updateRequest` triggers `bump_request_rev_on_change`. The realtime echo round-trips a row whose `startedAt` / `accumulatedMs` are now non-null/non-zero.
-3. Second Edit open → `pauseRequest` short-circuits on `if (cur.acceptedBy || cur.startedAt != null) return;` (and `resumeRequest` short-circuits on `accumulatedMs > 0`). No UPDATE is sent. Server stays `searching`. Doctor card stays visible.
-
-Race: `handleEditSave` calls `updateRequest` after `setEditOpen(false)`; the resume UPDATE and the material-edit UPDATE collapse into one bump-rev echo that overwrites the next click's optimistic state.
+(c) **Triggered only on rating insert.** `recompute_trust` is invoked exclusively from `_ratings_after_insert`. A cancellation/completion alone never recomputes — so reliability lags until somebody also rates.
 
 **Fix.**
-1. Drop the `startedAt`/`accumulatedMs`/`acceptedBy` guards in `pauseRequest`/`resumeRequest` for the pre-acceptance broadcast path. Keep only "no-op if status already matches target".
-2. Invoke pause/resume from explicit `onOpen` / `onDismiss` handlers on the edit sheet, not via a `net`-dependent `useEffect`.
-3. In `handleEditSave`, run the material-field UPDATE first, then re-broadcast, so `bump_request_rev_on_change` does not race the resume.
+1. Rewrite `_trust_terminal_shifts(_user_id, _role)`:
+   - `completed` rows where the user was a participant → count toward both numerator & denominator.
+   - `cancelled` rows where `accepted_by IS NOT NULL` AND `cancelled_by = _user_id` → count toward denominator only (their cancellation).
+   - `cancelled` rows where the OTHER party cancelled → **excluded entirely** (no numerator, no denominator).
+   - `no_show` → counted against the no-show party only (use existing `cancelled_by` / outcome conventions).
+   - Pre-acceptance cancels (`accepted_by IS NULL`) — already excluded ✓.
+2. New trigger `trg_cr_recompute_trust_on_terminal` AFTER UPDATE OF `status` on `coverage_requests`: when row transitions to a terminal state (`completed`, `cancelled`, `no_show`), call `recompute_trust(requester_id)` and `recompute_trust(accepted_by)`.
+3. Score formula in `recompute_trust` updated per Audit 7 (below) — same change covers both.
 
 ---
 
-### AUDIT 4 — Monnify ₦62,000 mismatch (origin confirmed)
+### AUDIT 7 — Latest-20 not enforced
 
-Two values exist per coverage request:
+**Root cause.** `recompute_trust` uses **closed blocks of 20** (block 1 = ratings 1–20, block 2 = ratings 21–40, etc.) and the displayed score is the *last closed block*. Two failure modes:
+- At 25 ratings: shows block 1 (oldest 20) instead of latest 20.
+- At <20 ratings: shows default 5.0 / 100 — current behavior never reflects them.
 
-| Column | Meaning | Set by |
-|---|---|---|
-| `amount` | Quoted full booking total (per-day rate × hours × days) | request creation (`_lock_rate_on_insert` + `compute_quote`) |
-| `total_billed_amount` | Actually-worked total after `end_shift` | `end_shift` from `shift_segments.billed_amount` |
+This applies equally to rating and reliability.
 
-Live DB evidence — three June 19 rows from before the safeguards landed:
+**Fix.** Switch to a true rolling latest-20 in `recompute_trust`:
 
-| id | days | per-day | env | `amount` | `total_billed_amount` |
-|---|---|---|---|---|---|
-| 7300ac18… | 3 | 8AM–6PM (10h) | normal | **₦60,000** | ₦6,000 |
-| 85eaadb4… | 3 | 8AM–6PM (10h) | normal | **₦60,000** | ₦6,000 |
-| 605f3ac8… | 3 | 8AM–6PM (10h) | normal | **₦60,000** | ₦6,000 |
+```sql
+-- rating (rolling)
+WITH latest AS (
+  SELECT score FROM public._trust_ratings_received(_user_id)
+  ORDER BY created_at DESC LIMIT 20
+)
+SELECT COALESCE(AVG(score)::numeric(4,2), 5.0), COUNT(*)
+  INTO rt_score, rt_sample_size FROM latest;
 
-`amount = days × per_day_hours × tier_rate`. A 4-day equivalent at 8AM–3:45PM (7.75 h × ₦2,000 × 4) = **₦62,000** — the exact figure on the screenshot.
+-- reliability (rolling)
+WITH latest AS (
+  SELECT outcome FROM public._trust_terminal_shifts(_user_id, v_role)
+  ORDER BY terminal_at DESC LIMIT 20
+)
+SELECT COUNT(*) FILTER (WHERE outcome='completed'),
+       COUNT(*)
+  INTO rl_completed, rl_sample_size FROM latest;
+rl_score := CASE WHEN rl_sample_size > 0
+                 THEN ROUND(rl_completed::numeric / rl_sample_size * 100)
+                 ELSE 100 END;
+```
 
-**How ₦62,000 reached the Monnify virtual account (now user-confirmed):**
+Keep `trust_blocks` table for historical/audit display (already populated by existing code), but the live `trust_snapshot.rating.score` and `reliability.score` come from the rolling-20 window. Snapshot payload exposes `sample_size` so the UI can render "Based on your last N shifts" honestly when N < 20.
 
-1. Pre-fix `beginSettlementCheckout` read (or fell back to) `coverage_requests.amount`, called `initiateSplitTransaction({ amount: 62000, … })`, then `initBankTransferAccount(txRef)` minted the Monnify virtual account at ₦62,000 and persisted the full account JSON into `coverage_requests.payment_account`.
-2. `end_shift` later wrote `total_billed_amount = 8,000`. There was no DB trigger to clear the cached `payment_account` and no amount-match guard in the RESUME-IF-PENDING branch, so subsequent opens returned the same ₦62,000 cached virtual account verbatim.
-3. The user transferred the backend-authoritative ₦8,000; Monnify matched the webhook on `paymentReference` (not amount), so the shift completed and rated correctly while the UI kept showing ₦62,000.
+Admin dashboard reads `profiles.trust_snapshot` → automatically picks up the corrected score the moment `recompute_trust` is re-invoked. Add a one-shot backfill at the end of the migration: `SELECT public.recompute_trust(id) FROM public.profiles;` so every existing snapshot is rewritten under the new rules.
 
-**What the current code already prevents:**
-- `settlement.functions.ts:44-47` requires `billing_locked_at` AND `total_billed_amount > 0`; quoted `amount` is never read.
-- `settlement.functions.ts:55-89` requires `Math.round(cachedAmount) === serverAmount` to reuse cached `payment_account`; otherwise mints fresh at current `total_billed_amount`.
-- DB trigger `trg_invalidate_payment_cache` (BEFORE UPDATE OF `total_billed_amount`) clears `payment_account`/`payment_reference`/`payment_url` on every amount change.
+---
 
-**Evidence the screenshot cannot recur today:**
-- Most recent 4-day completed shift `77f19c65…` → 4 segments × ₦2,000, `total_billed_amount=8,000`, cached `payment_account.amount=8,000`, paid ₦8,000.
-- `WHERE (payment_account->>'amount')::numeric BETWEEN 50000 AND 80000` → **0 rows** project-wide.
-- `WHERE total_billed_amount <> (payment_account->>'amount')::numeric AND payment_account IS NOT NULL` → **0 rows**.
+### AUDIT 8 — Sign-out doesn't always force offline
 
-**Fix.** No production code change. Add a regression test that:
-1. Creates a 4-day standard shift whose quoted `amount` is far larger than the eventual `total_billed_amount`.
-2. Runs `start → pause → resume × N → end`.
-3. Asserts `Σ(segment.billed_amount) == total_billed_amount == payment_account.amount == amount-sent-to-Monnify`.
-4. Manually corrupts `payment_account.amount` to ₦62,000 and confirms the next `beginSettlementCheckout` discards the cache and mints fresh.
+**Root cause.** `__root.tsx`'s `subscribeAuthState(SIGNED_OUT)` calls `unregisterDoctor()` → `clearMyPresence()`. `clearMyPresence` reads `getCurrentUserIdSync()`, but by the time the SIGNED_OUT event fires Supabase has already cleared the session, so `uid === null` and the function **early-returns without writing**. The presence row remains `online=true` until its 60s freshness window expires — the doctor "stays online" to other requesters.
+
+`AccountScreen.tsx:252` and `auth.$role.tsx:72` call `supabase.auth.signOut()` directly without first clearing presence. `pagehide`/`beforeunload` beacons (added previously) cover tab close, but not the in-app sign-out path.
+
+**Fix.**
+1. Add `clearMyPresenceForUser(uid)` to `presence-remote.ts` that accepts an explicit uid (does not consult auth) and PATCHes `doctor_presence` with `online=false`, `last_seen=now()`.
+2. Create `src/lib/sign-out.ts` exporting `signOutAndClearPresence()`:
+   - Read current uid via `supabase.auth.getUser()` (or `getCurrentUserIdSync`) BEFORE sign-out.
+   - `await clearMyPresenceForUser(uid)` (await — must land before sign-out invalidates the bearer).
+   - `await supabase.auth.signOut()`.
+3. Replace all in-app sign-out call sites (`AccountScreen.tsx`, `auth.$role.tsx`, `reset-password.tsx`) with `signOutAndClearPresence()`.
+4. As a backstop, change `__root.tsx`'s SIGNED_OUT handler to capture `session?.user?.id` from the previous event (cache the last seen userId via a module-scope ref in `auth-ready.ts`) and call `clearMyPresenceForUser(prevUid)` even if the wrapper above was bypassed.
+
+After this, a signed-out doctor's row flips to `online=false` synchronously, the realtime DELETE/UPDATE propagates, every requester's `subscribePresence` snapshot drops them within one tick, the admin online-doctor count decrements immediately, and dispatch broadcasts skip them (`list_open_coverage_requests` already gates on `dp.online = true`).
+
+---
+
+### AUDIT 9 — Multi-day day counter visibility
+
+**Server-side: already correct.**
+- `start_shift` sets `day_index = GREATEST(1, COALESCE(r.day_index, 1))`.
+- `pause_shift` advances `day_index` to `LEAST(days, day_index + 1)` and freezes the day's billed amount.
+- `resume_shift` preserves `day_index` (does NOT increment).
+- `_auto_advance_day_boundary` cron also advances `+1` at the booked-per-day boundary.
+- `end_shift` persists final `day_index` so completed history reads correctly.
+
+**Client-side: gaps.** The Day-counter badge IS rendered in `CoverDispatchPortal` (incoming & accepted cards) and in `CoverageScreen` (requester Active/Upcoming/History lists). It is **missing** from:
+- `CoverHome.tsx` → `CoverageTile` — the doctor's home-screen focus tile (the "Active coverage" / "Next coverage" card) never shows `Day X of N`.
+- `RequesterHome.tsx` — the active-coverage overlay on the requester's map home does not show `Day X of N` either.
+
+**Fix.**
+1. In `CoverHome.tsx` `CoverageTile`, render the same `Day {dayIndex} of {days}` pill that `CoverDispatchPortal` uses, gated on `coverage.days > 1`. Source `dayIndex` from the same `Coverage` shape (already includes `days` and `dayIndex` — `dispatch.ts:88`).
+2. In `RequesterHome.tsx`, where the accepted/active coverage chip is rendered (the floating tile that shows hospital + meta during dispatch/accepted/active), add the same pill, gated on `days > 1`. Pull `dayIndex` from the matching `net.requests[requestId]` row.
+3. Verify `fmtOpMeta` is unchanged — the badge is a separate element so the meta line stays readable.
+
+No DB change for Audit 9.
 
 ---
 
 ## Implementation Order
 
-1. **Audit 1** — RLS + `SECURITY DEFINER` RPC, then trim `presence-remote.ts`.
-2. **Audit 2** — `doctor_presence` lat/lng migration + event-driven GPS writes (app open / sign-in / online toggle / manual refresh / 20-min foreground tick) + sign-out auto-offline (incl. `pagehide` beacon) + absolute-coordinate markers.
-3. **Audit 3** — Drop stale guards in `network.ts`; explicit pause/resume in edit-sheet handlers.
-4. **Audit 4** — Regression test only.
+1. **Audit 5** — Migration: fix `prevent_requester_sensitive_change`, drop duplicate trigger, harden `_ratings_after_insert`.
+2. **Audit 7** — Migration: rewrite `recompute_trust` to use rolling latest-20 for both rating and reliability; backfill all snapshots.
+3. **Audit 6** — Migration: rewrite `_trust_terminal_shifts` to attribute cancellations to `cancelled_by` only; add `trg_cr_recompute_trust_on_terminal` AFTER-UPDATE-OF-status trigger.
+4. **Audit 8** — Frontend: `clearMyPresenceForUser(uid)` + `signOutAndClearPresence()`; replace sign-out call sites; cache previous uid in `auth-ready.ts` for the root SIGNED_OUT backstop.
+5. **Audit 9** — Frontend: add Day-X-of-N pill to `CoverHome` `CoverageTile` and the requester active-coverage overlay in `RequesterHome`.
 
-**Awaiting approval before implementing.**
+**Awaiting approval.**
