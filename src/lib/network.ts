@@ -36,6 +36,7 @@ import {
   upsertMyPresence,
   type PresenceRow,
 } from "./presence-remote";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Fire backend-authoritative shift lifecycle RPC. Returns the server payload
