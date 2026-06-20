@@ -241,6 +241,13 @@ export async function heartbeatPresence(online: boolean): Promise<void> {
 export async function clearMyPresence(): Promise<void> {
   const uid = getCurrentUserIdSync();
   if (!uid) return;
+  await clearMyPresenceForUser(uid);
+}
+
+/** Mark a specific user offline. Used by sign-out paths where auth.uid()
+ *  may already have been cleared by the time we get here. */
+export async function clearMyPresenceForUser(uid: string): Promise<void> {
+  if (!uid) return;
   const existing = rawRows.get(uid);
   if (existing) {
     rawRows.set(uid, { ...existing, online: false, last_seen: new Date().toISOString() });
