@@ -35,6 +35,7 @@ type Row = {
   started_at: number | null;
   accumulated_ms: number;
   settled_amount: number | null;
+  total_billed_amount: number | null;
   days: number;
   day_index: number;
   cancelled_by: string | null;
