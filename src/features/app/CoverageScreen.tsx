@@ -782,7 +782,7 @@ function RequestCard({
           : "var(--color-surface-elevated)",
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         <Avatar initials={identity.initials} selfieUrl={identity.selfieUrl} dim={isHistory} live={isActive} />
 
         <div className="min-w-0 flex-1">
@@ -809,11 +809,11 @@ function RequestCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 truncate text-[12px] text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
             <span className="truncate">{identity.mdcn}</span>
-            <span>·</span>
+            <span className="shrink-0">·</span>
             <RatingPill entityId={item.doctorRatingId} role="doctor" inline />
-            <span>·</span>
+            <span className="shrink-0">·</span>
             <ReliabilityPill entityId={item.doctorRatingId} inline />
           </div>
 
@@ -843,77 +843,78 @@ function RequestCard({
             </div>
           )}
         </div>
-
-        {isUpcoming && (
-          <button
-            onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
-            disabled={!!pending}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
-            style={{
-              background: "var(--color-foreground)",
-              color: "var(--color-background)",
-            }}
-          >
-            {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
-          </button>
-        )}
-        {isActive && item.days > 1 && item.dayIndex < item.days && (
-          <button
-            onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
-            disabled={!!pending}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
-            style={{
-              background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
-              color: "var(--color-foreground)",
-            }}
-          >
-            {pauseLabel ?? "Pause Shift"}
-          </button>
-        )}
-        {isActive && (
-          <button
-            onClick={(e) => { e.stopPropagation(); if (!pending) onEnd(); }}
-            disabled={!!pending}
-            className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
-            style={{
-              background: "var(--color-foreground)",
-              color: "var(--color-background)",
-            }}
-          >
-            {endLabel ?? "End Shift"}
-          </button>
-        )}
       </div>
 
-      {isUpcoming && !item.everStarted && item.dayIndex <= 1 && (
-        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
-          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
-          <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
-          <a
-            href={`tel:${item.phone}`}
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
-            style={{
-              background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
-              color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Call
-          </a>
-        </div>
-      )}
-      {isUpcoming && (item.everStarted || item.dayIndex > 1) && (
-        <div className="mt-2.5 flex items-center gap-1.5 pl-[56px]">
-          <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
+      {(isUpcoming || isActive) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 pl-[56px]">
+          {isUpcoming && (
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
+              disabled={!!pending}
+              className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
+              style={{
+                background: "var(--color-foreground)",
+                color: "var(--color-background)",
+              }}
+            >
+              {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
+            </button>
+          )}
+          {isActive && item.days > 1 && item.dayIndex < item.days && (
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
+              disabled={!!pending}
+              className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
+              style={{
+                background: "color-mix(in oklab, var(--color-foreground) 8%, transparent)",
+                color: "var(--color-foreground)",
+              }}
+            >
+              {pauseLabel ?? "Pause Shift"}
+            </button>
+          )}
+          {isActive && (
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!pending) onEnd(); }}
+              disabled={!!pending}
+              className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
+              style={{
+                background: "var(--color-foreground)",
+                color: "var(--color-background)",
+              }}
+            >
+              {endLabel ?? "End Shift"}
+            </button>
+          )}
+          {isUpcoming && !item.everStarted && item.dayIndex <= 1 && (
+            <>
+              <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
+              <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
+              <a
+                href={`tel:${item.phone}`}
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors active:opacity-80"
+                style={{
+                  background: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+                  color: "color-mix(in oklab, var(--color-foreground) 80%, transparent)",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Call
+              </a>
+            </>
+          )}
+          {isUpcoming && (item.everStarted || item.dayIndex > 1) && !isActive && (
+            <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
+          )}
         </div>
       )}
     </div>
