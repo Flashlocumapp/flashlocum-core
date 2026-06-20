@@ -475,7 +475,10 @@ function init() {
           continue;
         }
         if (old.status === r.status) continue;
-        if (r.status === "completed") {
+        if (r.status === "completed" || r.status === "awaiting_payment") {
+          // Treat both webhook-driven completion AND requester-initiated
+          // end-shift (which lands in awaiting_payment first) as the
+          // "shift ended" moment for the doctor.
           netEvent = {
             actor: "requester",
             actorId: r.requesterSessionId,
