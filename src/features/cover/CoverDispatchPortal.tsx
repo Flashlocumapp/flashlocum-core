@@ -94,7 +94,16 @@ function CoverDispatchOverlays() {
               const res = await submitShiftRating(requestId, rating, feedback || null);
               if (!res.ok && res.error !== "already_rated") {
                 pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+                return;
               }
+              // Audit-10: positive confirmation toast.
+              ingest(
+                fromLocal({
+                  kind: "rating.submitted",
+                  entityId: requestId,
+                  audience: "doctor",
+                }),
+              );
             })();
             recordHistoryRating(pendingRating.requestId, rating);
           }
