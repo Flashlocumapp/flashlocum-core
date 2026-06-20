@@ -1213,7 +1213,13 @@ function DispatchOverlay({
     const isPreAcceptance = !!cur && !cur.acceptedBy && cur.startedAt == null && (cur.accumulatedMs ?? 0) === 0;
     const canReuseRequest = isPreAcceptance && (cur?.status === "broadcasting" || cur?.status === "paused");
     if (cur && canReuseRequest) {
-      // Coming back from configure: sync any edits then resume.
+      // Coming back from configure: ensure a deterministic
+      // searching → paused → searching cycle so the server trigger
+      // bump_request_rev_on_change fires even when the patched fields
+      // equal the DB row (the original "edit-twice" failure mode). If the
+      // local mirror still reads broadcasting because the parent pause
+      // effect's echo hasn't landed yet, pause now — idempotent.
+      if (cur.status === "broadcasting") pauseRequest(cur.id);
       updateRequest(cur.id, {
         hospital: location?.name ?? cur.hospital,
         area: location?.area ?? cur.area,
