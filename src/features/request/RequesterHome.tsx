@@ -351,6 +351,8 @@ function HomeScreen({ active }: { active: boolean }) {
         top: d.top,
         left: d.left,
         key: d.sessionId,
+        lat: d.lat,
+        lng: d.lng,
       })),
     [net],
   );
