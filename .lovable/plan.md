@@ -1,141 +1,147 @@
-## AUDITS 5–9 — DIAGNOSIS & FIX PLAN
+# Audit 10 — Notification Cleanup & Replacement Plan
 
-### AUDIT 5 — Doctor → Requester rating fails: `record 'new' has no field 'location'`
-
-**Root cause (confirmed against live DB).**
-`submit_shift_rating` (SECURITY DEFINER) inserts a row into `public.ratings`. The `trg_ratings_after_insert` trigger then runs `_ratings_after_insert()`, which `UPDATE`s `public.coverage_requests` to set `doctor_rating_*` / `requester_rating_*`. That UPDATE fires the BEFORE-UPDATE trigger `prevent_requester_sensitive_change()`.
-
-The function — verified live via `pg_get_functiondef` — contains a doctor-branch block that assigns six fields that **do not exist** on `coverage_requests`:
-
-```sql
-NEW.location        := OLD.location;
-NEW.lat             := OLD.lat;
-NEW.lng             := OLD.lng;
-NEW.scheduled_start := OLD.scheduled_start;
-NEW.scheduled_end   := OLD.scheduled_end;
-NEW.notes           := OLD.notes;
-```
-
-`information_schema.columns` confirms only `phone` exists from that group. The doctor branch executes whenever `OLD.accepted_by = auth.uid()`. When a doctor rates, `auth.uid()` is still the doctor (SECURITY DEFINER bypasses RLS, not `auth.uid()`), so the branch fires and PostgreSQL raises `record "new" has no field "location"`. Requester→Doctor rating works because it takes the *first* branch (`NEW.requester_id = auth.uid()`), which only touches columns that exist.
-
-Two more issues found while inspecting:
-- The trigger is registered **twice** on `coverage_requests` (`coverage_requests_prevent_requester_sensitive_change` and `prevent_requester_sensitive_change_trg`). Harmless when correct, but doubles the failure surface — drop the duplicate.
-- `_ratings_after_insert` runs as the caller. Combined with `prevent_requester_sensitive_change`, a doctor rating that *did* succeed would silently reset `requester_rating_*` if the function ever got expanded — pin the rating-recording UPDATE behind `app.lifecycle_bypass = on` so it cannot be undone.
-
-**Fix.**
-1. `CREATE OR REPLACE FUNCTION public.prevent_requester_sensitive_change` — keep the requester branch unchanged; in the doctor branch, drop the six nonexistent columns and the `accumulated_ms`/`started_at` reset (those already lifecycle-bypass), keep `requester_id`, `accepted_by`, `settled_amount`, `payment_status`, `payment_reference`, `payment_provider`, `payment_url`, `paid_at`, `fee_pct`, `remitted_at`, `hospital`, `phone`.
-2. `DROP TRIGGER prevent_requester_sensitive_change_trg ON public.coverage_requests` (keep `coverage_requests_prevent_requester_sensitive_change`).
-3. Wrap the UPDATE in `_ratings_after_insert` with `set_config('app.lifecycle_bypass','on',true)` / `''` so future expansions of the prevent-trigger can never strip rating fields.
+This is a **cleanup** plan. The Audit 10 contract is the single source of truth. Every old toast, push body, and trigger point that does not match it gets removed, replaced, or re-wired. No event may produce more than one outcome.
 
 ---
 
-### AUDIT 6 — Reliability not updating
+## Part A — Cleanup Report (what exists today vs. what should exist)
 
-**Root causes.**
+### A1. Copy that must be REPLACED (wrong wording in the central planner)
 
-(a) **Counts the wrong party.** `_trust_terminal_shifts(_user_id, _role)` includes every cancelled row where `accepted_by IS NOT NULL`, with `outcome = 'cancelled'`, regardless of `cancelled_by`. So when a *doctor* cancels an accepted shift, the *requester's* reliability denominator gets a "cancelled" entry too. Violates the stated rule: "Reliability changes only when YOU cancel."
+`src/lib/feedback.ts` → `plan()` switch is the single rendering policy. Today its copy is generic and in some cases factually wrong. Replace each kind's templates:
 
-(b) **Score doesn't move until a block closes.** `recompute_trust` only writes `rl_score` from the *last closed block* (`rl_blocks_closed > 0`). Before the first 20 terminal shifts complete, score stays at the default 100 and never reflects current cancellations. Same problem at counts 21–39 (still showing block 1 = oldest 20).
+| Kind | Current copy (remove) | New copy (Audit 10) |
+|---|---|---|
+| `shift.started` (doctor) | "Your shift with {hospital} has started." + "Tap the active card for shift details." | "Your shift with {hospital} has started." (no subtitle) |
+| `shift.started` (requester) | "Doctor started the shift at {hospital}." | **No toast** — self-initiated. Remove. |
+| `shift.paused` (doctor) | "Your shift with {hospital} has been paused." + "Coverage timer is preserved…" | "{hospital} paused your shift until the next scheduled session." |
+| `shift.paused` (requester) | "Doctor paused the shift at {hospital}." | **No toast** — self-initiated. Remove. |
+| `shift.resumed` (doctor) | "Your shift with {hospital} has resumed." + "Coverage timer continues…" | "Your shift with {hospital} has resumed." (no subtitle) |
+| `shift.resumed` (requester) | "Doctor resumed the shift at {hospital}." | **No toast** — self-initiated. Remove. |
+| `shift.ended` (doctor) | "Your shift with {hospital} has ended." + **"Payment will be remitted to your account by 10PM today."** | "Your shift with {hospital} has ended. Payment processing has started." (single line, no payment-remittance subtitle — that belongs to `payment.settled`) |
+| `shift.ended` (requester) | "Doctor ended the shift at {hospital}." | **No toast** — self-initiated. Remove. |
+| `shift.updated` (doctor) | "{hospital} updated this shift" | "{hospital} updated your shift details." |
+| `shift.updated` (requester) | (same generic) | **No toast** — self-initiated. Remove. |
+| `shift.cancelled` (doctor) | "{hospital} cancelled shift" | "{hospital} cancelled the shift." |
+| `shift.cancelled` (requester) | "Doctor cancelled shift" | "Dr. {doctorName} cancelled the shift." |
+| `payment.settled` (doctor) | "Payment settled" | "Payment received for your shift with {hospital}. Remittance will be made by 10PM today." |
+| `payment.settled` (requester) | (not handled) | "Payment completed successfully for your shift with Dr. {doctorName}." |
+| `reminder.preshift` (doctor) | "Your shift with {hospital} starts in 1 hour" | "Reminder: your shift with {hospital} starts in 1 hour." |
+| `reminder.preshift` (requester) | (not handled) | "Reminder: Dr. {doctorName}'s shift starts in 1 hour." |
+| `rating.submitted` (new kind) | n/a | "Thank you for your feedback." (both roles) |
 
-(c) **Triggered only on rating insert.** `recompute_trust` is invoked exclusively from `_ratings_after_insert`. A cancellation/completion alone never recomputes — so reliability lags until somebody also rates.
+Add `doctorName` to `CanonicalEvent.ctx`; require it for every requester-facing message that references the doctor. Treat a missing `doctorName` or `hospitalName` as a data bug to fix upstream — do not ship "the doctor"/"the hospital" fallbacks anywhere in the planner.
 
-**Fix.**
-1. Rewrite `_trust_terminal_shifts(_user_id, _role)`:
-   - `completed` rows where the user was a participant → count toward both numerator & denominator.
-   - `cancelled` rows where `accepted_by IS NOT NULL` AND `cancelled_by = _user_id` → count toward denominator only (their cancellation).
-   - `cancelled` rows where the OTHER party cancelled → **excluded entirely** (no numerator, no denominator).
-   - `no_show` → counted against the no-show party only (use existing `cancelled_by` / outcome conventions).
-   - Pre-acceptance cancels (`accepted_by IS NULL`) — already excluded ✓.
-2. New trigger `trg_cr_recompute_trust_on_terminal` AFTER UPDATE OF `status` on `coverage_requests`: when row transitions to a terminal state (`completed`, `cancelled`, `no_show`), call `recompute_trust(requester_id)` and `recompute_trust(accepted_by)`.
-3. Score formula in `recompute_trust` updated per Audit 7 (below) — same change covers both.
+### A2. Haptics that must be REMOVED
+
+Audit 10 reserves haptic for `offer.new` only. Remove the haptic from every other kind in `plan()`:
+
+- `offer.accepted` — medium → none
+- `shift.started` — light → none
+- `shift.paused` — light → none
+- `shift.resumed` — light → none
+- `shift.ended` — light-medium → none
+- `shift.cancelled` — medium → none
+
+Keep `offer.new` medium haptic for the doctor only.
+
+### A3. Toasts firing from the WRONG event (the End Shift bug, and friends)
+
+`src/features/cover/dispatch.ts` `subscribeNetwork` branch reacts on `ev.action`. When the requester clicks End Shift:
+- The server flips `status` to `completed`, but the in-app network event currently surfaces as `action: "update"` first (see `src/lib/network.ts` `completeRequest` — applies no local patch with `action: "complete"`; the doctor side only sees the postgres_changes UPDATE).
+- Result: doctor receives "Hospital Y updated your shift" before (or instead of) `shift.ended`.
+
+Fix at the **event-source layer**, not the planner:
+- In `network.ts`, when an incoming row update transitions `status` from active/paused → `completed`/`cancelled`, classify the synthesized event as `action: "complete"` / `action: "cancel"` (not `"update"`). This is the single switch that prevents the wrong toast for end-shift.
+- Apply the same rule to terminal transitions on `start_shift`, `pause_shift`, `resume_shift`. If the row's status changed, the event MUST carry the lifecycle verb — never the generic `update`.
+
+In `dispatch.ts`, reorder the branch so `complete` / `cancel` are evaluated before `update`. Even with the network fix, this guarantees a stray `update` arriving for a terminal row is dropped (the terminal-kind version ceiling in `feedback.ts` already suppresses it, but defence-in-depth here is cheap).
+
+### A4. Push bodies that must be REPLACED (server side)
+
+`src/lib/coverage-notify.functions.ts`:
+- `claimAndNotifyFn` → currently: `"${doctorName} accepted your shift at ${hospital}"`. Replace with `"Dr. ${doctorName} accepted your request."`
+- `cancelAndNotifyFn` → currently: `"The doctor cancelled the shift at ${hospital}"` / `"The requester cancelled the shift at ${hospital}"`. Replace with `"Dr. ${doctorName} cancelled the shift."` / `"${hospital} cancelled the shift."`
+- `startAndNotifyFn` → push to doctor on `shift.started`. **REMOVE** — `start_shift` is always requester-initiated; doctor is the audience but the doctor-facing in-app toast is the foreground path. Keep a push only for backgrounded doctors using the same wording: `"Your shift with ${hospital} has started."` (no "${requesterName} started your shift" wording — that's not in the contract).
+
+`src/routes/api/public/monnify-webhook.ts`:
+- Currently pushes doctor: `"You've been paid ₦X for {hospital}"`. Replace with `"Payment received for your shift with ${hospital}. Remittance will be made by 10PM today."`
+- **ADD** a second push for the requester: `"Payment completed successfully for your shift with Dr. ${doctorName}."` Fetch `requester_id` + `doctor name` in the same `select`.
+
+`src/routes/api/public/hooks/shift-reminders.ts`:
+- Doctor push: replace `"Your shift starts in 1 hour" / "{hospital} — be ready to clock in."` with title `"Reminder"` body `"Your shift with ${hospital} starts in 1 hour."`
+- Requester push: replace `"Shift starts in 1 hour" / "{hospital} — your covering doctor will be ready shortly."` with title `"Reminder"` body `"Reminder: Dr. ${doctorName}'s shift starts in 1 hour."`
+- **Multi-day fix**: stop stamping `reminder_sent_at` as a single boolean. Use the existing per-day schedule (compute the per-day `start_ts` for each scheduled day of a multi-day shift) and dedupe against a per-day stamp — either a JSONB array column or a separate `reminder_sent_days` table. The cron must fire once per scheduled day, not once per row.
+
+### A5. Toasts that must be REMOVED
+
+`src/features/cover/dispatch.ts` line ~408–422 — the multi-day pause override (`Day X of N complete — shift with {hospital} moved to Upcoming.` + `Resume on the next scheduled day to continue.`) Remove the override entirely; the planner's new copy ("{hospital} paused your shift until the next scheduled session.") is the only message. The Day-X-of-N visibility belongs in the card UI (Audit 9), not in the toast.
+
+`src/features/request/RequesterHome.tsx` — currently produces zero canonical lifecycle ingests. After Audit 10, the requester is also an audience for `offer.accepted` / `shift.cancelled` (when doctor cancels) / `payment.settled` / `reminder.preshift` / `rating.submitted`. Wire a requester-side mirror of `dispatch.ts` that listens to the same network events and calls `ingest()` with `audience: "requester"`. **Do not** add raw `pushToast` calls for lifecycle events; they bypass dedupe.
+
+### A6. Toasts that must REMAIN unchanged (operational, not lifecycle)
+
+These are out of Audit 10's scope and must not be touched:
+- `network.ts` warn toasts for failed RPCs ("Couldn't start this shift" / "Couldn't pause…" / "Couldn't end…") — operational errors, single-channel by definition.
+- `RequesterHome.tsx` request-form guards ("Coverage requests start from today", "limited to 14 days", "FlashLocum is only available in Lagos", "Couldn't load that location") — form validation, not lifecycle.
+- `RequesterHome.tsx` expiry toast ("No doctor accepted this request in time") — keep; this is the requester's `request.expired` signal and Audit 10 leaves it as-is.
+- `CoverHome.tsx` upload/verification toasts ("Re-uploaded", "Refreshing your location…") — operational, presence-related, not in the lifecycle contract.
+- `ShiftSettlement.tsx` rating-failure toast ("Couldn't save rating…") — keep as the warn-path; add a new positive path (see A7).
+
+### A7. Notifications that must be ADDED (new outputs required by the contract)
+
+| Event | New output | Where to wire |
+|---|---|---|
+| `offer.new` background push | "New coverage request available" — only path that uses device sound + vibration | New server fn invoked from the broadcast/dispatch fan-out; recipients = `list_open_coverage_requests` snapshot, gated `online=true` |
+| `offer.accepted` requester toast | "Dr. {doctorName} accepted your request." | Requester-side `ingest()` from new `RequesterHome` lifecycle subscriber |
+| `shift.updated` doctor push (background only) | "{hospital} updated your shift details." | Extend `coverage-notify` with `updateAndNotifyFn`, called by the requester's update RPC |
+| `shift.paused/resumed` doctor push | Match A1 copy | Same place |
+| `shift.ended` doctor push | "Your shift with {hospital} has ended. Payment processing has started." | Triggered the moment the requester's End Shift RPC succeeds — push from a new `endAndNotifyFn` wrapper around `end_shift`, mirroring `startAndNotifyFn` |
+| `payment.settled` requester push | "Payment completed successfully for your shift with Dr. {doctorName}." | `monnify-webhook` — add second `sendPushToUser` call |
+| `rating.submitted` toast | "Thank you for your feedback." | Add new kind to `feedback.ts`; emit from `ShiftSettlement.tsx` on RPC success (both roles) |
+
+### A8. Duplicates and ordering hazards to fix
+
+1. **Foreground push re-ingest.** `push-registration.ts` re-ingests OS push payloads through the in-app engine. Audit 10 requires *exactly one* output per event per recipient. The 6-second dedupe key collapses identical `kind:entityId:version` triples, but server pushes today use `Date.now()` as their version, which won't match the realtime `updatedAt`. **Standardize the version**: every server push must use the row's `updated_at` (epoch ms) as its `version`, identical to the realtime path. Without this, push + realtime are two different versions and both render.
+2. **Visibility gate.** Add a single product rule at `ingest()`: if recipient is visible AND `source === "push"`, drop the push (the realtime/local path will own the toast). If recipient is hidden AND `source !== "push"`, render nothing and let the OS banner show. This is the canonical "one channel per event" enforcement; the dedupe ledger remains as belt-and-braces.
+3. **Cancellation push asymmetry.** `cancelAndNotifyFn` currently only pushes the counterparty. Audit 10 keeps that rule (self-initiated → silent), so this is already correct — flagged so it isn't "fixed" by mistake.
+4. **End-shift double toast.** Fixed by A3 (event classification at the network layer) plus terminal-kind version ceiling already in `feedback.ts`.
 
 ---
 
-### AUDIT 7 — Latest-20 not enforced
+## Part B — Implementation Order
 
-**Root cause.** `recompute_trust` uses **closed blocks of 20** (block 1 = ratings 1–20, block 2 = ratings 21–40, etc.) and the displayed score is the *last closed block*. Two failure modes:
-- At 25 ratings: shows block 1 (oldest 20) instead of latest 20.
-- At <20 ratings: shows default 5.0 / 100 — current behavior never reflects them.
-
-This applies equally to rating and reliability.
-
-**Fix.** Switch to a true rolling latest-20 in `recompute_trust`:
-
-```sql
--- rating (rolling)
-WITH latest AS (
-  SELECT score FROM public._trust_ratings_received(_user_id)
-  ORDER BY created_at DESC LIMIT 20
-)
-SELECT COALESCE(AVG(score)::numeric(4,2), 5.0), COUNT(*)
-  INTO rt_score, rt_sample_size FROM latest;
-
--- reliability (rolling)
-WITH latest AS (
-  SELECT outcome FROM public._trust_terminal_shifts(_user_id, v_role)
-  ORDER BY terminal_at DESC LIMIT 20
-)
-SELECT COUNT(*) FILTER (WHERE outcome='completed'),
-       COUNT(*)
-  INTO rl_completed, rl_sample_size FROM latest;
-rl_score := CASE WHEN rl_sample_size > 0
-                 THEN ROUND(rl_completed::numeric / rl_sample_size * 100)
-                 ELSE 100 END;
-```
-
-Keep `trust_blocks` table for historical/audit display (already populated by existing code), but the live `trust_snapshot.rating.score` and `reliability.score` come from the rolling-20 window. Snapshot payload exposes `sample_size` so the UI can render "Based on your last N shifts" honestly when N < 20.
-
-Admin dashboard reads `profiles.trust_snapshot` → automatically picks up the corrected score the moment `recompute_trust` is re-invoked. Add a one-shot backfill at the end of the migration: `SELECT public.recompute_trust(id) FROM public.profiles;` so every existing snapshot is rewritten under the new rules.
+1. **Planner copy + haptic cleanup** — rewrite `plan()` in `feedback.ts` for every kind in A1, remove haptics per A2, add `doctorName` to `ctx`, add new `rating.submitted` kind.
+2. **Event-source classification** — patch `network.ts` so terminal transitions emit `complete` / `cancel` actions, not `update`. Reorder `dispatch.ts` branches so terminal kinds win.
+3. **Version standardization** — every server push uses the row's `updated_at` as `version`. Update `coverage-notify.functions.ts`, `monnify-webhook.ts`, `shift-reminders.ts`.
+4. **Visibility gate** in `ingest()` — push dropped when foreground, in-app dropped when backgrounded.
+5. **Server push body rewrites** — A4 wording changes in `coverage-notify.functions.ts`, `monnify-webhook.ts`, `shift-reminders.ts`.
+6. **Add missing outputs** — A7: new `endAndNotifyFn`, `updateAndNotifyFn`, requester-side `payment.settled` push, offer.new background push, rating-submitted toast.
+7. **Requester-side lifecycle subscriber** — new module mirroring `dispatch.ts`'s `subscribeNetwork`, scoped to `requester` audience, wired into `RequesterHome`.
+8. **Remove dead overrides** — drop the multi-day pause copy override in `dispatch.ts`; drop any `pushToast` lifecycle calls left over after Step 7.
+9. **Multi-day reminder per-day fix** — replace single `reminder_sent_at` with per-day stamping.
+10. **Verify by walking each lifecycle** on two devices (single-day and multi-day; doctor cancel, requester cancel, payment success). Confirm exactly one feedback outcome per event per recipient.
 
 ---
 
-### AUDIT 8 — Sign-out doesn't always force offline
+## Part C — Cleanup Report Summary
 
-**Root cause.** `__root.tsx`'s `subscribeAuthState(SIGNED_OUT)` calls `unregisterDoctor()` → `clearMyPresence()`. `clearMyPresence` reads `getCurrentUserIdSync()`, but by the time the SIGNED_OUT event fires Supabase has already cleared the session, so `uid === null` and the function **early-returns without writing**. The presence row remains `online=true` until its 60s freshness window expires — the doctor "stays online" to other requesters.
+| Item | Action |
+|---|---|
+| All current lifecycle copy in `feedback.ts plan()` | REPLACE |
+| Haptics on every kind except `offer.new` | REMOVE |
+| Multi-day pause toast override in `dispatch.ts` | REMOVE |
+| Generic actor wording ("the doctor", "the hospital", "this shift") | REPLACE with real names |
+| `shift.updated` firing for end-shift transitions | FIX at event source |
+| Server push versions using `Date.now()` | REPLACE with row `updated_at` |
+| Foreground OS-push re-ingest with no visibility gate | GATE in `ingest()` |
+| Operational warn toasts (network failures, form validation, location, uploads) | KEEP unchanged |
+| Request-expiry toast in `RequesterHome` | KEEP unchanged |
+| Rating-failure toast in `ShiftSettlement` | KEEP; add rating-success path |
+| Requester-side lifecycle ingest (offer.accepted, shift.cancelled, payment.settled, rating, preshift) | ADD |
+| Per-day pre-shift reminder for multi-day shifts | ADD |
+| Background push for `offer.new` | ADD |
 
-`AccountScreen.tsx:252` and `auth.$role.tsx:72` call `supabase.auth.signOut()` directly without first clearing presence. `pagehide`/`beforeunload` beacons (added previously) cover tab close, but not the in-app sign-out path.
-
-**Fix.**
-1. Add `clearMyPresenceForUser(uid)` to `presence-remote.ts` that accepts an explicit uid (does not consult auth) and PATCHes `doctor_presence` with `online=false`, `last_seen=now()`.
-2. Create `src/lib/sign-out.ts` exporting `signOutAndClearPresence()`:
-   - Read current uid via `supabase.auth.getUser()` (or `getCurrentUserIdSync`) BEFORE sign-out.
-   - `await clearMyPresenceForUser(uid)` (await — must land before sign-out invalidates the bearer).
-   - `await supabase.auth.signOut()`.
-3. Replace all in-app sign-out call sites (`AccountScreen.tsx`, `auth.$role.tsx`, `reset-password.tsx`) with `signOutAndClearPresence()`.
-4. As a backstop, change `__root.tsx`'s SIGNED_OUT handler to capture `session?.user?.id` from the previous event (cache the last seen userId via a module-scope ref in `auth-ready.ts`) and call `clearMyPresenceForUser(prevUid)` even if the wrapper above was bypassed.
-
-After this, a signed-out doctor's row flips to `online=false` synchronously, the realtime DELETE/UPDATE propagates, every requester's `subscribePresence` snapshot drops them within one tick, the admin online-doctor count decrements immediately, and dispatch broadcasts skip them (`list_open_coverage_requests` already gates on `dp.online = true`).
-
----
-
-### AUDIT 9 — Multi-day day counter visibility
-
-**Server-side: already correct.**
-- `start_shift` sets `day_index = GREATEST(1, COALESCE(r.day_index, 1))`.
-- `pause_shift` advances `day_index` to `LEAST(days, day_index + 1)` and freezes the day's billed amount.
-- `resume_shift` preserves `day_index` (does NOT increment).
-- `_auto_advance_day_boundary` cron also advances `+1` at the booked-per-day boundary.
-- `end_shift` persists final `day_index` so completed history reads correctly.
-
-**Client-side: gaps.** The Day-counter badge IS rendered in `CoverDispatchPortal` (incoming & accepted cards) and in `CoverageScreen` (requester Active/Upcoming/History lists). It is **missing** from:
-- `CoverHome.tsx` → `CoverageTile` — the doctor's home-screen focus tile (the "Active coverage" / "Next coverage" card) never shows `Day X of N`.
-- `RequesterHome.tsx` — the active-coverage overlay on the requester's map home does not show `Day X of N` either.
-
-**Fix.**
-1. In `CoverHome.tsx` `CoverageTile`, render the same `Day {dayIndex} of {days}` pill that `CoverDispatchPortal` uses, gated on `coverage.days > 1`. Source `dayIndex` from the same `Coverage` shape (already includes `days` and `dayIndex` — `dispatch.ts:88`).
-2. In `RequesterHome.tsx`, where the accepted/active coverage chip is rendered (the floating tile that shows hospital + meta during dispatch/accepted/active), add the same pill, gated on `days > 1`. Pull `dayIndex` from the matching `net.requests[requestId]` row.
-3. Verify `fmtOpMeta` is unchanged — the badge is a separate element so the meta line stays readable.
-
-No DB change for Audit 9.
-
----
-
-## Implementation Order
-
-1. **Audit 5** — Migration: fix `prevent_requester_sensitive_change`, drop duplicate trigger, harden `_ratings_after_insert`.
-2. **Audit 7** — Migration: rewrite `recompute_trust` to use rolling latest-20 for both rating and reliability; backfill all snapshots.
-3. **Audit 6** — Migration: rewrite `_trust_terminal_shifts` to attribute cancellations to `cancelled_by` only; add `trg_cr_recompute_trust_on_terminal` AFTER-UPDATE-OF-status trigger.
-4. **Audit 8** — Frontend: `clearMyPresenceForUser(uid)` + `signOutAndClearPresence()`; replace sign-out call sites; cache previous uid in `auth-ready.ts` for the root SIGNED_OUT backstop.
-5. **Audit 9** — Frontend: add Day-X-of-N pill to `CoverHome` `CoverageTile` and the requester active-coverage overlay in `RequesterHome`.
+End-state: one canonical planner, one channel per event per recipient, actor-named copy, haptic reserved for the one event that needs it.
 
 **Awaiting approval.**
