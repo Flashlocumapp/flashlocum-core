@@ -438,13 +438,15 @@ function CoverageTile({
       </div>
       <div className="text-[12.5px] text-muted-foreground">{coverage.area}</div>
 
-      <div className="mt-2 text-[12.5px] leading-snug text-foreground/80">
-        {fmtOpMeta(coverage.coverage, coverage.day, coverage.start, coverage.end, coverage.durationHrs, coverage.amount)}
-        {(coverage.days ?? 1) > 1 && (
-          <span className="ml-2 inline-flex h-4 items-center rounded-full bg-secondary/80 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
+      {(coverage.days ?? 1) > 1 && (
+        <div className="mt-2">
+          <span className="inline-flex h-4 items-center rounded-full bg-secondary/80 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
             Day {Math.min(coverage.dayIndex ?? 1, coverage.days ?? 1)} of {coverage.days}
           </span>
-        )}
+        </div>
+      )}
+      <div className="mt-1 text-[12.5px] leading-snug text-foreground/80">
+        {fmtOpMeta(coverage.coverage, coverage.day, coverage.start, coverage.end, coverage.durationHrs, coverage.amount)}
       </div>
 
       <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
