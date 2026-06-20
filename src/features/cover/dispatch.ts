@@ -405,21 +405,16 @@ export function ensureDoctorSession(initialOnline = true) {
         }),
       );
     } else if (ev.action === "pause") {
-      const isMulti = (r.days ?? 1) > 1;
-      const completedDay = Math.max(1, (r.dayIndex ?? 1) - 1);
+      // Planner owns the copy — "Hospital X paused your shift until the next
+      // scheduled session." The Day X of N indicator lives on the card UI
+      // (Audit 9), not in the toast.
       ingest(
         fromRealtime({
           kind: "shift.paused",
           entityId: r.id,
           audience: "doctor",
           updatedAt: r.updatedAt,
-          ctx: {
-            hospitalName: r.hospital,
-            title: isMulti
-              ? `Day ${completedDay} of ${r.days} complete — shift with ${r.hospital} moved to Upcoming.`
-              : undefined,
-            body: isMulti ? "Resume on the next scheduled day to continue." : undefined,
-          },
+          ctx: { hospitalName: r.hospital },
         }),
       );
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
