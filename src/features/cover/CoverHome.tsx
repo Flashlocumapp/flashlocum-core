@@ -108,11 +108,32 @@ export function CoverHome({ active = true }: { active?: boolean }) {
       {/* top primary Online/Offline pill */}
       <header className="absolute inset-x-0 top-0 z-30">
         <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 pt-3">
-          <OnlinePill
-            online={online && approved}
-            disabled={!approved}
-            onToggle={handleToggleOnline}
-          />
+          <div className="flex items-center gap-2">
+            <OnlinePill
+              online={online && approved}
+              disabled={!approved}
+              onToggle={handleToggleOnline}
+            />
+            {online && approved && (
+              <button
+                type="button"
+                onClick={handleRefreshLocation}
+                title="Refresh my location"
+                aria-label="Refresh my location"
+                className="flex h-9 w-9 items-center justify-center rounded-full active:scale-[0.96] transition-transform"
+                style={{
+                  background: "var(--color-surface-elevated)",
+                  border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
+                  boxShadow: "0 4px 18px -4px rgba(0,0,0,0.18)",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+              </button>
+            )}
+          </div>
           {verification && !approved && <VerificationBanner status={verification} />}
           {verification === "action_required" && <ActionRequiredCard />}
         </div>
