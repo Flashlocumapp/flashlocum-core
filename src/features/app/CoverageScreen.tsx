@@ -1217,6 +1217,13 @@ function CoverCard({
         )}
       </div>
 
+      {!isHistory && (item as CoverItem).days > 1 && (
+        <div className="mt-1.5">
+          <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
+            Day {Math.min((item as CoverItem).dayIndex ?? 1, (item as CoverItem).days)} of {(item as CoverItem).days}
+          </span>
+        </div>
+      )}
       <div
         className="mt-1.5 text-[12.5px] leading-snug"
         style={{
