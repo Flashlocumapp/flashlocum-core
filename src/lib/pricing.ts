@@ -397,7 +397,10 @@ export function computeWorkedPricing(
       return Math.round((bill / 60) * homeRate * busyMult);
     };
     const todayAmount = priceHomeDay(worked);
-    const priorDaysAmount = (d - 1) * priceHomeDay(bookedPerDay);
+    const priorDaysAmount =
+      typeof priorBilledAmount === "number" && priorBilledAmount >= 0
+        ? priorBilledAmount
+        : (d - 1) * priceHomeDay(bookedPerDay);
     return {
       amount: todayAmount + priorDaysAmount,
       billableMinutes: Math.ceil(worked / homeBlock) * homeBlock,
