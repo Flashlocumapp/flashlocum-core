@@ -731,18 +731,51 @@ export function isDeclined(d: { declined?: string[] } | undefined, id: string, r
 
 
 
+/** Best-effort offline write on tab close. Uses fetch keepalive + the
+ *  current Supabase session bearer so the row flips to online=false even
+ *  when the page is being unloaded (a normal async call wouldn't complete
+ *  in time). Falls back to a regular `clearMyPresence()` write. */
+async function beaconOffline() {
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (!url || !apikey || !uid || !session?.access_token) return;
+    await fetch(`${url}/rest/v1/doctor_presence?user_id=eq.${uid}`, {
+      method: "PATCH",
+      keepalive: true,
+      headers: {
+        apikey,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ online: false, last_seen: new Date().toISOString() }),
+    });
+  } catch {
+    // Swallow — best-effort.
+  }
+}
+
 export function startHeartbeat() {
   if (typeof window === "undefined") return () => {};
   const t = window.setInterval(() => heartbeat(), HEARTBEAT_MS);
   const visibility = () => {
     if (document.visibilityState === "visible") heartbeat();
   };
+  const onPageHide = () => {
+    unregisterDoctor();
+    void beaconOffline();
+  };
   document.addEventListener("visibilitychange", visibility);
-  window.addEventListener("beforeunload", unregisterDoctor);
+  window.addEventListener("beforeunload", onPageHide);
+  window.addEventListener("pagehide", onPageHide);
   return () => {
     window.clearInterval(t);
     document.removeEventListener("visibilitychange", visibility);
-    window.removeEventListener("beforeunload", unregisterDoctor);
+    window.removeEventListener("beforeunload", onPageHide);
+    window.removeEventListener("pagehide", onPageHide);
   };
 }
 
