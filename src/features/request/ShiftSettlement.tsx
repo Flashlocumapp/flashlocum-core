@@ -1427,24 +1427,12 @@ function CustomTransferPane({
     : PRICE_HOLD_SEC;
   const expired = startedAtRef.current != null && remaining === 0;
 
-  // When the price hold expires AND the live recomputed amount differs from
-  // the locked transfer amount, automatically re-issue the transfer account
-  // so the Payment page always reflects the current source-of-truth amount
-  // (matching Settlement, Coverage History, etc.). Reset anchor so the new
-  // 15-min hold restarts.
-  const refreshedRef = useRef(false);
-  useEffect(() => {
-    if (!expired) {
-      refreshedRef.current = false;
-      return;
-    }
-    if (refreshedRef.current) return;
-    if (account && amount > account.amount && !paymentTriggered) {
-      refreshedRef.current = true;
-      startedAtRef.current = null;
-      onRetry();
-    }
-  }, [expired, amount, account, paymentTriggered, onRetry]);
+  // Price-hold expiry is informational only. The amount on screen is whatever
+  // the server-frozen Monnify virtual account says — we do NOT silently
+  // re-mint a fresh account at a higher local estimate, because the local
+  // estimate over-counts prior closed days (root cause of the ₦42,000 lie).
+  // If the server bill genuinely changes, end_shift / billing poll will
+  // refresh `frozenAmountRef` and any retry will be user-initiated.
 
   // The Monnify virtual account is the single source of truth for the amount
   // to pay. We display `account.amount` verbatim — never an inflated local
