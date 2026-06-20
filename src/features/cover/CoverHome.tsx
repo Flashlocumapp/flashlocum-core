@@ -20,6 +20,11 @@ import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
 import { useMyProfile } from "@/lib/profile-remote";
 import { uploadDoctorSelfie, uploadDoctorDocument } from "@/lib/doctor-uploads";
+import {
+  refreshDoctorLocation,
+  startDoctorLocationRefresh,
+  stopDoctorLocationRefresh,
+} from "@/lib/doctor-gps";
 
 
 /**
