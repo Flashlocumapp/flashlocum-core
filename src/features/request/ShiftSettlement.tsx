@@ -181,6 +181,20 @@ export function ShiftSettlement({
     : 0;
   const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = billableMinutes(workedMin);
+  // Authoritative sum of `shift_segments.billed_amount` for already-closed
+  // days, hydrated from the billing poll below. Passed into computeWorkedPricing
+  // so prior days come from the server ledger — not a booked-length estimate —
+  // killing the multi-day over-estimate that caused the Monnify ₦42,000 lie.
+  const priorBilled = useMemo(() => {
+    if (!segments.length) return undefined;
+    let sum = 0;
+    for (const s of segments) {
+      if (s.ended_at && typeof s.billed_amount === "number") sum += s.billed_amount;
+    }
+    // Exclude today's still-open segment (ended_at == null). The remaining
+    // closed-segment sum is the authoritative prior-day total.
+    return sum;
+  }, [segments]);
   const totalAmount = useMemo(
     () =>
       computeWorkedPricing(
@@ -191,8 +205,9 @@ export function ShiftSettlement({
         shift.days,
         shift.environment ?? "normal",
         bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+        priorBilled,
       ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin],
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
