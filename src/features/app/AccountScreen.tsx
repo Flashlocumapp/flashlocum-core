@@ -249,7 +249,8 @@ export function AccountScreen() {
                 await queryClient.cancelQueries();
                 unregisterDoctor();
                 queryClient.clear();
-                await supabase.auth.signOut();
+                const { signOutAndClearPresence } = await import("@/lib/sign-out");
+                await signOutAndClearPresence();
                 navigate({ to: "/role", replace: true });
               }}
               tone="muted"

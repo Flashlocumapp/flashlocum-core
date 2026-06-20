@@ -98,9 +98,21 @@ function RootComponent() {
   usePushRegistration();
   useEffect(() => {
     let sawSignOut = false;
+    let lastUid: string | null = null;
     return subscribeAuthState(({ event, session }) => {
       if (event === "SIGNED_OUT" && !session) {
         sawSignOut = true;
+        const prevUid = lastUid;
+        lastUid = null;
+        // Backstop: if any in-app sign-out call site forgot to use
+        // signOutAndClearPresence(), flip presence offline here using the
+        // last known uid. clearMyPresence() alone would no-op because
+        // auth.uid() is already null at this point.
+        if (prevUid) {
+          void import("@/lib/presence-remote").then(({ clearMyPresenceForUser }) =>
+            clearMyPresenceForUser(prevUid),
+          );
+        }
         unregisterDoctor();
         void queryClient.cancelQueries().finally(() => {
           queryClient.clear();
@@ -109,6 +121,7 @@ function RootComponent() {
         });
         return;
       }
+      if (session?.user?.id) lastUid = session.user.id;
       if (event === "SIGNED_IN" && session && sawSignOut) {
         sawSignOut = false;
         void router.invalidate();
