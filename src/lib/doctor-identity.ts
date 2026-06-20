@@ -30,7 +30,15 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
     const rows = JSON.parse(raw) as DoctorIdentity[];
     if (!Array.isArray(rows)) return out;
     for (const row of rows) {
-      if (row?.id && row.loaded) out.set(row.id, row);
+      if (!row?.id || !row.loaded) continue;
+      // Backfill selfiePath for entries persisted before the signed-URL split.
+      const path = row.selfiePath ?? row.selfieUrl ?? null;
+      const isAbsolute = !!path && /^(https?:|data:|blob:)/i.test(path);
+      out.set(row.id, {
+        ...row,
+        selfiePath: path,
+        selfieUrl: isAbsolute ? path : null,
+      });
     }
   } catch {
     /* ignore malformed / privacy-mode storage */
