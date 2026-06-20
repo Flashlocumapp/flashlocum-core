@@ -1268,19 +1268,27 @@ function DispatchOverlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
-  // Pause / resume broadcasting whenever the cancel or edit sheet is open.
-  // Pre-acceptance only — the `acceptedBy` check is the only safe gate;
-  // pauseRequest/resumeRequest themselves no-op when status already matches
-  // the target. We deliberately do NOT gate on `startedAt`/`accumulatedMs`
-  // because those fields can carry stale realtime echoes from earlier
-  // edit/resume cycles and silently blocked the second pause.
+  // Pause / resume broadcasting whenever the cancel sheet, the edit sheet,
+  // OR the configure stage is active for a pre-acceptance request.
+  // "Edit Request" navigates to the configure stage rather than opening
+  // the edit sheet — without including stage==='configure' here, the
+  // broadcast stays live and the doctor's incoming card never goes down
+  // while the requester is editing, which is what made the second Edit
+  // Request fail to propagate (the trigger-driven diff bump is a no-op
+  // when the re-sent patch equals the current row).
+  const editingFromDispatch =
+    stage === "configure" &&
+    requestId != null &&
+    !!net.requests[requestId] &&
+    !net.requests[requestId]?.acceptedBy;
+  const pausedForBroadcast = paused || editingFromDispatch;
   useEffect(() => {
     if (!requestId) return;
     const cur = net.requests[requestId];
     if (!cur || cur.acceptedBy) return;
-    if (paused) pauseRequest(requestId);
+    if (pausedForBroadcast) pauseRequest(requestId);
     else if (stage === "dispatch") resumeRequest(requestId);
-  }, [paused, requestId, stage, net]);
+  }, [pausedForBroadcast, requestId, stage, net]);
 
   // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
   // re-publish and dismiss-resume (paused → searching) automatically restart

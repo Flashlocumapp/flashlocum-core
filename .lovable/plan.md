@@ -1,35 +1,123 @@
 ## Root cause
 
-The DB realtime UPDATE for "doctor went offline" **is** being delivered to requesters (the previous RLS fix unblocked it). The delay is now entirely client-side, in two layers that conspire to hide the offline transition for up to 2 minutes:
+The pre-acceptance "Edit Request" button is supposed to take the doctor's Incoming Coverage card **down** while the requester edits, and put it back **fresh** (new `rev` + reset 180s broadcast window) when the requester re-publishes. The intended mechanism is `status: searching → paused → searching`, driven by `pauseRequest()` / `resumeRequest()`.
 
-1. `src/lib/presence-remote.ts` → `buildSnapshot()` filters out any row where `online === false`. So when the realtime UPDATE arrives flipping a doctor to offline, the snapshot emitted to subscribers simply **omits** that doctor (instead of emitting them with `online:false`).
+The "Edit Request" button currently does only `setStage("configure")`. It does **not** open the `editOpen` bottom sheet or set `cancelOpen`. The pause/resume effect that watches those flags therefore never fires for this path:
 
-2. `src/lib/network.ts` → `mergePresenceRows()` sees the doctor missing from the incoming snapshot, then applies a `PRESENCE_PRESERVE_MS = 2 * 60 * 1000` fallback that **keeps the previous entry with `online:true`** as long as `lastSeen` is under 2 minutes old. The map's `onlineDoctors(net)` selector then keeps rendering that doctor as online.
+```ts
+// src/features/request/RequesterHome.tsx (≈1271–1283)
+const paused = cancelOpen || editOpen;
+useEffect(() => {
+  if (!requestId) return;
+  const cur = net.requests[requestId];
+  if (!cur || cur.acceptedBy) return;
+  if (paused) pauseRequest(requestId);
+  else if (stage === "dispatch") resumeRequest(requestId);
+}, [paused, requestId, stage, net]);
+```
 
-Net effect: ONLINE→OFFLINE takes ~2 min to propagate visually (whichever expires first: server-side cron flipping `online=false`, or the 2-min client preserve window). OFFLINE→ONLINE looks instant because the row is now present with `online:true`, overwriting any stale entry immediately.
+When stage goes `dispatch → configure` for "Edit Request":
+- `paused` is still `false` (no sheet open).
+- `stage !== "dispatch"`, so the `else if` does nothing.
+- **The DB row stays `searching`.** No invalidate is emitted. The doctor's card stays on screen showing the OLD content.
 
-The preserve fallback's stated purpose (smoothing a flicker while a now-removed client-side approval check resolved) no longer applies — approval is filtered server-side in `list_online_approved_doctors` and RLS, and the local doctor's own toggle path already updates state synchronously.
+When stage goes `configure → dispatch` (user taps "Find Doctor"), the publish effect's reuse branch runs:
 
-## Fix (frontend only)
+```ts
+// (≈1215–1234)
+if (cur && canReuseRequest) {
+  updateRequest(cur.id, { /* new fields */ });
+  resumeRequest(cur.id);  // guard: status === "broadcasting" → return
+  return;
+}
+```
 
-Two minimal edits, no schema or RLS changes:
+`resumeRequest` short-circuits because `cur.status` is still `"broadcasting"` (it was never paused). The only thing that propagates to doctors is whatever `bump_request_rev_on_change` decides from the `updateRequest` patch:
 
-1. **`src/lib/presence-remote.ts` — `buildSnapshot()`**
-   - Remove the `if (!r.online) continue;` filter. Emit every row in `rawRows`, including those with `online:false`.
-   - Update the comment block accordingly: presence-remote is now a pass-through cache; the *rendering* layer decides which doctors are visible.
+```sql
+material_changed :=
+  NEW.hospital IS DISTINCT FROM OLD.hospital
+  OR NEW.start_time IS DISTINCT FROM OLD.start_time
+  ...
+```
 
-2. **`src/lib/network.ts` — `mergePresenceRows()`**
-   - Delete the `PRESENCE_PRESERVE_MS` constant and the trailing "preserve prev entry when missing" loop.
-   - The merge becomes a straight projection of the incoming rows into `state.doctors`. A doctor flipped to `online:false` now arrives explicitly with that flag and the `onlineDoctors()` selector drops them on the next render.
+### Why it "works once" then stops
 
-No other call site needs to change:
-- `onlineDoctors(net)` (line 1189) already filters by `d.online`.
-- `GoogleMapBackground` only renders markers for the doctors handed in, so offline doctors disappear from the map immediately.
-- The local doctor's own UI continues to write `upsertMyPresence` synchronously, so their own toggle is unaffected.
+On the **first** Edit Request the patch usually carries a value that differs from the DB row (the row still holds the original create-time fields), so `material_changed = true`, the trigger bumps `rev` and `broadcast_started_at`, `coverage_requests_emit_invalidate` fires, doctors refresh, and the card content changes.
+
+On the **second** Edit Request the requester's `updateRequest` patch is computed from the same `draft` / `coverage` / `days` / `location` state used last time. The publish effect re-sends the full block — `hospital`, `area`, `coverage`, `day`, `start`, `end`, `durationHrs`, `amount`, `note`, `startTs`, `endTs`, `days`, `environment`. After the first edit cycle, all of those fields in the DB already equal what the requester is about to send (the requester's only "real" change is something already reflected in `draft`, or a string-equal repeat). `material_changed` evaluates to `false`, so:
+
+- `bump_request_rev_on_change` does NOT bump `rev` or `broadcast_started_at`.
+- `coverage_requests_emit_invalidate.should_emit` evaluates to `false` (no status change, no `broadcast_started_at`/`rev` change, no `accepted_by` change).
+- No realtime broadcast goes out.
+- Doctors never refresh, and the card stays with the previous values — exactly what the user is reporting.
+
+This is not a workaround we can paper over by always touching some field; the design depends on a deterministic pause → republish lifecycle.
+
+## Real fix
+
+Make "Edit Request" an explicit, idempotent pause/republish — exactly the contract `pauseRequest` / `resumeRequest` were written for — instead of leaving the broadcast running and hoping the trigger detects a diff.
+
+### 1. `src/features/request/RequesterHome.tsx` — pause whenever the requester leaves dispatch to edit
+
+Extend the pause condition to include "user has navigated away from dispatch with an active pre-acceptance request" (i.e. they are in the configure stage editing this request):
+
+```ts
+const editingFromDispatch =
+  stage === "configure" && requestId != null && !net.requests[requestId]?.acceptedBy;
+const pausedForBroadcast = paused || editingFromDispatch;
+
+useEffect(() => {
+  if (!requestId) return;
+  const cur = net.requests[requestId];
+  if (!cur || cur.acceptedBy) return;
+  if (pausedForBroadcast) pauseRequest(requestId);
+  else if (stage === "dispatch") resumeRequest(requestId);
+}, [pausedForBroadcast, requestId, stage, net]);
+```
+
+Effect: tapping "Edit Request" immediately transitions the row to `paused` on the server, `coverage_requests_emit_invalidate` fires (status change), every doctor's `coverage_invalidations` channel triggers a refresh, and `list_open_coverage_requests` excludes paused rows — the card disappears within one realtime cycle. Idempotent on subsequent edits because `pauseRequest` early-returns when status is already `paused`.
+
+### 2. `src/lib/network.ts` — make `resumeRequest` deterministic instead of "only if currently paused"
+
+The current `resumeRequest` returns early when `status === "broadcasting"`, which is why a second Find-Doctor tap produces no rev bump if the pause never ran. With fix #1 the row will be `paused` before every resume, but we should also harden the function so a missed/echoed local state can't silently swallow the bump:
+
+```ts
+export function resumeRequest(id: string) {
+  refreshState();
+  const cur = state.requests[id];
+  if (!cur) return;
+  if (cur.acceptedBy) return;            // accepted shifts use resume_shift RPC
+  if (cur.status !== "broadcasting" && cur.status !== "paused") return;
+  // Always bump locally; the server trigger will re-bump on paused→searching.
+  applyPatch(
+    id,
+    {
+      status: "broadcasting",
+      broadcastStartedAt: simNow(),
+      rev: (cur.rev ?? 1) + 1,
+    },
+    { actor: "requester", actorId: getSessionId(), action: "resume" },
+  );
+}
+```
+
+Why this matters: even with #1 in place, the local store may briefly observe `status: "broadcasting"` between optimistic writes and realtime echoes. We never want a Find-Doctor tap to be a no-op when the requester is actively re-publishing.
+
+### 3. Database — let `coverage_requests_emit_invalidate` fan out resume even if `rev` is bumped only client-side
+
+`bump_request_rev_on_change` already bumps `rev` + `broadcast_started_at` on `paused → searching`, so this is now consistent for the Edit Request flow. No migration is needed for correctness with fix #1 + #2.
+
+We are intentionally NOT proposing "always bump `rev` on every update" — that breaks the doctor's `(id, rev)` decline-key contract by making every keystroke look like a fresh offer.
 
 ## Verification after build
 
-- Doctor A toggles Offline → requester B sees the marker disappear within one realtime tick (sub-second on the same network), with no reload.
-- Doctor A toggles Online → marker reappears immediately (unchanged from today).
-- Doctor A signs out → `signOutAndClearPresence` writes `online:false` before tearing down the session; marker disappears immediately.
-- No regression to the local doctor's own Online/Offline pill (driven by `useDispatch`, not the presence snapshot).
+Manual, with two devices:
+
+1. Requester creates a request → doctor sees the card.
+2. Requester taps **Edit Request** → doctor's card disappears within ~1s (status paused, RPC excludes paused).
+3. Requester edits → taps Find Doctor → doctor's card reappears with the updated fields, fresh 180s window, `rev` incremented.
+4. Repeat steps 2–3 a second, third, fourth time. Each cycle the card disappears on Edit and reappears on Find Doctor with the new content — no manual refresh, no reload.
+5. Edge case: Requester taps Edit Request, makes NO changes, taps Find Doctor → card still disappears and reappears (now correct, because pause/resume is now status-driven rather than diff-driven).
+
+DB sanity checks (optional, via SQL): after each Edit Request, confirm `status = 'paused'`; after each Find Doctor, confirm `status = 'searching'` and that `rev` has incremented and `broadcast_started_at` is fresh.
