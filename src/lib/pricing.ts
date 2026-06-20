@@ -453,7 +453,11 @@ export function computeWorkedPricing(
       )
     : { billable: 0, amount: 0, toleranceFired: false };
 
-  const total = today.amount + (d - 1) * priorDay.amount;
+  const priorAmount =
+    typeof priorBilledAmount === "number" && priorBilledAmount >= 0
+      ? priorBilledAmount
+      : (d - 1) * priorDay.amount;
+  const total = today.amount + priorAmount;
   const billable = today.billable + (d - 1) * priorDay.billable;
 
   const parts: string[] = [];
