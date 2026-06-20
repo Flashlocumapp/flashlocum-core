@@ -40,7 +40,16 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
 function writeIdentityCache() {
   if (typeof window === "undefined") return;
   try {
-    const rows = Array.from(cache.values()).filter((row) => row.loaded).slice(-60);
+    // Persist storage paths only — signed URLs expire (~1h) and would be
+    // stale on the next reload. Live entries strip the signed URL before
+    // serialisation; resolveSelfie() re-signs on hydrate.
+    const rows = Array.from(cache.values())
+      .filter((row) => row.loaded)
+      .slice(-60)
+      .map((row) => ({
+        ...row,
+        selfieUrl: row.selfiePath ?? null,
+      }));
     window.localStorage.setItem(LS_KEY, JSON.stringify(rows));
   } catch {
     /* ignore quota / privacy-mode storage */
