@@ -302,7 +302,7 @@ let cachedSnapshot: NetRequest[] = initialPersistedSnapshot;
 let cachedSnapshotUserId: string | null =
   initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
+
 
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
 // shifts they have accepted, and the currently-searching pool — at realistic
@@ -632,18 +632,12 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       .subscribe();
   }
 
-  // Polling safety net: doctors only learn about new searching-pool rows
-  // through the `coverage_invalidations` broadcast (RLS hides the pool from
-  // postgres_changes). If a broadcast is lost — channel not yet subscribed
-  // when the requester inserts, transient disconnect, server-side fan-out
-  // drop — the doctor's incoming card would never appear. A cheap 15s
-  // re-fetch closes that gap; refreshSnapshot is in-flight-deduped so
-  // bursts collapse to a single RPC call.
-  if (!pollTimer) {
-    pollTimer = setInterval(() => {
-      if (activeSubscribers > 0) void refreshSnapshot();
-    }, 15_000);
-  }
+  // Audit 11: no client-side polling. The two sources of truth are the
+  // server snapshot issued on subscription activation / identity rehydration
+  // (refreshSnapshot below) and realtime events. If a new searching-pool row
+  // is missed, the next `coverage_invalidations` broadcast or the
+  // SUBSCRIBED-triggered refresh reconciles it — never a periodic poll.
+
 
   // Tab/app reopen: refresh in the background so Incoming Coverage stays
   // visible across the visibility flip. We intentionally do NOT blank the
@@ -669,14 +663,23 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   }
 
   // Re-bind the filtered channel whenever auth identity changes — the
-  // previous channel's filter is hard-coded to the prior uid.
+  // previous channel's filter is hard-coded to the prior uid. Audit 11:
+  // also discard any in-memory state carried over from the previous
+  // identity so a previously-cached row cannot survive sign-in as a
+  // different user. UI shows empty until the fresh server snapshot arrives.
   const offAuth = onUserIdChange((id) => {
     setLiveSnapshotSeen(false);
+    cachedSnapshot = [];
+    cachedSnapshotUserId = null;
+    lastPoolRows = [];
+    recentEventIds.clear();
+    snapshotListeners.forEach((fn) => fn(cachedSnapshot));
     if (id) {
       ensureChannelForUser(id);
       void refreshSnapshot();
     }
   });
+
 
   return () => {
     eventListeners.delete(opts.onEvent);
@@ -699,14 +702,11 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
         supabase.removeChannel(invalidationChannel);
         invalidationChannel = null;
       }
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
       setLiveSnapshotSeen(false);
     }
   };
 }
+
 
 /* ---------------- Writes ---------------- */
 

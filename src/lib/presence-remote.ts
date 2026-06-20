@@ -39,16 +39,16 @@ const rawRows = new Map<string, PresenceRow>();
 const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
 
-/** Presence rows older than this are treated as offline / stale. */
-const STALE_MS = 60 * 1000;
+// Audit 11: presence is server-authoritative. The server (pg_cron job
+// `expire_stale_doctor_presence`) is the only authority that decides a
+// doctor has gone dark; it flips `online=false`, which propagates as a
+// normal realtime UPDATE. The client therefore renders the server-truth
+// `online` flag directly — no client-side staleness window, no inference.
 
 function buildSnapshot(): PresenceRow[] {
-  const now = Date.now();
   const out: PresenceRow[] = [];
   for (const r of rawRows.values()) {
-    const lastSeenMs = r.last_seen ? new Date(r.last_seen).getTime() : 0;
-    const fresh = now - lastSeenMs < STALE_MS;
-    if (!r.online || !fresh) continue;
+    if (!r.online) continue;
     out.push({
       user_id: r.user_id,
       online: true,
@@ -61,6 +61,7 @@ function buildSnapshot(): PresenceRow[] {
   }
   return out;
 }
+
 
 function emit() {
   const snap = buildSnapshot();
