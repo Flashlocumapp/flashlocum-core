@@ -358,7 +358,25 @@ function applyRemoteEvent(ev: RemoteEvent) {
     let action: NetActionType | null = null;
     let actor: Actor = "requester";
     let actorId: string = ev.row.requesterSessionId;
-    if (oldStatus === "broadcasting" && newStatus === "accepted") {
+    // Audit-10 ordering: terminal/settlement transitions are evaluated FIRST,
+    // so a status-change UPDATE never falls through to the generic "update"
+    // branch and misfires a "shift.updated" toast on the doctor.
+    if (
+      (newStatus === "completed" || newStatus === "awaiting_payment") &&
+      oldStatus !== "completed" &&
+      oldStatus !== "awaiting_payment"
+    ) {
+      // End-shift moment: requester clicked End Shift. Payment may still be
+      // processing (awaiting_payment); doctor should immediately see
+      // "Your shift has ended. Payment processing has started."
+      action = "complete";
+    } else if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+      action = "cancel";
+      if (ev.row.cancelledBy === "doctor") {
+        actor = "doctor";
+        actorId = ev.row.acceptedBy ?? actorId;
+      }
+    } else if (oldStatus === "broadcasting" && newStatus === "accepted") {
       action = "accept";
       actor = "doctor";
       actorId = ev.row.acceptedBy ?? actorId;
@@ -370,20 +388,23 @@ function applyRemoteEvent(ev: RemoteEvent) {
       action = "pause";
     } else if (oldStatus === "paused" && newStatus === "active") {
       action = "resume";
-    } else if (newStatus === "completed" && oldStatus !== "completed") {
-      action = "complete";
-    } else if (newStatus === "cancelled" && oldStatus !== "cancelled") {
-      action = "cancel";
-      if (ev.row.cancelledBy === "doctor") {
-        actor = "doctor";
-        actorId = ev.row.acceptedBy ?? actorId;
-      }
     } else if (oldStatus === "broadcasting" && newStatus === "paused") {
       action = "pause";
     } else if (oldStatus === "paused" && newStatus === "broadcasting") {
       action = "resume";
     } else if (oldStatus === newStatus) {
-      action = "update";
+      // Same-status row update. Only surface as a lifecycle "update" event
+      // when the row is in a state where an update is meaningful to the
+      // doctor — never on awaiting_payment / completed / cancelled, which
+      // would misfire "Hospital X updated your shift" after End Shift.
+      if (
+        newStatus === "broadcasting" ||
+        newStatus === "accepted" ||
+        newStatus === "active" ||
+        newStatus === "paused"
+      ) {
+        action = "update";
+      }
     }
     if (action) netEvent = { actor, actorId, shiftId: ev.row.id, action };
   } else if (ev.type === "DELETE") {
