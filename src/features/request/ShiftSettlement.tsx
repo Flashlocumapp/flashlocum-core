@@ -781,8 +781,8 @@ export function ShiftSettlement({
           <ConfirmedPane
             key="done"
             shift={shift}
-            total={totalAmount}
-            billedMin={billedMin}
+            total={frozenAmount}
+            billedMin={frozenBilledMin}
             segments={segments}
             extensionCount={extensionCount}
             tx={tx}
