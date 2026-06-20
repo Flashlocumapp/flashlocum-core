@@ -300,7 +300,15 @@ export function billableMinutes(workedMin: number): number {
   return Math.max(CURRENT.modifiers.first_hour_min, roundedOverrunMinutes(safe));
 }
 
-/** Worked-time estimator mirroring the SQL end_shift pipeline. */
+/**
+ * Worked-time estimator mirroring the SQL end_shift pipeline.
+ *
+ * `priorBilledAmount`: authoritative server-side sum of `billed_amount` for
+ * already-closed segments. When provided (>= 0), it OVERRIDES the local
+ * estimate of prior days — `worked` is treated as the CURRENT day only and
+ * total = today + priorBilledAmount. Pass `undefined` (default) to fall
+ * back to estimating prior days at booked length using the locked tier.
+ */
 export function computeWorkedPricing(
   coverage: CoverageKind,
   startHHMM: string,
@@ -309,6 +317,7 @@ export function computeWorkedPricing(
   days: number = 1,
   environment: Environment = "normal",
   bookedMinutesPerDay?: number,
+  priorBilledAmount?: number,
 ): PricingResult {
   const t = CURRENT;
   const worked = Math.max(0, Math.floor(workedMinutes));
@@ -388,7 +397,10 @@ export function computeWorkedPricing(
       return Math.round((bill / 60) * homeRate * busyMult);
     };
     const todayAmount = priceHomeDay(worked);
-    const priorDaysAmount = (d - 1) * priceHomeDay(bookedPerDay);
+    const priorDaysAmount =
+      typeof priorBilledAmount === "number" && priorBilledAmount >= 0
+        ? priorBilledAmount
+        : (d - 1) * priceHomeDay(bookedPerDay);
     return {
       amount: todayAmount + priorDaysAmount,
       billableMinutes: Math.ceil(worked / homeBlock) * homeBlock,
@@ -441,7 +453,11 @@ export function computeWorkedPricing(
       )
     : { billable: 0, amount: 0, toleranceFired: false };
 
-  const total = today.amount + (d - 1) * priorDay.amount;
+  const priorAmount =
+    typeof priorBilledAmount === "number" && priorBilledAmount >= 0
+      ? priorBilledAmount
+      : (d - 1) * priorDay.amount;
+  const total = today.amount + priorAmount;
   const billable = today.billable + (d - 1) * priorDay.billable;
 
   const parts: string[] = [];

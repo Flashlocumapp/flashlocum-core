@@ -118,11 +118,18 @@ function toRequestItem(r: NetRequest): RequestItem {
         : undefined;
   // History reflects FINAL settled operational reality, not booking estimate.
   const isCompleted = outcome === "completed";
+  const isAwaitingPayment = r.status === "awaiting_payment";
   const settledHrs = isCompleted
     ? Math.max(0.25, Math.round((r.accumulatedMs ?? 0) / 900_000) / 4)
     : r.durationHrs;
   const settledDays = isCompleted ? Math.max(1, r.dayIndex ?? r.days ?? 1) : Math.max(1, r.days ?? 1);
-  const settledAmount = isCompleted ? (r.settledAmount ?? r.amount) : r.amount;
+  // Prefer server-frozen totals (settled_amount → total_billed_amount) over
+  // the original booked estimate for any row past End Shift. This keeps the
+  // coverage card in lockstep with what Monnify is actually charging.
+  const settledAmount =
+    (isCompleted || isAwaitingPayment)
+      ? (r.settledAmount ?? r.totalBilledAmount ?? r.amount)
+      : r.amount;
   return {
     id: r.id,
     doctorSid: r.acceptedBy,

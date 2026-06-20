@@ -201,6 +201,10 @@ export type NetRequest = {
   dayIndex?: number;
   /** Final billed amount captured at completeRequest time (worked-time based). */
   settledAmount?: number;
+  /** Server-frozen sum of `shift_segments.billed_amount` written by end_shift /
+   *  pause_shift. Authoritative pending bill before payment lands; never the
+   *  booked estimate. */
+  totalBilledAmount?: number;
   /** Requester→FlashLocum payment state ('pending' | 'paid'). */
   paymentStatus?: string;
   paymentReference?: string;

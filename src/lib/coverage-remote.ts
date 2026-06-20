@@ -35,6 +35,7 @@ type Row = {
   started_at: number | null;
   accumulated_ms: number;
   settled_amount: number | null;
+  total_billed_amount: number | null;
   days: number;
   day_index: number;
   cancelled_by: string | null;
@@ -201,6 +202,7 @@ export function rowToNet(r: Row): NetRequest {
     days: r.days,
     dayIndex: r.day_index,
     settledAmount: r.settled_amount ?? undefined,
+    totalBilledAmount: r.total_billed_amount ?? undefined,
     paymentStatus: r.payment_status ?? undefined,
     paymentReference: r.payment_reference ?? undefined,
     paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,

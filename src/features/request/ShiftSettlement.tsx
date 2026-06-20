@@ -181,6 +181,20 @@ export function ShiftSettlement({
     : 0;
   const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = billableMinutes(workedMin);
+  // Authoritative sum of `shift_segments.billed_amount` for already-closed
+  // days, hydrated from the billing poll below. Passed into computeWorkedPricing
+  // so prior days come from the server ledger — not a booked-length estimate —
+  // killing the multi-day over-estimate that caused the Monnify ₦42,000 lie.
+  const priorBilled = useMemo(() => {
+    if (!segments.length) return undefined;
+    let sum = 0;
+    for (const s of segments) {
+      if (s.ended_at && typeof s.billed_amount === "number") sum += s.billed_amount;
+    }
+    // Exclude today's still-open segment (ended_at == null). The remaining
+    // closed-segment sum is the authoritative prior-day total.
+    return sum;
+  }, [segments]);
   const totalAmount = useMemo(
     () =>
       computeWorkedPricing(
@@ -191,8 +205,9 @@ export function ShiftSettlement({
         shift.days,
         shift.environment ?? "normal",
         bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+        priorBilled,
       ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin],
+    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled],
   );
   // Snapshot of the bill at the moment End Shift was pressed.
   const frozenBilledMinRef = useRef<number>(0);
@@ -766,8 +781,8 @@ export function ShiftSettlement({
           <ConfirmedPane
             key="done"
             shift={shift}
-            total={totalAmount}
-            billedMin={billedMin}
+            total={frozenAmount}
+            billedMin={frozenBilledMin}
             segments={segments}
             extensionCount={extensionCount}
             tx={tx}
@@ -905,7 +920,7 @@ function SettlementPane({
   if (onPayWithMonnify) {
     return (
       <CustomTransferPane
-        amount={liveAmount ?? amount}
+        amount={amount}
         account={account}
         payState={payState}
         payError={payError}
@@ -1427,30 +1442,19 @@ function CustomTransferPane({
     : PRICE_HOLD_SEC;
   const expired = startedAtRef.current != null && remaining === 0;
 
-  // When the price hold expires AND the live recomputed amount differs from
-  // the locked transfer amount, automatically re-issue the transfer account
-  // so the Payment page always reflects the current source-of-truth amount
-  // (matching Settlement, Coverage History, etc.). Reset anchor so the new
-  // 15-min hold restarts.
-  const refreshedRef = useRef(false);
-  useEffect(() => {
-    if (!expired) {
-      refreshedRef.current = false;
-      return;
-    }
-    if (refreshedRef.current) return;
-    if (account && amount > account.amount && !paymentTriggered) {
-      refreshedRef.current = true;
-      startedAtRef.current = null;
-      onRetry();
-    }
-  }, [expired, amount, account, paymentTriggered, onRetry]);
+  // Price-hold expiry is informational only. The amount on screen is whatever
+  // the server-frozen Monnify virtual account says — we do NOT silently
+  // re-mint a fresh account at a higher local estimate, because the local
+  // estimate over-counts prior closed days (root cause of the ₦42,000 lie).
+  // If the server bill genuinely changes, end_shift / billing poll will
+  // refresh `frozenAmountRef` and any retry will be user-initiated.
 
-  // Display always prefers the higher of locked vs live amount so the user
-  // never sees a stale value if recompute has happened.
-  const displayAmount = account
-    ? Math.max(account.amount, amount)
-    : amount;
+  // The Monnify virtual account is the single source of truth for the amount
+  // to pay. We display `account.amount` verbatim — never an inflated local
+  // estimate — so the headline always matches what the bank rails will accept.
+  // Fallback to `amount` (server-frozen total_billed_amount) only while the
+  // account is being minted.
+  const displayAmount = account ? account.amount : amount;
 
   return (
     <motion.section
