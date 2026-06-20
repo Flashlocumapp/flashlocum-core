@@ -311,28 +311,25 @@ export function GoogleMapBackground({
     }
   }, [userCenter, showSelf, selfMarkerKind, mapReady]);
 
-  // Render available-doctor presence markers. Marker.top/left (0..1) is used
-  // as a pseudo-spread around the current center until real coordinates flow
-  // in from the presence layer.
+  // Render available-doctor presence markers at their ABSOLUTE lat/lng
+  // (written by the doctor app on app open, sign-in, going online, manual
+  // refresh, and a 20-minute foreground tick). The map `center` is camera-
+  // only — selecting a hospital pans the camera but never relocates any
+  // doctor marker. Doctors without a GPS fix are simply omitted from the
+  // map (no synthesized fallback position).
   //
-  // IMPORTANT: this effect must NOT tear down and rebuild every marker on
-  // each geolocation tick. We diff by marker.key — adds, removes, and moves
-  // are all O(changed) instead of O(all). Position is updated in-place when
-  // the center drifts, so the existing Marker instances (and their SMIL
-  // pulse animations) stay alive.
+  // Diff by marker.key — adds / removes / moves are O(changed), so existing
+  // Marker instances and their SMIL pulse animations stay alive across ticks.
   useEffect(() => {
     if (!mapRef.current) return;
     const pool = markerObjs.current;
     const next = markers ?? [];
-    const c = center ?? userCenter ?? FALLBACK_CENTER;
-    const spread = 0.03; // ~3km
     const seen = new Set<string>();
     next.forEach((m) => {
+      if (m.lat == null || m.lng == null) return; // no GPS fix → no marker
+      const pos = { lat: m.lat, lng: m.lng };
+      if (!inLagos(pos)) return; // doctors outside Lagos are not shown
       seen.add(m.key);
-      const pos = {
-        lat: c.lat + (0.5 - m.top) * spread,
-        lng: c.lng + (m.left - 0.5) * spread,
-      };
       const existing = pool.get(m.key);
       if (existing) {
         existing.setPosition(pos);
@@ -349,14 +346,14 @@ export function GoogleMapBackground({
         );
       }
     });
-    // Remove markers that are no longer in the input.
+    // Remove markers that are no longer in the input (or lost their GPS fix).
     for (const [key, marker] of pool) {
       if (!seen.has(key)) {
         marker.setMap(null);
         pool.delete(key);
       }
     }
-  }, [markers, center, userCenter, mapReady]);
+  }, [markers, mapReady]);
 
   // Hospital / place markers are intentionally NOT rendered on the map.
   // Hospitals exist as data context (search, selection, dispatch), not as
