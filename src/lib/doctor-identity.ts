@@ -4,6 +4,7 @@
 // derives display values from it — no fake initials, no synthesized MDCN.
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { fetchDoctorProfile, type ProfileRow } from "@/lib/profile-remote";
 
 export type DoctorIdentity = {
