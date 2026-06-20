@@ -1239,10 +1239,10 @@ function ConfirmedPane({
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative flex h-full w-full flex-col"
+      className="relative flex h-full w-full flex-col overflow-y-auto"
     >
       <TopBar onClose={onClose} />
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pt-2">
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-6 pt-2">
         <div className="mt-2 flex h-12 w-12 items-center justify-center rounded-full"
           style={{ background: "color-mix(in oklab, var(--color-presence) 18%, transparent)" }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
