@@ -38,7 +38,8 @@ export type EventKind =
   | "offer.accepted"
   | "payment.settled"
   | "verification.result"
-  | "reminder.preshift";
+  | "reminder.preshift"
+  | "rating.submitted";
 
 export type EventSource = "local" | "realtime" | "push";
 export type EventAudience = "doctor" | "requester";
@@ -58,6 +59,8 @@ export type CanonicalEvent = {
   audience: EventAudience;
   ctx?: {
     hospitalName?: string;
+    /** Doctor's display name — required for any requester-facing message that names the doctor. */
+    doctorName?: string;
     amount?: number;
     /** Optional override for the toast title; otherwise derived. */
     title?: string;
@@ -65,7 +68,7 @@ export type CanonicalEvent = {
     body?: string;
     /** Skip toast entirely (e.g. offer.new — the card itself is the signal). */
     suppressToast?: boolean;
-    /** Skip haptic (e.g. pure-info updates). */
+    /** Skip haptic (rarely needed; haptic is reserved for offer.new). */
     suppressHaptic?: boolean;
   };
 };
