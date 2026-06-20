@@ -137,9 +137,15 @@ export type DoctorPresence = {
   sessionId: string;
   online: boolean;
   acceptedCount: number;
-  // Stable, slightly randomized map position per session.
+  // Stable, slightly randomized map position per session (legacy fallback
+  // for the stylized map). The live Google map uses lat/lng instead.
   top: number; // 0..1
   left: number; // 0..1
+  // Real GPS coords — written event-driven from the doctor app. May be null
+  // when the doctor has denied geolocation permission; in that case the
+  // map omits the marker rather than synthesizing a fake position.
+  lat: number | null;
+  lng: number | null;
   lastSeen: number;
   declined: string[]; // request ids this session declined
 };
@@ -533,6 +539,8 @@ function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> 
       acceptedCount: prev?.acceptedCount ?? 0,
       top: r.top,
       left: r.left,
+      lat: r.lat ?? null,
+      lng: r.lng ?? null,
       lastSeen: new Date(r.last_seen).getTime(),
       declined: prev?.declined ?? [],
     };
