@@ -824,6 +824,13 @@ function RequestCard({
             <ReliabilityPill entityId={item.doctorRatingId} inline />
           </div>
 
+          {!isHistory && item.days > 1 && (
+            <div className="mt-1">
+              <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
+                Day {Math.min(item.dayIndex, item.days)} of {item.days}
+              </span>
+            </div>
+          )}
           <div
             className="mt-0.5 truncate text-[12.5px]"
             style={{
@@ -833,11 +840,6 @@ function RequestCard({
             }}
           >
             {meta}
-            {!isHistory && item.days > 1 && (
-              <span className="ml-2 inline-flex h-4 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
-                Day {Math.min(item.dayIndex, item.days)} of {item.days}
-              </span>
-            )}
           </div>
           {isActive && (
             <div className="mt-0.5">
