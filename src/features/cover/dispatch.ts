@@ -424,19 +424,6 @@ export function ensureDoctorSession(initialOnline = true) {
       );
       if (acceptedSheet?.id === r.id) acceptedSheet = null;
       bump();
-    } else if (ev.action === "complete") {
-      ingest(
-        fromRealtime({
-          kind: "shift.ended",
-          entityId: r.id,
-          audience: "doctor",
-          updatedAt: r.updatedAt,
-          ctx: { hospitalName: r.hospital },
-        }),
-      );
-      pendingRatingRequestId = r.id;
-      if (acceptedSheet?.id === r.id) acceptedSheet = null;
-      bump();
     } else if (ev.action === "cancel") {
       ingest(
         fromRealtime({
