@@ -1271,9 +1271,9 @@ function DispatchOverlay({
   // Pause / resume broadcasting whenever the cancel or edit sheet is open.
   // Pre-acceptance only — the `acceptedBy` check is the only safe gate;
   // pauseRequest/resumeRequest themselves no-op when status already matches
-  // the target. We deliberately do NOT gate on `startedAt`/`accumulatedMs`
-  // because those fields can carry stale realtime echoes from earlier
-  // edit/resume cycles and silently blocked the second pause.
+  // the target. NOTE: stage transitions away from "dispatch" (Edit Request
+  // → configure) are paused by the parent HomeScreen effect, not here —
+  // DispatchOverlay only mounts for "dispatch" | "accepted".
   useEffect(() => {
     if (!requestId) return;
     const cur = net.requests[requestId];

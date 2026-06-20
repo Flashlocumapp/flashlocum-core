@@ -1118,6 +1118,16 @@ export function pauseRequest(id: string) {
  * expiry timer resets immediately and previously-declined doctors see the
  * card again. Pre-acceptance only.
  *
+ * IMPORTANT: this function is called from the requester's republish path
+ * (configure → match → dispatch after "Edit Request"). It MUST bump
+ * deterministically, not just when local state happens to read "paused".
+ * The previous `status === "broadcasting" → return` short-circuit was the
+ * second-edit bug: if a stale realtime echo had already flipped the local
+ * mirror back to "broadcasting" before the user finished editing, the
+ * resume was swallowed, no rev/broadcast_started_at bump happened, the
+ * server-side `bump_request_rev_on_change` trigger only fires for paused→
+ * searching transitions, and the doctor never saw the updated card.
+ *
  * NOTE: prior guards on `startedAt != null` / `accumulatedMs > 0` were
  * removed — those fields persist across edit-sheet open/close cycles via
  * realtime echoes from `bump_request_rev_on_change` and silently blocked
@@ -1129,8 +1139,7 @@ export function resumeRequest(id: string) {
   const cur = state.requests[id];
   if (!cur) return;
   if (cur.acceptedBy) return; // accepted shifts use resume_shift RPC
-  if (cur.status === "broadcasting") return; // no-op
-  if (cur.status !== "paused") return;
+  if (cur.status !== "broadcasting" && cur.status !== "paused") return;
   applyPatch(
     id,
     {

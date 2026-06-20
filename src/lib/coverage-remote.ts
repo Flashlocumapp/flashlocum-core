@@ -239,6 +239,22 @@ function netPatchToRow(p: Partial<NetRequest>): Partial<Row> {
   if (p.dayIndex !== undefined) out.day_index = p.dayIndex;
   if (p.settledAmount !== undefined) out.settled_amount = p.settledAmount ?? null;
   if (p.environment !== undefined) out.environment = p.environment;
+  // Republish-only: when resumeRequest fires (paused → broadcasting OR a
+  // forced re-broadcast over an already-broadcasting row), we send fresh
+  // values for broadcast_started_at and rev. Mapping them here makes the
+  // server-side `coverage_requests_emit_invalidate` trigger fan out the
+  // invalidate even when the status transition itself is a no-op (e.g.
+  // pause hadn't committed yet when the requester tapped Find Doctor),
+  // and advances the doctor-side `(id, rev)` decline key so previously
+  // declined doctors see the offer again. The trigger
+  // `bump_request_rev_on_change` still owns paused→searching transitions
+  // and will override NEW.rev/NEW.broadcast_started_at to authoritative
+  // server values when that transition happens; passing them here is a
+  // safety net for the no-transition case, not a replacement.
+  if (p.broadcastStartedAt !== undefined) {
+    out.broadcast_started_at = new Date(p.broadcastStartedAt).toISOString();
+  }
+  if (p.rev !== undefined) out.rev = p.rev;
   return out;
 }
 
