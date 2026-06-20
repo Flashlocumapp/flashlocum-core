@@ -142,6 +142,12 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
             ? `Dr. ${doctorName ?? "your doctor"} cancelled the shift.`
             : `${hospital} cancelled the shift.`;
         const { sendPushToUser } = await import("@/lib/push.server");
+        const cancelExtras: Record<string, string> = {
+          type: "coverage_cancelled",
+          requestId: data.requestId,
+        };
+        if (doctorName) cancelExtras.doctorName = doctorName;
+        if (row.hospital) cancelExtras.hospitalName = row.hospital;
         await sendPushToUser(notifyUserId, {
           title: "Shift cancelled",
           body,
@@ -150,12 +156,7 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
           version,
           occurredAt: version,
           audience: actor === "doctor" ? "requester" : "doctor",
-          data: {
-            type: "coverage_cancelled",
-            requestId: data.requestId,
-            doctorName,
-            hospitalName: row.hospital ?? undefined,
-          },
+          data: cancelExtras,
         });
       }
     } catch (e) {
