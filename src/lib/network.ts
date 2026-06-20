@@ -36,6 +36,7 @@ import {
   upsertMyPresence,
   type PresenceRow,
 } from "./presence-remote";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Fire backend-authoritative shift lifecycle RPC. Returns the server payload
@@ -137,9 +138,15 @@ export type DoctorPresence = {
   sessionId: string;
   online: boolean;
   acceptedCount: number;
-  // Stable, slightly randomized map position per session.
+  // Stable, slightly randomized map position per session (legacy fallback
+  // for the stylized map). The live Google map uses lat/lng instead.
   top: number; // 0..1
   left: number; // 0..1
+  // Real GPS coords — written event-driven from the doctor app. May be null
+  // when the doctor has denied geolocation permission; in that case the
+  // map omits the marker rather than synthesizing a fake position.
+  lat: number | null;
+  lng: number | null;
   lastSeen: number;
   declined: string[]; // request ids this session declined
 };
@@ -533,6 +540,8 @@ function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> 
       acceptedCount: prev?.acceptedCount ?? 0,
       top: r.top,
       left: r.left,
+      lat: r.lat ?? null,
+      lng: r.lng ?? null,
       lastSeen: new Date(r.last_seen).getTime(),
       declined: prev?.declined ?? [],
     };
@@ -613,6 +622,8 @@ export function registerDoctor(initialOnline: boolean) {
         acceptedCount: current?.acceptedCount ?? 0,
         top: pos.top,
         left: pos.left,
+        lat: current?.lat ?? null,
+        lng: current?.lng ?? null,
         lastSeen: simNow(),
         declined: current?.declined ?? [],
       },
@@ -721,18 +732,51 @@ export function isDeclined(d: { declined?: string[] } | undefined, id: string, r
 
 
 
+/** Best-effort offline write on tab close. Uses fetch keepalive + the
+ *  current Supabase session bearer so the row flips to online=false even
+ *  when the page is being unloaded (a normal async call wouldn't complete
+ *  in time). Falls back to a regular `clearMyPresence()` write. */
+async function beaconOffline() {
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (!url || !apikey || !uid || !session?.access_token) return;
+    await fetch(`${url}/rest/v1/doctor_presence?user_id=eq.${uid}`, {
+      method: "PATCH",
+      keepalive: true,
+      headers: {
+        apikey,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ online: false, last_seen: new Date().toISOString() }),
+    });
+  } catch {
+    // Swallow — best-effort.
+  }
+}
+
 export function startHeartbeat() {
   if (typeof window === "undefined") return () => {};
   const t = window.setInterval(() => heartbeat(), HEARTBEAT_MS);
   const visibility = () => {
     if (document.visibilityState === "visible") heartbeat();
   };
+  const onPageHide = () => {
+    unregisterDoctor();
+    void beaconOffline();
+  };
   document.addEventListener("visibilitychange", visibility);
-  window.addEventListener("beforeunload", unregisterDoctor);
+  window.addEventListener("beforeunload", onPageHide);
+  window.addEventListener("pagehide", onPageHide);
   return () => {
     window.clearInterval(t);
     document.removeEventListener("visibilitychange", visibility);
-    window.removeEventListener("beforeunload", unregisterDoctor);
+    window.removeEventListener("beforeunload", onPageHide);
+    window.removeEventListener("pagehide", onPageHide);
   };
 }
 
@@ -1040,8 +1084,12 @@ export async function completeRequest(id: string): Promise<{ ok: boolean; error?
 export function pauseRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
-  if (!cur || cur.status !== "broadcasting") return;
-  if (cur.acceptedBy || cur.startedAt != null) return;
+  if (!cur) return;
+  // Pre-acceptance only — once a doctor has accepted or the shift has
+  // started, the post-acceptance pause RPC owns lifecycle.
+  if (cur.acceptedBy) return;
+  if (cur.status === "paused") return; // no-op
+  if (cur.status !== "broadcasting") return;
   applyPatch(
     id,
     { status: "paused" },
@@ -1053,20 +1101,21 @@ export function pauseRequest(id: string) {
  * Resume a paused request back to broadcasting. Treated as a fresh offer:
  * we optimistically restart broadcastStartedAt and bump rev so the 180s
  * expiry timer resets immediately and previously-declined doctors see the
- * card again. The server-side bump_request_rev trigger applies the same
- * change authoritatively when the UPDATE lands.
+ * card again. Pre-acceptance only.
  *
- * Pre-acceptance only. A post-acceptance multi-day shift uses the same
- * `paused` enum value but its lifecycle is owned by the `resume_shift` RPC
- * (invoked from CoverageScreen → startRequest). Refuse to flip such rows
- * to `broadcasting` here or we resurrect the accepted shift in the open
- * pool and auto-unpause it.
+ * NOTE: prior guards on `startedAt != null` / `accumulatedMs > 0` were
+ * removed — those fields persist across edit-sheet open/close cycles via
+ * realtime echoes from `bump_request_rev_on_change` and silently blocked
+ * the second resume, which is what made Edit Request stop hiding the
+ * doctor card after its first use.
  */
 export function resumeRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
-  if (!cur || cur.status !== "paused") return;
-  if (cur.acceptedBy || cur.startedAt != null || (cur.accumulatedMs ?? 0) > 0) return;
+  if (!cur) return;
+  if (cur.acceptedBy) return; // accepted shifts use resume_shift RPC
+  if (cur.status === "broadcasting") return; // no-op
+  if (cur.status !== "paused") return;
   applyPatch(
     id,
     {

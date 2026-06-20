@@ -20,6 +20,11 @@ import { useVerificationStatus } from "@/lib/verification";
 import { pushToast } from "@/lib/notifications";
 import { useMyProfile } from "@/lib/profile-remote";
 import { uploadDoctorSelfie, uploadDoctorDocument } from "@/lib/doctor-uploads";
+import {
+  refreshDoctorLocation,
+  startDoctorLocationRefresh,
+  stopDoctorLocationRefresh,
+} from "@/lib/doctor-gps";
 
 
 /**
@@ -47,6 +52,23 @@ export function CoverHome({ active = true }: { active?: boolean }) {
     if (active && !approved && online) setOnline(false);
   }, [active, approved, online]);
 
+  // Refresh GPS once on mount/sign-in when this doctor is approved. No
+  // continuous tracking — see lib/doctor-gps.ts.
+  useEffect(() => {
+    if (!approved) return;
+    refreshDoctorLocation(online);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approved]);
+
+  // Start / stop the 20-minute foreground refresh tick alongside online.
+  useEffect(() => {
+    if (online && approved) {
+      startDoctorLocationRefresh();
+      return () => stopDoctorLocationRefresh();
+    }
+    stopDoctorLocationRefresh();
+  }, [online, approved]);
+
   const handleToggleOnline = () => {
     if (!approved) {
       pushToast({
@@ -61,7 +83,17 @@ export function CoverHome({ active = true }: { active?: boolean }) {
       });
       return;
     }
-    setOnline(!online);
+    const next = !online;
+    setOnline(next);
+    // Refresh GPS on the going-online edge so the marker appears at the
+    // doctor's real coordinates immediately.
+    if (next) refreshDoctorLocation(true);
+  };
+
+  const handleRefreshLocation = () => {
+    if (!approved || !online) return;
+    refreshDoctorLocation(true);
+    pushToast({ tone: "presence", title: "Refreshing your location…" });
   };
 
   return (
@@ -76,11 +108,32 @@ export function CoverHome({ active = true }: { active?: boolean }) {
       {/* top primary Online/Offline pill */}
       <header className="absolute inset-x-0 top-0 z-30">
         <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 pt-3">
-          <OnlinePill
-            online={online && approved}
-            disabled={!approved}
-            onToggle={handleToggleOnline}
-          />
+          <div className="flex items-center gap-2">
+            <OnlinePill
+              online={online && approved}
+              disabled={!approved}
+              onToggle={handleToggleOnline}
+            />
+            {online && approved && (
+              <button
+                type="button"
+                onClick={handleRefreshLocation}
+                title="Refresh my location"
+                aria-label="Refresh my location"
+                className="flex h-9 w-9 items-center justify-center rounded-full active:scale-[0.96] transition-transform"
+                style={{
+                  background: "var(--color-surface-elevated)",
+                  border: "1px solid color-mix(in oklab, var(--color-foreground) 10%, transparent)",
+                  boxShadow: "0 4px 18px -4px rgba(0,0,0,0.18)",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+              </button>
+            )}
+          </div>
           {verification && !approved && <VerificationBanner status={verification} />}
           {verification === "action_required" && <ActionRequiredCard />}
         </div>

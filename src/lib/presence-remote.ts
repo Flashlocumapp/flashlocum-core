@@ -1,9 +1,10 @@
 // Supabase-backed doctor presence.
 //
-// Stores each doctor's online flag, last-seen heartbeat, and stable map
-// position as a row in `doctor_presence`. All clients subscribe to realtime
-// changes so that requesters immediately see doctors come online / go
-// offline, and the dispatch map reflects the true backend state.
+// Stores each doctor's online flag, last-seen heartbeat, and (when GPS
+// permission is granted) their real lat/lng as a row in `doctor_presence`.
+// All clients subscribe to realtime changes so requesters immediately see
+// doctors come online / go offline, and the map renders each doctor at
+// their absolute coordinates.
 
 import { supabase } from "@/integrations/supabase/client";
 import { onUserIdChange, getCurrentUserIdSync } from "./coverage-remote";
@@ -15,6 +16,8 @@ export type PresenceRow = {
   top: number;
   left: number;
   last_seen: string;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 type RealtimePayload = {
@@ -27,16 +30,11 @@ type RealtimePayload = {
 const TABLE = "doctor_presence";
 
 let channel: ReturnType<typeof supabase.channel> | null = null;
-let ownProfileChannel: ReturnType<typeof supabase.channel> | null = null;
-let ownProfileChannelUserId: string | null = null;
 
-// Raw caches — backend truth.
+// Raw caches — backend truth. Only approved + online doctors are ever
+// loaded into rawRows (the SECURITY DEFINER RPC filters server-side), so
+// no client-side approval bookkeeping is needed.
 const rawRows = new Map<string, PresenceRow>();
-const approvedIds = new Set<string>();
-// Profiles we've already checked verification for — avoids re-fetching the
-// same unknown id on every heartbeat update.
-const checkedProfileIds = new Set<string>();
-const inFlightProfileChecks = new Set<string>();
 
 const snapshotListeners = new Set<(rows: PresenceRow[]) => void>();
 let activeSubscribers = 0;
@@ -48,14 +46,16 @@ function buildSnapshot(): PresenceRow[] {
   const now = Date.now();
   const out: PresenceRow[] = [];
   for (const r of rawRows.values()) {
-    if (!approvedIds.has(r.user_id)) continue;
     const lastSeenMs = r.last_seen ? new Date(r.last_seen).getTime() : 0;
     const fresh = now - lastSeenMs < STALE_MS;
+    if (!r.online || !fresh) continue;
     out.push({
       user_id: r.user_id,
-      online: !!r.online && fresh,
+      online: true,
       top: Number(r.top ?? 0.5),
       left: Number(r.left ?? 0.5),
+      lat: r.lat ?? null,
+      lng: r.lng ?? null,
       last_seen: r.last_seen,
     });
   }
@@ -68,8 +68,7 @@ function emit() {
 }
 
 // Guards against re-running the initial fetch on every TOKEN_REFRESHED /
-// INITIAL_SESSION event. We only refetch when the signed-in user identity
-// actually changes (sign-in / sign-out / user-switch).
+// INITIAL_SESSION event.
 let lastFetchedUserId: string | null = null;
 let initialFetchInFlight: Promise<void> | null = null;
 
@@ -82,25 +81,31 @@ async function initialFetch(force = false) {
   if (!force && lastFetchedUserId === auth.userId) return;
   if (initialFetchInFlight) return initialFetchInFlight;
   initialFetchInFlight = (async () => {
-    // Only fetch presence rows; approval status is resolved lazily per
-    // user_id via ensureApprovalKnown(). Shipping the full approved-doctor
-    // ID list to every requester on every token refresh was wasteful and
-    // leaked the doctor roster.
-    const presenceRes = await supabase
-      .from(TABLE)
-      .select("user_id, online, top, left, last_seen");
-    if (presenceRes.error) {
-      console.warn("[presence-remote] fetch error:", presenceRes.error.message);
+    // Server-side filtered to online + approved doctors; no profile roster
+    // is fetched to the client.
+    const { data, error } = await supabase.rpc("list_online_approved_doctors");
+    if (error) {
+      console.warn("[presence-remote] rpc error:", error.message);
     } else {
       rawRows.clear();
-      for (const r of presenceRes.data ?? []) {
-        rawRows.set(r.user_id, r as PresenceRow);
-      }
-      // Kick off lazy approval checks for any unknown ids; ensureApprovalKnown
-      // dedupes in-flight requests and caches results, so repeated calls are
-      // cheap.
-      for (const r of presenceRes.data ?? []) {
-        if (!checkedProfileIds.has(r.user_id)) void ensureApprovalKnown(r.user_id);
+      for (const r of (data ?? []) as Array<{
+        user_id: string;
+        online: boolean;
+        last_seen: string;
+        top: number | null;
+        left: number | null;
+        lat: number | null;
+        lng: number | null;
+      }>) {
+        rawRows.set(r.user_id, {
+          user_id: r.user_id,
+          online: !!r.online,
+          last_seen: r.last_seen,
+          top: Number(r.top ?? 0.5),
+          left: Number(r.left ?? 0.5),
+          lat: r.lat,
+          lng: r.lng,
+        });
       }
     }
     lastFetchedUserId = auth.userId;
@@ -111,63 +116,6 @@ async function initialFetch(force = false) {
   return initialFetchInFlight;
 }
 
-
-/** Lazily verify doctors' approval status in batches. Coalesces all unknown
- *  ids requested within a microtask + 50ms window into a single
- *  `id IN (...)` query, so a fresh page-load that surfaces N online doctors
- *  costs 1 round-trip instead of N. */
-const pendingApprovalChecks = new Set<string>();
-let approvalFlushTimer: ReturnType<typeof setTimeout> | null = null;
-
-async function flushApprovalChecks() {
-  approvalFlushTimer = null;
-  const ids = Array.from(pendingApprovalChecks).filter(
-    (id) => !checkedProfileIds.has(id) && !inFlightProfileChecks.has(id),
-  );
-  pendingApprovalChecks.clear();
-  if (ids.length === 0) return;
-  ids.forEach((id) => inFlightProfileChecks.add(id));
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, verification_status")
-      .in("id", ids);
-    if (error) {
-      ids.forEach((id) => inFlightProfileChecks.delete(id));
-      return;
-    }
-    const approvedSet = new Set(
-      (data ?? [])
-        .filter((r) => r.verification_status === "approved")
-        .map((r) => r.id as string),
-    );
-    let changed = false;
-    for (const id of ids) {
-      checkedProfileIds.add(id);
-      if (approvedSet.has(id)) {
-        if (!approvedIds.has(id)) {
-          approvedIds.add(id);
-          changed = true;
-        }
-      } else if (rawRows.delete(id)) {
-        changed = true;
-      }
-    }
-    ids.forEach((id) => inFlightProfileChecks.delete(id));
-    if (changed) emit();
-  } catch {
-    ids.forEach((id) => inFlightProfileChecks.delete(id));
-  }
-}
-
-function ensureApprovalKnown(userId: string) {
-  if (checkedProfileIds.has(userId) || inFlightProfileChecks.has(userId)) return;
-  pendingApprovalChecks.add(userId);
-  if (approvalFlushTimer == null) {
-    approvalFlushTimer = setTimeout(flushApprovalChecks, 50);
-  }
-}
-
 function applyPresencePayload(payload: RealtimePayload) {
   const evt = payload.eventType ?? payload.event;
   if (evt === "DELETE") {
@@ -176,62 +124,26 @@ function applyPresencePayload(payload: RealtimePayload) {
   } else {
     const row = payload.new as PresenceRow | undefined;
     if (row?.user_id) {
-      rawRows.set(row.user_id, row);
-      if (!checkedProfileIds.has(row.user_id)) void ensureApprovalKnown(row.user_id);
+      // Realtime delivers everyone, but RLS gates SELECT to online+approved
+      // (plus self/admin/assigned-requester). Offline rows are stripped in
+      // buildSnapshot via the fresh+online check.
+      rawRows.set(row.user_id, {
+        user_id: row.user_id,
+        online: !!row.online,
+        last_seen: row.last_seen,
+        top: Number(row.top ?? 0.5),
+        left: Number(row.left ?? 0.5),
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+      });
     }
   }
   emit();
-}
-
-/** Per-user channel for the signed-in user's own profile — used to track
- *  their own verification status flipping (e.g. admin approves them while
- *  they're online). Replaces the previous global profiles channel which
- *  fired on every heartbeat for every user. */
-function applyOwnProfilePayload(payload: RealtimePayload) {
-  const evt = payload.eventType ?? payload.event;
-  if (evt === "DELETE") {
-    const id = (payload.old as { id?: string } | undefined)?.id;
-    if (id) {
-      approvedIds.delete(id);
-      rawRows.delete(id);
-      checkedProfileIds.delete(id);
-      emit();
-    }
-    return;
-  }
-  const row = payload.new as { id: string; verification_status: string } | undefined;
-  if (!row?.id) return;
-  checkedProfileIds.add(row.id);
-  if (row.verification_status === "approved") {
-    approvedIds.add(row.id);
-  } else {
-    approvedIds.delete(row.id);
-    rawRows.delete(row.id);
-  }
-  emit();
-}
-
-function ensureOwnProfileChannel(userId: string) {
-  if (ownProfileChannelUserId === userId && ownProfileChannel) return;
-  if (ownProfileChannel) {
-    supabase.removeChannel(ownProfileChannel);
-    ownProfileChannel = null;
-  }
-  ownProfileChannelUserId = userId;
-  ownProfileChannel = supabase
-    .channel(`own-profile-verification-${userId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
-      (payload) => applyOwnProfilePayload(payload),
-    )
-    .subscribe();
 }
 
 export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): () => void {
   snapshotListeners.add(onSnapshot);
   activeSubscribers++;
-  // Emit current cache synchronously so subscriber gets instant data.
   onSnapshot(buildSnapshot());
   void initialFetch();
 
@@ -243,27 +155,16 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
       )
       .subscribe();
   }
-  void ensureAuthReady().then((auth) => {
-    if (auth.userId) ensureOwnProfileChannel(auth.userId);
-  });
 
   const offAuth = onUserIdChange((id) => {
     if (id) {
-      ensureOwnProfileChannel(id);
-      // initialFetch() is a no-op when id matches lastFetchedUserId, so
-      // TOKEN_REFRESHED events that re-fire this listener don't trigger a
-      // refetch. A genuine sign-in / user-switch will refetch once.
       void initialFetch();
     } else {
-      // Signed out — clear caches so the next sign-in starts clean.
       lastFetchedUserId = null;
       rawRows.clear();
-      approvedIds.clear();
-      checkedProfileIds.clear();
       emit();
     }
   });
-
 
   return () => {
     snapshotListeners.delete(onSnapshot);
@@ -274,11 +175,6 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
         supabase.removeChannel(channel);
         channel = null;
       }
-      if (ownProfileChannel) {
-        supabase.removeChannel(ownProfileChannel);
-        ownProfileChannel = null;
-        ownProfileChannelUserId = null;
-      }
     }
   };
 }
@@ -288,6 +184,8 @@ export async function upsertMyPresence(fields: {
   online: boolean;
   top?: number;
   left?: number;
+  lat?: number | null;
+  lng?: number | null;
 }): Promise<void> {
   const uid = getCurrentUserIdSync();
   if (!uid) return;
@@ -297,6 +195,8 @@ export async function upsertMyPresence(fields: {
     last_seen: string;
     top?: number;
     left?: number;
+    lat?: number | null;
+    lng?: number | null;
   } = {
     user_id: uid,
     online: fields.online,
@@ -304,21 +204,23 @@ export async function upsertMyPresence(fields: {
   };
   if (fields.top !== undefined) row.top = fields.top;
   if (fields.left !== undefined) row.left = fields.left;
+  if (fields.lat !== undefined) row.lat = fields.lat;
+  if (fields.lng !== undefined) row.lng = fields.lng;
 
-  // Optimistically update local cache so the toggling client sees the
-  // change immediately, without waiting for the realtime echo.
+  // Optimistic local cache update so toggling client gets instant feedback.
   const existing = rawRows.get(uid);
   rawRows.set(uid, {
     user_id: uid,
     online: fields.online,
     top: fields.top ?? existing?.top ?? 0.5,
     left: fields.left ?? existing?.left ?? 0.5,
+    lat: fields.lat !== undefined ? fields.lat : existing?.lat ?? null,
+    lng: fields.lng !== undefined ? fields.lng : existing?.lng ?? null,
     last_seen: row.last_seen,
   });
   emit();
 
   const { error } = await supabase.from(TABLE).upsert(row, { onConflict: "user_id" });
-
   if (error) console.warn("[presence-remote] upsert error:", error.message);
 }
 
@@ -331,16 +233,14 @@ export async function heartbeatPresence(online: boolean): Promise<void> {
     .update({ online, last_seen: new Date().toISOString() })
     .eq("user_id", uid);
   if (error && error.code !== "PGRST116") {
-    // If no row yet, upsert one.
     await upsertMyPresence({ online });
   }
 }
 
-/** Remove my presence row (e.g. on sign-out / unload). */
+/** Mark me offline (e.g. on sign-out / explicit toggle / unload). */
 export async function clearMyPresence(): Promise<void> {
   const uid = getCurrentUserIdSync();
   if (!uid) return;
-  // Optimistic local clear.
   const existing = rawRows.get(uid);
   if (existing) {
     rawRows.set(uid, { ...existing, online: false, last_seen: new Date().toISOString() });

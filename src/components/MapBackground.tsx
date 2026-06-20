@@ -1,7 +1,18 @@
 // Stylized map. Renders stethoscope markers for online doctor sessions.
 // One shared visual language across Request Coverage and Cover & Earn.
 
-export type Marker = { top: number; left: number; key: string };
+// Marker positions can be either:
+//   - synthesized (top/left in 0..1, used by the stylized fallback map)
+//   - absolute geo (lat/lng — preferred for the live Google Map so markers
+//     stay anchored to real-world coordinates and never re-anchor when the
+//     camera center pans to a newly selected hospital).
+export type Marker = {
+  top: number;
+  left: number;
+  key: string;
+  lat?: number | null;
+  lng?: number | null;
+};
 
 export function MapBackground({
   variant = "presence",

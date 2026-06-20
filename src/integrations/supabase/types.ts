@@ -267,7 +267,9 @@ export type Database = {
       doctor_presence: {
         Row: {
           last_seen: string
+          lat: number | null
           left: number
+          lng: number | null
           online: boolean
           top: number
           updated_at: string
@@ -275,7 +277,9 @@ export type Database = {
         }
         Insert: {
           last_seen?: string
+          lat?: number | null
           left?: number
+          lng?: number | null
           online?: boolean
           top?: number
           updated_at?: string
@@ -283,7 +287,9 @@ export type Database = {
         }
         Update: {
           last_seen?: string
+          lat?: number | null
           left?: number
+          lng?: number | null
           online?: boolean
           top?: number
           updated_at?: string
@@ -1177,6 +1183,18 @@ export type Database = {
         Returns: {
           id: string
           phone: string
+        }[]
+      }
+      list_online_approved_doctors: {
+        Args: never
+        Returns: {
+          last_seen: string
+          lat: number
+          left: number
+          lng: number
+          online: boolean
+          top: number
+          user_id: string
         }[]
       }
       list_open_coverage_requests: {

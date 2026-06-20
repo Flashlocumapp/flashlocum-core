@@ -351,6 +351,8 @@ function HomeScreen({ active }: { active: boolean }) {
         top: d.top,
         left: d.left,
         key: d.sessionId,
+        lat: d.lat,
+        lng: d.lng,
       })),
     [net],
   );
@@ -1267,13 +1269,15 @@ function DispatchOverlay({
   }, [stage]);
 
   // Pause / resume broadcasting whenever the cancel or edit sheet is open.
-  // Pre-acceptance only — pauseRequest/resumeRequest themselves refuse to
-  // touch accepted shifts, but we also gate here so a leftover requestId
-  // pointing at an accepted multi-day shift never even attempts the call.
+  // Pre-acceptance only — the `acceptedBy` check is the only safe gate;
+  // pauseRequest/resumeRequest themselves no-op when status already matches
+  // the target. We deliberately do NOT gate on `startedAt`/`accumulatedMs`
+  // because those fields can carry stale realtime echoes from earlier
+  // edit/resume cycles and silently blocked the second pause.
   useEffect(() => {
     if (!requestId) return;
     const cur = net.requests[requestId];
-    if (!cur || cur.acceptedBy || cur.startedAt != null) return;
+    if (!cur || cur.acceptedBy) return;
     if (paused) pauseRequest(requestId);
     else if (stage === "dispatch") resumeRequest(requestId);
   }, [paused, requestId, stage, net]);
