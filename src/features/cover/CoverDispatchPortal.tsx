@@ -5,6 +5,7 @@ import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { PaymentSummaryOverlay } from "@/components/PaymentSummaryOverlay";
+import { EnvironmentBadge } from "@/components/EnvironmentBadge";
 import { submitShiftRating } from "@/lib/trust";
 import { pushToast } from "@/lib/notifications";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
@@ -123,6 +124,7 @@ function IncomingBody({ item }: { item: Coverage }) {
         <div className="inline-flex items-center gap-2">
           <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
           <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+          <EnvironmentBadge environment={item.environment ?? "normal"} size="sm" />
         </div>
 
       </div>
