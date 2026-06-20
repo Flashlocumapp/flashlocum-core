@@ -1213,7 +1213,13 @@ function DispatchOverlay({
     const isPreAcceptance = !!cur && !cur.acceptedBy && cur.startedAt == null && (cur.accumulatedMs ?? 0) === 0;
     const canReuseRequest = isPreAcceptance && (cur?.status === "broadcasting" || cur?.status === "paused");
     if (cur && canReuseRequest) {
-      // Coming back from configure: sync any edits then resume.
+      // Coming back from configure: ensure a deterministic
+      // searching → paused → searching cycle so the server trigger
+      // bump_request_rev_on_change fires even when the patched fields
+      // equal the DB row (the original "edit-twice" failure mode). If the
+      // local mirror still reads broadcasting because the parent pause
+      // effect's echo hasn't landed yet, pause now — idempotent.
+      if (cur.status === "broadcasting") pauseRequest(cur.id);
       updateRequest(cur.id, {
         hospital: location?.name ?? cur.hospital,
         area: location?.area ?? cur.area,
@@ -1269,18 +1275,24 @@ function DispatchOverlay({
   }, [stage]);
 
   // Pause / resume broadcasting whenever the cancel or edit sheet is open.
-  // Pre-acceptance only — the `acceptedBy` check is the only safe gate;
-  // pauseRequest/resumeRequest themselves no-op when status already matches
-  // the target. NOTE: stage transitions away from "dispatch" (Edit Request
-  // → configure) are paused by the parent HomeScreen effect, not here —
-  // DispatchOverlay only mounts for "dispatch" | "accepted".
+  // Pre-acceptance only. Dependencies are narrowed to the specific request
+  // fields that matter (status, acceptedBy) instead of the whole `net`
+  // object — depending on `net` made this effect re-run on every presence
+  // heartbeat, which combined with an unconditional resumeRequest produced
+  // an infinite rev-bump feedback loop (doctor decline keys invalidated on
+  // every bump → dismissed cards reappeared; requester UI thrashed and
+  // Edit/Cancel taps felt dead).
+  const _curForGate = requestId ? net.requests[requestId] : undefined;
+  const _curStatus = _curForGate?.status;
+  const _curAcceptedBy = _curForGate?.acceptedBy;
   useEffect(() => {
-    if (!requestId) return;
-    const cur = net.requests[requestId];
-    if (!cur || cur.acceptedBy) return;
-    if (paused) pauseRequest(requestId);
-    else if (stage === "dispatch") resumeRequest(requestId);
-  }, [paused, requestId, stage, net]);
+    if (!requestId || !_curStatus || _curAcceptedBy) return;
+    if (paused) {
+      if (_curStatus === "broadcasting") pauseRequest(requestId);
+    } else if (stage === "dispatch") {
+      if (_curStatus === "paused") resumeRequest(requestId);
+    }
+  }, [paused, requestId, stage, _curStatus, _curAcceptedBy]);
 
   // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
   // re-publish and dismiss-resume (paused → searching) automatically restart

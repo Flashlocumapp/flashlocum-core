@@ -1139,7 +1139,14 @@ export function resumeRequest(id: string) {
   const cur = state.requests[id];
   if (!cur) return;
   if (cur.acceptedBy) return; // accepted shifts use resume_shift RPC
-  if (cur.status !== "broadcasting" && cur.status !== "paused") return;
+  // Strict paused→broadcasting transition. The previous "always bump"
+  // version combined with effects that depend on the whole `net` object
+  // created an infinite rev-bump feedback loop (each bump produced a
+  // realtime echo → state change → effect re-runs → another bump). The
+  // server trigger `bump_request_rev_on_change` reliably bumps rev and
+  // broadcast_started_at on this status flip, and the publish/sync effect
+  // ensures the row is paused before resume is ever called.
+  if (cur.status !== "paused") return;
   applyPatch(
     id,
     {
