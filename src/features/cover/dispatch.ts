@@ -360,6 +360,27 @@ export function ensureDoctorSession(initialOnline = true) {
     }
 
     if (r.acceptedBy !== sid) return;
+
+    // Completion can be driven by the webhook (actor='system') or by the
+    // requester ending the shift directly. Either way the doctor needs the
+    // post-shift rating overlay — gate on the action, not the actor.
+    if (ev.action === "complete") {
+      processedEvents.set(eventKey, Date.now());
+      ingest(
+        fromRealtime({
+          kind: "shift.ended",
+          entityId: r.id,
+          audience: "doctor",
+          updatedAt: r.updatedAt,
+          ctx: { hospitalName: r.hospital },
+        }),
+      );
+      pendingRatingRequestId = r.id;
+      if (acceptedSheet?.id === r.id) acceptedSheet = null;
+      bump();
+      return;
+    }
+
     if (ev.actor !== "requester") return;
     processedEvents.set(eventKey, Date.now());
 
