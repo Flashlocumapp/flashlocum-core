@@ -213,11 +213,14 @@ export const startAndNotifyFn = createServerFn({ method: "POST" })
           version,
           occurredAt: startedAtMs ?? version,
           audience: "doctor",
-          data: {
-            type: "shift_started",
-            requestId: data.requestId,
-            hospitalName: row.hospital ?? undefined,
-          },
+          data: (() => {
+            const e: Record<string, string> = {
+              type: "shift_started",
+              requestId: data.requestId,
+            };
+            if (row.hospital) e.hospitalName = row.hospital;
+            return e;
+          })(),
         });
       } catch (e) {
         console.warn("[start-notify] push failed:", (e as Error).message);
