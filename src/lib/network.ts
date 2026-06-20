@@ -621,6 +621,8 @@ export function registerDoctor(initialOnline: boolean) {
         acceptedCount: current?.acceptedCount ?? 0,
         top: pos.top,
         left: pos.left,
+        lat: current?.lat ?? null,
+        lng: current?.lng ?? null,
         lastSeen: simNow(),
         declined: current?.declined ?? [],
       },
