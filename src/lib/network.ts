@@ -1050,8 +1050,12 @@ export async function completeRequest(id: string): Promise<{ ok: boolean; error?
 export function pauseRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
-  if (!cur || cur.status !== "broadcasting") return;
-  if (cur.acceptedBy || cur.startedAt != null) return;
+  if (!cur) return;
+  // Pre-acceptance only — once a doctor has accepted or the shift has
+  // started, the post-acceptance pause RPC owns lifecycle.
+  if (cur.acceptedBy) return;
+  if (cur.status === "paused") return; // no-op
+  if (cur.status !== "broadcasting") return;
   applyPatch(
     id,
     { status: "paused" },
@@ -1063,20 +1067,21 @@ export function pauseRequest(id: string) {
  * Resume a paused request back to broadcasting. Treated as a fresh offer:
  * we optimistically restart broadcastStartedAt and bump rev so the 180s
  * expiry timer resets immediately and previously-declined doctors see the
- * card again. The server-side bump_request_rev trigger applies the same
- * change authoritatively when the UPDATE lands.
+ * card again. Pre-acceptance only.
  *
- * Pre-acceptance only. A post-acceptance multi-day shift uses the same
- * `paused` enum value but its lifecycle is owned by the `resume_shift` RPC
- * (invoked from CoverageScreen → startRequest). Refuse to flip such rows
- * to `broadcasting` here or we resurrect the accepted shift in the open
- * pool and auto-unpause it.
+ * NOTE: prior guards on `startedAt != null` / `accumulatedMs > 0` were
+ * removed — those fields persist across edit-sheet open/close cycles via
+ * realtime echoes from `bump_request_rev_on_change` and silently blocked
+ * the second resume, which is what made Edit Request stop hiding the
+ * doctor card after its first use.
  */
 export function resumeRequest(id: string) {
   refreshState();
   const cur = state.requests[id];
-  if (!cur || cur.status !== "paused") return;
-  if (cur.acceptedBy || cur.startedAt != null || (cur.accumulatedMs ?? 0) > 0) return;
+  if (!cur) return;
+  if (cur.acceptedBy) return; // accepted shifts use resume_shift RPC
+  if (cur.status === "broadcasting") return; // no-op
+  if (cur.status !== "paused") return;
   applyPatch(
     id,
     {
