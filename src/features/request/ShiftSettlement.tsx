@@ -1446,11 +1446,12 @@ function CustomTransferPane({
     }
   }, [expired, amount, account, paymentTriggered, onRetry]);
 
-  // Display always prefers the higher of locked vs live amount so the user
-  // never sees a stale value if recompute has happened.
-  const displayAmount = account
-    ? Math.max(account.amount, amount)
-    : amount;
+  // The Monnify virtual account is the single source of truth for the amount
+  // to pay. We display `account.amount` verbatim — never an inflated local
+  // estimate — so the headline always matches what the bank rails will accept.
+  // Fallback to `amount` (server-frozen total_billed_amount) only while the
+  // account is being minted.
+  const displayAmount = account ? account.amount : amount;
 
   return (
     <motion.section
