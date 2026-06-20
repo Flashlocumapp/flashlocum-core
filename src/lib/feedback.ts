@@ -38,7 +38,8 @@ export type EventKind =
   | "offer.accepted"
   | "payment.settled"
   | "verification.result"
-  | "reminder.preshift";
+  | "reminder.preshift"
+  | "rating.submitted";
 
 export type EventSource = "local" | "realtime" | "push";
 export type EventAudience = "doctor" | "requester";
@@ -58,6 +59,8 @@ export type CanonicalEvent = {
   audience: EventAudience;
   ctx?: {
     hospitalName?: string;
+    /** Doctor's display name — required for any requester-facing message that names the doctor. */
+    doctorName?: string;
     amount?: number;
     /** Optional override for the toast title; otherwise derived. */
     title?: string;
@@ -65,7 +68,7 @@ export type CanonicalEvent = {
     body?: string;
     /** Skip toast entirely (e.g. offer.new — the card itself is the signal). */
     suppressToast?: boolean;
-    /** Skip haptic (e.g. pure-info updates). */
+    /** Skip haptic (rarely needed; haptic is reserved for offer.new). */
     suppressHaptic?: boolean;
   };
 };
@@ -206,6 +209,7 @@ type RenderPlan = {
 
 function plan(ev: CanonicalEvent): RenderPlan | null {
   const hospital = ev.ctx?.hospitalName ?? "the hospital";
+  const doctor = ev.ctx?.doctorName ? `Dr. ${ev.ctx.doctorName}` : "the doctor";
   const isDoctor = ev.audience === "doctor";
   const tOverride = ev.ctx?.title;
   const bOverride = ev.ctx?.body;
@@ -217,71 +221,92 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
 
   switch (ev.kind) {
     case "offer.new":
-      // Card is the signal; no toast. Medium haptic for the doctor only.
+      // Card is the signal; no toast. Medium haptic for the doctor only —
+      // this is the ONLY event in the system that emits a haptic.
       return {
         toast: tOverride ? toast("presence", tOverride) : undefined,
         haptic: !skipHaptic && isDoctor ? "medium" : undefined,
       };
     case "offer.accepted":
-      // Sheet opens; medium haptic for doctor confirming the claim.
-      return { haptic: !skipHaptic && isDoctor ? "medium" : undefined };
-    case "shift.started":
+      // Doctor: sheet opens, no toast/haptic (self-initiated claim).
+      // Requester: actor-named confirmation toast.
+      if (isDoctor) return { toast: undefined, haptic: undefined };
       return {
-        toast: toast(
-          "presence",
-          tOverride ?? (isDoctor ? `Your shift with ${hospital} has started.` : `Doctor started the shift at ${hospital}.`),
-          isDoctor ? "Tap the active card for shift details." : undefined,
-        ),
-        haptic: skipHaptic ? undefined : "light",
+        toast: toast("presence", tOverride ?? `${doctor} accepted your request.`),
+      };
+    case "shift.started":
+      // Self-initiated for requester; no toast.
+      if (!isDoctor) return null;
+      return {
+        toast: toast("presence", tOverride ?? `Your shift with ${hospital} has started.`),
       };
     case "shift.paused":
+      if (!isDoctor) return null;
       return {
         toast: toast(
           "presence",
-          tOverride ?? (isDoctor ? `Your shift with ${hospital} has been paused.` : `Doctor paused the shift at ${hospital}.`),
-          isDoctor ? "Coverage timer is preserved and will resume when restarted." : undefined,
-          5200,
+          tOverride ?? `${hospital} paused your shift until the next scheduled session.`,
         ),
-        haptic: skipHaptic ? undefined : "light",
       };
     case "shift.resumed":
+      if (!isDoctor) return null;
       return {
-        toast: toast(
-          "presence",
-          tOverride ?? (isDoctor ? `Your shift with ${hospital} has resumed.` : `Doctor resumed the shift at ${hospital}.`),
-          isDoctor ? "Coverage timer continues from where it paused." : undefined,
-        ),
-        haptic: skipHaptic ? undefined : "light",
+        toast: toast("presence", tOverride ?? `Your shift with ${hospital} has resumed.`),
       };
     case "shift.ended":
+      // Fires the moment the requester ends the shift — payment hasn't
+      // settled yet. payment.settled is a separate event with its own copy.
+      if (!isDoctor) return null;
       return {
         toast: toast(
           "presence",
-          tOverride ?? (isDoctor ? `Your shift with ${hospital} has ended.` : `Doctor ended the shift at ${hospital}.`),
-          isDoctor ? "Payment will be remitted to your account by 10PM today." : undefined,
+          tOverride ??
+            `Your shift with ${hospital} has ended. Payment processing has started.`,
+          undefined,
           5200,
         ),
-        haptic: skipHaptic ? undefined : "light-medium",
       };
     case "shift.updated":
+      // Doctor receives the actor-named update; requester is the initiator → silent.
+      if (!isDoctor) return null;
       return {
-        toast: toast("presence", tOverride ?? `${hospital} updated this shift`),
-        haptic: undefined,
+        toast: toast("presence", tOverride ?? `${hospital} updated your shift details.`),
       };
     case "shift.cancelled":
+      // Whoever cancelled is silent (engine relies on caller never emitting
+      // for the initiator). The counterparty sees an actor-named warn toast.
       return {
         toast: toast(
           "warn",
-          tOverride ?? (isDoctor ? `${hospital} cancelled shift` : `Doctor cancelled shift`),
+          tOverride ?? (isDoctor ? `${hospital} cancelled the shift.` : `${doctor} cancelled the shift.`),
         ),
-        haptic: skipHaptic ? undefined : "medium",
       };
     case "payment.settled":
-      return { toast: toast("presence", tOverride ?? "Payment settled") };
+      return {
+        toast: toast(
+          "presence",
+          tOverride ??
+            (isDoctor
+              ? `Payment received for your shift with ${hospital}. Remittance will be made by 10PM today.`
+              : `Payment completed successfully for your shift with ${doctor}.`),
+          undefined,
+          5200,
+        ),
+      };
     case "verification.result":
       return { toast: toast("presence", tOverride ?? "Verification update") };
     case "reminder.preshift":
-      return { toast: toast("presence", tOverride ?? `Your shift with ${hospital} starts in 1 hour`) };
+      return {
+        toast: toast(
+          "presence",
+          tOverride ??
+            (isDoctor
+              ? `Reminder: your shift with ${hospital} starts in 1 hour.`
+              : `Reminder: ${doctor}'s shift starts in 1 hour.`),
+        ),
+      };
+    case "rating.submitted":
+      return { toast: toast("presence", tOverride ?? "Thank you for your feedback.") };
   }
 }
 

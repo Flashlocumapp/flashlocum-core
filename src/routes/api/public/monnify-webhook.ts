@@ -105,26 +105,77 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
           console.warn("[monnify-webhook] broadcast failed:", (e as Error).message);
         }
 
-        // Push the doctor who covered this shift.
+        // Push BOTH parties on confirmed payment (Audit-10 contract).
         try {
           const { data: row } = await supabaseAdmin
             .from("coverage_requests")
-            .select("accepted_by, hospital, settled_amount")
+            .select("id, accepted_by, requester_id, hospital, settled_amount, updated_at")
             .eq("payment_reference", ref)
             .maybeSingle();
-          if (row?.accepted_by) {
+          if (row) {
             const { sendPushToUser } = await import("@/lib/push.server");
             const naira = Number(row.settled_amount ?? amount ?? 0);
-            await sendPushToUser(row.accepted_by, {
-              title: "Payment received",
-              body: `You've been paid${naira > 0 ? ` ₦${naira.toLocaleString()}` : ""}${row.hospital ? ` for ${row.hospital}` : ""}.`,
-              kind: "payment.settled",
-              entityId: ref,
-              version: Date.now(),
-              occurredAt: Date.now(),
-              audience: "doctor",
-              data: { type: "payment_settled", paymentReference: ref },
-            });
+            const hospital = row.hospital ?? "the hospital";
+            const t = row.updated_at ? Date.parse(row.updated_at as string) : Date.now();
+            const version = Number.isFinite(t) ? t : Date.now();
+
+            // Look up the doctor's display name once for the requester-facing copy.
+            let doctorName = "your doctor";
+            if (row.accepted_by) {
+              const { data: doc } = await supabaseAdmin
+                .from("profiles")
+                .select("full_name")
+                .eq("id", row.accepted_by)
+                .maybeSingle();
+              if (doc?.full_name) doctorName = doc.full_name;
+            }
+
+            const tasks: Promise<unknown>[] = [];
+
+            if (row.accepted_by) {
+              const doctorExtras: Record<string, string> = {
+                type: "payment_settled",
+                paymentReference: ref,
+                requestId: row.id,
+              };
+              if (row.hospital) doctorExtras.hospitalName = row.hospital;
+              if (naira > 0) doctorExtras.amount = String(naira);
+              tasks.push(
+                sendPushToUser(row.accepted_by, {
+                  title: "Payment received",
+                  body: `Payment received for your shift with ${hospital}. Remittance will be made by 10PM today.`,
+                  kind: "payment.settled",
+                  entityId: ref,
+                  version,
+                  occurredAt: version,
+                  audience: "doctor",
+                  data: doctorExtras,
+                }),
+              );
+            }
+
+            if (row.requester_id) {
+              const requesterExtras: Record<string, string> = {
+                type: "payment_settled",
+                paymentReference: ref,
+                requestId: row.id,
+                doctorName,
+              };
+              tasks.push(
+                sendPushToUser(row.requester_id, {
+                  title: "Payment complete",
+                  body: `Payment completed successfully for your shift with Dr. ${doctorName}.`,
+                  kind: "payment.settled",
+                  entityId: ref,
+                  version,
+                  occurredAt: version,
+                  audience: "requester",
+                  data: requesterExtras,
+                }),
+              );
+            }
+
+            await Promise.allSettled(tasks);
           }
         } catch (e) {
           console.warn("[monnify-webhook] push failed:", (e as Error).message);

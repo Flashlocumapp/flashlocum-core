@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { RatingOverlay } from "@/components/RatingOverlay";
 import { submitShiftRating } from "@/lib/trust";
 import { pushToast } from "@/lib/notifications";
+import { fromLocal, ingest } from "@/lib/feedback";
 import { simNow, useSimClock } from "@/lib/clock";
 import {
   computeWorkedPricing,
@@ -1322,7 +1323,16 @@ function ConfirmedPane({
                 const res = await submitShiftRating(shiftId, rating, feedback || null);
                 if (!res.ok && res.error !== "already_rated") {
                   pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+                  return;
                 }
+                // Audit-10: positive confirmation for both roles.
+                ingest(
+                  fromLocal({
+                    kind: "rating.submitted",
+                    entityId: shiftId,
+                    audience: "requester",
+                  }),
+                );
               })();
             }
           }

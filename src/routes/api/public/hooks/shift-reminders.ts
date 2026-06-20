@@ -60,11 +60,29 @@ export const Route = createFileRoute("/api/public/hooks/shift-reminders")({
         const { sendPushToUser } = await import("@/lib/push.server");
         let sent = 0;
 
+        // Batch-fetch the doctor display names for every reminder we're
+        // about to send so the requester-facing copy ("Dr. {name}'s shift…")
+        // can name the doctor.
+        const doctorIds = Array.from(
+          new Set(rows.map((r) => r.accepted_by).filter((x): x is string => !!x)),
+        );
+        const doctorNames = new Map<string, string>();
+        if (doctorIds.length) {
+          const { data: docs } = await supabaseAdmin
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", doctorIds);
+          for (const d of docs ?? []) {
+            if (d.full_name) doctorNames.set(d.id, d.full_name);
+          }
+        }
+
         for (const row of rows) {
           if (!row.accepted_by) continue;
           const hospital = row.hospital ?? "the hospital";
           const startMs = Number(row.start_ts);
           if (!Number.isFinite(startMs)) continue;
+          const doctorName = doctorNames.get(row.accepted_by) ?? "your doctor";
 
           // Push both audiences. Failures are tolerated — the next cron tick
           // won't retry (reminder_sent_at is stamped below regardless), but
@@ -72,25 +90,33 @@ export const Route = createFileRoute("/api/public/hooks/shift-reminders")({
           // shows the upcoming shift.
           await Promise.allSettled([
             sendPushToUser(row.accepted_by, {
-              title: `Your shift starts in 1 hour`,
-              body: `${hospital} — be ready to clock in.`,
+              title: "Reminder",
+              body: `Reminder: your shift with ${hospital} starts in 1 hour.`,
               kind: "reminder.preshift",
               entityId: row.id,
               version: startMs,
               occurredAt: now,
               audience: "doctor",
-              data: { type: "preshift_reminder", requestId: row.id },
+              data: {
+                type: "preshift_reminder",
+                requestId: row.id,
+                hospitalName: row.hospital ?? "",
+              },
             }),
             row.requester_id
               ? sendPushToUser(row.requester_id, {
-                  title: `Shift starts in 1 hour`,
-                  body: `${hospital} — your covering doctor will be ready shortly.`,
+                  title: "Reminder",
+                  body: `Reminder: Dr. ${doctorName}'s shift starts in 1 hour.`,
                   kind: "reminder.preshift",
                   entityId: row.id,
                   version: startMs,
                   occurredAt: now,
                   audience: "requester",
-                  data: { type: "preshift_reminder", requestId: row.id },
+                  data: {
+                    type: "preshift_reminder",
+                    requestId: row.id,
+                    doctorName,
+                  },
                 })
               : Promise.resolve(),
           ]);
