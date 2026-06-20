@@ -107,6 +107,7 @@ function emptyIdentity(sessionId: string | null): DoctorIdentity {
     initials: makeInitials("", sessionId),
     mdcn: "—",
     selfieUrl: null,
+    selfiePath: null,
     ratingId: sessionId ? `doc:${sessionId}` : null,
     loaded: false,
   };
@@ -114,13 +115,19 @@ function emptyIdentity(sessionId: string | null): DoctorIdentity {
 
 function identityFromProfile(p: ProfileRow): DoctorIdentity {
   const full = ensureDr(p.full_name ?? "");
+  const path = p.selfie_url ?? null;
+  // If selfie_url is already an absolute URL (legacy rows), use it as-is;
+  // otherwise it's a storage path that needs signing — resolveSelfie() does
+  // that asynchronously and patches the cache entry.
+  const isAbsolute = !!path && /^(https?:|data:|blob:)/i.test(path);
   return {
     id: p.id,
     fullName: full || "Doctor",
     shortName: makeShort(full || "Doctor"),
     initials: makeInitials(p.full_name ?? "", p.id),
     mdcn: p.mdcn?.trim() ? p.mdcn.trim() : "—",
-    selfieUrl: p.selfie_url ?? null,
+    selfieUrl: isAbsolute ? path : null,
+    selfiePath: path,
     ratingId: `doc:${p.id}`,
     loaded: true,
   };
@@ -130,7 +137,41 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+// Sign storage paths via Supabase Storage so requester clients (and the
+// doctor on their own device) can render the avatar. The bucket is private;
+// RLS on storage.objects gates which selfies a caller can sign.
+const signedSelfieInflight = new Map<string, Promise<void>>();
+async function resolveSelfie(sessionId: string, path: string) {
+  if (signedSelfieInflight.has(sessionId)) return signedSelfieInflight.get(sessionId);
+  const p = (async () => {
+    const { data, error } = await supabase.storage
+      .from("doctors")
+      .createSignedUrl(path, 60 * 60);
+    if (error || !data?.signedUrl) return;
+    const cur = cache.get(sessionId);
+    if (!cur) return;
+    cache.set(sessionId, { ...cur, selfieUrl: data.signedUrl });
+    notify();
+  })().finally(() => {
+    signedSelfieInflight.delete(sessionId);
+  });
+  signedSelfieInflight.set(sessionId, p);
+  return p;
+}
+
+function maybeResolveSelfie(sessionId: string) {
+  const cur = cache.get(sessionId);
+  if (!cur || !cur.loaded) return;
+  if (cur.selfieUrl) return;
+  if (!cur.selfiePath) return;
+  if (/^(https?:|data:|blob:)/i.test(cur.selfiePath)) return;
+  void resolveSelfie(sessionId, cur.selfiePath);
+}
+
 function loadInto(sessionId: string) {
+  // If a stale cache entry exists with a path but no signed URL, kick off
+  // signing on every load so reloads recover from expired URLs.
+  maybeResolveSelfie(sessionId);
   if (cache.has(sessionId) && cache.get(sessionId)!.loaded) return;
   if (inflight.has(sessionId)) return;
   const p = fetchDoctorProfile(sessionId)
@@ -139,6 +180,7 @@ function loadInto(sessionId: string) {
         cache.set(sessionId, identityFromProfile(row));
         writeIdentityCache();
         notify();
+        maybeResolveSelfie(sessionId);
       }
     })
     .catch(() => {})
