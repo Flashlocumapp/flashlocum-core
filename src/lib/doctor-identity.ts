@@ -13,7 +13,8 @@ export type DoctorIdentity = {
   shortName: string;      // e.g. "Dr. Emmanuel A."
   initials: string;       // e.g. "EA"
   mdcn: string;           // exactly as stored, e.g. "MDCN/R/34729" — no prefix
-  selfieUrl: string | null;
+  selfieUrl: string | null;  // resolved (signed) URL ready for <img src>
+  selfiePath: string | null; // raw storage path persisted across reloads
   ratingId: string | null; // matches doctorEntityId(id)
   loaded: boolean;
 };
