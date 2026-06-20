@@ -58,6 +58,12 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
         const { sendPushToUser } = await import("@/lib/push.server");
         const doctorName = doc?.full_name ?? "your doctor";
         const version = rowVersion(req.updated_at as string | null);
+        const extras: Record<string, string> = {
+          type: "coverage_accepted",
+          requestId: data.requestId,
+          doctorName,
+        };
+        if (req.hospital) extras.hospitalName = req.hospital;
         await sendPushToUser(req.requester_id, {
           title: "Request accepted",
           body: `Dr. ${doctorName} accepted your request.`,
@@ -66,12 +72,7 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
           version,
           occurredAt: version,
           audience: "requester",
-          data: {
-            type: "coverage_accepted",
-            requestId: data.requestId,
-            doctorName,
-            hospitalName: req.hospital ?? undefined,
-          },
+          data: extras,
         });
       }
     } catch (e) {
