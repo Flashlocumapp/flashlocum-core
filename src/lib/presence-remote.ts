@@ -46,12 +46,17 @@ let activeSubscribers = 0;
 // `online` flag directly — no client-side staleness window, no inference.
 
 function buildSnapshot(): PresenceRow[] {
+  // Pass-through: emit every cached row, including online=false. The
+  // rendering layer (e.g. `onlineDoctors()` selector, map markers) is the
+  // single authority that filters by `online`. Filtering here would hide
+  // the online→offline transition entirely — the downstream merge would
+  // see the doctor "missing" from the snapshot and fall back to a stale
+  // online=true entry, delaying the offline event by minutes.
   const out: PresenceRow[] = [];
   for (const r of rawRows.values()) {
-    if (!r.online) continue;
     out.push({
       user_id: r.user_id,
-      online: true,
+      online: !!r.online,
       top: Number(r.top ?? 0.5),
       left: Number(r.left ?? 0.5),
       lat: r.lat ?? null,

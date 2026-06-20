@@ -1,58 +1,35 @@
-# Audit 11 — Pre-Approval Behavioural Confirmations
+## Root cause
 
-Explicit confirmations against each requirement. No code. No infrastructure framing.
+The DB realtime UPDATE for "doctor went offline" **is** being delivered to requesters (the previous RLS fix unblocked it). The delay is now entirely client-side, in two layers that conspire to hide the offline transition for up to 2 minutes:
 
----
+1. `src/lib/presence-remote.ts` → `buildSnapshot()` filters out any row where `online === false`. So when the realtime UPDATE arrives flipping a doctor to offline, the snapshot emitted to subscribers simply **omits** that doctor (instead of emitting them with `online:false`).
 
-## 1. Stale Request Elimination — Confirmed
+2. `src/lib/network.ts` → `mergePresenceRows()` sees the doctor missing from the incoming snapshot, then applies a `PRESENCE_PRESERVE_MS = 2 * 60 * 1000` fallback that **keeps the previous entry with `online:true`** as long as `lastSeen` is under 2 minutes old. The map's `onlineDoctors(net)` selector then keeps rendering that doctor as online.
 
-- Doctors will not see stale, cancelled, or out-of-scope requests after reload, reconnect, tab switch, app resume, or sign-in as a different identity.
-- Once a request is cancelled, edited out of a doctor's eligibility, or withdrawn by the requester, it cannot reappear on that doctor's Incoming Coverage feed under any condition.
-- A previously-cached row that survives identity change or session rehydration is treated as a defect, not as acceptable UX.
+Net effect: ONLINE→OFFLINE takes ~2 min to propagate visually (whichever expires first: server-side cron flipping `online=false`, or the 2-min client preserve window). OFFLINE→ONLINE looks instant because the row is now present with `online:true`, overwriting any stale entry immediately.
 
-## 2. Realtime Presence Sync — Confirmed
+The preserve fallback's stated purpose (smoothing a flicker while a now-removed client-side approval check resolved) no longer applies — approval is filtered server-side in `list_online_approved_doctors` and RLS, and the local doctor's own toggle path already updates state synchronously.
 
-- A doctor toggling online/offline (or being taken offline by the server) sees their own state reflect correctly everywhere they are signed in, without any refresh.
-- Requesters see doctors appear and disappear automatically, without any refresh.
-- Other doctors viewing presence-derived surfaces see the same change automatically, without any refresh.
-- There is no dependency on polling, manual refresh, or page reload to make presence correct.
-- Presence is server-authoritative: an app death (kill, crash, network loss) produces an offline transition that propagates the same way an explicit toggle-off does. "Ghost online" pins are a defect.
+## Fix (frontend only)
 
-## 3. Edit / Cancel Propagation (Pre-Acceptance) — Confirmed
+Two minimal edits, no schema or RLS changes:
 
-When a requester edits or cancels a request before acceptance:
+1. **`src/lib/presence-remote.ts` — `buildSnapshot()`**
+   - Remove the `if (!r.online) continue;` filter. Emit every row in `rawRows`, including those with `online:false`.
+   - Update the comment block accordingly: presence-remote is now a pass-through cache; the *rendering* layer decides which doctors are visible.
 
-- The request is removed from every eligible doctor's Incoming Coverage automatically, with no refresh.
-- This holds for repeated edit/cancel cycles on the same request — every cycle propagates cleanly.
-- A doctor cannot continue to see, tap, or accept a request that has been cancelled or edited out of their eligibility. If that ever happens, it is a defect to fix at the source, not a tolerated race.
-- If an edited request becomes eligible again (or is re-published), it appears on all newly-eligible doctors' screens automatically, with no refresh.
-- None of this depends on reload, refresh, navigation, or polling.
+2. **`src/lib/network.ts` — `mergePresenceRows()`**
+   - Delete the `PRESENCE_PRESERVE_MS` constant and the trailing "preserve prev entry when missing" loop.
+   - The merge becomes a straight projection of the incoming rows into `state.doctors`. A doctor flipped to `online:false` now arrives explicitly with that flag and the `onlineDoctors()` selector drops them on the next render.
 
-## 4. No Manual Refresh Dependency (Global) — Confirmed
+No other call site needs to change:
+- `onlineDoctors(net)` (line 1189) already filters by `d.online`.
+- `GoogleMapBackground` only renders markers for the doctors handed in, so offline doctors disappear from the map immediately.
+- The local doctor's own UI continues to write `upsertMyPresence` synchronously, so their own toggle is unaffected.
 
-No user — doctor, requester, or admin — will ever need to refresh, reload, navigate, or tap any "Refresh / Sync" control to see:
+## Verification after build
 
-- new requests
-- removed or cancelled requests
-- edits to a request
-- accept / start / pause / resume / end / payment / rating events
-- doctor online/offline status changes
-- their own self-initiated state changes
-
-The "Refresh Location" button is removed. No equivalent control exists or will be added.
-
----
-
-## Final Clarification — Confirmed Verbatim
-
-> **After implementing Audit 11, all request lifecycle changes and presence changes propagate in realtime across all connected clients without relying on polling, reload, or manual refresh under any condition.**
-
-The two sources of truth a client may render from are the server snapshot issued on subscription activation / identity rehydration, and the realtime event committed by the server. Anything else — polling, sticky fallbacks, surviving caches across identity change, optimistic state not reconciled by the next authoritative event — is treated as a defect and fixed at the source.
-
-The anchor principle remains:
-
-> **State change is reflected upon server commit via realtime subscription, or it is a defect.**
-
-All previously approved sections of Audit 11 (lifecycle event → UI map for all 10+ events, exact in-app toast copy, push payloads, one-channel-per-event rule, presence simplification, cross-device consistency matrix, identity-switch cache invalidation, "what must never appear" list) remain unchanged.
-
-**Awaiting approval to proceed to implementation.**
+- Doctor A toggles Offline → requester B sees the marker disappear within one realtime tick (sub-second on the same network), with no reload.
+- Doctor A toggles Online → marker reappears immediately (unchanged from today).
+- Doctor A signs out → `signOutAndClearPresence` writes `online:false` before tearing down the session; marker disappears immediately.
+- No regression to the local doctor's own Online/Offline pill (driven by `useDispatch`, not the presence snapshot).
