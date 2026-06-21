@@ -317,7 +317,40 @@ export async function heartbeatPresence(online: boolean): Promise<void> {
   if (error && error.code !== "PGRST116") {
     await upsertMyPresence({ online });
   }
+  // Stage 0 self-check: read our own row back. If the server disagrees with
+  // local intent (e.g. cron has flipped us offline while the channel was
+  // dead), trust the server, surface a toast, and emit so UI reflects truth.
+  try {
+    const { data, error: readErr } = await supabase
+      .from(TABLE)
+      .select("online,last_seen,top,left,lat,lng")
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (readErr || !data) return;
+    const serverOnline = !!data.online;
+    if (serverOnline !== online) {
+      rawRows.set(uid, {
+        user_id: uid,
+        online: serverOnline,
+        last_seen: data.last_seen,
+        top: Number(data.top ?? 0.5),
+        left: Number(data.left ?? 0.5),
+        lat: data.lat ?? null,
+        lng: data.lng ?? null,
+      });
+      emit();
+      pushToast({
+        tone: serverOnline ? "info" : "warn",
+        title: serverOnline
+          ? "You're back online."
+          : "You went offline — tap online to resume receiving offers.",
+      });
+    }
+  } catch {
+    /* non-fatal */
+  }
 }
+
 
 /** Mark me offline (e.g. on sign-out / explicit toggle / unload). */
 export async function clearMyPresence(): Promise<void> {
