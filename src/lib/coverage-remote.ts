@@ -206,6 +206,7 @@ export function rowToNet(r: Row): NetRequest {
     totalBilledAmount: r.total_billed_amount ?? undefined,
     paymentStatus: r.payment_status ?? undefined,
     paymentReference: r.payment_reference ?? undefined,
+    paymentDueAt: r.payment_due_at ?? undefined,
     paidAt: r.paid_at ? new Date(r.paid_at).getTime() : undefined,
     remittedAt: r.remitted_at ? new Date(r.remitted_at).getTime() : undefined,
     environment: r.environment === "busy" ? "busy" : "normal",
