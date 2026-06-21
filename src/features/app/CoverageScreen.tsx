@@ -1230,6 +1230,7 @@ function Avatar({
 
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { upcoming, history } = useDispatch();
+  const net = useNetwork();
 
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
