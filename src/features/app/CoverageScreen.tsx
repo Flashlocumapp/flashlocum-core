@@ -942,8 +942,32 @@ function RequestCard({
         </div>
       </div>
 
-      {(isUpcoming || isActive) && (
+      {(isUpcoming || isActive || isPaymentPending) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 pl-[56px]">
+          {isPaymentPending && (
+            <>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.06em]"
+                style={{
+                  background: "color-mix(in oklab, var(--color-warning, #b45309) 14%, transparent)",
+                  color: "var(--color-warning, #b45309)",
+                }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor" }} />
+                Payment pending
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEnd(); }}
+                className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+                style={{
+                  background: "var(--color-foreground)",
+                  color: "var(--color-background)",
+                }}
+              >
+                Continue payment
+              </button>
+            </>
+          )}
           {isUpcoming && (
             <button
               onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
