@@ -103,6 +103,13 @@ function amPmFromHHMM(s: string): string {
 }
 
 function toRequestItem(r: NetRequest): RequestItem {
+  // `awaiting_payment` is its own first-class client status now. It is NOT
+  // mapped back to "active" — the row is past End Shift, the bill is locked
+  // server-side, and the only valid action is "Continue payment". The card
+  // still lives under the Active tab (so the user finds it where they left
+  // it) but the CTA / visuals are different. See PAYMENT_SESSION_STABILITY
+  // audit: client must never flip a row out of awaiting_payment — only the
+  // Monnify webhook (→ "completed") does.
   const status: ReqStatus =
     r.status === "active"
       ? "active"
@@ -111,7 +118,7 @@ function toRequestItem(r: NetRequest): RequestItem {
         : r.status === "paused"
           ? "upcoming"
           : r.status === "awaiting_payment"
-            ? "active"
+            ? "payment_pending"
             : "completed";
   const outcome =
     r.status === "completed"
@@ -162,6 +169,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     environment: r.environment ?? "normal",
     everStarted: !!r.everStarted || (r.accumulatedMs ?? 0) > 0 || (r.dayIndex ?? 1) > 1,
+    paymentDueAt: r.paymentDueAt,
   };
 }
 
