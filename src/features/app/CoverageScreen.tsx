@@ -857,7 +857,13 @@ function RequestCard({
     ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
     : baseMeta;
 
-  const onCardClick = isHistory ? onOpenHistory : onOpenDetail;
+  // payment_pending: tapping anywhere on the card resumes the payment
+  // session — never the active-shift detail sheet.
+  const onCardClick = isHistory
+    ? onOpenHistory
+    : isPaymentPending
+      ? onEnd
+      : onOpenDetail;
   const wrapperProps = {
     onClick: onCardClick,
     role: "button" as const,
