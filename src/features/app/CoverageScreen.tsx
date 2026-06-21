@@ -48,7 +48,7 @@ import { useSimClock } from "@/lib/clock";
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
-type ReqStatus = "upcoming" | "active" | "completed";
+type ReqStatus = "upcoming" | "active" | "payment_pending" | "completed";
 type RequestItem = {
   id: string;
   doctorSid: string | undefined;
@@ -73,6 +73,9 @@ type RequestItem = {
   environment?: "normal" | "busy";
   /** Monotonic flag — true once the shift has ever entered Active. */
   everStarted: boolean;
+  /** Server-owned ISO deadline for the 15-minute settlement window.
+   *  Only meaningful when status === "payment_pending". */
+  paymentDueAt?: string;
 };
 
 
