@@ -1293,6 +1293,30 @@ function ConfirmedPane({
     return Array.from(map.values()).sort((a, b) => a.day - b.day);
   })();
 
+  // Aggregate exact start / end / worked / billed across every segment so
+  // the Settlement Confirmed page shows the operational truth of the shift.
+  const shiftSpan = (() => {
+    let earliestStart: number | null = null;
+    let latestEnd: number | null = null;
+    let actualMin = 0;
+    let billedMin = 0;
+    for (const s of segments) {
+      const startMs = s.started_at ? Date.parse(s.started_at) : NaN;
+      const endMs = s.ended_at ? Date.parse(s.ended_at) : NaN;
+      if (Number.isFinite(startMs)) {
+        if (earliestStart == null || startMs < earliestStart) earliestStart = startMs;
+      }
+      if (Number.isFinite(endMs)) {
+        if (latestEnd == null || endMs > latestEnd) latestEnd = endMs;
+      }
+      if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+        actualMin += Math.max(0, Math.round((endMs - startMs) / 60000));
+      }
+      billedMin += s.billed_minutes ?? 0;
+    }
+    return { earliestStart, latestEnd, actualMin, billedMin };
+  })();
+
   const fmtSegTime = (iso: string | null) => {
     if (!iso) return "—";
     const d = new Date(iso);
