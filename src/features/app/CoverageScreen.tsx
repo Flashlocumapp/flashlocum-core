@@ -194,12 +194,51 @@ export function CoverageScreen() {
   useEffect(() => subscribeRoleChange(() => setLocalRole(getRole())), []);
   if (!role) return null;
 
-  return role === "cover" ? (
-    <DoctorCoverage tab={tab} setTab={setTab} />
-  ) : (
-    <RequesterCoverage tab={tab} setTab={setTab} />
+  return (
+    <>
+      <ReconnectingPill />
+      {role === "cover" ? (
+        <DoctorCoverage tab={tab} setTab={setTab} />
+      ) : (
+        <RequesterCoverage tab={tab} setTab={setTab} />
+      )}
+    </>
   );
 }
+
+function ReconnectingPill() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    return subscribeRealtimeHealth((h) => setShow(isAnyReconnecting(h)));
+  }, []);
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          className="pointer-events-none fixed inset-x-0 top-2 z-50 mx-auto flex max-w-md justify-center px-5"
+        >
+          <span
+            className="flex items-center gap-2 rounded-full px-3 py-1 text-[11.5px] font-medium shadow-[0_4px_18px_rgba(0,0,0,0.10)]"
+            style={{
+              background: "var(--color-surface-elevated)",
+              color: "var(--color-foreground)",
+            }}
+          >
+            <span
+              className="h-1.5 w-1.5 animate-pulse rounded-full"
+              style={{ background: "var(--color-warning, #f5a524)" }}
+            />
+            Reconnecting…
+          </span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 
 // ============ REQUESTER ============
 
