@@ -674,7 +674,15 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!historyDetail}
         item={historyDetail}
         onDismiss={() => setHistoryId(null)}
-        onRate={(id, rating) => {
+        onRate={async (id, rating, feedback) => {
+          // Persist to the backend so trust + admin dashboard reflect it.
+          // The sheet itself optimistically collapses the form on submit;
+          // we still surface an error toast if the RPC truly fails.
+          const res = await submitShiftRating(id, rating, feedback || null);
+          if (!res.ok && res.error !== "already_rated") {
+            pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+            return;
+          }
           setRatings((prev) => ({ ...prev, [id]: rating }));
           setHistoryId(null);
         }}
