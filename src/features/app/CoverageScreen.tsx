@@ -287,9 +287,33 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // payment_pending rows live under the Active tab — user finds them where
+  // they pressed End Shift — but render with the Continue payment CTA.
   const filtered = useMemo(
-    () => items.filter((i) => i.status === tab),
+    () =>
+      items.filter((i) =>
+        tab === "active"
+          ? i.status === "active" || i.status === "payment_pending"
+          : i.status === tab,
+      ),
     [items, tab],
+  );
+
+  // ---- Settlement sheet auto-restore ----
+  // PAYMENT_SESSION_STABILITY: any request whose SERVER status is
+  // awaiting_payment must re-open the settlement sheet on mount / refresh /
+  // reconnect / app reopen. The sheet is React state only, so without this
+  // effect a refresh would leave the user staring at the card with no way
+  // back to the payment screen except re-tapping a button.
+  //
+  // A per-request "user dismissed" ref keeps the sheet from immediately
+  // re-popping on the same render when the user explicitly closes it. The
+  // user reopens via the Continue payment CTA on the card (which clears
+  // the flag).
+  const dismissedPendingRef = useRef<Set<string>>(new Set());
+  const pendingItem = useMemo(
+    () => items.find((i) => i.status === "payment_pending") ?? null,
+    [items],
   );
 
   const historyItem = items.find((i) => i.id === historyId) ?? null;
