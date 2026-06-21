@@ -45,6 +45,7 @@ import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
 import { subscribeRealtimeHealth, isAnyReconnecting } from "@/lib/realtime-health";
+import { isRated, markRated, useRatedShiftsVersion } from "@/lib/rated-shifts";
 
 
 
