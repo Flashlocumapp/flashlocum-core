@@ -1553,6 +1553,35 @@ function DoctorCoverageDetail({
               label="Settlement"
               value={isHist(item) ? item.settlementStatus : "Pending"}
             />
+            {isHist(item) && (() => {
+              const row = netRows[item.id];
+              const startedMs = row?.firstStartedAt ?? row?.startedAt ?? null;
+              const endedMs = row?.paidAt ?? row?.updatedAt ?? null;
+              const mins = typeof row?.accumulatedMs === "number" ? Math.round(row.accumulatedMs / 60000) : 0;
+              const fmt = (ms: number) => {
+                const d = new Date(ms);
+                return Number.isNaN(d.getTime()) ? null : d.toLocaleString("en-NG", {
+                  weekday: "short", day: "2-digit", month: "short",
+                  hour: "2-digit", minute: "2-digit", hour12: true,
+                });
+              };
+              const hrMin = (m: number) => {
+                const h = Math.floor(m / 60); const r = m % 60;
+                if (h === 0) return `${r}min`;
+                if (r === 0) return `${h}hr`;
+                return `${h}hr ${r}min`;
+              };
+              const startedLabel = startedMs ? fmt(startedMs) : null;
+              const endedLabel = endedMs ? fmt(endedMs) : null;
+              return (
+                <>
+                  {startedLabel && <DetailRow label="Started" value={startedLabel} />}
+                  {endedLabel && <DetailRow label="Ended" value={endedLabel} />}
+                  {mins > 0 && <DetailRow label="Hours worked" value={hrMin(mins)} />}
+                  {mins > 0 && <DetailRow label="Hours billed" value={hrMin(mins)} />}
+                </>
+              );
+            })()}
             {isHist(item) && (
               <DetailRow label="Completed" value={item.completedOn} />
             )}
