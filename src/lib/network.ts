@@ -208,6 +208,10 @@ export type NetRequest = {
   /** Requester→FlashLocum payment state ('pending' | 'paid'). */
   paymentStatus?: string;
   paymentReference?: string;
+  /** Server-owned absolute deadline for the 15-minute settlement window
+   *  (ISO timestamp). Set by end_shift; the settlement UI derives the
+   *  countdown from this so it survives refresh / reconnect / reopen. */
+  paymentDueAt?: string;
   /** Timestamp (ms) when requester payment cleared. */
   paidAt?: number;
   /** Timestamp (ms) when FlashLocum remitted the payout to the doctor. */
