@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
+import { setChannelHealth, type ChannelKey } from "./realtime-health";
+
 
 type Row = {
   id: string;
