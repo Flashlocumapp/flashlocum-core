@@ -357,8 +357,20 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    * the one Monnify checkout. Webhook confirmation is the only source of
    * truth for payment success.
    */
-  const requestEnd = (id: string) => setEndConfirmId(id);
-  const beginEndShift = (id: string) => {
+  // For an ACTIVE row: prompt confirmation, then open the sheet (which
+  // runs end_shift). For a PAYMENT_PENDING row: skip the prompt and the
+  // end_shift RPC — the server has already locked the bill; just reopen
+  // the sheet so the existing Monnify session resumes via RESUME-IF-PENDING.
+  const requestEnd = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (item?.status === "payment_pending") {
+      dismissedPendingRef.current.delete(id);
+      openSettlementFor(id);
+      return;
+    }
+    setEndConfirmId(id);
+  };
+  const openSettlementFor = (id: string) => {
     const item = items.find((i) => i.id === id);
     const r = net.requests[id];
     if (!item) return;
@@ -375,6 +387,19 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       environment: (r?.environment ?? "normal") as "normal" | "busy",
     });
   };
+  const beginEndShift = (id: string) => openSettlementFor(id);
+
+  // Auto-restore: when the server says we have a payment_pending row, the
+  // sheet must be visible — unless the user has actively dismissed it this
+  // session. Survives refresh, reconnect, and app reopen because it keys
+  // off server state, not React state.
+  useEffect(() => {
+    if (!pendingItem) return;
+    if (settlingSnapshot) return;
+    if (dismissedPendingRef.current.has(pendingItem.id)) return;
+    openSettlementFor(pendingItem.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingItem?.id, settlingSnapshot]);
 
   const confirmEnd = async () => {
     if (!settlingId) return;
