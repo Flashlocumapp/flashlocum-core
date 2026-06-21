@@ -206,6 +206,12 @@ export function HistoryDetailSheet({
         </div>
       )}
 
+      {!showRating && effectiveRating == null && alreadyRated && (
+        <div className="mt-3 text-[12.5px] text-muted-foreground">
+          You've already rated this coverage.
+        </div>
+      )}
+
     </DismissSheet>
   );
 }
