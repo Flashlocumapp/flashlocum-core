@@ -653,6 +653,9 @@ function ensureChannelForUser(userId: string) {
       // stays down past a grace window.
       if (status === "SUBSCRIBED") {
         clearChannelDownGrace();
+        resetBackoff("coverage");
+        setChannelHealth("coverage", "ok");
+        markRealtimeActivity();
         void refreshSnapshot();
       } else if (
         status === "CHANNEL_ERROR" ||
@@ -660,8 +663,20 @@ function ensureChannelForUser(userId: string) {
         status === "CLOSED"
       ) {
         scheduleChannelDownBlank();
+        // Stage 0 watchdog: tear down and re-subscribe with exp. backoff.
+        scheduleReconnect("coverage", () => {
+          if (!channelUserId) return;
+          if (channel) {
+            supabase.removeChannel(channel);
+            channel = null;
+          }
+          const uid = channelUserId;
+          channelUserId = null;
+          ensureChannelForUser(uid);
+        });
       }
     });
+
 }
 
 // 10s grace before a dropped realtime channel invalidates the live snapshot.
