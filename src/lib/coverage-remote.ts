@@ -486,7 +486,9 @@ async function refreshSnapshot(): Promise<void> {
     // snapshot. Incoming Coverage gates on this so cached rows can never
     // be presented as live broadcasts.
     setLiveSnapshotSeen(true);
+    markRealtimeActivity();
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+
   })().finally(() => {
     refreshInFlight = null;
     if (refreshPending) {
