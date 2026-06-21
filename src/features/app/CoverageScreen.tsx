@@ -23,6 +23,7 @@ import {
   type HistoryItem,
 } from "@/features/cover/dispatch";
 import { recordRating } from "@/lib/ratings";
+import { submitShiftRating } from "@/lib/trust";
 import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
 import { getDoctorIdentity, useDoctorIdentity } from "@/lib/doctor-identity";
 
@@ -317,6 +318,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   );
 
   const historyItem = items.find((i) => i.id === historyId) ?? null;
+  const historyRow = historyItem ? net.requests[historyItem.id] : null;
   const historyDetail: HistoryDetail | null = historyItem
     ? {
         id: historyItem.id,
@@ -326,6 +328,20 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         amount: historyItem.amount,
         rating: ratings[historyItem.id],
         environment: historyItem.environment,
+        startedAtMs: historyRow?.firstStartedAt ?? historyRow?.startedAt ?? null,
+        endedAtMs:
+          historyRow?.paidAt ??
+          (historyRow?.paymentDueAt
+            ? Date.parse(historyRow.paymentDueAt) - 15 * 60 * 1000
+            : null),
+        actualMinutes:
+          typeof historyRow?.accumulatedMs === "number"
+            ? Math.round(historyRow.accumulatedMs / 60000)
+            : null,
+        billedMinutes:
+          typeof historyRow?.accumulatedMs === "number"
+            ? Math.round(historyRow.accumulatedMs / 60000)
+            : null,
       }
     : null;
 
@@ -397,9 +413,14 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     if (!pendingItem) return;
     if (settlingSnapshot) return;
     if (dismissedPendingRef.current.has(pendingItem.id)) return;
+    // PAYMENT_SESSION_STABILITY: wait until the server-owned deadline is
+    // present before mounting the sheet. Without this guard the sheet
+    // opens with a null paymentDueAt and the countdown briefly anchors to
+    // simNow() — visible to the user as a reset to 15:00 on refresh.
+    if (!pendingItem.paymentDueAt) return;
     openSettlementFor(pendingItem.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingItem?.id, settlingSnapshot]);
+  }, [pendingItem?.id, pendingItem?.paymentDueAt, settlingSnapshot]);
 
   const confirmEnd = async () => {
     if (!settlingId) return;
@@ -653,7 +674,15 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         open={!!historyDetail}
         item={historyDetail}
         onDismiss={() => setHistoryId(null)}
-        onRate={(id, rating) => {
+        onRate={async (id, rating, feedback) => {
+          // Persist to the backend so trust + admin dashboard reflect it.
+          // The sheet itself optimistically collapses the form on submit;
+          // we still surface an error toast if the RPC truly fails.
+          const res = await submitShiftRating(id, rating, feedback || null);
+          if (!res.ok && res.error !== "already_rated") {
+            pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
+            return;
+          }
           setRatings((prev) => ({ ...prev, [id]: rating }));
           setHistoryId(null);
         }}

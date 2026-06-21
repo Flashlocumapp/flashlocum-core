@@ -4,6 +4,29 @@ function fmtNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
 }
 
+function fmtHrMin(min: number) {
+  const m = Math.max(0, Math.floor(min));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r}min`;
+  if (r === 0) return `${h}hr`;
+  return `${h}hr ${r}min`;
+}
+
+function fmtMoment(ms: number | null | undefined) {
+  if (!ms) return null;
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-NG", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 /**
  * Doctor-facing "Payment received" confirmation — mirrors the requester's
  * Settlement Confirmed page. Full-screen with a green check, summary card
@@ -16,6 +39,10 @@ export function PaymentSummaryOverlay({
   coverage,
   total,
   feePct,
+  startedAtMs,
+  endedAtMs,
+  actualMinutes,
+  billedMinutes,
   onAcknowledge,
 }: {
   open: boolean;
@@ -23,11 +50,21 @@ export function PaymentSummaryOverlay({
   coverage?: string;
   total: number;
   feePct: number;
+  /** Exact moment the shift first started (ms). */
+  startedAtMs?: number | null;
+  /** Exact moment the shift ended (ms) — last segment ended_at, or paidAt fallback. */
+  endedAtMs?: number | null;
+  /** Sum of actual worked minutes across all segments. */
+  actualMinutes?: number | null;
+  /** Server-billed minutes (sum of shift_segments.billed_minutes). */
+  billedMinutes?: number | null;
   onAcknowledge: () => void;
 }) {
   if (!open) return null;
   const fee = Math.round((total * feePct) / 100);
   const net = total - fee;
+  const startedLabel = fmtMoment(startedAtMs ?? null);
+  const endedLabel = fmtMoment(endedAtMs ?? null);
 
   return (
     <motion.section
@@ -74,6 +111,14 @@ export function PaymentSummaryOverlay({
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5">
           <Row label="Facility" value={hospital} />
           {coverage && <Row label="Coverage" value={coverage} />}
+          {startedLabel && <Row label="Started" value={startedLabel} />}
+          {endedLabel && <Row label="Ended" value={endedLabel} />}
+          {typeof actualMinutes === "number" && actualMinutes > 0 && (
+            <Row label="Hours worked" value={fmtHrMin(actualMinutes)} />
+          )}
+          {typeof billedMinutes === "number" && billedMinutes > 0 && (
+            <Row label="Hours billed" value={fmtHrMin(billedMinutes)} />
+          )}
           <Row label="Total Payment" value={fmtNaira(total)} />
           <Row label={`FlashLocum Fee (${feePct}%)`} value={"−" + fmtNaira(fee)} muted />
           <Row label="Amount To Doctor" value={fmtNaira(net)} strong />

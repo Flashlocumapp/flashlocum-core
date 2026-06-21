@@ -215,6 +215,7 @@ export function rowToNet(r: Row): NetRequest {
       ? new Date(r.broadcast_started_at).getTime()
       : new Date(r.created_at).getTime(),
     everStarted: !!r.first_started_at,
+    firstStartedAt: r.first_started_at ? Date.parse(r.first_started_at) : undefined,
   };
 }
 

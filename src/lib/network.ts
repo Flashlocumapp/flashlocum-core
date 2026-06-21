@@ -234,6 +234,9 @@ export type NetRequest = {
    *  cleared by pause/resume. Sourced from `coverage_requests.first_started_at`.
    */
   everStarted?: boolean;
+  /** First time this shift ever transitioned into Active (ms epoch). Sourced
+   *  from `coverage_requests.first_started_at`. Monotonic — survives pauses. */
+  firstStartedAt?: number;
 };
 
 

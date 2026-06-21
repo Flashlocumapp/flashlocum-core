@@ -11,6 +11,7 @@ import { pushToast } from "@/lib/notifications";
 import { fromLocal, ingest } from "@/lib/feedback";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
+import { useNetwork } from "@/lib/network";
 
 
 import {
@@ -38,6 +39,22 @@ export function CoverDispatchPortal() {
 function CoverDispatchOverlays() {
   const { incoming, accepted, pendingRating } = useDispatch();
   const [ratingDismissed, setRatingDismissed] = useState<string | null>(null);
+  // Pull operational timestamps directly from the live request row so the
+  // Payment received card reflects the exact start / end / billed values
+  // backed by shift_segments → coverage_requests.
+  const netState = useNetwork();
+  const reqRow = pendingRating
+    ? netState.requests[pendingRating.requestId]
+    : undefined;
+  const startedAtMs = reqRow?.firstStartedAt ?? reqRow?.startedAt ?? null;
+  const endedAtMs =
+    reqRow?.paidAt ??
+    (reqRow?.paymentDueAt ? Date.parse(reqRow.paymentDueAt) - 15 * 60 * 1000 : null);
+  const billedMinutes =
+    typeof reqRow?.accumulatedMs === "number"
+      ? Math.round(reqRow.accumulatedMs / 60000)
+      : null;
+  const actualMinutes = billedMinutes;
 
   if (!incoming && !accepted && !pendingRating) return null;
 
@@ -75,6 +92,10 @@ function CoverDispatchOverlays() {
         coverage={pendingRating?.coverage}
         total={pendingRating?.total ?? 0}
         feePct={pendingRating?.feePct ?? 15}
+        startedAtMs={startedAtMs}
+        endedAtMs={endedAtMs}
+        actualMinutes={actualMinutes}
+        billedMinutes={billedMinutes}
         onAcknowledge={() => {
           dismissPendingRating();
           setRatingDismissed(null);

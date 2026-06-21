@@ -240,84 +240,105 @@ export function ShiftSettlement({
   // settlementReadyRef / frozenAmountRef and re-fire End Shift, producing the
   // "₦0 + shift is not ready" race.
   useEffect(() => {
-    if (open) {
-      // PAYMENT_SESSION_STABILITY: when the row is already past End Shift
-      // on the server, we have a server-owned deadline (paymentDueAt) that
-      // anchors the countdown. Reconstruct the original "End Shift moment"
-      // as `paymentDueAt - GRACE_TOTAL` so the existing
-      // `(tick - phaseStartedAtRef) / 1000` math yields the correct elapsed
-      // seconds across refresh, kill-tab, reconnect, and app reopen.
-      const dueMs = serverPaymentDueAt ? Date.parse(serverPaymentDueAt) : NaN;
-      const hasServerDeadline = Number.isFinite(dueMs);
-      const anchoredEndedAt = hasServerDeadline ? dueMs - GRACE_TOTAL * 1000 : null;
+    if (!open) return;
+    // PAYMENT_SESSION_STABILITY: when the row is already past End Shift
+    // on the server, the server deadline (paymentDueAt) is the ONLY valid
+    // anchor for the 15-minute countdown. If we don't have it yet (parent
+    // is mid-fetch on refresh/reopen), bail out — the next render with a
+    // valid deadline will seed the refs. Never fall back to simNow() for
+    // a restored session or the countdown jumps back to 15:00 on refresh.
+    const dueMs = serverPaymentDueAt ? Date.parse(serverPaymentDueAt) : NaN;
+    const hasServerDeadline = Number.isFinite(dueMs);
+    if (alreadyAwaitingPayment && !hasServerDeadline) return;
 
-      // Derive the initial phase from the server deadline when present, so
-      // a refresh past the 15-minute window lands in overtime instead of
-      // restarting a fresh settlement countdown.
-      let effectivePhase: Phase = initialPhase;
-      if (
-        hasServerDeadline &&
-        anchoredEndedAt !== null &&
-        (initialPhase === "settlement" || initialPhase === "grace" || initialPhase === "overtime")
-      ) {
-        const elapsedSec = Math.max(0, Math.floor((simNow() - anchoredEndedAt) / 1000));
-        if (elapsedSec >= GRACE_TOTAL) effectivePhase = "overtime";
-        else if (elapsedSec >= VISIBLE_COUNTDOWN) effectivePhase = "grace";
-        else effectivePhase = "settlement";
+    const anchoredEndedAt = hasServerDeadline ? dueMs - GRACE_TOTAL * 1000 : null;
+
+    // Derive the initial phase from the server deadline when present, so
+    // a refresh past the 15-minute window lands in overtime instead of
+    // restarting a fresh settlement countdown.
+    let effectivePhase: Phase = initialPhase;
+    if (
+      hasServerDeadline &&
+      anchoredEndedAt !== null &&
+      (initialPhase === "settlement" || initialPhase === "grace" || initialPhase === "overtime")
+    ) {
+      const elapsedSec = Math.max(0, Math.floor((simNow() - anchoredEndedAt) / 1000));
+      if (elapsedSec >= GRACE_TOTAL) effectivePhase = "overtime";
+      else if (elapsedSec >= VISIBLE_COUNTDOWN) effectivePhase = "grace";
+      else effectivePhase = "settlement";
+    }
+    setPhase(effectivePhase);
+    directEndStartedRef.current = false;
+    // Settlement readiness: server-owned end_shift is the only gate.
+    // When the row is already awaiting_payment, the bill is locked — open
+    // the gate immediately and skip handleEndShift.
+    settlementReadyRef.current =
+      alreadyAwaitingPayment ||
+      !(requestId && initialPhase === "settlement");
+    const now = simNow();
+    // Idempotent ref writes: only seed when null OR when the server-anchored
+    // value differs from the existing anchor by >1s. Prevents identity-only
+    // re-renders (realtime row patch with identical paymentDueAt) from
+    // resetting the countdown by a few ms each refresh.
+    const nextPhaseStart =
+      effectivePhase === "active" || effectivePhase === "confirmed"
+        ? null
+        : (anchoredEndedAt ?? now);
+    if (
+      phaseStartedAtRef.current == null ||
+      (nextPhaseStart != null &&
+        Math.abs((phaseStartedAtRef.current ?? 0) - nextPhaseStart) > 1000)
+    ) {
+      phaseStartedAtRef.current = nextPhaseStart;
+    }
+    const nextOvertimeStart =
+      effectivePhase === "overtime"
+        ? (anchoredEndedAt != null ? anchoredEndedAt + GRACE_TOTAL * 1000 : now)
+        : null;
+    if (
+      overtimeStartedAtRef.current == null ||
+      (nextOvertimeStart != null &&
+        Math.abs((overtimeStartedAtRef.current ?? 0) - nextOvertimeStart) > 1000)
+    ) {
+      overtimeStartedAtRef.current = nextOvertimeStart;
+    }
+    const nextEndedAt =
+      effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime"
+        ? (anchoredEndedAt ?? now)
+        : null;
+    if (
+      endedAtRef.current == null ||
+      (nextEndedAt != null &&
+        Math.abs((endedAtRef.current ?? 0) - nextEndedAt) > 1000)
+    ) {
+      endedAtRef.current = nextEndedAt;
+    }
+    confirmedAtRef.current = null;
+    autoConfirmAt.current = null;
+    // Seed the frozen amount only if not already seeded. Prefer the
+    // server-frozen total (total_billed_amount). Live-timer fallback only
+    // runs on the very first End Shift press before the server responds.
+    if (effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime") {
+      if (typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0) {
+        frozenAmountRef.current = serverTotalBilledAmount;
+      } else if (frozenAmountRef.current === 0) {
+        const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
+        const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
+        const priced = computeWorkedPricing(
+          shift.coverageKind,
+          shift.startHHMM,
+          w,
+          shift.endHHMM,
+          shift.days,
+          shift.environment ?? "normal",
+          bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+        );
+        frozenBilledMinRef.current = priced.billableMinutes;
+        frozenAmountRef.current = priced.amount;
       }
-      setPhase(effectivePhase);
-      directEndStartedRef.current = false;
-      // Settlement readiness: server-owned end_shift is the only gate.
-      // When the row is already awaiting_payment, the bill is locked — open
-      // the gate immediately and skip handleEndShift.
-      settlementReadyRef.current =
-        alreadyAwaitingPayment ||
-        !(requestId && initialPhase === "settlement");
-      const now = simNow();
-      // phaseStartedAtRef anchors the countdown. Prefer the server deadline
-      // (stable across refresh/reconnect); fall back to now() only when we
-      // genuinely don't have one (first End Shift press).
-      phaseStartedAtRef.current =
-        effectivePhase === "active" || effectivePhase === "confirmed"
-          ? null
-          : (anchoredEndedAt ?? now);
-      overtimeStartedAtRef.current =
-        effectivePhase === "overtime"
-          ? (anchoredEndedAt != null ? anchoredEndedAt + GRACE_TOTAL * 1000 : now)
-          : null;
-      endedAtRef.current =
-        effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime"
-          ? (anchoredEndedAt ?? now)
-          : null;
-      confirmedAtRef.current = null;
-      autoConfirmAt.current = null;
-      // Seed the frozen amount. Prefer the server-frozen total
-      // (total_billed_amount) — it never drifts across re-opens. Only fall
-      // back to a live-timer estimate when the server hasn't told us yet
-      // (first End Shift press, before end_shift returns).
-      if (effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime") {
-        if (typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0) {
-          frozenAmountRef.current = serverTotalBilledAmount;
-          frozenBilledMinRef.current = frozenBilledMinRef.current || 0;
-        } else {
-          const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
-          const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-          const priced = computeWorkedPricing(
-            shift.coverageKind,
-            shift.startHHMM,
-            w,
-            shift.endHHMM,
-            shift.days,
-            shift.environment ?? "normal",
-            bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
-          );
-          frozenBilledMinRef.current = priced.billableMinutes;
-          frozenAmountRef.current = priced.amount;
-        }
-      } else {
-        frozenBilledMinRef.current = 0;
-        frozenAmountRef.current = 0;
-      }
+    } else {
+      frozenBilledMinRef.current = 0;
+      frozenAmountRef.current = 0;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialPhase, requestId, intent, serverPaymentDueAt, serverTotalBilledAmount, alreadyAwaitingPayment]);
@@ -1272,6 +1293,30 @@ function ConfirmedPane({
     return Array.from(map.values()).sort((a, b) => a.day - b.day);
   })();
 
+  // Aggregate exact start / end / worked / billed across every segment so
+  // the Settlement Confirmed page shows the operational truth of the shift.
+  const shiftSpan = (() => {
+    let earliestStart: number | null = null;
+    let latestEnd: number | null = null;
+    let actualMin = 0;
+    let billedMin = 0;
+    for (const s of segments) {
+      const startMs = s.started_at ? Date.parse(s.started_at) : NaN;
+      const endMs = s.ended_at ? Date.parse(s.ended_at) : NaN;
+      if (Number.isFinite(startMs)) {
+        if (earliestStart == null || startMs < earliestStart) earliestStart = startMs;
+      }
+      if (Number.isFinite(endMs)) {
+        if (latestEnd == null || endMs > latestEnd) latestEnd = endMs;
+      }
+      if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+        actualMin += Math.max(0, Math.round((endMs - startMs) / 60000));
+      }
+      billedMin += s.billed_minutes ?? 0;
+    }
+    return { earliestStart, latestEnd, actualMin, billedMin };
+  })();
+
   const fmtSegTime = (iso: string | null) => {
     if (!iso) return "—";
     const d = new Date(iso);
@@ -1324,6 +1369,18 @@ function ConfirmedPane({
           <Row label="Coverage" value={coverageLabel} />
           {scheduleLabel && <Row label="Shift" value={scheduleLabel} />}
           <Row label="Doctor" value={doctor} />
+          {shiftSpan.earliestStart != null && (
+            <Row label="Started" value={fmtSegTime(new Date(shiftSpan.earliestStart).toISOString())} />
+          )}
+          {shiftSpan.latestEnd != null && (
+            <Row label="Ended" value={fmtSegTime(new Date(shiftSpan.latestEnd).toISOString())} />
+          )}
+          {shiftSpan.actualMin > 0 && (
+            <Row label="Hours worked" value={fmtHrMin(shiftSpan.actualMin)} />
+          )}
+          {shiftSpan.billedMin > 0 && (
+            <Row label="Hours billed" value={fmtHrMin(shiftSpan.billedMin)} />
+          )}
           <Row label="Settled" value={fmtNaira(settled)} strong />
           {paidAtLabel && <Row label="Paid at" value={paidAtLabel} />}
           {tx?.payment_reference && (
