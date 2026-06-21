@@ -92,6 +92,10 @@ function CoverDispatchOverlays() {
         coverage={pendingRating?.coverage}
         total={pendingRating?.total ?? 0}
         feePct={pendingRating?.feePct ?? 15}
+        startedAtMs={startedAtMs}
+        endedAtMs={endedAtMs}
+        actualMinutes={actualMinutes}
+        billedMinutes={billedMinutes}
         onAcknowledge={() => {
           dismissPendingRating();
           setRatingDismissed(null);
