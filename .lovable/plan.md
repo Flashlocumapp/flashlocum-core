@@ -1,79 +1,128 @@
-## Scope
 
-Four targeted fixes. UI/presentation + small data-plumbing only. No backend schema changes, no payment-architecture changes.
+# Scalability Assessment — Realtime, Presence, Invalidations
 
----
-
-### 1. Countdown resets on page refresh
-
-**Symptom:** the 15-minute settlement countdown jumps back to a fresh value after every refresh of the payment page.
-
-**Root cause (in `src/features/request/ShiftSettlement.tsx`):**
-- The reset effect (lines ~242-323) depends on `serverPaymentDueAt`. On a refresh, the row is fetched async — the sheet opens with `serverPaymentDueAt = null` first, then the value arrives and the effect re-runs. On the first pass, `phaseStartedAtRef` is anchored to `simNow()` (the fallback), so the countdown briefly resets.
-- Additionally, the `intent` and `requestId` identity-only deps still cause the effect body to re-seed `phaseStartedAtRef` / `frozenAmountRef` even when the server deadline is already known and unchanged.
-
-**Fix:**
-- Gate the reset effect so that when `alreadyAwaitingPayment === true`, it WAITS for a valid `serverPaymentDueAt` before anchoring refs (skip the `simNow()` fallback entirely for restored sessions).
-- Make refs idempotent: only write `phaseStartedAtRef` / `endedAtRef` / `frozenAmountRef` if they are currently null OR if the new anchored value differs by >1s. Prevents re-seeding on identical re-renders.
-- Stop the `serverTotalBilledAmount` change from re-triggering full reset; split it into its own small effect that only updates `frozenAmountRef`.
-- In `CoverageScreen.tsx` auto-restore: don't open `ShiftSettlement` until `net.requests[id].paymentDueAt` is present for an `awaiting_payment` row (one extra tick), so the sheet never mounts with `null` first.
+Honest read of the current design plus a staged remediation plan. No code has changed yet; this is the proposal you asked for.
 
 ---
 
-### 2. Exact start / end / billed-hours on summary, confirmed, and history pages
+## 1. Real-time scaling capacity
 
-Show, on a single read of `shift_segments` (already loaded on the confirmed pane):
-- **Started at** — first segment's `started_at`
-- **Ended at** — last closed segment's `ended_at`
-- **Actual hours worked** — sum of `(ended_at - started_at)` across segments
-- **Hours billed** — sum of `billed_minutes` across segments
+Current shape:
+- Every signed-in client opens **2 Supabase Realtime channels**: `coverage_requests` (postgres_changes, filtered) and `doctor_presence_changes` (postgres_changes, table-wide `event:"*"`).
+- Doctors additionally receive an `invalidate` broadcast on `coverage_invalidations` triggered by `coverage_requests_emit_invalidate`.
+- `presence-remote` subscribes to the **entire `doctor_presence` table** (no filter); RLS gates rows but the fan-out still happens server-side.
 
-**Files:**
-- `src/features/request/ShiftSettlement.tsx → ConfirmedPane`: add a "Shift times" block above "Settled" with Started / Ended / Worked / Billed rows derived from existing `segments[]` (already in scope, see lines 1256-1273). No new fetch.
-- `src/components/PaymentSummaryOverlay.tsx`: extend props with `startedAt`, `endedAt`, `actualMinutes`, `billedMinutes` and render the same four rows. Update the doctor caller (`CoverDispatchPortal`) to pass them from the existing segment data.
-- `src/components/HistoryDetailSheet.tsx`: extend the `HistoryDetail` type with the same four fields; render the rows above the Settlement amount for both doctor and requester history.
-- `src/lib/coverage-remote.ts`: when mapping a history row, derive the four values from `shift_segments` already returned (or add a lightweight `select` of `started_at, ended_at, billed_minutes` ordered by `segment_index`) and surface them on the `HistoryDetail` shape that `CoverageScreen.tsx` and the doctor `EarningsScreen.tsx` already consume.
+Verdict against your targets:
 
-Formatting: reuse `fmtSegTime` (already in `ShiftSettlement.tsx`) for timestamps; reuse `fmtHrMin` for durations.
-
----
-
-### 3. Remove device-settings disclaimer in Account tab
-
-`src/features/app/AccountScreen.tsx` line 320-322: delete the entire `<p>` block:
-
-```text
-Disabling push here mutes in-app alerts. To stop banners on your lock
-screen, change notification permission in your device settings.
-```
-
-No replacement copy.
+| Target | Verdict | Why |
+|---|---|---|
+| 10,000 concurrent doctors | **Will not hold on Supabase Realtime defaults.** | Supabase Realtime soft-caps around ~10k concurrent connections per project on standard plans, and `postgres_changes` is the most expensive subscription type (each WAL row is evaluated per subscriber). 10k doctors × 2 channels = 20k subs minimum. |
+| 1,000 shift updates / minute | **Borderline.** | Each `UPDATE` on `coverage_requests` fans out to every subscribed doctor via `postgres_changes`, plus a `broadcast` fan-out. At ~17/sec sustained with 10k subscribers that's ~170k messages/sec egress — well past the realtime tenant ceiling. |
+| Bottleneck point | **~1.5k–2k concurrent doctors** with current `postgres_changes`-heavy design, or sooner if a single shift edit storm hits (rev bump on every edit republishes). |
 
 ---
 
-### 4. History-Coverage rating sheet does not close / persist after submit
+## 2. Presence system scalability
 
-**Symptom:** Rating + comment submit successfully (visible in admin), but `HistoryDetailSheet` keeps showing the rating form / does not visually acknowledge that the rating was saved.
+- `doctor_presence` subscribed table-wide → every heartbeat UPDATE (25s cadence per doctor) is fanned out to every other subscriber. At 10k online doctors that's **~400 writes/sec × 10k subscribers = 4M msgs/sec** theoretical fan-out. RLS filters reads, not the WAL evaluation cost.
+- Heartbeat cadence 25s + 90s cron expiry is correct in concept but the cron job `expire_stale_doctor_presence` runs an unbounded `UPDATE ... WHERE last_seen < now()-90s`. Under load this becomes a long-running write that competes with heartbeats for row locks.
+- No batching, no `presence` channel (Supabase's purpose-built presence primitive is unused).
 
-**Root cause (in `src/features/app/CoverageScreen.tsx` lines 652-660):**
-- `onRate` only writes to local `ratings` state and closes the sheet. It never calls `submitShiftRating`, so the server rating is set via a different path (settlement RatingOverlay). On re-open of the same history row, `item.rating` from the server snapshot may not be populated, so `showRating = !item.rating` stays true and the form re-appears.
-
-**Fix:**
-- In `HistoryDetailSheet.tsx`: after the user taps Submit, await the parent's `onRate` (make it async-aware) and locally flip an internal `submittedRating` state so the form immediately collapses to "You rated this coverage X / 5" — independent of server refresh latency.
-- In `CoverageScreen.tsx` `onRate` handler: call `submitShiftRating(id, rating, feedback)` from `@/lib/trust`, then on success update local state AND close. On `already_rated` treat as success. On error, show the existing `pushToast` and keep the sheet open.
-- Ensure `item.rating` is hydrated from the server: in `coverage-remote.ts` history mapper, populate `rating` from the existing `ratings` table read (or `get_shift_rating_state` if already cached) so subsequent opens skip the form entirely.
+**Degradation point:** noticeable jitter around **500–1000 concurrent online doctors**; lock contention on `doctor_presence` and realtime egress become the dominant cost.
 
 ---
 
-## Out of scope
+## 3. Invalidation broadcast load
 
-- Monnify split-payment / Reserved Account architecture (unchanged).
-- Server schema (no migrations).
-- Any change to live `endShift` RPC behavior.
+- `coverage_requests_emit_invalidate` fires on every status/rev/broadcast_started_at change → one broadcast per change to the `coverage_invalidations` topic, received by **every** doctor.
+- `bump_request_rev_on_change` bumps `rev` on every material edit while `status IN (searching,paused)` — a requester rapidly editing an offer produces a broadcast storm proportional to keystrokes-as-edits.
+- No debouncing, no batching, no per-doctor targeting (geographic / role / availability scoping is done client-side after delivery).
 
-## Verification
+**Storm risk:** real. A national rollout with 200 simultaneous requesters editing offers ≈ tens of broadcasts/sec, each multiplied by every online doctor.
 
-- Refresh the payment page mid-countdown three times in a row: timer continues from server `payment_due_at`, never jumps back to 15:00.
-- Open Settlement Confirmed and Payment Summary after a multi-segment shift: Started / Ended / Worked / Billed match the values in admin → Shifts.
-- Account tab: disclaimer paragraph is gone.
-- Rate a completed shift from History (both doctor and requester): form collapses immediately, sheet closes, re-opening the row shows "You rated this coverage X / 5".
+---
+
+## 4. Database load under high activity
+
+- Each accept goes through `claim_coverage_request` (SECURITY DEFINER, single UPDATE with `WHERE status='searching' AND accepted_by IS NULL`) — that part is correct and race-safe.
+- Hot paths that will hurt at scale:
+  - `coverage_requests` has many wide triggers (`bump_request_rev_on_change`, `_cr_enforce_account_restriction`, `_lock_rate_on_insert`, `coverage_requests_emit_invalidate`) — every UPDATE pays all of them.
+  - `_auto_advance_day_boundary` and `drain_surcharge_due` are cron jobs doing `FOR UPDATE` loops up to 200 rows; fine today, will need pagination + batching at >5k active shifts.
+  - `list_open_coverage_requests` returns up to 500 rows on every reconnect for every doctor — at scale this is the dominant read.
+
+---
+
+## 5. Polling-removal impact (the most important risk)
+
+This is where the current design is most fragile. After the recent removal of polling fallback:
+
+- `coverage-remote` and `network.ts` rely on the realtime SUBSCRIBED callback to reconcile state on reconnect. If the websocket drops and silently fails to resubscribe (Supabase has had cases where `CHANNEL_ERROR`/`TIMED_OUT` arrives but reconnect backoff stalls), **Incoming Coverage can stay stale indefinitely**.
+- `doctor_presence` rows can be flipped offline server-side by cron, and if the realtime channel is dead the doctor's UI still shows themselves "online" — they'll think they're receiving offers when they aren't.
+- `ShiftSettlement` still has an adaptive billing fallback (good); `CoverageScreen` does not.
+- **There is no last-resort reconciliation timer.** A single dropped websocket = stale UI until manual refresh.
+
+This is the single highest-priority fix regardless of scale plans.
+
+---
+
+## 6. Overall verdict
+
+**Not production-scalable for a Nigeria-wide rollout as-is.** It is fine for Lagos pilot scale (low hundreds of concurrent doctors). What breaks first, in order:
+
+1. **Realtime fan-out on `doctor_presence` table-wide subscription** — first symptom around 500–1000 online doctors: presence updates lag, then drop.
+2. **`coverage_invalidations` broadcast storms** during edit-heavy periods — first symptom around 200+ concurrent requesters.
+3. **Per-doctor `postgres_changes` on `coverage_requests`** — first symptom around 1.5k–2k online doctors: missed events, reconnect storms after any Supabase Realtime hiccup.
+4. **Silent stale UI** from realtime drops — can happen *today* at any scale; not load-dependent.
+
+---
+
+## Remediation plan (staged)
+
+### Stage 0 — Safety net (do first, small, low-risk)
+
+Goal: eliminate the "silent stale UI" class of bug regardless of future redesign.
+
+1. **Reconciliation timer in `coverage-remote.ts` and `presence-remote.ts`.**
+   - Low-frequency safety poll: every **60s when tab visible**, paused when hidden, and a one-shot fetch on `visibilitychange → visible` and on `online` events.
+   - This is *not* the old per-second poll — it's a slow heartbeat that re-fetches the snapshot only if `(now - lastRealtimeEventAt) > 45s`.
+2. **Channel health watchdog.** When `channel.subscribe` returns `CHANNEL_ERROR` / `TIMED_OUT` / `CLOSED`, force `removeChannel` + re-subscribe with capped exponential backoff (1s → 30s) and a visible "Reconnecting…" indicator in CoverageScreen.
+3. **Heartbeat-driven self-check.** After each heartbeat, if our own `doctor_presence.online` row read back disagrees with local state, trust the server and surface a toast.
+
+### Stage 1 — Cut realtime fan-out (medium effort)
+
+4. **Replace table-wide `doctor_presence` postgres_changes with Supabase Presence channel** (`channel.track({...})`). Presence is gossip-based, scales O(participants) per region, and removes WAL fan-out entirely for heartbeats. Keep the `doctor_presence` table only as a recovery snapshot, written every ~2 minutes instead of every 25s.
+5. **Targeted `coverage_requests` subscriptions.** Doctors subscribe with a `filter` scoped to their service area (state/region), not table-wide. Add a `region` column + index; partition broadcasts.
+6. **Debounce `bump_request_rev_on_change`.** Only bump `rev` + `broadcast_started_at` once per request per 2s window; collapse keystroke-storm edits.
+
+### Stage 2 — Move fan-out off Postgres (larger redesign, once Stage 1 metrics justify it)
+
+7. **Edge-function fanout via a dedicated message bus.** Put a Cloudflare Worker (or Supabase Edge Function) in front of `coverage_invalidations`. Triggers `NOTIFY` once; the worker maintains per-region SSE/WebSocket rooms and pushes a *coalesced* "something changed since cursor X" message every 250ms max. Clients then pull only their own slice via `list_open_coverage_requests`. This decouples DB write rate from client fan-out cost.
+8. **Read-side caching.** `list_open_coverage_requests` results cached per region for 1s in the edge worker; cuts duplicate reads on reconnect storms.
+9. **Cron jobs become incremental.** `expire_stale_doctor_presence`, `drain_surcharge_due`, `_auto_advance_day_boundary` move to keyset-paginated batches with `FOR UPDATE SKIP LOCKED`.
+
+### Load thresholds the plan unlocks
+
+| Stage | Safe concurrent doctors | Safe edits/min |
+|---|---|---|
+| Today | ~500 | ~100 |
+| After Stage 0 | ~500 (same, but no silent staleness) | ~100 |
+| After Stage 1 | ~5,000 | ~600 |
+| After Stage 2 | 50,000+ | 5,000+ |
+
+---
+
+## What I'd build first if you approve
+
+Only Stage 0 in this first pass — it is small, reversible, and removes the most dangerous failure mode (silent stale UI) without touching architecture. Concretely:
+
+- `src/lib/coverage-remote.ts`: add `lastRealtimeEventAt` watermark, 60s visibility-gated reconciliation, channel health watchdog, exponential reconnect.
+- `src/lib/presence-remote.ts`: same watchdog + reconciliation; trust-server self-check after heartbeat.
+- `src/features/app/CoverageScreen.tsx`: small "Reconnecting…" pill when watchdog is in backoff.
+
+Stage 1 and Stage 2 are separate approvals — they involve a schema change (region column), pricing-time DB migration, and an edge worker, and I want metrics from Stage 0 before committing to them.
+
+### Out of scope for this plan
+
+- No changes to `claim_coverage_request`, billing, Monnify, or settlement code.
+- No changes to RLS or auth.
+- No changes to admin dashboards.
