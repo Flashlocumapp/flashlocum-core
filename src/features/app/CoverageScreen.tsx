@@ -542,12 +542,39 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
       <ShiftSettlement
         open={!!settlingSnapshot}
-        onClose={() => setSettlingSnapshot(null)}
+        onClose={() => {
+          // Mark as "user-dismissed" so the auto-restore effect does not
+          // immediately reopen the sheet on the same render. The dismissed
+          // flag is cleared when the user taps the "Continue payment" CTA
+          // on the card, or on next session.
+          if (settlingSnapshot) dismissedPendingRef.current.add(settlingSnapshot.id);
+          setSettlingSnapshot(null);
+        }}
         initialPhase="settlement"
         intent="end"
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingSnapshot(null)}
         requestId={settlingSnapshot?.id}
+        // When the row is already past End Shift, hand the server-owned
+        // deadline + frozen total down so the sheet derives countdown from
+        // payment_due_at (not a fresh local 15:00) and skips the end_shift
+        // RPC. This is what makes refresh / kill-tab / reconnect resume the
+        // exact same payment session.
+        serverPaymentDueAt={
+          settlingSnapshot
+            ? net.requests[settlingSnapshot.id]?.paymentDueAt ?? null
+            : null
+        }
+        serverTotalBilledAmount={
+          settlingSnapshot
+            ? net.requests[settlingSnapshot.id]?.totalBilledAmount ?? null
+            : null
+        }
+        alreadyAwaitingPayment={
+          settlingSnapshot
+            ? net.requests[settlingSnapshot.id]?.status === "awaiting_payment"
+            : false
+        }
         shift={
           settlingSnapshot
             ? {
