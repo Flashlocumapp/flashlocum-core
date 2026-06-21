@@ -52,11 +52,15 @@ export function HistoryDetailSheet({
   item,
   onDismiss,
   onRate,
+  alreadyRated = false,
 }: {
   open: boolean;
   item: HistoryDetail | null;
   onDismiss: () => void;
   onRate: (id: string, rating: number, feedback: string) => void | Promise<void>;
+  /** True when the current user has already submitted a rating for this shift,
+   *  even if the numeric score isn't loaded locally. Collapses the form. */
+  alreadyRated?: boolean;
 }) {
 
   const [rating, setRating] = useState(item?.rating ?? 0);
