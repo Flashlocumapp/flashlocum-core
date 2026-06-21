@@ -854,6 +854,8 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
         invalidationChannel = null;
       }
       setLiveSnapshotSeen(false);
+      stopReconcileTimer();
+
     }
   };
 }
