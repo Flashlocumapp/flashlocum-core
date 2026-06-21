@@ -334,7 +334,9 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 // tab is visible, the reconciliation interval forces a snapshot refresh.
 // This eliminates the "silent stale UI" failure mode where a websocket
 // quietly dies without firing CHANNEL_ERROR.
-// `lastRealtimeEventAt` tracks the last time we received ANY realtime signal.
+
+let lastRealtimeEventAt = Date.now();
+
 
 function markRealtimeActivity() {
   lastRealtimeEventAt = Date.now();
