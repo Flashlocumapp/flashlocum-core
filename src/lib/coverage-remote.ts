@@ -553,8 +553,10 @@ function handlePayload(payload: {
   new?: unknown;
   old?: unknown;
 }) {
+  markRealtimeActivity();
   const row = (payload.new ?? payload.old) as Row | undefined;
   if (!row?.id) return;
+
   // Crude per-row event coalescing across overlapping filtered bindings.
   const key = `${row.id}:${payload.eventType}:${(row as Row).updated_at ?? ""}`;
   const now = Date.now();
