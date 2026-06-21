@@ -413,9 +413,14 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     if (!pendingItem) return;
     if (settlingSnapshot) return;
     if (dismissedPendingRef.current.has(pendingItem.id)) return;
+    // PAYMENT_SESSION_STABILITY: wait until the server-owned deadline is
+    // present before mounting the sheet. Without this guard the sheet
+    // opens with a null paymentDueAt and the countdown briefly anchors to
+    // simNow() — visible to the user as a reset to 15:00 on refresh.
+    if (!pendingItem.paymentDueAt) return;
     openSettlementFor(pendingItem.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingItem?.id, settlingSnapshot]);
+  }, [pendingItem?.id, pendingItem?.paymentDueAt, settlingSnapshot]);
 
   const confirmEnd = async () => {
     if (!settlingId) return;
