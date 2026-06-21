@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DismissSheet } from "./DismissSheet";
 import { EnvironmentBadge } from "./EnvironmentBadge";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
@@ -13,7 +13,38 @@ export type HistoryDetail = {
   note?: string;
   rating?: number;
   environment?: "normal" | "busy";
+  /** Exact moment the shift first started (ms epoch). */
+  startedAtMs?: number | null;
+  /** Exact moment the shift ended (ms epoch). */
+  endedAtMs?: number | null;
+  /** Actual worked minutes summed across segments. */
+  actualMinutes?: number | null;
+  /** Server-billed minutes. */
+  billedMinutes?: number | null;
 };
+
+function fmtMoment(ms: number | null | undefined) {
+  if (!ms) return null;
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-NG", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function fmtHrMin(min: number) {
+  const m = Math.max(0, Math.floor(min));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r}min`;
+  if (r === 0) return `${h}hr`;
+  return `${h}hr ${r}min`;
+}
 
 
 export function HistoryDetailSheet({
@@ -25,17 +56,34 @@ export function HistoryDetailSheet({
   open: boolean;
   item: HistoryDetail | null;
   onDismiss: () => void;
-  onRate: (id: string, rating: number, feedback: string) => void;
+  onRate: (id: string, rating: number, feedback: string) => void | Promise<void>;
 }) {
 
   const [rating, setRating] = useState(item?.rating ?? 0);
   const [feedback, setFeedback] = useState("");
+  // Locally remember that the user just submitted, so the rating form
+  // collapses immediately — independent of whether the server snapshot
+  // has refreshed `item.rating` yet.
+  const [localSubmitted, setLocalSubmitted] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const identity = useDoctorIdentity(item?.doctorSid ?? null);
+
+  // Reset draft state whenever the open row changes.
+  useEffect(() => {
+    setRating(item?.rating ?? 0);
+    setFeedback("");
+    setLocalSubmitted(null);
+    setSubmitting(false);
+  }, [item?.id]);
 
   if (!item) return null;
 
+  const startedLabel = fmtMoment(item.startedAtMs ?? null);
+  const endedLabel = fmtMoment(item.endedAtMs ?? null);
+  const effectiveRating = item.rating ?? localSubmitted ?? null;
+  const showRating = effectiveRating == null;
+
   const meta = `${item.coverage} · ${shortWeekdays(item.completedOn ?? "")} · ${fmtNairaK(item.amount)}`;
-  const showRating = !item.rating;
 
   return (
     <DismissSheet open={open} onDismiss={onDismiss}>
@@ -71,6 +119,14 @@ export function HistoryDetailSheet({
 
       <div className="mt-4 rounded-2xl bg-secondary/50 px-3.5 py-3">
         <Row label="Coverage" value={item.coverage} />
+        {startedLabel && <Row label="Started" value={startedLabel} />}
+        {endedLabel && <Row label="Ended" value={endedLabel} />}
+        {typeof item.actualMinutes === "number" && item.actualMinutes > 0 && (
+          <Row label="Hours worked" value={fmtHrMin(item.actualMinutes)} />
+        )}
+        {typeof item.billedMinutes === "number" && item.billedMinutes > 0 && (
+          <Row label="Hours billed" value={fmtHrMin(item.billedMinutes)} />
+        )}
         <Row label="Completed" value={item.completedOn ?? "—"} />
         <Row label="Settlement" value={`₦${item.amount.toLocaleString("en-NG")}`} strong />
         <div className="text-[11.5px] text-muted-foreground mt-2 tabular-nums">{meta}</div>
@@ -119,18 +175,30 @@ export function HistoryDetailSheet({
             className="mt-3 w-full resize-none rounded-xl bg-background/60 px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground/55"
           />
           <button
-            disabled={!rating}
-            onClick={() => onRate(item.id, rating, feedback)}
+            disabled={!rating || submitting}
+            onClick={async () => {
+              if (!rating || submitting) return;
+              setSubmitting(true);
+              // Optimistically collapse the form so the user sees an
+              // immediate response even before the parent finishes the
+              // backend round-trip.
+              setLocalSubmitted(rating);
+              try {
+                await onRate(item.id, rating, feedback);
+              } finally {
+                setSubmitting(false);
+              }
+            }}
             className="mt-3 h-10 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground disabled:opacity-40 active:opacity-90"
           >
-            Submit rating
+            {submitting ? "Submitting…" : "Submit rating"}
           </button>
         </div>
       )}
 
-      {!showRating && item.rating && (
+      {!showRating && effectiveRating != null && (
         <div className="mt-3 text-[12.5px] text-muted-foreground">
-          You rated this coverage {item.rating} / 5
+          You rated this coverage {effectiveRating} / 5
         </div>
       )}
 
