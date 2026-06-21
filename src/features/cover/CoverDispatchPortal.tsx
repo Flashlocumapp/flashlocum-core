@@ -124,6 +124,8 @@ function CoverDispatchOverlays() {
                 pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
                 return;
               }
+              const { markRated } = await import("@/lib/rated-shifts");
+              markRated(requestId);
               // Audit-10: positive confirmation toast.
               ingest(
                 fromLocal({
