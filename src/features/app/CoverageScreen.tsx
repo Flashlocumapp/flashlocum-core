@@ -719,6 +719,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       <HistoryDetailSheet
         open={!!historyDetail}
         item={historyDetail}
+        alreadyRated={historyItem ? isRated(historyItem.id) : false}
         onDismiss={() => setHistoryId(null)}
         onRate={async (id, rating, feedback) => {
           // Persist to the backend so trust + admin dashboard reflect it.
@@ -730,6 +731,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
             return;
           }
           setRatings((prev) => ({ ...prev, [id]: rating }));
+          markRated(id);
           setHistoryId(null);
         }}
       />
