@@ -455,7 +455,7 @@ export function ShiftSettlement({
     if (settlementReadyRef.current || directEndStartedRef.current) return;
     directEndStartedRef.current = true;
     void handleEndShift();
-  }, [open, requestId, initialPhase]);
+  }, [open, requestId, initialPhase, alreadyAwaitingPayment]);
 
   const handleMadePayment = () => {
     autoConfirmAt.current = simNow() + 2500;
