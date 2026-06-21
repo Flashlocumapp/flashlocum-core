@@ -741,10 +741,47 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       .on("broadcast", { event: "invalidate" }, () => {
         // RLS may have filtered the postgres_changes event for this client;
         // re-fetching reconciles cache divergence.
+        markRealtimeActivity();
         scheduleRefresh();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          resetBackoff("invalidations");
+          setChannelHealth("invalidations", "ok");
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          scheduleReconnect("invalidations", () => {
+            if (invalidationChannel) {
+              supabase.removeChannel(invalidationChannel);
+              invalidationChannel = null;
+            }
+            // Re-create on next subscriber tick; do so eagerly here.
+            invalidationChannel = supabase
+              .channel("coverage_invalidations", {
+                config: { broadcast: { self: false } },
+              })
+              .on("broadcast", { event: "invalidate" }, () => {
+                markRealtimeActivity();
+                scheduleRefresh();
+              })
+              .subscribe((s) => {
+                if (s === "SUBSCRIBED") {
+                  resetBackoff("invalidations");
+                  setChannelHealth("invalidations", "ok");
+                }
+              });
+          });
+        }
+      });
   }
+
+  // Stage 0 safety net: low-frequency reconciliation timer. Fires only when
+  // tab is visible AND no realtime activity for `RECONCILE_AFTER_SILENCE_MS`.
+  startReconcileTimer();
+
 
   // Audit 11: no client-side polling. The two sources of truth are the
   // server snapshot issued on subscription activation / identity rehydration
