@@ -48,7 +48,7 @@ import { useSimClock } from "@/lib/clock";
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
-type ReqStatus = "upcoming" | "active" | "completed";
+type ReqStatus = "upcoming" | "active" | "payment_pending" | "completed";
 type RequestItem = {
   id: string;
   doctorSid: string | undefined;
@@ -73,6 +73,9 @@ type RequestItem = {
   environment?: "normal" | "busy";
   /** Monotonic flag — true once the shift has ever entered Active. */
   everStarted: boolean;
+  /** Server-owned ISO deadline for the 15-minute settlement window.
+   *  Only meaningful when status === "payment_pending". */
+  paymentDueAt?: string;
 };
 
 
@@ -100,6 +103,13 @@ function amPmFromHHMM(s: string): string {
 }
 
 function toRequestItem(r: NetRequest): RequestItem {
+  // `awaiting_payment` is its own first-class client status now. It is NOT
+  // mapped back to "active" — the row is past End Shift, the bill is locked
+  // server-side, and the only valid action is "Continue payment". The card
+  // still lives under the Active tab (so the user finds it where they left
+  // it) but the CTA / visuals are different. See PAYMENT_SESSION_STABILITY
+  // audit: client must never flip a row out of awaiting_payment — only the
+  // Monnify webhook (→ "completed") does.
   const status: ReqStatus =
     r.status === "active"
       ? "active"
@@ -108,7 +118,7 @@ function toRequestItem(r: NetRequest): RequestItem {
         : r.status === "paused"
           ? "upcoming"
           : r.status === "awaiting_payment"
-            ? "active"
+            ? "payment_pending"
             : "completed";
   const outcome =
     r.status === "completed"
@@ -159,6 +169,7 @@ function toRequestItem(r: NetRequest): RequestItem {
     dayIndex: Math.max(1, r.dayIndex ?? 1),
     environment: r.environment ?? "normal",
     everStarted: !!r.everStarted || (r.accumulatedMs ?? 0) > 0 || (r.dayIndex ?? 1) > 1,
+    paymentDueAt: r.paymentDueAt,
   };
 }
 
@@ -276,9 +287,33 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // payment_pending rows live under the Active tab — user finds them where
+  // they pressed End Shift — but render with the Continue payment CTA.
   const filtered = useMemo(
-    () => items.filter((i) => i.status === tab),
+    () =>
+      items.filter((i) =>
+        tab === "active"
+          ? i.status === "active" || i.status === "payment_pending"
+          : i.status === tab,
+      ),
     [items, tab],
+  );
+
+  // ---- Settlement sheet auto-restore ----
+  // PAYMENT_SESSION_STABILITY: any request whose SERVER status is
+  // awaiting_payment must re-open the settlement sheet on mount / refresh /
+  // reconnect / app reopen. The sheet is React state only, so without this
+  // effect a refresh would leave the user staring at the card with no way
+  // back to the payment screen except re-tapping a button.
+  //
+  // A per-request "user dismissed" ref keeps the sheet from immediately
+  // re-popping on the same render when the user explicitly closes it. The
+  // user reopens via the Continue payment CTA on the card (which clears
+  // the flag).
+  const dismissedPendingRef = useRef<Set<string>>(new Set());
+  const pendingItem = useMemo(
+    () => items.find((i) => i.status === "payment_pending") ?? null,
+    [items],
   );
 
   const historyItem = items.find((i) => i.id === historyId) ?? null;
@@ -322,8 +357,20 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
    * the one Monnify checkout. Webhook confirmation is the only source of
    * truth for payment success.
    */
-  const requestEnd = (id: string) => setEndConfirmId(id);
-  const beginEndShift = (id: string) => {
+  // For an ACTIVE row: prompt confirmation, then open the sheet (which
+  // runs end_shift). For a PAYMENT_PENDING row: skip the prompt and the
+  // end_shift RPC — the server has already locked the bill; just reopen
+  // the sheet so the existing Monnify session resumes via RESUME-IF-PENDING.
+  const requestEnd = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (item?.status === "payment_pending") {
+      dismissedPendingRef.current.delete(id);
+      openSettlementFor(id);
+      return;
+    }
+    setEndConfirmId(id);
+  };
+  const openSettlementFor = (id: string) => {
     const item = items.find((i) => i.id === id);
     const r = net.requests[id];
     if (!item) return;
@@ -340,6 +387,19 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       environment: (r?.environment ?? "normal") as "normal" | "busy",
     });
   };
+  const beginEndShift = (id: string) => openSettlementFor(id);
+
+  // Auto-restore: when the server says we have a payment_pending row, the
+  // sheet must be visible — unless the user has actively dismissed it this
+  // session. Survives refresh, reconnect, and app reopen because it keys
+  // off server state, not React state.
+  useEffect(() => {
+    if (!pendingItem) return;
+    if (settlingSnapshot) return;
+    if (dismissedPendingRef.current.has(pendingItem.id)) return;
+    openSettlementFor(pendingItem.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingItem?.id, settlingSnapshot]);
 
   const confirmEnd = async () => {
     if (!settlingId) return;
@@ -482,12 +542,39 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
       <ShiftSettlement
         open={!!settlingSnapshot}
-        onClose={() => setSettlingSnapshot(null)}
+        onClose={() => {
+          // Mark as "user-dismissed" so the auto-restore effect does not
+          // immediately reopen the sheet on the same render. The dismissed
+          // flag is cleared when the user taps the "Continue payment" CTA
+          // on the card, or on next session.
+          if (settlingSnapshot) dismissedPendingRef.current.add(settlingSnapshot.id);
+          setSettlingSnapshot(null);
+        }}
         initialPhase="settlement"
         intent="end"
         onConfirmed={confirmEnd}
         onRebook={() => setSettlingSnapshot(null)}
         requestId={settlingSnapshot?.id}
+        // When the row is already past End Shift, hand the server-owned
+        // deadline + frozen total down so the sheet derives countdown from
+        // payment_due_at (not a fresh local 15:00) and skips the end_shift
+        // RPC. This is what makes refresh / kill-tab / reconnect resume the
+        // exact same payment session.
+        serverPaymentDueAt={
+          settlingSnapshot
+            ? net.requests[settlingSnapshot.id]?.paymentDueAt ?? null
+            : null
+        }
+        serverTotalBilledAmount={
+          settlingSnapshot
+            ? net.requests[settlingSnapshot.id]?.totalBilledAmount ?? null
+            : null
+        }
+        alreadyAwaitingPayment={
+          settlingSnapshot
+            ? net.requests[settlingSnapshot.id]?.status === "awaiting_payment"
+            : false
+        }
         shift={
           settlingSnapshot
             ? {
@@ -756,6 +843,7 @@ function RequestCard({
   onOpenDetail: () => void;
 }) {
   const isActive = item.status === "active";
+  const isPaymentPending = item.status === "payment_pending";
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
   const identity = useDoctorIdentity(item.doctorSid ?? null);
@@ -769,7 +857,13 @@ function RequestCard({
     ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
     : baseMeta;
 
-  const onCardClick = isHistory ? onOpenHistory : onOpenDetail;
+  // payment_pending: tapping anywhere on the card resumes the payment
+  // session — never the active-shift detail sheet.
+  const onCardClick = isHistory
+    ? onOpenHistory
+    : isPaymentPending
+      ? onEnd
+      : onOpenDetail;
   const wrapperProps = {
     onClick: onCardClick,
     role: "button" as const,
@@ -854,8 +948,32 @@ function RequestCard({
         </div>
       </div>
 
-      {(isUpcoming || isActive) && (
+      {(isUpcoming || isActive || isPaymentPending) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 pl-[56px]">
+          {isPaymentPending && (
+            <>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.06em]"
+                style={{
+                  background: "color-mix(in oklab, var(--color-warning, #b45309) 14%, transparent)",
+                  color: "var(--color-warning, #b45309)",
+                }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor" }} />
+                Payment pending
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEnd(); }}
+                className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
+                style={{
+                  background: "var(--color-foreground)",
+                  color: "var(--color-background)",
+                }}
+              >
+                Continue payment
+              </button>
+            </>
+          )}
           {isUpcoming && (
             <button
               onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
