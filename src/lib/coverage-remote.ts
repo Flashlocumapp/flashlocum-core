@@ -43,6 +43,7 @@ type Row = {
   updated_at: string;
   payment_status: string | null;
   payment_reference: string | null;
+  payment_due_at: string | null;
   paid_at: string | null;
   remitted_at: string | null;
   environment: string;
