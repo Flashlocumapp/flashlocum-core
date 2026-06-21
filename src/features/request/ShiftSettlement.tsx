@@ -241,45 +241,86 @@ export function ShiftSettlement({
   // "₦0 + shift is not ready" race.
   useEffect(() => {
     if (open) {
-      setPhase(initialPhase);
+      // PAYMENT_SESSION_STABILITY: when the row is already past End Shift
+      // on the server, we have a server-owned deadline (paymentDueAt) that
+      // anchors the countdown. Reconstruct the original "End Shift moment"
+      // as `paymentDueAt - GRACE_TOTAL` so the existing
+      // `(tick - phaseStartedAtRef) / 1000` math yields the correct elapsed
+      // seconds across refresh, kill-tab, reconnect, and app reopen.
+      const dueMs = serverPaymentDueAt ? Date.parse(serverPaymentDueAt) : NaN;
+      const hasServerDeadline = Number.isFinite(dueMs);
+      const anchoredEndedAt = hasServerDeadline ? dueMs - GRACE_TOTAL * 1000 : null;
+
+      // Derive the initial phase from the server deadline when present, so
+      // a refresh past the 15-minute window lands in overtime instead of
+      // restarting a fresh settlement countdown.
+      let effectivePhase: Phase = initialPhase;
+      if (
+        hasServerDeadline &&
+        anchoredEndedAt !== null &&
+        (initialPhase === "settlement" || initialPhase === "grace" || initialPhase === "overtime")
+      ) {
+        const elapsedSec = Math.max(0, Math.floor((simNow() - anchoredEndedAt) / 1000));
+        if (elapsedSec >= GRACE_TOTAL) effectivePhase = "overtime";
+        else if (elapsedSec >= VISIBLE_COUNTDOWN) effectivePhase = "grace";
+        else effectivePhase = "settlement";
+      }
+      setPhase(effectivePhase);
       directEndStartedRef.current = false;
-      // Single source of truth for settlement readiness: only the server's
-      // end_shift RPC success (with billing_locked_at + total_billed_amount)
-      // flips this true. Any settlement open with a requestId starts locked.
-      settlementReadyRef.current = !(requestId && initialPhase === "settlement");
+      // Settlement readiness: server-owned end_shift is the only gate.
+      // When the row is already awaiting_payment, the bill is locked — open
+      // the gate immediately and skip handleEndShift.
+      settlementReadyRef.current =
+        alreadyAwaitingPayment ||
+        !(requestId && initialPhase === "settlement");
       const now = simNow();
+      // phaseStartedAtRef anchors the countdown. Prefer the server deadline
+      // (stable across refresh/reconnect); fall back to now() only when we
+      // genuinely don't have one (first End Shift press).
       phaseStartedAtRef.current =
-        initialPhase === "active" || initialPhase === "confirmed" ? null : now;
-      overtimeStartedAtRef.current = initialPhase === "overtime" ? now : null;
+        effectivePhase === "active" || effectivePhase === "confirmed"
+          ? null
+          : (anchoredEndedAt ?? now);
+      overtimeStartedAtRef.current =
+        effectivePhase === "overtime"
+          ? (anchoredEndedAt != null ? anchoredEndedAt + GRACE_TOTAL * 1000 : now)
+          : null;
       endedAtRef.current =
-        initialPhase === "settlement" || initialPhase === "grace" ? now : null;
+        effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime"
+          ? (anchoredEndedAt ?? now)
+          : null;
       confirmedAtRef.current = null;
       autoConfirmAt.current = null;
-      // When opening directly into settlement, seed an interim frozen bill
-      // from the live timer so the UI never flashes ₦0 while end_shift is
-      // in flight. The server response will overwrite this with the
-      // authoritative total_billed_amount inside handleEndShift.
-      if (initialPhase === "settlement" || initialPhase === "grace") {
-        const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
-        const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-        const priced = computeWorkedPricing(
-          shift.coverageKind,
-          shift.startHHMM,
-          w,
-          shift.endHHMM,
-          shift.days,
-          shift.environment ?? "normal",
-          bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
-        );
-        frozenBilledMinRef.current = priced.billableMinutes;
-        frozenAmountRef.current = priced.amount;
+      // Seed the frozen amount. Prefer the server-frozen total
+      // (total_billed_amount) — it never drifts across re-opens. Only fall
+      // back to a live-timer estimate when the server hasn't told us yet
+      // (first End Shift press, before end_shift returns).
+      if (effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime") {
+        if (typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0) {
+          frozenAmountRef.current = serverTotalBilledAmount;
+          frozenBilledMinRef.current = frozenBilledMinRef.current || 0;
+        } else {
+          const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
+          const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
+          const priced = computeWorkedPricing(
+            shift.coverageKind,
+            shift.startHHMM,
+            w,
+            shift.endHHMM,
+            shift.days,
+            shift.environment ?? "normal",
+            bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+          );
+          frozenBilledMinRef.current = priced.billableMinutes;
+          frozenAmountRef.current = priced.amount;
+        }
       } else {
         frozenBilledMinRef.current = 0;
         frozenAmountRef.current = 0;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPhase, requestId, intent]);
+  }, [open, initialPhase, requestId, intent, serverPaymentDueAt, serverTotalBilledAmount, alreadyAwaitingPayment]);
 
 
   const finalize = () => {
