@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
+import { setChannelHealth } from "./realtime-health";
+
 
 type Row = {
   id: string;
@@ -324,6 +326,78 @@ let cachedSnapshotUserId: string | null =
   initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+// --- Stage 0 safety net: reconciliation timer + channel watchdog ---------
+//
+// `lastRealtimeEventAt` tracks the last time we received ANY realtime signal
+// (postgres_changes, invalidate broadcast, or a SUBSCRIBED callback). If we
+// have been silent for longer than `RECONCILE_AFTER_SILENCE_MS` while the
+// tab is visible, the reconciliation interval forces a snapshot refresh.
+// This eliminates the "silent stale UI" failure mode where a websocket
+// quietly dies without firing CHANNEL_ERROR.
+
+let lastRealtimeEventAt = Date.now();
+
+
+function markRealtimeActivity() {
+  lastRealtimeEventAt = Date.now();
+}
+
+const RECONCILE_INTERVAL_MS = 60_000;
+const RECONCILE_AFTER_SILENCE_MS = 45_000;
+let reconcileTimer: ReturnType<typeof setInterval> | null = null;
+
+function startReconcileTimer() {
+  if (reconcileTimer) return;
+  reconcileTimer = setInterval(() => {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (Date.now() - lastRealtimeEventAt < RECONCILE_AFTER_SILENCE_MS) return;
+    void refreshSnapshot();
+  }, RECONCILE_INTERVAL_MS);
+}
+function stopReconcileTimer() {
+  if (reconcileTimer) {
+    clearInterval(reconcileTimer);
+    reconcileTimer = null;
+  }
+}
+
+// Exponential-backoff watchdogs per channel. When subscribe reports a
+// non-OK status, we tear the channel down and schedule a re-create with
+// capped backoff (1s → 30s).
+type WatchdogKey = "coverage" | "invalidations" | "presence";
+const backoffMs: Record<WatchdogKey, number> = {
+  coverage: 1000,
+  invalidations: 1000,
+  presence: 1000,
+};
+const backoffTimers: Partial<Record<WatchdogKey, ReturnType<typeof setTimeout>>> = {};
+const MAX_BACKOFF_MS = 30_000;
+
+function resetBackoff(k: WatchdogKey) {
+  backoffMs[k] = 1000;
+  const t = backoffTimers[k];
+  if (t) {
+    clearTimeout(t);
+    backoffTimers[k] = undefined;
+  }
+}
+
+function scheduleReconnect(k: WatchdogKey, run: () => void) {
+  if (backoffTimers[k]) return;
+  const delay = backoffMs[k];
+  backoffMs[k] = Math.min(MAX_BACKOFF_MS, delay * 2);
+  setChannelHealth(k, "reconnecting");
+  backoffTimers[k] = setTimeout(() => {
+    backoffTimers[k] = undefined;
+    try {
+      run();
+    } catch (e) {
+      console.warn(`[coverage-remote] reconnect ${k} failed:`, (e as Error).message);
+    }
+  }, delay);
+}
+
+
 
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
 // shifts they have accepted, and the currently-searching pool — at realistic
@@ -412,7 +486,9 @@ async function refreshSnapshot(): Promise<void> {
     // snapshot. Incoming Coverage gates on this so cached rows can never
     // be presented as live broadcasts.
     setLiveSnapshotSeen(true);
+    markRealtimeActivity();
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+
   })().finally(() => {
     refreshInFlight = null;
     if (refreshPending) {
@@ -477,8 +553,10 @@ function handlePayload(payload: {
   new?: unknown;
   old?: unknown;
 }) {
+  markRealtimeActivity();
   const row = (payload.new ?? payload.old) as Row | undefined;
   if (!row?.id) return;
+
   // Crude per-row event coalescing across overlapping filtered bindings.
   const key = `${row.id}:${payload.eventType}:${(row as Row).updated_at ?? ""}`;
   const now = Date.now();
@@ -575,6 +653,9 @@ function ensureChannelForUser(userId: string) {
       // stays down past a grace window.
       if (status === "SUBSCRIBED") {
         clearChannelDownGrace();
+        resetBackoff("coverage");
+        setChannelHealth("coverage", "ok");
+        markRealtimeActivity();
         void refreshSnapshot();
       } else if (
         status === "CHANNEL_ERROR" ||
@@ -582,8 +663,20 @@ function ensureChannelForUser(userId: string) {
         status === "CLOSED"
       ) {
         scheduleChannelDownBlank();
+        // Stage 0 watchdog: tear down and re-subscribe with exp. backoff.
+        scheduleReconnect("coverage", () => {
+          if (!channelUserId) return;
+          if (channel) {
+            supabase.removeChannel(channel);
+            channel = null;
+          }
+          const uid = channelUserId;
+          channelUserId = null;
+          ensureChannelForUser(uid);
+        });
       }
     });
+
 }
 
 // 10s grace before a dropped realtime channel invalidates the live snapshot.
@@ -648,10 +741,47 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       .on("broadcast", { event: "invalidate" }, () => {
         // RLS may have filtered the postgres_changes event for this client;
         // re-fetching reconciles cache divergence.
+        markRealtimeActivity();
         scheduleRefresh();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          resetBackoff("invalidations");
+          setChannelHealth("invalidations", "ok");
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          scheduleReconnect("invalidations", () => {
+            if (invalidationChannel) {
+              supabase.removeChannel(invalidationChannel);
+              invalidationChannel = null;
+            }
+            // Re-create on next subscriber tick; do so eagerly here.
+            invalidationChannel = supabase
+              .channel("coverage_invalidations", {
+                config: { broadcast: { self: false } },
+              })
+              .on("broadcast", { event: "invalidate" }, () => {
+                markRealtimeActivity();
+                scheduleRefresh();
+              })
+              .subscribe((s) => {
+                if (s === "SUBSCRIBED") {
+                  resetBackoff("invalidations");
+                  setChannelHealth("invalidations", "ok");
+                }
+              });
+          });
+        }
+      });
   }
+
+  // Stage 0 safety net: low-frequency reconciliation timer. Fires only when
+  // tab is visible AND no realtime activity for `RECONCILE_AFTER_SILENCE_MS`.
+  startReconcileTimer();
+
 
   // Audit 11: no client-side polling. The two sources of truth are the
   // server snapshot issued on subscription activation / identity rehydration
@@ -724,6 +854,8 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
         invalidationChannel = null;
       }
       setLiveSnapshotSeen(false);
+      stopReconcileTimer();
+
     }
   };
 }
