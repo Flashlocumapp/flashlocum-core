@@ -318,6 +318,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   );
 
   const historyItem = items.find((i) => i.id === historyId) ?? null;
+  const historyRow = historyItem ? net.requests[historyItem.id] : null;
   const historyDetail: HistoryDetail | null = historyItem
     ? {
         id: historyItem.id,
@@ -327,6 +328,20 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         amount: historyItem.amount,
         rating: ratings[historyItem.id],
         environment: historyItem.environment,
+        startedAtMs: historyRow?.firstStartedAt ?? historyRow?.startedAt ?? null,
+        endedAtMs:
+          historyRow?.paidAt ??
+          (historyRow?.paymentDueAt
+            ? Date.parse(historyRow.paymentDueAt) - 15 * 60 * 1000
+            : null),
+        actualMinutes:
+          typeof historyRow?.accumulatedMs === "number"
+            ? Math.round(historyRow.accumulatedMs / 60000)
+            : null,
+        billedMinutes:
+          typeof historyRow?.accumulatedMs === "number"
+            ? Math.round(historyRow.accumulatedMs / 60000)
+            : null,
       }
     : null;
 
