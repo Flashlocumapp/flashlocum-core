@@ -843,6 +843,7 @@ function RequestCard({
   onOpenDetail: () => void;
 }) {
   const isActive = item.status === "active";
+  const isPaymentPending = item.status === "payment_pending";
   const isUpcoming = item.status === "upcoming";
   const isHistory = item.status === "completed";
   const identity = useDoctorIdentity(item.doctorSid ?? null);
