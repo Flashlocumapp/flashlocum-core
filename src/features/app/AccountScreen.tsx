@@ -317,9 +317,6 @@ function FeedbackPrefsSection() {
           }}
         />
       </ListGroup>
-      <p className="mt-2 px-1 text-[12px] text-muted-foreground">
-        Disabling push here mutes in-app alerts. To stop banners on your lock screen, change notification permission in your device settings.
-      </p>
     </Section>
   );
 }
