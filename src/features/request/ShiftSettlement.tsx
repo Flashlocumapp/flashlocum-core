@@ -1369,6 +1369,18 @@ function ConfirmedPane({
           <Row label="Coverage" value={coverageLabel} />
           {scheduleLabel && <Row label="Shift" value={scheduleLabel} />}
           <Row label="Doctor" value={doctor} />
+          {shiftSpan.earliestStart != null && (
+            <Row label="Started" value={fmtSegTime(new Date(shiftSpan.earliestStart).toISOString())} />
+          )}
+          {shiftSpan.latestEnd != null && (
+            <Row label="Ended" value={fmtSegTime(new Date(shiftSpan.latestEnd).toISOString())} />
+          )}
+          {shiftSpan.actualMin > 0 && (
+            <Row label="Hours worked" value={fmtHrMin(shiftSpan.actualMin)} />
+          )}
+          {shiftSpan.billedMin > 0 && (
+            <Row label="Hours billed" value={fmtHrMin(shiftSpan.billedMin)} />
+          )}
           <Row label="Settled" value={fmtNaira(settled)} strong />
           {paidAtLabel && <Row label="Paid at" value={paidAtLabel} />}
           {tx?.payment_reference && (
