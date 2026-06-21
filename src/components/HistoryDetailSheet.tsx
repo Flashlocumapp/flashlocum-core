@@ -85,7 +85,7 @@ export function HistoryDetailSheet({
   const startedLabel = fmtMoment(item.startedAtMs ?? null);
   const endedLabel = fmtMoment(item.endedAtMs ?? null);
   const effectiveRating = item.rating ?? localSubmitted ?? null;
-  const showRating = effectiveRating == null;
+  const showRating = effectiveRating == null && !alreadyRated;
 
   const meta = `${item.coverage} · ${shortWeekdays(item.completedOn ?? "")} · ${fmtNairaK(item.amount)}`;
 
