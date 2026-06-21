@@ -386,7 +386,7 @@ function scheduleReconnect(k: WatchdogKey, run: () => void) {
   if (backoffTimers[k]) return;
   const delay = backoffMs[k];
   backoffMs[k] = Math.min(MAX_BACKOFF_MS, delay * 2);
-  setChannelHealth(k as ChannelKey, "reconnecting");
+  setChannelHealth(k, "reconnecting");
   backoffTimers[k] = setTimeout(() => {
     backoffTimers[k] = undefined;
     try {
