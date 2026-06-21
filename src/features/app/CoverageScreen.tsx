@@ -297,6 +297,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  // Subscribe to the shared "shifts I've already rated" store so a rating
+  // submitted via the post-End-Shift overlay (or in a previous session)
+  // also collapses the form here.
+  useRatedShiftsVersion();
   // Settlement sheet lifecycle: snapshot the shift props the moment the
   // sheet opens, then keep them stable for the entire payment flow. Driving
   // the sheet from `items.find(settlingId)` would unmount it on every
