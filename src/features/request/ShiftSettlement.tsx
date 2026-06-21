@@ -94,6 +94,9 @@ export function ShiftSettlement({
   onConfirmed,
   requestId,
   intent = "end",
+  serverPaymentDueAt = null,
+  serverTotalBilledAmount = null,
+  alreadyAwaitingPayment = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -108,6 +111,20 @@ export function ShiftSettlement({
    *  proceed to payment; on payment confirmation the requester returns to
    *  Upcoming Coverage and can resume the shift later. */
   intent?: "end" | "pause";
+  /** PAYMENT_SESSION_STABILITY: server-owned absolute deadline for the
+   *  15-minute settlement window. When set, the sheet derives the
+   *  countdown from THIS instead of resetting a local 15:00 timer on
+   *  every open. Survives refresh / kill-tab / reconnect. */
+  serverPaymentDueAt?: string | null;
+  /** Server-frozen total at End Shift. When set, used as the displayed
+   *  frozen amount instead of recomputing from the live timer (which
+   *  drifts each render). */
+  serverTotalBilledAmount?: number | null;
+  /** True when the row is already past End Shift on the server. In that
+   *  case the sheet must NOT call end_shift again — the bill is already
+   *  locked, the Monnify reference already exists, and the only action
+   *  is to resume checkout. */
+  alreadyAwaitingPayment?: boolean;
 }) {
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
