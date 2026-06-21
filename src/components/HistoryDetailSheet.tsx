@@ -52,11 +52,15 @@ export function HistoryDetailSheet({
   item,
   onDismiss,
   onRate,
+  alreadyRated = false,
 }: {
   open: boolean;
   item: HistoryDetail | null;
   onDismiss: () => void;
   onRate: (id: string, rating: number, feedback: string) => void | Promise<void>;
+  /** True when the current user has already submitted a rating for this shift,
+   *  even if the numeric score isn't loaded locally. Collapses the form. */
+  alreadyRated?: boolean;
 }) {
 
   const [rating, setRating] = useState(item?.rating ?? 0);
@@ -81,7 +85,7 @@ export function HistoryDetailSheet({
   const startedLabel = fmtMoment(item.startedAtMs ?? null);
   const endedLabel = fmtMoment(item.endedAtMs ?? null);
   const effectiveRating = item.rating ?? localSubmitted ?? null;
-  const showRating = effectiveRating == null;
+  const showRating = effectiveRating == null && !alreadyRated;
 
   const meta = `${item.coverage} · ${shortWeekdays(item.completedOn ?? "")} · ${fmtNairaK(item.amount)}`;
 
@@ -199,6 +203,12 @@ export function HistoryDetailSheet({
       {!showRating && effectiveRating != null && (
         <div className="mt-3 text-[12.5px] text-muted-foreground">
           You rated this coverage {effectiveRating} / 5
+        </div>
+      )}
+
+      {!showRating && effectiveRating == null && alreadyRated && (
+        <div className="mt-3 text-[12.5px] text-muted-foreground">
+          You've already rated this coverage.
         </div>
       )}
 

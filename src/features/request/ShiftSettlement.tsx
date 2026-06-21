@@ -1467,6 +1467,10 @@ function ConfirmedPane({
                   pushToast({ tone: "warn", title: res.message || "Couldn't save rating." });
                   return;
                 }
+                // Mark this shift as rated in the shared store so the
+                // history detail collapses the rating form everywhere.
+                const { markRated } = await import("@/lib/rated-shifts");
+                markRated(shiftId);
                 // Audit-10: positive confirmation for both roles.
                 ingest(
                   fromLocal({

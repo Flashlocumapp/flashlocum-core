@@ -45,6 +45,7 @@ import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
 import { subscribeRealtimeHealth, isAnyReconnecting } from "@/lib/realtime-health";
+import { isRated, markRated, useRatedShiftsVersion } from "@/lib/rated-shifts";
 
 
 
@@ -296,6 +297,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  // Subscribe to the shared "shifts I've already rated" store so a rating
+  // submitted via the post-End-Shift overlay (or in a previous session)
+  // also collapses the form here.
+  useRatedShiftsVersion();
   // Settlement sheet lifecycle: snapshot the shift props the moment the
   // sheet opens, then keep them stable for the entire payment flow. Driving
   // the sheet from `items.find(settlingId)` would unmount it on every
@@ -714,6 +719,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       <HistoryDetailSheet
         open={!!historyDetail}
         item={historyDetail}
+        alreadyRated={historyItem ? isRated(historyItem.id) : false}
         onDismiss={() => setHistoryId(null)}
         onRate={async (id, rating, feedback) => {
           // Persist to the backend so trust + admin dashboard reflect it.
@@ -725,6 +731,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
             return;
           }
           setRatings((prev) => ({ ...prev, [id]: rating }));
+          markRated(id);
           setHistoryId(null);
         }}
       />
@@ -1223,6 +1230,7 @@ function Avatar({
 
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { upcoming, history } = useDispatch();
+  const net = useNetwork();
 
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
@@ -1300,6 +1308,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
 
       <DoctorCoverageDetail
         item={detail}
+        netRows={net.requests}
         onDismiss={() => setDetailId(null)}
       />
     </section>
@@ -1490,9 +1499,11 @@ function CoverCard({
 
 function DoctorCoverageDetail({
   item,
+  netRows,
   onDismiss,
 }: {
   item: CoverItem | HistoryItem | null;
+  netRows: Record<string, NetRequest>;
   onDismiss: () => void;
 }) {
   const isHist = (i: CoverItem | HistoryItem): i is HistoryItem =>
@@ -1546,6 +1557,35 @@ function DoctorCoverageDetail({
               label="Settlement"
               value={isHist(item) ? item.settlementStatus : "Pending"}
             />
+            {isHist(item) && (() => {
+              const row = netRows[item.id];
+              const startedMs = row?.firstStartedAt ?? row?.startedAt ?? null;
+              const endedMs = row?.paidAt ?? row?.updatedAt ?? null;
+              const mins = typeof row?.accumulatedMs === "number" ? Math.round(row.accumulatedMs / 60000) : 0;
+              const fmt = (ms: number) => {
+                const d = new Date(ms);
+                return Number.isNaN(d.getTime()) ? null : d.toLocaleString("en-NG", {
+                  weekday: "short", day: "2-digit", month: "short",
+                  hour: "2-digit", minute: "2-digit", hour12: true,
+                });
+              };
+              const hrMin = (m: number) => {
+                const h = Math.floor(m / 60); const r = m % 60;
+                if (h === 0) return `${r}min`;
+                if (r === 0) return `${h}hr`;
+                return `${h}hr ${r}min`;
+              };
+              const startedLabel = startedMs ? fmt(startedMs) : null;
+              const endedLabel = endedMs ? fmt(endedMs) : null;
+              return (
+                <>
+                  {startedLabel && <DetailRow label="Started" value={startedLabel} />}
+                  {endedLabel && <DetailRow label="Ended" value={endedLabel} />}
+                  {mins > 0 && <DetailRow label="Hours worked" value={hrMin(mins)} />}
+                  {mins > 0 && <DetailRow label="Hours billed" value={hrMin(mins)} />}
+                </>
+              );
+            })()}
             {isHist(item) && (
               <DetailRow label="Completed" value={item.completedOn} />
             )}
