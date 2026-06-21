@@ -1308,6 +1308,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
 
       <DoctorCoverageDetail
         item={detail}
+        netRows={net.requests}
         onDismiss={() => setDetailId(null)}
       />
     </section>
