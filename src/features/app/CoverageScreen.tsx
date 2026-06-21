@@ -1499,9 +1499,11 @@ function CoverCard({
 
 function DoctorCoverageDetail({
   item,
+  netRows,
   onDismiss,
 }: {
   item: CoverItem | HistoryItem | null;
+  netRows: Record<string, NetRequest>;
   onDismiss: () => void;
 }) {
   const isHist = (i: CoverItem | HistoryItem): i is HistoryItem =>
