@@ -157,13 +157,10 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
   void initialFetch();
 
   if (!channel) {
-    channel = supabase
-      .channel("doctor_presence_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) =>
-        applyPresencePayload(payload),
-      )
-      .subscribe();
+    openPresenceChannel();
   }
+
+  startPresenceReconcileTimer();
 
   const offAuth = onUserIdChange((id) => {
     if (id) {
@@ -184,9 +181,85 @@ export function subscribePresence(onSnapshot: (rows: PresenceRow[]) => void): ()
         supabase.removeChannel(channel);
         channel = null;
       }
+      stopPresenceReconcileTimer();
     }
   };
 }
+
+// --- Stage 0 safety net ---------------------------------------------------
+
+let lastPresenceActivityAt = Date.now();
+function markPresenceActivity() {
+  lastPresenceActivityAt = Date.now();
+}
+
+const PRESENCE_RECONCILE_INTERVAL_MS = 60_000;
+const PRESENCE_RECONCILE_SILENCE_MS = 45_000;
+let presenceReconcileTimer: ReturnType<typeof setInterval> | null = null;
+
+function startPresenceReconcileTimer() {
+  if (presenceReconcileTimer) return;
+  presenceReconcileTimer = setInterval(() => {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (Date.now() - lastPresenceActivityAt < PRESENCE_RECONCILE_SILENCE_MS) return;
+    void initialFetch(true);
+  }, PRESENCE_RECONCILE_INTERVAL_MS);
+}
+function stopPresenceReconcileTimer() {
+  if (presenceReconcileTimer) {
+    clearInterval(presenceReconcileTimer);
+    presenceReconcileTimer = null;
+  }
+}
+
+let presenceBackoffMs = 1000;
+let presenceBackoffTimer: ReturnType<typeof setTimeout> | null = null;
+const PRESENCE_MAX_BACKOFF_MS = 30_000;
+
+function schedulePresenceReconnect() {
+  if (presenceBackoffTimer) return;
+  const delay = presenceBackoffMs;
+  presenceBackoffMs = Math.min(PRESENCE_MAX_BACKOFF_MS, presenceBackoffMs * 2);
+  setChannelHealth("presence", "reconnecting");
+  presenceBackoffTimer = setTimeout(() => {
+    presenceBackoffTimer = null;
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+    openPresenceChannel();
+  }, delay);
+}
+
+function openPresenceChannel() {
+  channel = supabase
+    .channel("doctor_presence_changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload) => {
+      markPresenceActivity();
+      applyPresencePayload(payload);
+    })
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        presenceBackoffMs = 1000;
+        if (presenceBackoffTimer) {
+          clearTimeout(presenceBackoffTimer);
+          presenceBackoffTimer = null;
+        }
+        setChannelHealth("presence", "ok");
+        markPresenceActivity();
+        // Reconcile on (re)connect so any updates missed while down are picked up.
+        void initialFetch(true);
+      } else if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
+        schedulePresenceReconnect();
+      }
+    });
+}
+
+
 
 /** Upsert my presence row. No-op if not signed in. */
 export async function upsertMyPresence(fields: {
