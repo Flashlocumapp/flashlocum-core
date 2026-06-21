@@ -133,10 +133,19 @@ export const endShift = createServerFn({ method: "POST" })
       };
     };
     if (error) {
-      // "not in progress" means the shift was never started — surface the error.
       if (/already (ended|completed)/i.test(error.message)) {
         const billing = await readBilling();
         return { ok: true as const, already: true as const, ...billing };
+      }
+      // "not in progress" can also mean the shift already transitioned to
+      // awaiting_payment on a prior end_shift call. Treat as idempotent so
+      // the client resumes the existing payment session after refresh/reopen
+      // instead of seeing a hard error.
+      if (/not in progress/i.test(error.message)) {
+        const billing = await readBilling();
+        if (billing.billing_locked_at || billing.payment_status === "awaiting_payment") {
+          return { ok: true as const, already: true as const, ...billing };
+        }
       }
       throw new Error(error.message);
     }
