@@ -445,6 +445,13 @@ export function ShiftSettlement({
 
   useEffect(() => {
     if (!open || !requestId || initialPhase !== "settlement") return;
+    // PAYMENT_SESSION_STABILITY: if the row is already past End Shift on
+    // the server, the bill is locked and the Monnify reference exists.
+    // Skip handleEndShift entirely and go straight to RESUME-IF-PENDING
+    // via startMonnifyCheckout. Calling end_shift here would do nothing
+    // (server is idempotent) but would also re-mint local timer anchors
+    // we just took the trouble to derive from payment_due_at.
+    if (alreadyAwaitingPayment) return;
     if (settlementReadyRef.current || directEndStartedRef.current) return;
     directEndStartedRef.current = true;
     void handleEndShift();
