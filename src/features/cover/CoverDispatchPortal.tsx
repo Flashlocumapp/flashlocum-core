@@ -46,15 +46,22 @@ function CoverDispatchOverlays() {
   const reqRow = pendingRating
     ? netState.requests[pendingRating.requestId]
     : undefined;
-  const startedAtMs = reqRow?.firstStartedAt ?? reqRow?.startedAt ?? null;
-  const endedAtMs =
-    reqRow?.paidAt ??
-    (reqRow?.paymentDueAt ? Date.parse(reqRow.paymentDueAt) - 15 * 60 * 1000 : null);
   const billedMinutes =
     typeof reqRow?.accumulatedMs === "number"
       ? Math.round(reqRow.accumulatedMs / 60000)
       : null;
   const actualMinutes = billedMinutes;
+  const endedAtMs =
+    reqRow?.paidAt ??
+    reqRow?.updatedAt ??
+    (reqRow?.paymentDueAt ? Date.parse(reqRow.paymentDueAt) - 15 * 60 * 1000 : null);
+  // Prefer firstStartedAt (monotonic, server-owned). For legacy rows that
+  // pre-date `first_started_at`, derive a best-effort start from the known
+  // end time minus accumulated worked minutes so the row never blanks.
+  const startedAtMs =
+    reqRow?.firstStartedAt ??
+    reqRow?.startedAt ??
+    (endedAtMs && billedMinutes ? endedAtMs - billedMinutes * 60_000 : null);
 
   if (!incoming && !accepted && !pendingRating) return null;
 
