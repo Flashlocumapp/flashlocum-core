@@ -28,6 +28,7 @@ import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
 import { Route as AdminAdminIndexRouteImport } from './routes/_admin.admin.index'
 import { Route as ApiPublicMonnifyWebhookRouteImport } from './routes/api/public/monnify-webhook'
+import { Route as ApiPublicMonnifyDisbursementWebhookRouteImport } from './routes/api/public/monnify-disbursement-webhook'
 import { Route as AdminAdminVerificationRouteImport } from './routes/_admin.admin.verification'
 import { Route as AdminAdminUsersRouteImport } from './routes/_admin.admin.users'
 import { Route as AdminAdminUnpaidRouteImport } from './routes/_admin.admin.unpaid'
@@ -139,6 +140,12 @@ const ApiPublicMonnifyWebhookRoute = ApiPublicMonnifyWebhookRouteImport.update({
   path: '/api/public/monnify-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMonnifyDisbursementWebhookRoute =
+  ApiPublicMonnifyDisbursementWebhookRouteImport.update({
+    id: '/api/public/monnify-disbursement-webhook',
+    path: '/api/public/monnify-disbursement-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminAdminVerificationRoute = AdminAdminVerificationRouteImport.update({
   id: '/verification',
   path: '/verification',
@@ -258,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
+  '/api/public/monnify-disbursement-webhook': typeof ApiPublicMonnifyDisbursementWebhookRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin/': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
@@ -293,6 +301,7 @@ export interface FileRoutesByTo {
   '/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/admin/users': typeof AdminAdminUsersRoute
   '/admin/verification': typeof AdminAdminVerificationRoute
+  '/api/public/monnify-disbursement-webhook': typeof ApiPublicMonnifyDisbursementWebhookRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
@@ -332,6 +341,7 @@ export interface FileRoutesById {
   '/_admin/admin/unpaid': typeof AdminAdminUnpaidRoute
   '/_admin/admin/users': typeof AdminAdminUsersRoute
   '/_admin/admin/verification': typeof AdminAdminVerificationRoute
+  '/api/public/monnify-disbursement-webhook': typeof ApiPublicMonnifyDisbursementWebhookRoute
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/_admin/admin/': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
@@ -370,6 +380,7 @@ export interface FileRouteTypes {
     | '/admin/unpaid'
     | '/admin/users'
     | '/admin/verification'
+    | '/api/public/monnify-disbursement-webhook'
     | '/api/public/monnify-webhook'
     | '/admin/'
     | '/api/public/hooks/outbox-drain'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/admin/unpaid'
     | '/admin/users'
     | '/admin/verification'
+    | '/api/public/monnify-disbursement-webhook'
     | '/api/public/monnify-webhook'
     | '/admin'
     | '/api/public/hooks/outbox-drain'
@@ -443,6 +455,7 @@ export interface FileRouteTypes {
     | '/_admin/admin/unpaid'
     | '/_admin/admin/users'
     | '/_admin/admin/verification'
+    | '/api/public/monnify-disbursement-webhook'
     | '/api/public/monnify-webhook'
     | '/_admin/admin/'
     | '/api/public/hooks/outbox-drain'
@@ -462,6 +475,7 @@ export interface RootRouteChildren {
   AdminUnauthorizedRoute: typeof AdminUnauthorizedRoute
   AuthRoleRoute: typeof AuthRoleRoute
   OnboardingRoleRoute: typeof OnboardingRoleRoute
+  ApiPublicMonnifyDisbursementWebhookRoute: typeof ApiPublicMonnifyDisbursementWebhookRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
   ApiPublicHooksOutboxDrainRoute: typeof ApiPublicHooksOutboxDrainRoute
   ApiPublicHooksShiftRemindersRoute: typeof ApiPublicHooksShiftRemindersRoute
@@ -602,6 +616,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/monnify-webhook'
       fullPath: '/api/public/monnify-webhook'
       preLoaderRoute: typeof ApiPublicMonnifyWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/monnify-disbursement-webhook': {
+      id: '/api/public/monnify-disbursement-webhook'
+      path: '/api/public/monnify-disbursement-webhook'
+      fullPath: '/api/public/monnify-disbursement-webhook'
+      preLoaderRoute: typeof ApiPublicMonnifyDisbursementWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_admin/admin/verification': {
@@ -805,6 +826,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUnauthorizedRoute: AdminUnauthorizedRoute,
   AuthRoleRoute: AuthRoleRoute,
   OnboardingRoleRoute: OnboardingRoleRoute,
+  ApiPublicMonnifyDisbursementWebhookRoute:
+    ApiPublicMonnifyDisbursementWebhookRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
   ApiPublicHooksOutboxDrainRoute: ApiPublicHooksOutboxDrainRoute,
   ApiPublicHooksShiftRemindersRoute: ApiPublicHooksShiftRemindersRoute,
