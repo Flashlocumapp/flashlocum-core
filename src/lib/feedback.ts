@@ -379,7 +379,7 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
   // Resolve plan and render.
   const p = plan(ev);
   if (p?.toast) {
-    pushToast({ tone: p.toast.tone, title: p.toast.title, body: p.toast.body, ttl: p.toast.ttl });
+    pushToast({ tone: p.toast.tone, title: p.toast.title, body: p.toast.body, ttl: p.toast.ttl, key: lkey });
   }
   if (p?.haptic) emitHaptic(p.haptic);
 
