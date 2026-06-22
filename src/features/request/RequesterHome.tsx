@@ -299,7 +299,9 @@ function HomeScreen({ active }: { active: boolean }) {
 
   const selectLocation = (r: Recent) => {
     setLocation(r);
-    setQuery(r.name);
+    // Clear search state on selection — next search starts from empty.
+    setQuery("");
+    setSuggestions([]);
     setStage("configure");
   };
 
@@ -307,10 +309,11 @@ function HomeScreen({ active }: { active: boolean }) {
     // Hard-restrict to Lagos. If coords are present and out of bounds, reject
     // immediately; otherwise resolve via Place Details and validate there.
     if (s.lat != null && s.lng != null && !isInLagos(s.lat, s.lng)) {
-      pushToast({ tone: "warn", title: "FlashLocum is only available in Lagos right now." });
+      pushToast({ tone: "warn", title: "FlashLocum is not available in this location yet." });
       return;
     }
-    setQuery(s.primary);
+    // Clear search state on selection — next search starts from empty.
+    setQuery("");
     setSuggestions([]);
     if (s.lat != null && s.lng != null) {
       setLocation({
@@ -328,7 +331,7 @@ function HomeScreen({ active }: { active: boolean }) {
       if (!isInLagos(details.lat, details.lng)) {
         setLocation(null);
         setStage("search");
-        pushToast({ tone: "warn", title: "FlashLocum is only available in Lagos right now." });
+        pushToast({ tone: "warn", title: "FlashLocum is not available in this location yet." });
         return;
       }
       setLocation({
@@ -343,6 +346,7 @@ function HomeScreen({ active }: { active: boolean }) {
       pushToast({ tone: "warn", title: "Couldn't load that location. Try again." });
     }
   };
+
 
   const net = useNetwork();
   const markers: Marker[] = useMemo(
