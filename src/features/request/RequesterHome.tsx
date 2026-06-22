@@ -295,6 +295,15 @@ function HomeScreen({ active }: { active: boolean }) {
     };
   }, [query, location?.name, searchOrigin]);
 
+  // Reset search state when the sheet collapses so the next open starts fresh.
+  useEffect(() => {
+    if (stage === "collapsed") {
+      setQuery("");
+      setSuggestions([]);
+    }
+  }, [stage]);
+
+
   const recents: Recent[] = useRecentLocations();
 
   const selectLocation = (r: Recent) => {
