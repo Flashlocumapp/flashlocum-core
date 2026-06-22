@@ -210,7 +210,32 @@ export function CoverageScreen() {
 function ReconnectingPill() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    return subscribeRealtimeHealth((h) => setShow(isAnyReconnecting(h)));
+    // Debounce: only show the pill if a channel has been unhealthy for
+    // >= 800ms. Supabase realtime briefly reports "reconnecting" during
+    // the cold-start handshake; the debounce eliminates that sub-second
+    // flash without hiding real connectivity issues.
+    let pendingTimer: number | null = null;
+    const unsub = subscribeRealtimeHealth((h) => {
+      const bad = isAnyReconnecting(h);
+      if (bad) {
+        if (pendingTimer == null) {
+          pendingTimer = window.setTimeout(() => {
+            setShow(true);
+            pendingTimer = null;
+          }, 800);
+        }
+      } else {
+        if (pendingTimer != null) {
+          window.clearTimeout(pendingTimer);
+          pendingTimer = null;
+        }
+        setShow(false);
+      }
+    });
+    return () => {
+      if (pendingTimer != null) window.clearTimeout(pendingTimer);
+      unsub();
+    };
   }, []);
   return (
     <AnimatePresence>
@@ -758,7 +783,7 @@ function RequesterDetailSheet({
               style={{ background: "var(--color-secondary)" }}
             >
               {identity.selfieUrl ? (
-                <img src={identity.selfieUrl} alt="" className="h-full w-full object-cover" />
+                <img src={identity.selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
               ) : (
                 identity.initials
               )}
@@ -1179,7 +1204,7 @@ function Avatar({
         }}
       >
         {selfieUrl ? (
-          <img src={selfieUrl} alt="" className="h-full w-full object-cover" />
+          <img src={selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
         ) : (
           initials
         )}
