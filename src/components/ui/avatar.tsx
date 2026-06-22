@@ -23,6 +23,11 @@ const AvatarImage = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Image
     ref={ref}
+    decoding="async"
+    loading="eager"
+    // @ts-expect-error fetchpriority is valid HTML, not yet in React types
+    fetchpriority="high"
+    draggable={false}
     className={cn("aspect-square h-full w-full", className)}
     {...props}
   />

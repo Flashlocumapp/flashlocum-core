@@ -42,35 +42,10 @@ function deriveInitials(name: string, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
-function useSelfieUrl(pathOrUrl: string | null): string | null {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    if (!pathOrUrl) {
-      setSrc(null);
-      return;
-    }
-    if (/^(https?:|data:|blob:)/i.test(pathOrUrl)) {
-      setSrc(pathOrUrl);
-      return;
-    }
-    (async () => {
-      const { data, error } = await supabase.storage
-        .from("doctors")
-        .createSignedUrl(pathOrUrl, 60 * 60);
-      if (cancelled) return;
-      if (error || !data?.signedUrl) {
-        setSrc(null);
-        return;
-      }
-      setSrc(data.signedUrl);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pathOrUrl]);
-  return src;
-}
+// Selfie signing goes through the shared module-level cache in
+// `@/lib/selfie-url` so the URL is signed once per session and reused
+// across Account, Coverage cards, History, and RequesterHome doctor cards.
+import { useSelfieUrl } from "@/lib/selfie-url";
 
 export function AccountScreen() {
   const navigate = useNavigate();
