@@ -156,7 +156,6 @@ function AppShell() {
         style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
         <div
-          key={pathname}
           className="absolute inset-0 overflow-y-auto overflow-x-hidden"
           style={{
             WebkitOverflowScrolling: "touch",
@@ -167,6 +166,7 @@ function AppShell() {
           <Outlet />
         </div>
       </div>
+
       <AnimatePresence>
         {!immersive && (
           <motion.div
