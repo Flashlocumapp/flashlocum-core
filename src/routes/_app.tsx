@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
-import { ToastHost } from "@/components/ToastHost";
+
 
 import { RestrictionBanner } from "@/components/RestrictionBanner";
 import { clearRole, getRole, hasRole, setRole, type Role } from "@/lib/role";
@@ -182,8 +182,7 @@ function AppShell() {
         )}
       </AnimatePresence>
       <CoverDispatchPortal />
-      <ToastHost />
-      
+
       <RestrictionBanner />
     </div>
   );
