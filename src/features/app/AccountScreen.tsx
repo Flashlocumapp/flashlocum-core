@@ -134,7 +134,7 @@ export function AccountScreen() {
             }}
           >
             {isDoctor && selfieSrc ? (
-              <img src={selfieSrc} alt="" className="h-full w-full object-cover" />
+              <img src={selfieSrc} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
             ) : (
               identity.initials
             )}
