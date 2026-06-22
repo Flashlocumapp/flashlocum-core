@@ -1,124 +1,69 @@
-# FINAL REMEDIATION PLAN — Notifications, Settlement, Edit Flow, Map, Search
+## Confirmation
 
-User-approved scope. Each section is independently shippable.
+### 1. Daily reconciliation cron + Monnify dashboard wiring — NOT DONE
 
----
+Current state in the repo:
+- `src/routes/api/public/monnify-disbursement-webhook.ts` exists (the webhook handler is in place).
+- `src/routes/api/public/hooks/` contains only `outbox-drain.ts`, `shift-reminders.ts`, `surcharge-drain.ts`. **No `reconcile-settlements.ts`.**
+- No `cron.schedule(...)` entry exists for disbursement reconciliation.
+- No memory file documents the Monnify dashboard webhook URL.
 
-## §1 — Notification / Toast / Push / Haptic Compliance
+So if Monnify ever drops a `SUCCESSFUL_DISBURSEMENT` callback (network blip, signature mismatch, dashboard not yet wired), nothing back-fills `remitted_at` — settlements would stay "pending" forever. This is the exact gap the plan flagged and it is still open.
 
-### 1.1 Delete duplicate/non-compliant toasts
+### 2. Are toasts global, single-instance, non-duplicating? — PARTIALLY
 
-**`src/features/app/CoverageScreen.tsx`** — delete the legacy realtime listener at lines 270–296. The engine (`feedback.ts` `plan()`) already emits `offer.accepted` and `shift.cancelled` toasts with the correct, name-bearing wording. Removes:
-- ❌ `"Doctor accepted your request." / "Open Coverage → Upcoming for details."`
-- ❌ `"Doctor cancelled this shift."`
+What is correct:
+- `pushToast` is a module-level pub/sub in `src/lib/notifications.ts`. Anyone can fire it from anywhere.
+- `ToastHost` renders only the **latest** toast (`useLatestToast`), so two rapid toasts replace each other in the same slot — no stacking.
+- Contract-routed toasts go through `feedback.ts` `ingest()`, which has a 6-second per-event-key ledger that drops duplicates (e.g. the same `offer.accepted` arriving from realtime + local emit).
 
-**`src/lib/presence-remote.ts:342–347`** — delete the online/offline ambient toast. Presence reconciliation is silent.
+What is **not** correct:
+- `ToastHost` is mounted **only inside `src/routes/_app.tsx`** (the doctor/requester shell). It is **not** in `__root.tsx`, `_admin.tsx`, `/role`, `/auth/$role`, `/onboarding/$role`, `/reset-password`, or the legal pages. Any `pushToast` fired on those screens is silently dropped — so toasts are **not truly global**.
+- Raw `pushToast` calls (admin screens, RequesterHome validation, ShiftSettlement rating errors, admin.unauthorized) have **no dedup**. If the same path fires twice within a render cycle, the second one just replaces the first visually (so the user sees one toast) — but there is no key-based suppression like the contract events have. In practice this is fine because each call site is single-shot, but it is not a formal "no duplication" guarantee.
+- The admin pages call `pushToast` but there is no `ToastHost` under `_admin.tsx`, so admin toasts currently don't render at all. This is a real bug.
 
-### 1.2 Fix `verification.result` wording
+## Proposed remediation
 
-**`src/lib/feedback.ts` `plan()`** — replace the generic `"Verification update"` with two contract-exact strings derived from `ctx.title` payload:
-- approved → `"Your account has been verified successfully."`
-- rejected → `"Your verification requires attention. Please review and resubmit."`
+### A. Make toasts truly global
+1. Move `<ToastHost />` mount from `src/routes/_app.tsx` up into `src/routes/__root.tsx` (render once at the root, after `<Outlet />`). Remove the duplicate from `_app.tsx` to keep a single instance.
+2. Verify the `--tab-bar-h` CSS var falls back to `0px` on routes without bottom tabs, so the toast sits above the safe-area inset on `/role`, `/auth`, `/onboarding`, admin pages.
 
-**`src/lib/admin.functions.ts:110–112`** — set push `body` to the same two strings (was: arbitrary `bodyByStatus`).
+### B. Add formal global dedup
+3. Extend `pushToast` with an optional `key?: string` and a 4-second ledger inside `notifications.ts` that drops repeats of the same key. Engine-emitted toasts already pass a stable `eventKey`; thread it through as `key` so the ledger covers both contract and raw call sites.
 
-### 1.3 Strip haptics from non-`offer.new` events
+### C. Daily reconciliation cron
+4. Create `src/routes/api/public/hooks/reconcile-settlements.ts`:
+   - Auth via `apikey` header (Supabase anon key).
+   - Query `coverage_requests` where `payment_status='paid' AND remitted_at IS NULL AND paid_at < now() - interval '36h'`.
+   - For each row, call the existing Monnify disbursement-status API (`src/lib/monnify/client.server.ts`) per `payment_reference`.
+   - On `SUCCESS`, call the `mark_settlement_remitted` RPC and broadcast `coverage_invalidations`, mirroring the webhook handler.
+   - Return `{ checked, remitted }` JSON.
+5. Schedule via `pg_cron` (SQL, not migration — it carries the anon key):
 
-**`src/lib/feedback.ts` `shiftCue()`** — remove the `haptic` intensity computation. The function becomes a no-op shim (kept only for API compatibility). The planner's `offer.new → medium` haptic remains the ONLY haptic emit in the codebase.
+   ```sql
+   select cron.schedule(
+     'reconcile-monnify-settlements-daily',
+     '0 3 * * *',  -- 03:00 UTC daily
+     $$
+     select net.http_post(
+       url:='https://flashlocum-core.lovable.app/api/public/hooks/reconcile-settlements',
+       headers:='{"Content-Type":"application/json","apikey":"<ANON_KEY>"}'::jsonb,
+       body:='{}'::jsonb
+     );
+     $$
+   );
+   ```
 
-### 1.4 Add missing background pushes
+### D. Monnify dashboard wiring (documentation only)
+6. Write `mem://features/monnify-settlement.md` recording the two webhook URLs to register in the Monnify dashboard:
+   - Collection: `https://flashlocum-core.lovable.app/api/public/monnify-webhook`
+   - Disbursement: `https://flashlocum-core.lovable.app/api/public/monnify-disbursement-webhook`
+   The dashboard registration itself is a manual step in the Monnify console — there is no API for it from our side.
 
-New server functions in `src/lib/coverage-notify.functions.ts` (mirror the existing `startAndNotifyFn` shape):
-- `pauseAndNotifyFn` — body `"{Hospital Name} paused your shift until the next scheduled session."`
-- `resumeAndNotifyFn` — body `"Your shift with {Hospital Name} has resumed."`
-- `updateAndNotifyFn` — body `"{Hospital Name} updated your shift details."` (called from the requester's "Edit Request → re-broadcast (POST-acceptance)" path only — pre-acceptance edits never push).
+## Execution order
+1. B (dedup) — pure addition to `notifications.ts`, no risk.
+2. A (move ToastHost to root) — one mount move, one removal.
+3. C (reconcile route) — new file + SQL via Supabase SQL tool.
+4. D (memory doc).
 
-Wire these from the existing lifecycle call sites in `src/lib/network.ts` (replace direct `remoteUpdateRequest` with the notify variants for the post-acceptance pause/resume paths) and from the edit-republish path in `RequesterHome.tsx`.
-
-### 1.5 Add `Request Created` background push to doctors
-
-In `src/lib/coverage-remote.ts` `remoteInsertRequest` (or a new `createAndNotifyFn` on the server), after the row is inserted, fan out a push to every currently-online eligible doctor:
-- title: `"New coverage request"`
-- body: `"New coverage request available from {Hospital Name}"`
-
-Foreground doctors already get the card + haptic via the realtime path; the engine's 6 s ledger collapses the foreground push echo into a no-op (per §1.7).
-
-### 1.6 Payment-complete rule (per user decision)
-
-- **Doctor**: unchanged. Foreground toast + background push, both bodied `"Payment received for your shift with {Hospital Name}. Remittance will be completed by 10PM today."` (already correct in `monnify-webhook.ts:144` and `feedback.ts plan()`).
-- **Requester**: **delete the requester push** in `src/routes/api/public/monnify-webhook.ts:160–177`. Requester initiates payment, so contract = toast-only. Foreground toast `"Payment completed successfully for your shift with Dr. {Doctor Name}."` continues to fire via the engine's `payment.settled` path (the realtime `paid_at` flip drives it; or a local `fromLocal` emit at successful Monnify return).
-
-### 1.7 Foreground push suppression
-
-Single global rule in the service-worker / Capacitor push handler: if `document.visibilityState === "visible"`, do NOT post a system notification. Always re-ingest into the engine. Guarantees the contract's "foreground = toast only" rule across every event.
-
-### 1.8 Normalize push title
-
-Across `coverage-notify.functions.ts`, `monnify-webhook.ts`, `shift-reminders.ts`, set push `title` equal to the body (or a short prefix derived from it), so the OS notification shade shows contract-exact wording — never a generic word like `"Reminder"` or `"Shift started"`.
-
-### 1.9 Operational toasts — KEEP (per user decision)
-
-These are explicitly NOT contract notifications; they remain as operational guidance. No changes:
-- `"You already have the maximum number of confirmed shifts."`
-- `"Coverage requests are limited to 14 days maximum."`
-- `"No doctor accepted this request in time."`
-- Lifecycle RPC error toasts (`"Couldn't start/pause/end this shift"`).
-- Rating save error, profile save, verification re-upload, race-loss-on-accept, place-details-error toasts.
-- All `_admin.*` toasts and admin push notifications (admin tooling is out of contract).
-
-### 1.10 Operational toasts — REMOVE (per user decision)
-
-In `src/features/request/RequesterHome.tsx:988–996`, delete the date-floor toast (`"Coverage requests start from today."`). Replace with inline form validation (disable past dates in the `<input type="date" min={today}>` and silently clamp via `onChange?.(min)` without surfacing a toast — `min` is already set, so no message is needed).
-
-### 1.11 Memory write
-
-Create `mem://constraints/notification-contract.md` capturing the full contract verbatim plus the operational-vs-contract split. Add a Core line to `mem://index.md` enforcing: "Contract events (lifecycle, payment, rating, reminder, request, shift, verification) route through `feedback.ts ingest()`. Direct `pushToast` calls outside operational/admin scope are forbidden."
-
----
-
-## §2 — Monnify Settlement Completion
-
-1. New route `src/routes/api/public/monnify-disbursement-webhook.ts` — HMAC-SHA512 verify with `MONNIFY_SECRET_KEY` (same shape as `monnify-webhook.ts`). Handle `SUCCESSFUL_DISBURSEMENT` and `FAILED_DISBURSEMENT`.
-2. On success, call `mark_settlement_remitted(_payment_reference, _amount)` RPC — sets `remitted_at`.
-3. Push the doctor: body `"Your earnings for {Hospital Name} have been successfully remitted to your bank account."` (also surfaces foreground toast via engine `payment.settled` second-stage event — extend `EventKind` with `settlement.remitted` for clean separation).
-4. Broadcast `coverage_invalidations` so Earnings + Admin Finance refresh without polling.
-5. Reconciliation cron at `src/routes/api/public/hooks/reconcile-settlements.ts` (daily) — for any `payment_status='paid' AND remitted_at IS NULL AND paid_at < now() - interval '36h'`, query Monnify per-reference and call `mark_settlement_remitted` for confirmed disbursements.
-6. Document Monnify dashboard webhook URL setup in `mem://features/monnify-settlement.md` — published URL is `https://flashlocum-core.lovable.app/api/public/monnify-disbursement-webhook`.
-
----
-
-## §3 — Edit Request Flow
-
-1. Drop the `cur.status !== "broadcasting"` guard in `pauseRequest` (`src/lib/network.ts:1118`). Authoritative gate becomes: if `acceptedBy` is set, no-op; otherwise always issue the DB UPDATE.
-2. Convert `pauseRequest` to `async`; await `remoteUpdateRequest` so the Edit screen can block on confirmation. Surface failures via operational toast.
-3. Add server RPC `pause_for_edit(_request_id)` (asserts `requester_id=auth.uid()` + `accepted_by IS NULL`, sets `status='paused'`, bumps `rev`, broadcasts invalidate atomically). Use it from `pauseRequest` in place of the generic UPDATE.
-4. Edit screen shows an inline "Hiding from doctors…" indicator that resolves the moment the RPC returns (typically <200 ms). No UI workaround — fix is purely state-machine + atomic RPC.
-
----
-
-## §4 — Map Lagos Restriction
-
-1. Tighten `LAGOS_BOUNDS` in `src/lib/google-maps.ts:69–72` to the actual state extent: `sw: { lat: 6.393, lng: 2.703 }, ne: { lat: 6.702, lng: 3.692 }`.
-2. Request `addressComponents` field in `Place.searchByText` and filter results where `administrative_area_level_1 !== "Lagos"` (deterministic admin-area check on top of bounds).
-3. Apply the same admin-area check in `selectSuggestion`'s Place Details path.
-4. Standardize rejection toast to `"FlashLocum is not available in this location yet."`.
-
----
-
-## §5 — Hospital Search Bar Clearing
-
-1. In `RequesterHome.tsx`, after `setLocation(...)` succeeds in both `selectLocation` and `selectSuggestion`, call `setQuery("")` and `setSuggestions([])`.
-2. Add a reset effect: on `stage === "collapsed"`, clear `query` and `suggestions`.
-3. Also clear on the expiry paths (`RequesterHome.tsx:1314, 1324`).
-
----
-
-## Execution Order
-
-1. §5 Search clear (trivial, ~5 lines).
-2. §3 Edit flow (small blast radius, biggest UX win).
-3. §4 Map bounds (single-file change).
-4. §1 Notification compliance (delete legacy + add missing pushes).
-5. §2 Settlement webhook (new route + cron + Monnify dashboard config).
-
-Each section ships independently. Approve to begin.
+Approve and I will switch to build mode and ship in that order.
