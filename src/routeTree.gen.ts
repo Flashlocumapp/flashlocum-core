@@ -45,6 +45,7 @@ import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.fin
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as ApiPublicHooksSurchargeDrainRouteImport } from './routes/api/public/hooks/surcharge-drain'
 import { Route as ApiPublicHooksShiftRemindersRouteImport } from './routes/api/public/hooks/shift-reminders'
+import { Route as ApiPublicHooksReconcileSettlementsRouteImport } from './routes/api/public/hooks/reconcile-settlements'
 import { Route as ApiPublicHooksOutboxDrainRouteImport } from './routes/api/public/hooks/outbox-drain'
 
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
@@ -229,6 +230,12 @@ const ApiPublicHooksShiftRemindersRoute =
     path: '/api/public/hooks/shift-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksReconcileSettlementsRoute =
+  ApiPublicHooksReconcileSettlementsRouteImport.update({
+    id: '/api/public/hooks/reconcile-settlements',
+    path: '/api/public/hooks/reconcile-settlements',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksOutboxDrainRoute =
   ApiPublicHooksOutboxDrainRouteImport.update({
     id: '/api/public/hooks/outbox-drain',
@@ -269,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin/': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
+  '/api/public/hooks/reconcile-settlements': typeof ApiPublicHooksReconcileSettlementsRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -305,6 +313,7 @@ export interface FileRoutesByTo {
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/admin': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
+  '/api/public/hooks/reconcile-settlements': typeof ApiPublicHooksReconcileSettlementsRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -345,6 +354,7 @@ export interface FileRoutesById {
   '/api/public/monnify-webhook': typeof ApiPublicMonnifyWebhookRoute
   '/_admin/admin/': typeof AdminAdminIndexRoute
   '/api/public/hooks/outbox-drain': typeof ApiPublicHooksOutboxDrainRoute
+  '/api/public/hooks/reconcile-settlements': typeof ApiPublicHooksReconcileSettlementsRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -384,6 +394,7 @@ export interface FileRouteTypes {
     | '/api/public/monnify-webhook'
     | '/admin/'
     | '/api/public/hooks/outbox-drain'
+    | '/api/public/hooks/reconcile-settlements'
     | '/api/public/hooks/shift-reminders'
     | '/api/public/hooks/surcharge-drain'
     | '/lovable/email/queue/process'
@@ -420,6 +431,7 @@ export interface FileRouteTypes {
     | '/api/public/monnify-webhook'
     | '/admin'
     | '/api/public/hooks/outbox-drain'
+    | '/api/public/hooks/reconcile-settlements'
     | '/api/public/hooks/shift-reminders'
     | '/api/public/hooks/surcharge-drain'
     | '/lovable/email/queue/process'
@@ -459,6 +471,7 @@ export interface FileRouteTypes {
     | '/api/public/monnify-webhook'
     | '/_admin/admin/'
     | '/api/public/hooks/outbox-drain'
+    | '/api/public/hooks/reconcile-settlements'
     | '/api/public/hooks/shift-reminders'
     | '/api/public/hooks/surcharge-drain'
     | '/lovable/email/queue/process'
@@ -478,6 +491,7 @@ export interface RootRouteChildren {
   ApiPublicMonnifyDisbursementWebhookRoute: typeof ApiPublicMonnifyDisbursementWebhookRoute
   ApiPublicMonnifyWebhookRoute: typeof ApiPublicMonnifyWebhookRoute
   ApiPublicHooksOutboxDrainRoute: typeof ApiPublicHooksOutboxDrainRoute
+  ApiPublicHooksReconcileSettlementsRoute: typeof ApiPublicHooksReconcileSettlementsRoute
   ApiPublicHooksShiftRemindersRoute: typeof ApiPublicHooksShiftRemindersRoute
   ApiPublicHooksSurchargeDrainRoute: typeof ApiPublicHooksSurchargeDrainRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -737,6 +751,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksShiftRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/reconcile-settlements': {
+      id: '/api/public/hooks/reconcile-settlements'
+      path: '/api/public/hooks/reconcile-settlements'
+      fullPath: '/api/public/hooks/reconcile-settlements'
+      preLoaderRoute: typeof ApiPublicHooksReconcileSettlementsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/outbox-drain': {
       id: '/api/public/hooks/outbox-drain'
       path: '/api/public/hooks/outbox-drain'
@@ -830,6 +851,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicMonnifyDisbursementWebhookRoute,
   ApiPublicMonnifyWebhookRoute: ApiPublicMonnifyWebhookRoute,
   ApiPublicHooksOutboxDrainRoute: ApiPublicHooksOutboxDrainRoute,
+  ApiPublicHooksReconcileSettlementsRoute:
+    ApiPublicHooksReconcileSettlementsRoute,
   ApiPublicHooksShiftRemindersRoute: ApiPublicHooksShiftRemindersRoute,
   ApiPublicHooksSurchargeDrainRoute: ApiPublicHooksSurchargeDrainRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
@@ -837,13 +860,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

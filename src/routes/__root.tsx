@@ -17,6 +17,7 @@ import { initNativeBridge } from "@/lib/native";
 import { unregisterDoctor } from "@/lib/network";
 import { usePushRegistration } from "@/lib/push-registration";
 import { loadPricingTable } from "@/lib/pricing";
+import { ToastHost } from "@/components/ToastHost";
 
 function NotFoundComponent() {
   return (
@@ -133,6 +134,7 @@ function RootComponent() {
       <div id="app-scroll-root" style={{ background: "var(--color-background)" }}>
         <Outlet />
       </div>
+      <ToastHost />
     </QueryClientProvider>
   );
 }
