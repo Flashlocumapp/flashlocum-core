@@ -16,7 +16,7 @@ export function ToastHost() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 12, opacity: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 30 }}
-          className="pointer-events-none absolute inset-x-0 z-[70] flex justify-center px-4"
+          className="pointer-events-none fixed inset-x-0 z-[70] flex justify-center px-4"
           style={{ bottom: "calc(var(--tab-bar-h, 64px) + 16px)" }}
         >
           <div
