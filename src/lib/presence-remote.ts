@@ -339,13 +339,9 @@ export async function heartbeatPresence(online: boolean): Promise<void> {
         lng: data.lng ?? null,
       });
       emit();
-      pushToast({
-        tone: serverOnline ? "info" : "warn",
-        title: serverOnline
-          ? "You're back online."
-          : "You went offline — tap online to resume receiving offers.",
-      });
+      // Presence reconciliation is intentionally silent — no toast.
     }
+
   } catch {
     /* non-fatal */
   }
