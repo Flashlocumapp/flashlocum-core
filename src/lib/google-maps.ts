@@ -65,10 +65,12 @@ export type PlaceDetails = {
 };
 
 // Lagos State bounds — FlashLocum is restricted to Lagos at launch.
-// Any pin, search result, or selection outside this box is rejected.
+// Tightened to the actual state extent (was previously too wide and let
+// Ogun State coordinates slip through). Any pin, search result, or
+// selection outside this box is rejected.
 export const LAGOS_BOUNDS = {
-  sw: { lat: 6.35, lng: 2.70 },
-  ne: { lat: 6.80, lng: 4.40 },
+  sw: { lat: 6.393, lng: 2.703 },
+  ne: { lat: 6.702, lng: 3.692 },
 } as const;
 
 export function isInLagos(lat?: number | null, lng?: number | null): boolean {
@@ -81,9 +83,22 @@ export function isInLagos(lat?: number | null, lng?: number | null): boolean {
   );
 }
 
+type AddressComponent = { longText?: string; shortText?: string; types?: string[] };
+function isLagosAdminArea(components: AddressComponent[] | null | undefined): boolean {
+  if (!components || components.length === 0) return true; // fall back to bounds-only check
+  for (const c of components) {
+    if (c.types?.includes("administrative_area_level_1")) {
+      const txt = `${c.longText ?? ""} ${c.shortText ?? ""}`.toLowerCase();
+      return /\blagos\b/.test(txt);
+    }
+  }
+  return true; // no admin_area_level_1 returned — don't over-reject
+}
+
 function looksLikeLagosText(secondary: string): boolean {
   return /\blagos\b/i.test(secondary);
 }
+
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
