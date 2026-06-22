@@ -987,13 +987,12 @@ const CtrlField = memo(function CtrlField({
           const v = e.target.value;
           if (type === "date") {
             if (min && v < min) {
-              pushToast({
-                tone: "info",
-                title: "Coverage requests start from today.",
-              });
+              // Silently clamp — inline `min` attr already prevents the
+              // picker from offering past dates; no toast needed.
               onChange?.(min);
               return;
             }
+
             if (max && v > max) {
               pushToast({
                 tone: "info",
