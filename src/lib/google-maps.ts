@@ -139,7 +139,7 @@ export async function fetchHospitalSuggestions(
   try {
     const { places } = await lib.Place.searchByText({
       textQuery: q,
-      fields: ["id", "displayName", "formattedAddress", "location"],
+      fields: ["id", "displayName", "formattedAddress", "location", "addressComponents"],
       locationRestriction,
       maxResultCount: 10,
       region: "NG",
@@ -154,6 +154,11 @@ export async function fetchHospitalSuggestions(
       const lat = loc.lat();
       const lng = loc.lng();
       if (!isInLagos(lat, lng)) return;
+      // Deterministic admin-area filter on top of bounds: reject any place
+      // whose `administrative_area_level_1` is not Lagos State (e.g. Ogun
+      // border towns whose coords sneak inside the rectangle).
+      const components = (place.addressComponents ?? null) as AddressComponent[] | null;
+      if (!isLagosAdminArea(components)) return;
       addSuggestion({
         placeId: id,
         primary: place.displayName ?? q,
@@ -167,13 +172,10 @@ export async function fetchHospitalSuggestions(
   }
 
   // Autocomplete predictions are intentionally NOT used as a fallback here.
-  // Autocomplete's `locationRestriction` is best-effort and routinely leaks
-  // results from neighbouring states (Ogun, Oyo) because predictions don't
-  // carry coordinates we can verify. Place.searchByText above uses a strict
-  // rectangular `locationRestriction` and every returned place is
-  // coordinate-checked against `isInLagos`, so results are guaranteed Lagos.
+  // See note above on locationRestriction reliability.
   void g;
   void looksLikeLagosText;
+
 
   if (signal?.aborted) return [];
   return Array.from(byId.values()).slice(0, 8);
