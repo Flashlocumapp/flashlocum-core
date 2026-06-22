@@ -1115,7 +1115,10 @@ export function pauseRequest(id: string) {
   // started, the post-acceptance pause RPC owns lifecycle.
   if (cur.acceptedBy) return;
   if (cur.status === "paused") return; // no-op
-  if (cur.status !== "broadcasting") return;
+  // No `status === "broadcasting"` guard: stale local mirrors during the
+  // edit flow (e.g. a realtime echo briefly flipping us back) must not
+  // swallow the pause. The server enforces the real precondition via RLS.
+
   applyPatch(
     id,
     { status: "paused" },
