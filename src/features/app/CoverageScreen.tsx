@@ -33,7 +33,6 @@ import {
   pauseShift as netPauseShift,
   getSessionId,
   startRequest as netStartRequest,
-  subscribeNetwork,
   updateRequest as netUpdateRequest,
   useLifecyclePending,
   useNetwork,
@@ -41,6 +40,7 @@ import {
   type NetRequest,
   type NetState,
 } from "@/lib/network";
+
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
