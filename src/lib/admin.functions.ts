@@ -92,24 +92,23 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
     try {
       const { sendPushToUser } = await import("@/lib/push.server");
       const titleByStatus: Record<VerificationStatus, string> = {
-        approved: "You're approved",
-        rejected: "Verification update",
+        approved: "Your account has been verified successfully.",
+        rejected: "Your verification requires attention. Please review and resubmit.",
         suspended: "Account suspended",
         pending: "Verification pending",
-        action_required: "Action required on your verification",
+        action_required: "Your verification requires attention. Please review and resubmit.",
       };
       const bodyByStatus: Record<VerificationStatus, string> = {
-        approved: "You can now accept shifts on FlashLocum.",
-        rejected: "Your verification was not approved. Open the app for details.",
+        approved: "Your account has been verified successfully.",
+        rejected: "Your verification requires attention. Please review and resubmit.",
         suspended: "Your account has been suspended. Contact support.",
         pending: "Your account is back under review.",
-        action_required:
-          data.reason?.trim() ||
-          "Additional information is required to complete your verification.",
+        action_required: "Your verification requires attention. Please review and resubmit.",
       };
       await sendPushToUser(data.doctorId, {
         title: titleByStatus[data.status],
         body: bodyByStatus[data.status],
+
         kind: "verification.result",
         entityId: data.doctorId,
         version: Date.now(),
