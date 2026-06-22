@@ -130,9 +130,9 @@ function acquireHeartbeat(): () => void {
 
 function AppShell() {
   const immersive = useImmersive();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => acquireHeartbeat(), []);
+
 
   return (
     <div
