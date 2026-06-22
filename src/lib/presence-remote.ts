@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { onUserIdChange, getCurrentUserIdSync } from "./coverage-remote";
 import { ensureAuthReady } from "@/lib/auth-ready";
 import { setChannelHealth } from "./realtime-health";
-import { pushToast } from "@/lib/notifications";
+
 
 
 export type PresenceRow = {
