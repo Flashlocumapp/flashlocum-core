@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
@@ -130,9 +130,9 @@ function acquireHeartbeat(): () => void {
 
 function AppShell() {
   const immersive = useImmersive();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => acquireHeartbeat(), []);
+
 
   return (
     <div
@@ -156,7 +156,6 @@ function AppShell() {
         style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
         <div
-          key={pathname}
           className="absolute inset-0 overflow-y-auto overflow-x-hidden"
           style={{
             WebkitOverflowScrolling: "touch",
@@ -167,6 +166,7 @@ function AppShell() {
           <Outlet />
         </div>
       </div>
+
       <AnimatePresence>
         {!immersive && (
           <motion.div
