@@ -154,26 +154,12 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
               );
             }
 
-            if (row.requester_id) {
-              const requesterExtras: Record<string, string> = {
-                type: "payment_settled",
-                paymentReference: ref,
-                requestId: row.id,
-                doctorName,
-              };
-              tasks.push(
-                sendPushToUser(row.requester_id, {
-                  title: "Payment complete",
-                  body: `Payment completed successfully for your shift with Dr. ${doctorName}.`,
-                  kind: "payment.settled",
-                  entityId: ref,
-                  version,
-                  occurredAt: version,
-                  audience: "requester",
-                  data: requesterExtras,
-                }),
-              );
-            }
+            // NOTE: requester does NOT receive a background push for
+            // payment.settled — they initiated the payment and only need
+            // an in-app toast (delivered via the realtime paid_at flip →
+            // engine `payment.settled`). Push is doctor-only here.
+            void doctorName;
+
 
             await Promise.allSettled(tasks);
           }
