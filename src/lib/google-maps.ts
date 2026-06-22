@@ -65,10 +65,12 @@ export type PlaceDetails = {
 };
 
 // Lagos State bounds — FlashLocum is restricted to Lagos at launch.
-// Any pin, search result, or selection outside this box is rejected.
+// Tightened to the actual state extent (was previously too wide and let
+// Ogun State coordinates slip through). Any pin, search result, or
+// selection outside this box is rejected.
 export const LAGOS_BOUNDS = {
-  sw: { lat: 6.35, lng: 2.70 },
-  ne: { lat: 6.80, lng: 4.40 },
+  sw: { lat: 6.393, lng: 2.703 },
+  ne: { lat: 6.702, lng: 3.692 },
 } as const;
 
 export function isInLagos(lat?: number | null, lng?: number | null): boolean {
@@ -81,9 +83,22 @@ export function isInLagos(lat?: number | null, lng?: number | null): boolean {
   );
 }
 
+type AddressComponent = { longText?: string; shortText?: string; types?: string[] };
+function isLagosAdminArea(components: AddressComponent[] | null | undefined): boolean {
+  if (!components || components.length === 0) return true; // fall back to bounds-only check
+  for (const c of components) {
+    if (c.types?.includes("administrative_area_level_1")) {
+      const txt = `${c.longText ?? ""} ${c.shortText ?? ""}`.toLowerCase();
+      return /\blagos\b/.test(txt);
+    }
+  }
+  return true; // no admin_area_level_1 returned — don't over-reject
+}
+
 function looksLikeLagosText(secondary: string): boolean {
   return /\blagos\b/i.test(secondary);
 }
+
 
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
@@ -124,7 +139,7 @@ export async function fetchHospitalSuggestions(
   try {
     const { places } = await lib.Place.searchByText({
       textQuery: q,
-      fields: ["id", "displayName", "formattedAddress", "location"],
+      fields: ["id", "displayName", "formattedAddress", "location", "addressComponents"],
       locationRestriction,
       maxResultCount: 10,
       region: "NG",
@@ -139,6 +154,11 @@ export async function fetchHospitalSuggestions(
       const lat = loc.lat();
       const lng = loc.lng();
       if (!isInLagos(lat, lng)) return;
+      // Deterministic admin-area filter on top of bounds: reject any place
+      // whose `administrative_area_level_1` is not Lagos State (e.g. Ogun
+      // border towns whose coords sneak inside the rectangle).
+      const components = (place.addressComponents ?? null) as AddressComponent[] | null;
+      if (!isLagosAdminArea(components)) return;
       addSuggestion({
         placeId: id,
         primary: place.displayName ?? q,
@@ -152,13 +172,10 @@ export async function fetchHospitalSuggestions(
   }
 
   // Autocomplete predictions are intentionally NOT used as a fallback here.
-  // Autocomplete's `locationRestriction` is best-effort and routinely leaks
-  // results from neighbouring states (Ogun, Oyo) because predictions don't
-  // carry coordinates we can verify. Place.searchByText above uses a strict
-  // rectangular `locationRestriction` and every returned place is
-  // coordinate-checked against `isInLagos`, so results are guaranteed Lagos.
+  // See note above on locationRestriction reliability.
   void g;
   void looksLikeLagosText;
+
 
   if (signal?.aborted) return [];
   return Array.from(byId.values()).slice(0, 8);

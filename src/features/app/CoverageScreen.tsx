@@ -33,14 +33,14 @@ import {
   pauseShift as netPauseShift,
   getSessionId,
   startRequest as netStartRequest,
-  subscribeNetwork,
   updateRequest as netUpdateRequest,
   useLifecyclePending,
   useNetwork,
   
   type NetRequest,
-  type NetState,
 } from "@/lib/network";
+
+
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
@@ -264,36 +264,11 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       .map(toRequestItem);
   }, [net, sid]);
 
-  // Cross-flow notifications: react to doctor-side transitions only.
+  // Cross-flow acceptance / cancellation toasts are emitted by the canonical
+  // feedback engine (offer.accepted / shift.cancelled). No local listener
+  // here — see src/lib/feedback.ts.
 
-  const processedEventsRef = useRef(new Set<string>());
-  useEffect(() => {
-    const off = subscribeNetwork((s: NetState) => {
-      const ev = s.lastEvent;
-      if (!ev || !ev.shiftId) return;
-      const eventKey = `${ev.actor}:${ev.actorId}:${ev.shiftId}:${ev.action}:${ev.at}`;
-      if (processedEventsRef.current.has(eventKey)) return;
-      const r = s.requests[ev.shiftId];
-      // Only react to shifts I own AND events caused by the OTHER actor.
-      if (!r || r.requesterSessionId !== sid) return;
-      if (ev.actor !== "doctor") return;
-      processedEventsRef.current.add(eventKey);
 
-      if (ev.action === "accept") {
-        pushToast({
-          tone: "presence",
-          title: "Doctor accepted your request.",
-          body: "Open Coverage → Upcoming for details.",
-        });
-      } else if (ev.action === "cancel") {
-        pushToast({
-          tone: "warn",
-          title: "Doctor cancelled this shift.",
-        });
-      }
-    });
-    return off;
-  }, [sid]);
 
 
   const [ratings, setRatings] = useState<Record<string, number>>({});

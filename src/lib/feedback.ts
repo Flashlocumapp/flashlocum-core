@@ -293,8 +293,19 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
           5200,
         ),
       };
-    case "verification.result":
-      return { toast: toast("presence", tOverride ?? "Verification update") };
+    case "verification.result": {
+      // Title payload carries the verification status (approved / rejected /
+      // action_required / suspended / pending). Wording is contract-exact.
+      const status = (ev.ctx?.title ?? "").toLowerCase();
+      const copy =
+        status === "approved"
+          ? "Your account has been verified successfully."
+          : status === "rejected" || status === "action_required" || status === "action required"
+            ? "Your verification requires attention. Please review and resubmit."
+            : tOverride ?? "Verification update";
+      return { toast: toast("presence", copy) };
+    }
+
     case "reminder.preshift":
       return {
         toast: toast(
