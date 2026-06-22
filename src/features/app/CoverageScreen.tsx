@@ -38,8 +38,8 @@ import {
   useNetwork,
   
   type NetRequest,
-  type NetState,
 } from "@/lib/network";
+
 
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
