@@ -223,6 +223,23 @@ function priceStandardDay(
   return { billable: bill, amount, toleranceFired: fired };
 }
 
+/**
+ * Mirror of SQL `_effective_product`: upgrade a Standard booking whose
+ * per-day window is exactly 24h (and days ∈ {1, 2}) to the matching
+ * straight product. Three separate 8h shifts do NOT upgrade.
+ */
+export function effectiveCoverageKind(
+  coverage: CoverageKind,
+  perDayMin: number,
+  days: number,
+): CoverageKind {
+  if (coverage !== "standard") return coverage;
+  const d = Math.max(1, Math.round(days));
+  if (perDayMin === 1440 && d === 1) return "straight24";
+  if (perDayMin === 1440 && d === 2) return "straight48";
+  return "standard";
+}
+
 /** Booked-window quote (no worked input). */
 export function computeCoveragePricing(
   coverage: CoverageKind,
@@ -235,6 +252,8 @@ export function computeCoveragePricing(
   const d = Math.max(1, Math.round(days));
   const perDay = splitPerDayMinutes(startHHMM, endHHMM);
   const perDayMin = perDay.dayMinutes + perDay.nightMinutes;
+  // Duration-aware upgrade so the quote matches what end_shift will charge.
+  coverage = effectiveCoverageKind(coverage, perDayMin, d);
   const totalMin = perDayMin * d;
   const busyApplies = environment === "busy" && coverage !== "home";
   const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
