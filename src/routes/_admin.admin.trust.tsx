@@ -73,7 +73,7 @@ function TrustPage() {
             checked={onlyFlagged}
             onChange={(e) => setOnlyFlagged(e.target.checked)}
           />
-          Only show flagged (rating &lt; 3.5 or reliability below threshold)
+          Only show flagged (doctor rating &lt; 4.0 / requester &lt; 3.5, or reliability below role threshold)
         </label>
         <span className="text-muted-foreground">— {rows.length} user{rows.length === 1 ? "" : "s"}</span>
       </div>
