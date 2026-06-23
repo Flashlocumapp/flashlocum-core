@@ -53,6 +53,7 @@ export function AccountScreen() {
   const [role, setLocalRole] = useState<Role | null>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
   const { profile, loading: profileLoading } = useMyProfile();
@@ -229,11 +230,30 @@ export function AccountScreen() {
                 navigate({ to: "/role", replace: true });
               }}
               tone="muted"
+            />
+            <NavRow
+              title="Delete Account"
+              onClick={() => setDeleteOpen(true)}
+              tone="danger"
               last
             />
           </ListGroup>
         </Section>
       </div>
+
+      {deleteOpen && (
+        <DeleteAccountSheet
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={async () => {
+            await queryClient.cancelQueries();
+            unregisterDoctor();
+            queryClient.clear();
+            const { signOutAndClearPresence } = await import("@/lib/sign-out");
+            await signOutAndClearPresence();
+            navigate({ to: "/role", replace: true });
+          }}
+        />
+      )}
 
       {profileOpen && (
         <ProfileSheet
@@ -358,7 +378,7 @@ function NavRow({
 }: {
   title: string;
   onClick: () => void;
-  tone?: "muted";
+  tone?: "muted" | "danger";
   last?: boolean;
 }) {
   return (
@@ -372,7 +392,14 @@ function NavRow({
     >
       <span
         className="text-[14.5px]"
-        style={{ color: tone === "muted" ? "var(--color-muted-foreground)" : undefined }}
+        style={{
+          color:
+            tone === "danger"
+              ? "var(--color-destructive)"
+              : tone === "muted"
+                ? "var(--color-muted-foreground)"
+                : undefined,
+        }}
       >
         {title}
       </span>
@@ -594,6 +621,152 @@ function SelectField({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function DeleteAccountSheet({
+  onClose,
+  onDeleted,
+}: {
+  onClose: () => void;
+  onDeleted: () => void | Promise<void>;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
+  const [eligible, setEligible] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { checkAccountDeleteEligibility } = await import(
+          "@/lib/account-delete.functions"
+        );
+        const res = await checkAccountDeleteEligibility();
+        if (cancelled) return;
+        setEligible(res.ok);
+        setReason(res.reason);
+      } catch (e) {
+        if (cancelled) return;
+        setReason(
+          e instanceof Error
+            ? e.message
+            : "Could not check account deletion eligibility. Please try again.",
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const runDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const { deleteMyAccount } = await import(
+        "@/lib/account-delete.functions"
+      );
+      await deleteMyAccount();
+      pushToast({ tone: "info", title: "Account deleted" });
+      await onDeleted();
+    } catch (e) {
+      pushToast({
+        tone: "warn",
+        title: "Could not delete account",
+        body: e instanceof Error ? e.message : "Please try again.",
+      });
+      setDeleting(false);
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[92%] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card p-5 pb-8"
+        style={{ boxShadow: "0 -20px 60px -20px rgba(0,0,0,0.45)" }}
+      >
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/20" />
+        <div className="text-[18px] font-semibold tracking-tight">
+          Delete Account
+        </div>
+
+        {loading ? (
+          <p className="mt-4 text-[14px] text-muted-foreground">
+            Checking your account…
+          </p>
+        ) : !eligible ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-[14px] leading-relaxed">{reason}</p>
+            <p className="text-[13px] text-muted-foreground">
+              Once these are resolved, you'll be able to delete your account
+              from this screen.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                onClick={onClose}
+                className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : !confirming ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-[14px] leading-relaxed">
+              Are you sure you want to permanently delete your account? This
+              action cannot be undone.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                onClick={onClose}
+                className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setConfirming(true)}
+                className="h-11 flex-1 rounded-2xl bg-destructive text-[14px] font-semibold text-destructive-foreground active:opacity-90"
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <p className="text-[14px] leading-relaxed">
+              Final confirmation: this will permanently remove your FlashLocum
+              account and sign you out.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                onClick={() => setConfirming(false)}
+                disabled={deleting}
+                className="h-11 flex-1 rounded-2xl bg-secondary text-[14px] font-medium active:bg-accent disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runDelete}
+                disabled={deleting}
+                className="h-11 flex-1 rounded-2xl bg-destructive text-[14px] font-semibold text-destructive-foreground active:opacity-90 disabled:opacity-60"
+              >
+                {deleting ? "Deleting…" : "Yes, delete my account"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
