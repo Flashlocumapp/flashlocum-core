@@ -1,103 +1,108 @@
-# FlashLocum — Billing Engine Correction Plan (revised, launch-blocking)
+# FlashLocum — Stability, Map Persistence, Payment Audit (revised after video review)
 
-Single migration. Fixes the three confirmed gaps: wrong surcharge rate, mis-classified 24h Standard bookings, and heuristic multi-day allocation. Snapshot-only, deterministic, reproducible.
+Both video recordings confirmed and re-checked:
+- **Video 1** — the blink happens on `/coverage` (a list screen with no map at all). The whole subtree flashes to a lighter state and back. This proves the blink is a **global re-render cascade**, not anything map-specific.
+- **Video 2** — on tab switch, the Google map tiles vanish entirely (gray surface only) and re-paint on return. This is a **hard unmount**, not just a visual reflow.
 
----
-
-## Scope
-
-| # | Fix | Why launch-blocking |
-|---|---|---|
-| E1 | Surcharge uses **day-rate-of-locked-tier** when day-minutes present, else night-rate; reads only from `rate_snapshot` | Today's ₦375/block on day shifts under-charges by ₦125/block (₦6,250 already lost on one live shift) |
-| E2 | Auto-upgrade to `straight_24h` / `straight_48h` only when **`booked_per_day_min == 1440` AND `days ∈ {1,2}`** | "Standard 08:00→08:00, 1 day" currently bills ₦44,000 instead of ₦36,000 |
-| E4 | Per-segment multi-day billing — each day priced from its own `shift_segments` row, not a greedy allocator | Booking B (5-day uneven actuals) attributes ₦18,000 to a day the doctor worked 10 seconds |
-| E3 | Snapshot-only surcharge math; live pricing tables never read after lock | Guarantees same shift → same bill, forever |
-| E6 | SQL test fixtures (Examples A–I + Booking A + Booking B + 24h-Standard case) asserted on every migration | Prevents silent regressions |
-| Backfill | One-shot UPDATE: recompute `surcharge_amount`, `total_billed_amount`, `settled_amount` for every locked in-flight row | Brings outstanding balances into spec |
-
-**Deferred (not in this migration):** E5 (symmetric vs one-sided tolerance) — keep current symmetric behaviour, document it in spec. Revisit post-launch with usage data.
+The fix below is scoped to what would actually eliminate both behaviours, with the exact files and lines.
 
 ---
 
-## Behavioural contracts after the fix
+## ISSUE 1 — Periodic global blink (every ~60s, on every screen)
 
-**Booking A** (09:00→17:00, 3 days, Standard quote): stays Standard, **₦48,000**. The classifier refuses to upgrade because `booked_per_day_min = 480 ≠ 1440`.
+### Root cause
+Two independent code paths convert the once-per-minute `last_seen_at` heartbeat into a global React re-render:
 
-**Booking B** (08:00→17:00, 5 days, actuals 9h12 / 10s / 8h33 / 44m / 4h05): per-segment billing produces **₦48,000** with the correct per-day attribution shown below — not today's ₦48,500 with ₦18,000 wrongly billed for Day 2.
+1. **Self-echo through `profile-remote.ts`**
+   `src/routes/_app.tsx:108` ticks `touchLastSeen()` every 60s. That writes `profiles.last_seen_at` for the current user. The per-user subscription in `src/lib/profile-remote.ts:333-344` listens for `event: "*"` on `profiles` filtered to `id=eq.${userId}`. The echo fires, `rememberProfile(next)` + `notifyProfile()` run unconditionally, and every `useMyProfile()` consumer setState's with a brand-new object identity. AppShell-mounted consumers (e.g. `ActionRequiredCard`, profile-driven UI) re-render their subtree.
 
-| Day | Worked | Billed min | Day amount |
-|---|---|---|---|
-| 1 | 9h 12m | 540 (tolerance) | ₦18,000 |
-| 2 | 10 sec | 60 (first-hour floor) | ₦2,000 |
-| 3 | 8h 33m | 525 (ceiling) | ₦17,500 |
-| 4 | 44 m | 60 (first-hour floor) | ₦2,000 |
-| 5 | 4h 05m | 255 (ceiling) | ₦8,500 |
+2. **Self-echo through `verification.ts`** ← the missing piece
+   `src/lib/verification.ts:32-49` opens a **second** subscription on `profiles` (`event: "UPDATE"`, same `id=eq.${userId}`). On every `last_seen_at` write the callback at line 41-45 reads `payload.new.verification_status` (which is unchanged) and calls `setCached(next)` if it has any value. That notifies every `useVerificationStatus()` listener. `useVerificationStatus` is consumed by `CoverHome` and by the `RestrictionBanner` mounted in `AppShell` (`src/routes/_app.tsx:RestrictionBanner`), so the cascade reaches **every** tab — Home, Coverage, Earnings, Account. This is why the blink shows on Coverage where there is no map.
 
-**24h-Standard case** (08:00→08:00, 1 day, Standard): classifier upgrades to `straight_24h`. Quote and end-shift both return **₦36,000** (or ₦45,000 busy). Surcharge = ₦375/block via `straight_per_hour/4`.
+3. **Reconcile-timer secondary noise** (smaller contributor)
+   `src/lib/coverage-remote.ts:345-355` and `src/lib/presence-remote.ts:196-206` both fire on a 60s cadence and broadcast snapshot arrays with new identities even when contents are unchanged, adding extra render thrash for consumers of `useNetwork()`.
 
-**Spec validation suite** (already passing on end-shift math, will be locked in as fixtures): all eight A–I worked examples produce the spec's exact naira amounts.
+### Why the blink looks like a "refresh"
+Animated surfaces (`<AnimatePresence>` in `_app.tsx` around the BottomTabs, motion components inside list rows) re-trigger entry transitions or briefly drop opacity when their React parents re-render with new object identities. That micro-transition is the visible flash.
 
----
+### Correct fix (eliminates both observed and confirmed)
+- **`src/lib/profile-remote.ts:333-344`** — in the `ensureProfileChannel` handler, compute the changed-keys set between `payload.old` and `payload.new`; if it is a subset of `{ last_seen_at }`, return without calling `rememberProfile`/`notifyProfile`. Then in `rememberProfile`, only call `notifyProfile()` when a meaningful field actually changed (shallow-diff against the prior cached row).
+- **`src/lib/verification.ts:32-49`** — same self-echo filter. Additionally, only call `setCached(next)` when `next !== cached`. This single change is what stops the cascade from reaching `/coverage`.
+- **`src/lib/coverage-remote.ts:345-355` and `src/lib/presence-remote.ts:196-206`** — before the listener fanout, hash the snapshot (`id + updated_at` join) and bail if equal to the last fanout's hash.
 
-## Technical changes (single migration)
-
-```text
-supabase/migrations/<ts>_billing_engine_correction.sql
-├── _effective_product(coverage_type, booked_per_day_min, days) → text
-│     'home' | 'straight_24h' | 'straight_48h' | 'standard'
-│     - honours explicit coverage_type ("24-Hour", "48-Hour", "Weekend", "Home Care")
-│     - else upgrades to straight_24h when booked_per_day_min=1440 AND days=1
-│     - else upgrades to straight_48h when booked_per_day_min=1440 AND days=2
-│     - else standard (or home for "home%")
-│
-├── compute_quote() — route through _effective_product (not coverage_type text)
-│
-├── end_shift() — three changes:
-│     1. classify via _effective_product
-│     2. multi-day Standard / Home loops over shift_segments by day_index,
-│        calling _price_standard_day / _price_home_day per row, summing
-│        billed_minutes + billed_amount into the request totals
-│     3. write per-day breakdown into shift_segments.billed_minutes /
-│        billed_amount so get_request_billing_state.days_breakdown is truthful
-│
-├── extend_payment_window() — surcharge from rate_snapshot:
-│     hourly = (snapshot.day_window_min > 0) ? snapshot.rate_day : snapshot.rate_night
-│     straight → snapshot.straight_per_hour; home → snapshot.home_hour
-│     block_amount = hourly / 4 (or 3000 flat for home, per spec)
-│
-├── drain_surcharge_due() — same snapshot-only formula; never reads
-│     pricing_rates / pricing_flats / pricing_modifiers
-│
-├── BACKFILL block (idempotent, wrapped in DO $$ ... $$):
-│     for each coverage_request with billing_locked_at IS NOT NULL
-│       AND payment_extension_count > 0:
-│         recompute corrected surcharge_amount,
-│         delta = corrected − stored,
-│         update surcharge_amount, total_billed_amount, settled_amount,
-│         INSERT row into payment_surcharge_log with reason='backfill_v2'
-│
-└── TEST FIXTURES (SELECT ... assert via RAISE EXCEPTION on mismatch):
-      A–I worked examples, Booking A (₦48,000 quote),
-      Booking B (₦48,000 from per-segment actuals),
-      24h-Standard upgrade case (₦36,000)
-```
-
-Frontend mirror (`src/lib/pricing.ts`) gets the same `_effective_product` rule in `coverageKindFromLabel` so booking-time estimates can never disagree with what the server bills. No other client changes — quote/settlement screens already read server amounts.
+Verification protocol after the fix:
+- Sit on `/coverage` for 3+ minutes with React Profiler recording. Expect 0 commits at the 60s mark (today: 1 commit per minute).
+- Sit on `/home`. Same expectation. The map must not flash, the rating pill must not re-mount.
 
 ---
 
-## Out of scope for this migration
+## ISSUE 2 — Map fully unmounts on tab switch (confirmed by video)
 
-- Symmetric vs one-sided tolerance policy (E5) — current symmetric behaviour preserved.
-- Pricing table editor changes.
-- Any UI copy beyond what the backend dictates.
+### Root cause
+The Google map is a child of `HomeRouter`, which is the component for the file route `src/routes/_app.home.tsx`. AppShell renders `<Outlet />` (`src/routes/_app.tsx:163-167`). TanStack Router unmounts the matched component when the route changes. So leaving `/home` for `/coverage` destroys:
+- The `<div>` that hosts the map
+- The `google.maps.Map` instance in `mapRef.current`
+- Every marker in `markerObjs` and `selfMarker`
+- `mapReady`, `userCenter`, all hook state
+
+On return, `GoogleMapBackground`'s init effect (`src/components/GoogleMapBackground.tsx:237-266`) re-runs from scratch. `loadMapsApi()` is cached so the SDK doesn't re-download, but `new g.maps.Map(...)` allocates a brand-new instance and every dependent effect re-fires. The grey frame in video 2 is the moment between the new map being constructed and the tiles painting.
+
+The `active` prop wired through `HomeRouter` → `GoogleMapBackground` was clearly intended to support keep-alive, but it can never work as long as the route owns the lifecycle.
+
+### Correct fix
+Promote `HomeRouter` to a **persistent layer mounted once inside `AppShell`**, alongside (and behind) `<Outlet />`:
+
+- **`src/routes/_app.tsx`** — derive `isHome = useRouterState({ select: s => s.location.pathname === '/home' })`. Render `<div style={{ display: isHome ? 'block' : 'none' }}><HomeRouter active={isHome} /></div>` as a sibling of `<Outlet />`, positioned in the same absolute layer it sits in today. Z-index it so Outlet content for other routes covers it when `isHome === false`.
+- **`src/routes/_app.home.tsx`** — change the component to `() => null`. The route still exists for navigation / URL matching; the visible UI is provided by the persistent layer.
+- Confirm `GoogleMapBackground`'s effects already gate work on `active` (pan effect at lines 281-286 already does). No other change required — `watchPosition` should keep running while hidden so the user-location dot is already accurate on return.
+
+This guarantees a single, lifelong `google.maps.Map` instance per session. Tab switching becomes a CSS toggle, identical to native screen stack behaviour.
+
+Verification protocol after the fix:
+- In DevTools, take a JS heap snapshot, find the `Map` instance, then switch to /coverage and back. The same instance ID must survive.
+- Visually: grey-frame moment in the video must be gone.
 
 ---
 
-## Order of work
+## ISSUE 3 — Payment countdown
 
-1. Write migration (functions + backfill + fixtures) — one file, one approval.
-2. Update `src/lib/pricing.ts` classifier in the same turn so dev-build estimates match.
-3. Spot-check the live locked shift (`e240b8aa-…`, LASUTH 10h day-only) to confirm `surcharge_amount` flips ₦18,750 → ₦25,000 after backfill.
+### Audit result (no behaviour change required, one display polish)
+The countdown is already backend-authoritative:
+- `payment_due_at` is set server-side in `end_shift` (`supabase/migrations/20260623033342_*.sql:357`).
+- `ShiftSettlement` reads it via `getRequestBillingState` (`src/lib/shift.functions.ts:183-210`), which also returns `server_now`. Reload/tab switch/offline simply re-anchor against the persisted server timestamp.
+- Surcharge is applied by the server cron `drain_surcharge_due` (`src/routes/api/public/hooks/surcharge-drain.ts`), independent of any client.
 
-No code written until you approve this plan.
+Display is computed against `simNow()` (`src/lib/clock.ts`), so on a device with a skewed wall clock, the visible number can disagree with the server's truth until the next poll.
+
+### Correct fix
+In `ShiftSettlement`, store `serverSkew = serverNow - Date.now()` from the first and every subsequent `getRequestBillingState` response in a ref. Compute the visible `remaining` as `paymentDueAt - (Date.now() + serverSkew)`. Cap `getRequestBillingState` polling to ≤30s while the sheet is visible so skew stays current. Enforcement is unchanged — purely a display fix to make device-clock skew invisible.
+
+---
+
+## ISSUE 4 — Monnify payment warning copy
+
+### What actually changes on `extend_payment_window`
+Verified from `supabase/migrations/20260623033342_*.sql:420…` and the existing Monnify flow:
+- **Amount** ✓ increases by one `_surcharge_block_amount` per call.
+- **`payment_reference`** ✓ is cleared on every lock (`end_shift` line 360) and re-minted on the next Monnify init (the unique index `uniq_coverage_payment_reference` forces a new reference because the amount changed).
+- **`account_number`** ✓ Monnify's virtual-account cache (`20260617132009_*.sql:5`) is keyed to `payment_reference`; clearing the reference invalidates the cache and the next `initTransaction` returns a fresh `accountNumber`, `bankName`, `expiresOn`.
+
+All three change. The current copy at `src/features/request/ShiftSettlement.tsx:1663-1664` only mentions the amount, which is misleading — the more confusing failure mode is paying to a stale account number.
+
+### Correct fix
+Replace both expired and pre-expiry strings with one rule taught upfront:
+
+> "Amount and payment details may change if payment is not completed in time. Always use the latest account number and payment reference displayed on this page."
+
+Pure presentation change.
+
+---
+
+## Implementation order (after approval)
+
+1. **Issue 4** — single string change.
+2. **Issue 1** — self-echo filter in `profile-remote.ts` + `verification.ts`, plus shallow-diff guards and snapshot-hash guards in `coverage-remote.ts` / `presence-remote.ts`. ~50 LOC across four files. Verifiable with React Profiler on `/coverage`.
+3. **Issue 2** — persistent `HomeRouter` layer in `_app.tsx`; `_app.home.tsx` → `() => null`. ~25 LOC. Verifiable with the heap-snapshot test above.
+4. **Issue 3** — server-skew ref in `ShiftSettlement`. ~15 LOC.
+
+All four independent; deployable in one turn.
