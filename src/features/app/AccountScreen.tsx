@@ -229,11 +229,30 @@ export function AccountScreen() {
                 navigate({ to: "/role", replace: true });
               }}
               tone="muted"
+            />
+            <NavRow
+              title="Delete Account"
+              onClick={() => setDeleteOpen(true)}
+              tone="danger"
               last
             />
           </ListGroup>
         </Section>
       </div>
+
+      {deleteOpen && (
+        <DeleteAccountSheet
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={async () => {
+            await queryClient.cancelQueries();
+            unregisterDoctor();
+            queryClient.clear();
+            const { signOutAndClearPresence } = await import("@/lib/sign-out");
+            await signOutAndClearPresence();
+            navigate({ to: "/role", replace: true });
+          }}
+        />
+      )}
 
       {profileOpen && (
         <ProfileSheet
