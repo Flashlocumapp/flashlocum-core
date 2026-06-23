@@ -392,7 +392,14 @@ function NavRow({
     >
       <span
         className="text-[14.5px]"
-        style={{ color: tone === "muted" ? "var(--color-muted-foreground)" : undefined }}
+        style={{
+          color:
+            tone === "danger"
+              ? "var(--color-destructive)"
+              : tone === "muted"
+                ? "var(--color-muted-foreground)"
+                : undefined,
+        }}
       >
         {title}
       </span>
