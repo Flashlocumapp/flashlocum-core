@@ -44,12 +44,12 @@ export const checkAccountDeleteEligibility = createServerFn({ method: "GET" })
         .from("coverage_requests")
         .select("id, status, start_ts", { count: "exact", head: false })
         .eq("requester_id", uid)
-        .in("status", OPEN_STATUSES as unknown as string[]),
+        .in("status", [...OPEN_STATUSES]),
       supabaseAdmin
         .from("coverage_requests")
         .select("id, status, start_ts", { count: "exact", head: false })
         .eq("accepted_by", uid)
-        .in("status", OPEN_STATUSES as unknown as string[]),
+        .in("status", [...OPEN_STATUSES]),
     ]);
 
     const nowMs = Date.now();
@@ -131,12 +131,12 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         .from("coverage_requests")
         .select("id, status, start_ts")
         .eq("requester_id", uid)
-        .in("status", OPEN_STATUSES as unknown as string[]),
+        .in("status", [...OPEN_STATUSES]),
       supabaseAdmin
         .from("coverage_requests")
         .select("id, status, start_ts")
         .eq("accepted_by", uid)
-        .in("status", OPEN_STATUSES as unknown as string[]),
+        .in("status", [...OPEN_STATUSES]),
       supabaseAdmin
         .from("coverage_requests")
         .select("id")
