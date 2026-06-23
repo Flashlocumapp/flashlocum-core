@@ -1658,10 +1658,10 @@ function CustomTransferPane({
                 <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   {expired ? "Price hold expired" : "Price held for"}
                 </span>
-                <span className="mt-0.5 text-[11.5px] text-muted-foreground">
-                  {expired
-                    ? "Amount may increase if payment isn't made soon."
-                    : "Amount may increase if payment isn't made in time."}
+                <span className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                  Amount and payment details may change if payment is not
+                  completed in time. Always use the latest account number and
+                  payment reference displayed on this page.
                 </span>
               </div>
               <span

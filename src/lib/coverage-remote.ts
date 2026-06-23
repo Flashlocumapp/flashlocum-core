@@ -326,6 +326,19 @@ let cachedSnapshotUserId: string | null =
   initialPersistedSnapshot.length > 0 ? activeCacheUserId() : null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Hash of the last fan-out. The reconcile interval re-fetches the snapshot
+// every 60s; without this guard, an identical roster still emits a new
+// array identity to every useNetwork() consumer, contributing to the
+// global periodic re-render blink the user reports.
+let lastCoverageSnapshotHash: string | null = null;
+function hashCoverageSnapshot(rows: NetRequest[]): string {
+  let h = "";
+  for (const r of rows) {
+    h += `${r.id}:${(r as { updated_at?: string }).updated_at ?? ""}:${(r as { status?: string }).status ?? ""}|`;
+  }
+  return h;
+}
+
 // --- Stage 0 safety net: reconciliation timer + channel watchdog ---------
 //
 // `lastRealtimeEventAt` tracks the last time we received ANY realtime signal
@@ -487,7 +500,14 @@ async function refreshSnapshot(): Promise<void> {
     // be presented as live broadcasts.
     setLiveSnapshotSeen(true);
     markRealtimeActivity();
-    snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    // Skip the fanout when the reconcile produced an identical roster.
+    // Emitting a new array identity every 60s would re-render every
+    // useNetwork() consumer and contribute to the global blink.
+    const nextHash = hashCoverageSnapshot(cachedSnapshot);
+    if (nextHash !== lastCoverageSnapshotHash) {
+      lastCoverageSnapshotHash = nextHash;
+      snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    }
 
   })().finally(() => {
     refreshInFlight = null;
