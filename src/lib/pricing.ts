@@ -341,9 +341,6 @@ export function computeWorkedPricing(
   const t = CURRENT;
   const worked = Math.max(0, Math.floor(workedMinutes));
   const d = Math.max(1, Math.round(days));
-  const busyApplies =
-    environment === "busy" && (coverage !== "home" || t.modifiers.home_busy_applies);
-  const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
 
   const bookedPerDay =
     bookedMinutesPerDay && bookedMinutesPerDay > 0
@@ -351,6 +348,13 @@ export function computeWorkedPricing(
       : endHHMM
         ? bookedMinutesFromWindow(startHHMM, endHHMM)
         : 0;
+
+  // Duration-aware upgrade so the live estimate matches what end_shift bills.
+  coverage = effectiveCoverageKind(coverage, bookedPerDay, d);
+
+  const busyApplies =
+    environment === "busy" && (coverage !== "home" || t.modifiers.home_busy_applies);
+  const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
 
   // === STRAIGHT 24H ===
   if (coverage === "straight24") {
