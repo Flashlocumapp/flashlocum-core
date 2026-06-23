@@ -26,7 +26,9 @@ export type DeleteEligibility = {
   reason: string | null;
 };
 
-const OPEN_STATUSES = ["accepted", "active", "paused"] as const;
+const OPEN_STATUSES = ["accepted", "active", "paused"] as const satisfies readonly (
+  "accepted" | "active" | "paused"
+)[];
 
 export const checkAccountDeleteEligibility = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
