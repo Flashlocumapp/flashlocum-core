@@ -133,33 +133,50 @@ function RequesterContent() {
         </AccordionContent>
       </AccordionItem>
 
-      {/* 3. Ratings */}
+      {/* 3. Ratings Score (Requester) */}
       <AccordionItem
         value="ratings"
         className="rounded-2xl border-0 px-4"
         style={{ background: "var(--color-surface-elevated)" }}
       >
         <AccordionTrigger className="py-4 text-[16px] font-semibold tracking-tight hover:no-underline">
-          3. Ratings
+          3. Ratings Score
         </AccordionTrigger>
         <AccordionContent className="pb-4">
-          <div className="space-y-2 text-[13.5px] leading-relaxed text-muted-foreground">
-            <p>Requesters also have a rating score.</p>
-            <p>Doctors rate requesters after completed shifts.</p>
-            <p className="font-medium text-foreground">How it works</p>
+          <div className="space-y-3 text-[13.5px] leading-relaxed text-muted-foreground">
+            <p className="font-medium text-foreground">How your Rating Score is calculated</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>Ratings are calculated in blocks of 20 shifts</li>
-              <li>After every 20 shifts, the system calculates the average rating</li>
-              <li>This replaces the previous rating block</li>
-              <li>Ratings reflect performance in batches, not single shifts</li>
+              <li>After every completed shift, doctors and requesters can rate each other from 1–5 stars.</li>
+              <li>Your Rating Score shows the average of your most recent ratings.</li>
+              <li>All users start with a 5.0 rating when they join FlashLocum.</li>
             </ul>
-            <p className="font-medium text-foreground">Minimum rating rule</p>
-            <p>A requester&apos;s rating cannot go below 3.5 stars. If rating falls below 3.5, the requester may be restricted from using the platform.</p>
+
+            <p className="font-medium text-foreground">Why is my Rating Score important?</p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li>Your Rating Score helps build trust on the platform.</li>
+              <li>Doctors may be more likely to accept requests from highly rated hospitals.</li>
+              <li>A strong rating reflects professionalism, reliability, communication, and overall shift experience.</li>
+            </ul>
+
+            <p className="font-medium text-foreground">Tips for maintaining a high Rating Score</p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li><span className="font-medium text-foreground">Be professional</span> — communicate clearly and respectfully before, during, and after shifts.</li>
+              <li><span className="font-medium text-foreground">Provide accurate information</span> — ensure shift details, expectations, and requirements are clear.</li>
+              <li><span className="font-medium text-foreground">Honour commitments</span> — avoid cancelling accepted bookings unless absolutely necessary.</li>
+              <li><span className="font-medium text-foreground">Maintain good communication</span> — keep doctors informed of important updates or unexpected issues.</li>
+              <li><span className="font-medium text-foreground">Create a positive experience</span> — treat doctors professionally and respectfully throughout the coverage period.</li>
+            </ul>
+
+            <p className="font-medium text-foreground">Minimum Rating Requirement</p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li>Requesters should maintain a Rating Score of at least 3.5.</li>
+              <li>Consistently low ratings may result in account review or platform restrictions.</li>
+            </ul>
           </div>
         </AccordionContent>
       </AccordionItem>
 
-      {/* 4. Reliability Score */}
+      {/* 4. Reliability Score (Requester) */}
       <AccordionItem
         value="reliability"
         className="rounded-2xl border-0 px-4"
@@ -169,26 +186,35 @@ function RequesterContent() {
           4. Reliability Score
         </AccordionTrigger>
         <AccordionContent className="pb-4">
-          <div className="space-y-2 text-[13.5px] leading-relaxed text-muted-foreground">
-            <p>Requesters also have a reliability score.</p>
-            <p>This measures how often requesters cancel shifts.</p>
-            <p className="font-medium text-foreground">Starting value</p>
-            <p>Every requester starts with 100% reliability.</p>
-            <p className="font-medium text-foreground">How it works</p>
+          <div className="space-y-3 text-[13.5px] leading-relaxed text-muted-foreground">
+            <p className="font-medium text-foreground">How your Reliability Score is calculated</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>Reliability is calculated in blocks of 20 shifts</li>
-              <li>After every 20 shifts, the system calculates cancellation rate</li>
-              <li>The previous reliability score is replaced</li>
+              <li>Your Reliability Score measures how consistently you honour accepted shift commitments.</li>
+              <li>Only cancellations made AFTER a doctor has accepted a shift affect Reliability.</li>
+              <li>Cancelling a request before acceptance does not affect your Reliability Score.</li>
+              <li>All users start with 100% Reliability when they join FlashLocum.</li>
             </ul>
-            <p className="font-medium text-foreground">How shifts are counted</p>
+
+            <p className="font-medium text-foreground">Why is my Reliability Score important?</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>Completed shift = success</li>
-              <li>Cancelled shift (after acceptance) = failure</li>
+              <li>Reliability helps doctors know they can depend on you.</li>
+              <li>Doctors prefer reliable hospitals.</li>
+              <li>Higher reliability improves trust and platform experience.</li>
             </ul>
-            <p className="font-medium text-foreground">Cancellation rule</p>
-            <p>Requesters must NOT cancel more than 5 shifts per 20 shifts. More than 5 cancellations will reduce reliability below acceptable level.</p>
-            <p className="font-medium text-foreground">Minimum reliability rule</p>
-            <p>Reliability cannot go below 75%. If reliability falls below 75%, requester may be restricted from creating or managing shifts.</p>
+
+            <p className="font-medium text-foreground">Tips for maintaining a high Reliability Score</p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li><span className="font-medium text-foreground">Only create shifts you intend to fill</span> — avoid creating requests that may later be cancelled.</li>
+              <li><span className="font-medium text-foreground">Avoid last-minute cancellations</span> — late cancellations disrupt doctors who have already committed their time.</li>
+              <li><span className="font-medium text-foreground">Plan ahead</span> — confirm staffing requirements before creating requests.</li>
+              <li><span className="font-medium text-foreground">Communicate early</span> — if circumstances change, notify the doctor as soon as possible.</li>
+            </ul>
+
+            <p className="font-medium text-foreground">Minimum Reliability Requirement</p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li>Minimum Reliability Score: 75%.</li>
+              <li>Accounts that repeatedly cancel accepted shifts may be reviewed or restricted.</li>
+            </ul>
           </div>
         </AccordionContent>
       </AccordionItem>
