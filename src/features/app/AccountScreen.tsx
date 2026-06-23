@@ -53,6 +53,7 @@ export function AccountScreen() {
   const [role, setLocalRole] = useState<Role | null>(() => getRole());
   const [switching, setSwitching] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const authIdentity = useAuthIdentity();
   const verification = useVerificationStatus();
   const { profile, loading: profileLoading } = useMyProfile();
