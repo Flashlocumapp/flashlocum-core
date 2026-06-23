@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
+import { HomeRouter } from "@/features/app/HomeRouter";
 
 
 import { RestrictionBanner } from "@/components/RestrictionBanner";
@@ -130,6 +131,13 @@ function acquireHeartbeat(): () => void {
 
 function AppShell() {
   const immersive = useImmersive();
+  // The Home tab content (map, search sheet) is mounted exactly once for
+  // the lifetime of the session. Tab switches just toggle its visibility
+  // via CSS `display`, so the Google Map instance, markers, camera state,
+  // and watchPosition subscription all survive switching to Coverage /
+  // Account and back. Without this, `<Outlet />` would unmount the map
+  // every time the user touches another tab.
+  const isHome = useRouterState({ select: (s) => s.location.pathname === "/home" });
 
   useEffect(() => acquireHeartbeat(), []);
 
@@ -155,9 +163,26 @@ function AppShell() {
         className="absolute inset-x-0 top-0"
         style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
+        {/* Persistent Home layer — always mounted, visibility toggled by
+            CSS so the map instance is never torn down on tab switch. */}
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{
+            display: isHome ? "block" : "none",
+            background: "var(--color-background)",
+          }}
+          aria-hidden={!isHome}
+        >
+          <HomeRouter active={isHome} />
+        </div>
+        {/* Non-home routes render here. On `/home` this stays empty (the
+            route's component is `() => null`) so the persistent layer
+            above is what the user sees. On other routes this covers the
+            persistent layer naturally because the home layer is hidden. */}
         <div
           className="absolute inset-0 overflow-y-auto overflow-x-hidden"
           style={{
+            display: isHome ? "none" : "block",
             WebkitOverflowScrolling: "touch",
             touchAction: "pan-y",
             background: "var(--color-background)",
