@@ -378,7 +378,7 @@ function NavRow({
 }: {
   title: string;
   onClick: () => void;
-  tone?: "muted";
+  tone?: "muted" | "danger";
   last?: boolean;
 }) {
   return (
