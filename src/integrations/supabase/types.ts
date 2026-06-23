@@ -954,6 +954,14 @@ export type Database = {
         Args: { _coverage_type: string; _days: number }
         Returns: string
       }
+      _effective_product: {
+        Args: {
+          _booked_per_day_min: number
+          _coverage_type: string
+          _days: number
+        }
+        Returns: string
+      }
       _hhmm_to_min: { Args: { _s: string }; Returns: number }
       _price_segment_locked: {
         Args: { _snapshot: Json; _worked_min: number }
@@ -1004,6 +1012,12 @@ export type Database = {
           day_min: number
           night_min: number
         }[]
+      }
+      _surcharge_block_amount: {
+        Args: {
+          _request: Database["public"]["Tables"]["coverage_requests"]["Row"]
+        }
+        Returns: number
       }
       _tier_for_per_day_hours: { Args: { _booked_hr: number }; Returns: string }
       _trust_ratings_received: {
