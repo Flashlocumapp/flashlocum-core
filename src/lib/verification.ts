@@ -38,9 +38,16 @@ function ensureVerificationChannel(userId: string) {
         filter: `id=eq.${userId}`,
       },
       (payload) => {
+        // Self-echo guard: the per-minute `last_seen_at` heartbeat fires an
+        // UPDATE on this same row. If verification_status is unchanged, do
+        // NOT fan out — every consumer (RestrictionBanner, CoverHome, …)
+        // would otherwise re-render once a minute and cause a visible blink
+        // on every screen in the app.
         const next = (payload.new as { verification_status?: VerificationStatus })
           ?.verification_status;
-        if (next) setCached(next);
+        if (!next) return;
+        if (next === cached) return;
+        setCached(next);
       },
     )
     .subscribe();

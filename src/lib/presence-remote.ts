@@ -71,8 +71,24 @@ function buildSnapshot(): PresenceRow[] {
 }
 
 
+// Hash of the last emitted snapshot. When the periodic reconcile or a
+// realtime echo produces an identical roster, we skip the fanout — emitting
+// a new array identity would force every `useNetwork()` consumer to
+// re-render and contribute to the periodic global blink.
+let lastSnapshotHash: string | null = null;
+function hashSnapshot(rows: PresenceRow[]): string {
+  let h = "";
+  for (const r of rows) {
+    h += `${r.user_id}:${r.online ? 1 : 0}:${r.lat ?? ""}:${r.lng ?? ""}:${r.last_seen}|`;
+  }
+  return h;
+}
+
 function emit() {
   const snap = buildSnapshot();
+  const h = hashSnapshot(snap);
+  if (h === lastSnapshotHash) return;
+  lastSnapshotHash = h;
   snapshotListeners.forEach((fn) => fn(snap));
 }
 

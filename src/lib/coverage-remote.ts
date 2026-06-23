@@ -487,7 +487,14 @@ async function refreshSnapshot(): Promise<void> {
     // be presented as live broadcasts.
     setLiveSnapshotSeen(true);
     markRealtimeActivity();
-    snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    // Skip the fanout when the reconcile produced an identical roster.
+    // Emitting a new array identity every 60s would re-render every
+    // useNetwork() consumer and contribute to the global blink.
+    const nextHash = hashCoverageSnapshot(cachedSnapshot);
+    if (nextHash !== lastCoverageSnapshotHash) {
+      lastCoverageSnapshotHash = nextHash;
+      snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    }
 
   })().finally(() => {
     refreshInFlight = null;

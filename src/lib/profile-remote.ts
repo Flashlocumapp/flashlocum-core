@@ -320,6 +320,45 @@ function notifyProfile() {
   profileListeners.forEach((l) => l(cachedProfile ?? null));
 }
 
+// Keys that are part of meaningful profile state. Changes to fields NOT in
+// this set (currently just `last_seen_at`, written once per minute by the
+// heartbeat in `_app.tsx`) are silenced — they would otherwise force every
+// `useMyProfile()` consumer to re-render, cascading into a visible global
+// blink across all tabs (Home, Coverage, Earnings, Account).
+const MEANINGFUL_PROFILE_KEYS: ReadonlyArray<keyof ProfileRow> = [
+  "id",
+  "role",
+  "full_name",
+  "phone",
+  "gender",
+  "mdcn",
+  "license_name",
+  "nysc_name",
+  "years_experience",
+  "bank_name",
+  "bank_account",
+  "bank_account_name",
+  "selfie_url",
+  "onboarded_at",
+  "onboarded_cover_at",
+  "onboarded_request_at",
+  "verification_status",
+  "location",
+  "verification_receipt_url",
+];
+
+function profilesDifferMeaningfully(
+  a: ProfileRow | null | undefined,
+  b: ProfileRow | null | undefined,
+): boolean {
+  if (a === b) return false;
+  if (!a || !b) return true;
+  for (const k of MEANINGFUL_PROFILE_KEYS) {
+    if (a[k] !== b[k]) return true;
+  }
+  return false;
+}
+
 let profileChannelUserId: string | null = null;
 let profileChannel: ReturnType<typeof supabase.channel> | null = null;
 
@@ -337,8 +376,13 @@ function ensureProfileChannel(userId: string) {
       { event: "*", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
       (payload) => {
         const next = (payload.new as ProfileRow | null) ?? null;
+        const prev = cachedProfile ?? null;
+        // Always remember the latest row so `getCachedProfile()` stays
+        // fresh (incl. last_seen_at), but only fan out to React subscribers
+        // when a user-visible field actually changed. Otherwise the 60s
+        // self-heartbeat triggers a full re-render cascade every minute.
         rememberProfile(next);
-        notifyProfile();
+        if (profilesDifferMeaningfully(prev, next)) notifyProfile();
       },
     )
     .subscribe();
