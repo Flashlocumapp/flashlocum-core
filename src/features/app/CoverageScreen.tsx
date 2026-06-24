@@ -703,12 +703,15 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         confirmBody="The assigned doctor will be notified. Keeping it preserves continuity."
         primaryLabel="Keep Shift"
         secondaryLabel="Cancel Shift"
-        onCancelled={() => {
+        reasonTitle="Reason for cancellation"
+        reasons={REQUESTER_REASONS}
+        onCancelled={(result) => {
           const id = cancelTargetId;
           setCancelTargetId(null);
-          if (id) netCancelRequest(id);
+          if (id && result) netCancelRequest(id, { code: result.code, text: result.text });
         }}
       />
+
 
       <EditShiftSheet
         open={!!editTargetId}
