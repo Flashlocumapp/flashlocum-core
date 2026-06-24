@@ -1,108 +1,69 @@
-# FlashLocum — Stability, Map Persistence, Payment Audit (revised after video review)
+## Plan — Reproduce the "Edit only works once" bug before any fix
 
-Both video recordings confirmed and re-checked:
-- **Video 1** — the blink happens on `/coverage` (a list screen with no map at all). The whole subtree flashes to a lighter state and back. This proves the blink is a **global re-render cascade**, not anything map-specific.
-- **Video 2** — on tab switch, the Google map tiles vanish entirely (gray surface only) and re-paint on return. This is a **hard unmount**, not just a visual reflow.
+You've approved the audit. The next step is the **5-cycle Playwright reproduction** with two browser contexts (requester + doctor) against the running preview. This requires switching to build mode so I can execute shell commands; no source files will be modified during this phase.
 
-The fix below is scoped to what would actually eliminate both behaviours, with the exact files and lines.
+### What the repro will do
 
----
+Single Playwright script under `/tmp/browser/edit-cycles/`, two contexts in one browser:
 
-## ISSUE 1 — Periodic global blink (every ~60s, on every screen)
+- **Context A — Requester**: restore Supabase session, navigate to `/home`, publish a coverage request (or reuse one already broadcasting if present).
+- **Context B — Doctor**: restore a doctor's Supabase session, navigate to `/coverage` (or doctor home feed), confirm online.
 
-### Root cause
-Two independent code paths convert the once-per-minute `last_seen_at` heartbeat into a global React re-render:
+Then run the exact cycle the user described, five times in a row:
 
-1. **Self-echo through `profile-remote.ts`**
-   `src/routes/_app.tsx:108` ticks `touchLastSeen()` every 60s. That writes `profiles.last_seen_at` for the current user. The per-user subscription in `src/lib/profile-remote.ts:333-344` listens for `event: "*"` on `profiles` filtered to `id=eq.${userId}`. The echo fires, `rememberProfile(next)` + `notifyProfile()` run unconditionally, and every `useMyProfile()` consumer setState's with a brand-new object identity. AppShell-mounted consumers (e.g. `ActionRequiredCard`, profile-driven UI) re-render their subtree.
+```text
+for i in 1..5:
+  A: click "Edit Request"           → screenshot A, screenshot B
+  A: change one field, click Save   → screenshot A, screenshot B
+  wait 1500ms for realtime fanout   → screenshot B
+```
 
-2. **Self-echo through `verification.ts`** ← the missing piece
-   `src/lib/verification.ts:32-49` opens a **second** subscription on `profiles` (`event: "UPDATE"`, same `id=eq.${userId}`). On every `last_seen_at` write the callback at line 41-45 reads `payload.new.verification_status` (which is unchanged) and calls `setCached(next)` if it has any value. That notifies every `useVerificationStatus()` listener. `useVerificationStatus` is consumed by `CoverHome` and by the `RestrictionBanner` mounted in `AppShell` (`src/routes/_app.tsx:RestrictionBanner`), so the cascade reaches **every** tab — Home, Coverage, Earnings, Account. This is why the blink shows on Coverage where there is no map.
+### Evidence captured per cycle
 
-3. **Reconcile-timer secondary noise** (smaller contributor)
-   `src/lib/coverage-remote.ts:345-355` and `src/lib/presence-remote.ts:196-206` both fire on a 60s cadence and broadcast snapshot arrays with new identities even when contents are unchanged, adding extra render thrash for consumers of `useNetwork()`.
+For each of the 5 cycles, persist to `/tmp/browser/edit-cycles/evidence/cycle-<n>/`:
 
-### Why the blink looks like a "refresh"
-Animated surfaces (`<AnimatePresence>` in `_app.tsx` around the BottomTabs, motion components inside list rows) re-trigger entry transitions or briefly drop opacity when their React parents re-render with new object identities. That micro-transition is the visible flash.
+1. **Doctor screenshot** immediately after Edit click (the card should disappear).
+2. **Doctor screenshot** 1.5s after Save (the card should reappear with refreshed details).
+3. **Requester `state.requests[id]` JSON** — `localStorage.flash:net`.
+4. **Server row** — read via supabase RPC `read_query`:
+   `SELECT id, status, rev, broadcast_started_at, updated_at FROM coverage_requests WHERE id = '<id>'` immediately after the Edit click and again after Save.
+5. **Requester console log** — captured via `page.on("console")` for any `pauseRequest` / `resumeRequest` / `applyRemoteEvent` traces. (If none exist today, add `console.debug` calls in a throwaway local patch that is reverted before the fix phase — these will not be committed.)
+6. **Doctor network frames** — Playwright `page.on("websocket")` to record realtime frames on `coverage_invalidations` and `realtime:public:coverage_requests`.
 
-### Correct fix (eliminates both observed and confirmed)
-- **`src/lib/profile-remote.ts:333-344`** — in the `ensureProfileChannel` handler, compute the changed-keys set between `payload.old` and `payload.new`; if it is a subset of `{ last_seen_at }`, return without calling `rememberProfile`/`notifyProfile`. Then in `rememberProfile`, only call `notifyProfile()` when a meaningful field actually changed (shallow-diff against the prior cached row).
-- **`src/lib/verification.ts:32-49`** — same self-echo filter. Additionally, only call `setCached(next)` when `next !== cached`. This single change is what stops the cascade from reaching `/coverage`.
-- **`src/lib/coverage-remote.ts:345-355` and `src/lib/presence-remote.ts:196-206`** — before the listener fanout, hash the snapshot (`id + updated_at` join) and bail if equal to the last fanout's hash.
+### Pass / fail criteria per cycle
 
-Verification protocol after the fix:
-- Sit on `/coverage` for 3+ minutes with React Profiler recording. Expect 0 commits at the 60s mark (today: 1 commit per minute).
-- Sit on `/home`. Same expectation. The map must not flash, the rating pill must not re-mount.
+For every cycle 1…5, all of the following must be true; the first cycle that violates any one of them is the failing cycle and pinpoints the root cause:
 
----
+- Server row flips to `status='paused'` after Edit click.
+- `coverage_invalidations` broadcast frame observed by the doctor within 1s.
+- Doctor `list_open_coverage_requests` result no longer contains the row.
+- Doctor card is visually gone in the screenshot.
+- After Save, server flips back to `status='searching'`, `rev` increments by ≥1, and doctor card reappears.
 
-## ISSUE 2 — Map fully unmounts on tab switch (confirmed by video)
+### Root-cause mapping (what each failure mode proves)
 
-### Root cause
-The Google map is a child of `HomeRouter`, which is the component for the file route `src/routes/_app.home.tsx`. AppShell renders `<Outlet />` (`src/routes/_app.tsx:163-167`). TanStack Router unmounts the matched component when the route changes. So leaving `/home` for `/coverage` destroys:
-- The `<div>` that hosts the map
-- The `google.maps.Map` instance in `mapRef.current`
-- Every marker in `markerObjs` and `selfMarker`
-- `mapReady`, `userCenter`, all hook state
+- **Server still shows `status='searching'` after Edit click** → fix A (handleSaveEdit ordering / pause-effect race). Doctor never had a reason to drop the card.
+- **Server flips to `paused` but no `coverage_invalidations` frame on cycle ≥2** → trigger / realtime authorization regression (would also indicate the recent realtime policy migration needs another look).
+- **Frame received but doctor still shows the card** → fix C (snapshot-listener short-circuit). The hash bug at `coverage-remote.ts:337` is independently confirmed and will be fixed regardless.
+- **`pauseRequest` returns early without writing** → fix B (status-paused guard hit by stale echo).
 
-On return, `GoogleMapBackground`'s init effect (`src/components/GoogleMapBackground.tsx:237-266`) re-runs from scratch. `loadMapsApi()` is cached so the SDK doesn't re-download, but `new g.maps.Map(...)` allocates a brand-new instance and every dependent effect re-fires. The grey frame in video 2 is the moment between the new map being constructed and the tiles painting.
+### Deliverable from this phase
 
-The `active` prop wired through `HomeRouter` → `GoogleMapBackground` was clearly intended to support keep-alive, but it can never work as long as the route owns the lifecycle.
+A short report posted back in chat with:
+- Which cycle failed (1, 2, 3, 4, or 5).
+- The four boolean checks above for the failing cycle.
+- The matching root cause from the mapping.
+- The exact fix to apply (1, 2, 3, or 4 from the previous audit, or a new one if the evidence rules them all out).
 
-### Correct fix
-Promote `HomeRouter` to a **persistent layer mounted once inside `AppShell`**, alongside (and behind) `<Outlet />`:
+Only after you confirm the root cause will I propose the implementation plan for the fix.
 
-- **`src/routes/_app.tsx`** — derive `isHome = useRouterState({ select: s => s.location.pathname === '/home' })`. Render `<div style={{ display: isHome ? 'block' : 'none' }}><HomeRouter active={isHome} /></div>` as a sibling of `<Outlet />`, positioned in the same absolute layer it sits in today. Z-index it so Outlet content for other routes covers it when `isHome === false`.
-- **`src/routes/_app.home.tsx`** — change the component to `() => null`. The route still exists for navigation / URL matching; the visible UI is provided by the persistent layer.
-- Confirm `GoogleMapBackground`'s effects already gate work on `active` (pan effect at lines 281-286 already does). No other change required — `watchPosition` should keep running while hidden so the user-location dot is already accurate on return.
+### Out of scope (this phase)
 
-This guarantees a single, lifelong `google.maps.Map` instance per session. Tab switching becomes a CSS toggle, identical to native screen stack behaviour.
+- No source file edits.
+- No DB migrations.
+- No changes to the realtime authorization policy.
+- The doctor's session must already exist in `LOVABLE_BROWSER_AUTH_STATUS=injected` mode for context B; if only one Supabase session is injected, the second context will sign in by reusing the same session pattern via a service-issued token (read-only repro). If that's not feasible in this sandbox, I will fall back to a single-context repro that asserts via direct supabase reads what the doctor *would* have received (server row + RPC result + websocket frames on the requester's own connection joined to `coverage_invalidations`).
 
-Verification protocol after the fix:
-- In DevTools, take a JS heap snapshot, find the `Map` instance, then switch to /coverage and back. The same instance ID must survive.
-- Visually: grey-frame moment in the video must be gone.
+### After you approve
 
----
-
-## ISSUE 3 — Payment countdown
-
-### Audit result (no behaviour change required, one display polish)
-The countdown is already backend-authoritative:
-- `payment_due_at` is set server-side in `end_shift` (`supabase/migrations/20260623033342_*.sql:357`).
-- `ShiftSettlement` reads it via `getRequestBillingState` (`src/lib/shift.functions.ts:183-210`), which also returns `server_now`. Reload/tab switch/offline simply re-anchor against the persisted server timestamp.
-- Surcharge is applied by the server cron `drain_surcharge_due` (`src/routes/api/public/hooks/surcharge-drain.ts`), independent of any client.
-
-Display is computed against `simNow()` (`src/lib/clock.ts`), so on a device with a skewed wall clock, the visible number can disagree with the server's truth until the next poll.
-
-### Correct fix
-In `ShiftSettlement`, store `serverSkew = serverNow - Date.now()` from the first and every subsequent `getRequestBillingState` response in a ref. Compute the visible `remaining` as `paymentDueAt - (Date.now() + serverSkew)`. Cap `getRequestBillingState` polling to ≤30s while the sheet is visible so skew stays current. Enforcement is unchanged — purely a display fix to make device-clock skew invisible.
-
----
-
-## ISSUE 4 — Monnify payment warning copy
-
-### What actually changes on `extend_payment_window`
-Verified from `supabase/migrations/20260623033342_*.sql:420…` and the existing Monnify flow:
-- **Amount** ✓ increases by one `_surcharge_block_amount` per call.
-- **`payment_reference`** ✓ is cleared on every lock (`end_shift` line 360) and re-minted on the next Monnify init (the unique index `uniq_coverage_payment_reference` forces a new reference because the amount changed).
-- **`account_number`** ✓ Monnify's virtual-account cache (`20260617132009_*.sql:5`) is keyed to `payment_reference`; clearing the reference invalidates the cache and the next `initTransaction` returns a fresh `accountNumber`, `bankName`, `expiresOn`.
-
-All three change. The current copy at `src/features/request/ShiftSettlement.tsx:1663-1664` only mentions the amount, which is misleading — the more confusing failure mode is paying to a stale account number.
-
-### Correct fix
-Replace both expired and pre-expiry strings with one rule taught upfront:
-
-> "Amount and payment details may change if payment is not completed in time. Always use the latest account number and payment reference displayed on this page."
-
-Pure presentation change.
-
----
-
-## Implementation order (after approval)
-
-1. **Issue 4** — single string change.
-2. **Issue 1** — self-echo filter in `profile-remote.ts` + `verification.ts`, plus shallow-diff guards and snapshot-hash guards in `coverage-remote.ts` / `presence-remote.ts`. ~50 LOC across four files. Verifiable with React Profiler on `/coverage`.
-3. **Issue 2** — persistent `HomeRouter` layer in `_app.tsx`; `_app.home.tsx` → `() => null`. ~25 LOC. Verifiable with the heap-snapshot test above.
-4. **Issue 3** — server-skew ref in `ShiftSettlement`. ~15 LOC.
-
-All four independent; deployable in one turn.
+I switch to build mode, run the repro, and report findings. No code is touched until you confirm the root cause from the evidence.
