@@ -920,11 +920,21 @@ export async function remoteInsertRequest(req: NetRequest): Promise<void> {
   emitInvalidate(req.id);
 }
 
-export async function remoteUpdateRequest(id: string, patch: Partial<NetRequest>): Promise<void> {
+export async function remoteUpdateRequest(
+  id: string,
+  patch: Partial<NetRequest> & { __cancelReason?: { code: string; text?: string } },
+): Promise<void> {
   if (patch.status === "cancelled") {
     try {
+      const reason = patch.__cancelReason;
       const { cancelAndNotifyFn } = await import("@/lib/coverage-notify.functions");
-      const res = await cancelAndNotifyFn({ data: { requestId: id } });
+      const res = await cancelAndNotifyFn({
+        data: {
+          requestId: id,
+          reasonCode: reason?.code,
+          reasonText: reason?.text,
+        },
+      });
       if (!res?.ok) {
         console.warn(
           "[coverage-remote] cancel skipped:",
