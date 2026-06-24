@@ -1482,9 +1482,10 @@ function DispatchOverlay({
     setStage("collapsed");
   };
 
-  // Post-acceptance cancel: notify doctor + record history.
-  const handleCancelPostAccept = () => {
-    if (requestId) netCancel(requestId);
+  // Post-acceptance cancel: notify doctor + record history. Requires a reason.
+  const handleCancelPostAccept = (result?: { code: string; label: string; text?: string }) => {
+    if (!result) return;
+    if (requestId) netCancel(requestId, { code: result.code, text: result.text });
     ownedIdRef.current = null;
     setRequestId(null);
     setCancelOpen(false);
