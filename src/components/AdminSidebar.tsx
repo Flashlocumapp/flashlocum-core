@@ -14,6 +14,7 @@ import {
   Coins,
   Gauge,
   MessageSquare,
+  XCircle,
 } from "lucide-react";
 
 
