@@ -129,7 +129,7 @@ function CancellationsPage() {
                   <td className="px-3 py-2">{roleLabel(r.cancelled_by)}</td>
                   <td className="px-3 py-2">{r.hospital ?? "—"}</td>
                   <td className="px-3 py-2">
-                    {r.reason_code ? reasonLabelFor(r.reason_code) : "—"}
+                    {r.reason_code ? labelForCode(r.reason_code) : "—"}
                   </td>
                   <td className="px-3 py-2 max-w-[320px] whitespace-pre-wrap text-muted-foreground">
                     {r.reason_text ?? "—"}
