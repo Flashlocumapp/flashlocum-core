@@ -236,6 +236,7 @@ function Row({ label, value, strong, muted }: { label: string; value: string; st
 }
 
 function AcceptedBody({ item }: { item: Coverage }) {
+  const [cancelOpen, setCancelOpen] = useState(false);
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -264,7 +265,7 @@ function AcceptedBody({ item }: { item: Coverage }) {
 
       <div className="mt-5 flex items-center gap-3">
         <button
-          onClick={() => cancelUpcoming(item.id)}
+          onClick={() => setCancelOpen(true)}
           className="h-12 flex-1 rounded-full bg-secondary text-[13.5px] font-medium text-foreground/75 active:opacity-90"
         >
           Cancel Shift
@@ -276,6 +277,21 @@ function AcceptedBody({ item }: { item: Coverage }) {
           Call
         </a>
       </div>
+
+      <CancelFlow
+        open={cancelOpen}
+        onDismiss={() => setCancelOpen(false)}
+        confirmTitle="Cancel this shift?"
+        confirmBody="Frequent cancellations affect your reliability score. The requester will be notified immediately."
+        primaryLabel="Keep Shift"
+        secondaryLabel="Cancel Shift"
+        reasons={DOCTOR_REASONS}
+        onCancelled={(result) => {
+          setCancelOpen(false);
+          if (result) cancelUpcoming(item.id, { code: result.code, text: result.text });
+        }}
+      />
     </div>
   );
 }
+
