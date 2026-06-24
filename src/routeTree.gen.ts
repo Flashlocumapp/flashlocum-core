@@ -42,6 +42,7 @@ import { Route as AdminAdminRatingsRouteImport } from './routes/_admin.admin.rat
 import { Route as AdminAdminPricingRouteImport } from './routes/_admin.admin.pricing'
 import { Route as AdminAdminFlashboardRouteImport } from './routes/_admin.admin.flashboard'
 import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.finance'
+import { Route as AdminAdminCancellationsRouteImport } from './routes/_admin.admin.cancellations'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as ApiPublicHooksSurchargeDrainRouteImport } from './routes/api/public/hooks/surcharge-drain'
 import { Route as ApiPublicHooksShiftRemindersRouteImport } from './routes/api/public/hooks/shift-reminders'
@@ -212,6 +213,11 @@ const AdminAdminFinanceRoute = AdminAdminFinanceRouteImport.update({
   path: '/finance',
   getParentRoute: () => AdminAdminRoute,
 } as any)
+const AdminAdminCancellationsRoute = AdminAdminCancellationsRouteImport.update({
+  id: '/cancellations',
+  path: '/cancellations',
+  getParentRoute: () => AdminAdminRoute,
+} as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
     id: '/lovable/email/queue/process',
@@ -259,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
+  '/admin/cancellations': typeof AdminAdminCancellationsRoute
   '/admin/finance': typeof AdminAdminFinanceRoute
   '/admin/flashboard': typeof AdminAdminFlashboardRoute
   '/admin/pricing': typeof AdminAdminPricingRoute
@@ -296,6 +303,7 @@ export interface FileRoutesByTo {
   '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
+  '/admin/cancellations': typeof AdminAdminCancellationsRoute
   '/admin/finance': typeof AdminAdminFinanceRoute
   '/admin/flashboard': typeof AdminAdminFlashboardRoute
   '/admin/pricing': typeof AdminAdminPricingRoute
@@ -337,6 +345,7 @@ export interface FileRoutesById {
   '/admin/unauthorized': typeof AdminUnauthorizedRoute
   '/auth/$role': typeof AuthRoleRoute
   '/onboarding/$role': typeof OnboardingRoleRoute
+  '/_admin/admin/cancellations': typeof AdminAdminCancellationsRoute
   '/_admin/admin/finance': typeof AdminAdminFinanceRoute
   '/_admin/admin/flashboard': typeof AdminAdminFlashboardRoute
   '/_admin/admin/pricing': typeof AdminAdminPricingRoute
@@ -377,6 +386,7 @@ export interface FileRouteTypes {
     | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
+    | '/admin/cancellations'
     | '/admin/finance'
     | '/admin/flashboard'
     | '/admin/pricing'
@@ -414,6 +424,7 @@ export interface FileRouteTypes {
     | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
+    | '/admin/cancellations'
     | '/admin/finance'
     | '/admin/flashboard'
     | '/admin/pricing'
@@ -454,6 +465,7 @@ export interface FileRouteTypes {
     | '/admin/unauthorized'
     | '/auth/$role'
     | '/onboarding/$role'
+    | '/_admin/admin/cancellations'
     | '/_admin/admin/finance'
     | '/_admin/admin/flashboard'
     | '/_admin/admin/pricing'
@@ -730,6 +742,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdminFinanceRouteImport
       parentRoute: typeof AdminAdminRoute
     }
+    '/_admin/admin/cancellations': {
+      id: '/_admin/admin/cancellations'
+      path: '/cancellations'
+      fullPath: '/admin/cancellations'
+      preLoaderRoute: typeof AdminAdminCancellationsRouteImport
+      parentRoute: typeof AdminAdminRoute
+    }
     '/lovable/email/queue/process': {
       id: '/lovable/email/queue/process'
       path: '/lovable/email/queue/process'
@@ -769,6 +788,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminAdminRouteChildren {
+  AdminAdminCancellationsRoute: typeof AdminAdminCancellationsRoute
   AdminAdminFinanceRoute: typeof AdminAdminFinanceRoute
   AdminAdminFlashboardRoute: typeof AdminAdminFlashboardRoute
   AdminAdminPricingRoute: typeof AdminAdminPricingRoute
@@ -786,6 +806,7 @@ interface AdminAdminRouteChildren {
 }
 
 const AdminAdminRouteChildren: AdminAdminRouteChildren = {
+  AdminAdminCancellationsRoute: AdminAdminCancellationsRoute,
   AdminAdminFinanceRoute: AdminAdminFinanceRoute,
   AdminAdminFlashboardRoute: AdminAdminFlashboardRoute,
   AdminAdminPricingRoute: AdminAdminPricingRoute,

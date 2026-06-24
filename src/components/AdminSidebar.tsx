@@ -14,6 +14,7 @@ import {
   Coins,
   Gauge,
   MessageSquare,
+  XCircle,
 } from "lucide-react";
 
 
@@ -42,6 +43,7 @@ const sections = [
   { title: "Reliability & Risk", url: "/admin/risk", icon: AlertTriangle, group: "Trust & Safety" },
   { title: "Trust Snapshots", url: "/admin/trust", icon: Gauge, group: "Trust & Safety" },
   { title: "Ratings & Comments", url: "/admin/ratings", icon: MessageSquare, group: "Trust & Safety" },
+  { title: "Cancellations", url: "/admin/cancellations", icon: XCircle, group: "Trust & Safety" },
   { title: "Support Tools", url: "/admin/support", icon: LifeBuoy, group: "Trust & Safety" },
   { title: "System Health", url: "/admin/system", icon: HeartPulse, group: "Platform" },
 ] as const;
