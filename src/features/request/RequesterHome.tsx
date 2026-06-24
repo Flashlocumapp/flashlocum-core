@@ -5,6 +5,7 @@ import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
+import { REQUESTER_REASONS } from "@/lib/cancellation-reasons";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
@@ -1472,7 +1473,7 @@ function DispatchOverlay({
   };
 
 
-  // Pre-acceptance cancel: remove silently (no notification, no history).
+  // Pre-acceptance cancel: remove silently (no notification, no history, no reason captured).
   const handleCancelPreAccept = () => {
     if (requestId) removeRequest(requestId);
     ownedIdRef.current = null;
@@ -1481,9 +1482,10 @@ function DispatchOverlay({
     setStage("collapsed");
   };
 
-  // Post-acceptance cancel: notify doctor + record history.
-  const handleCancelPostAccept = () => {
-    if (requestId) netCancel(requestId);
+  // Post-acceptance cancel: notify doctor + record history. Requires a reason.
+  const handleCancelPostAccept = (result?: { code: string; label: string; text?: string }) => {
+    if (!result) return;
+    if (requestId) netCancel(requestId, { code: result.code, text: result.text });
     ownedIdRef.current = null;
     setRequestId(null);
     setCancelOpen(false);
@@ -1688,8 +1690,10 @@ function DispatchOverlay({
               confirmBody={`${acceptedDoctorName} is already assigned. Keeping it preserves continuity.`}
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
+              reasons={REQUESTER_REASONS}
               onCancelled={handleCancelPostAccept}
             />
+
 
             <EditShiftSheet
               open={editOpen}

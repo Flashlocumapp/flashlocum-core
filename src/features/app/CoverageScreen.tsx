@@ -4,6 +4,7 @@ import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
+import { DOCTOR_REASONS } from "@/lib/cancellation-reasons";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
@@ -1298,13 +1299,14 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         primaryLabel="Keep Shift"
         secondaryLabel="Cancel Shift"
         reasonTitle="Reason for cancellation"
-        reasons={["Emergency", "Illness", "Transport issue", "Schedule conflict", "Other"]}
-        onCancelled={(reason) => {
+        reasons={DOCTOR_REASONS}
+        onCancelled={(result) => {
           const id = cancelId;
           setCancelId(null);
-          if (id) cancelUpcoming(id, reason);
+          if (id && result) cancelUpcoming(id, { code: result.code, text: result.text });
         }}
       />
+
 
       <DoctorCoverageDetail
         item={detail}
