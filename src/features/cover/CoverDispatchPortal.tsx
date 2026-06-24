@@ -288,7 +288,7 @@ function AcceptedBody({ item }: { item: Coverage }) {
         primaryLabel="Keep Shift"
         secondaryLabel="Cancel Shift"
         reasons={DOCTOR_REASONS}
-        onCancelled={(result) => {
+        onCancelled={(result: CancelReasonResult | undefined) => {
           setCancelOpen(false);
           if (result) cancelUpcoming(item.id, { code: result.code, text: result.text });
         }}
