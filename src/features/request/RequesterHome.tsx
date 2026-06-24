@@ -1690,8 +1690,10 @@ function DispatchOverlay({
               confirmBody={`${acceptedDoctorName} is already assigned. Keeping it preserves continuity.`}
               primaryLabel="Keep Shift"
               secondaryLabel="Cancel Shift"
+              reasons={REQUESTER_REASONS}
               onCancelled={handleCancelPostAccept}
             />
+
 
             <EditShiftSheet
               open={editOpen}
