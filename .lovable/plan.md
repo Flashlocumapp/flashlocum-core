@@ -23,9 +23,21 @@ Pre-acceptance Edit has a transition-order race:
 
 Cancel works because it pauses while staying inside `DispatchOverlay`; Edit should do the same pause **before** leaving `DispatchOverlay`.
 
+### Additional finding from the parallel code audit
+
+There is one more reliability gap outside the button click itself:
+
+- `applyRemoteEvent` already handles `paused → broadcasting` when the realtime row event arrives.
+- The snapshot fallback in `network.ts` does **not** synthesize a `paused → broadcasting` event if that realtime row event is missed/delayed.
+
+That means Edit can pause correctly, then republish correctly on the server, but the doctor-side fallback path may fail to treat the republished request as a fresh offer. Cancel is more reliable because its terminal delete/cancel transitions are already handled in all paths.
+
 ### Exact remediation plan
 
-Edit only `src/features/request/RequesterHome.tsx`.
+Edit only these files:
+
+- `src/features/request/RequesterHome.tsx`
+- `src/lib/network.ts`
 
 1. Add a parent handler `beginLiveRequestEdit()` in `HomeScreen`:
    - if `activeRequestId` exists, call `pauseRequest(activeRequestId)` synchronously;
@@ -50,6 +62,10 @@ Edit only `src/features/request/RequesterHome.tsx`.
    - the existing configure → match → dispatch path updates the existing row and calls `resumeRequest`, republishing it as a fresh request.
    - Clear `editingLiveRequestId` once the stage returns to `dispatch` or `accepted`.
 
+7. Add the missing snapshot fallback in `src/lib/network.ts`:
+   - when `old.status === "paused" && r.status === "broadcasting"`, synthesize a doctor-visible re-publication event.
+   - Use `action: "publish"` rather than only `"resume"` so the doctor feed treats the restored request like a fresh incoming offer, matching the expected user experience after saving an edit.
+
 ### Why this is the correct fix
 
 It does not invent a new delivery model. It reuses the exact proven primitives Cancel already uses:
@@ -59,3 +75,5 @@ It does not invent a new delivery model. It reuses the exact proven primitives C
 - restoration/republication = `resumeRequest`
 
 The only change is moving Edit's first pause to the same moment Cancel already pauses: immediately on click, before any UI transition can unmount the dispatch overlay.
+
+The snapshot fallback addition ensures the saved edit also reappears reliably even if the lower-level realtime row event is delayed or dropped.
