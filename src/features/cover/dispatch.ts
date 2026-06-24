@@ -547,10 +547,13 @@ export function dismissPendingRating() {
   bump();
 }
 
-export function cancelUpcoming(id: string, reason?: string) {
+export function cancelUpcoming(
+  id: string,
+  reason?: { code: string; text?: string },
+) {
   const r = currentRequest(id);
   if (!r) return;
-  cancelRequest(id);
+  cancelRequest(id, reason);
   if (acceptedSheet?.id === id) acceptedSheet = null;
   bump();
 }
