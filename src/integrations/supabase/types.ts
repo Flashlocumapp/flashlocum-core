@@ -62,6 +62,9 @@ export type Database = {
           base_amount: number | null
           billing_locked_at: string | null
           broadcast_started_at: string
+          cancellation_reason_code: string | null
+          cancellation_reason_text: string | null
+          cancelled_at: string | null
           cancelled_by: string | null
           coverage_type: string
           created_at: string
@@ -119,6 +122,9 @@ export type Database = {
           base_amount?: number | null
           billing_locked_at?: string | null
           broadcast_started_at?: string
+          cancellation_reason_code?: string | null
+          cancellation_reason_text?: string | null
+          cancelled_at?: string | null
           cancelled_by?: string | null
           coverage_type: string
           created_at?: string
@@ -176,6 +182,9 @@ export type Database = {
           base_amount?: number | null
           billing_locked_at?: string | null
           broadcast_started_at?: string
+          cancellation_reason_code?: string | null
+          cancellation_reason_text?: string | null
+          cancelled_at?: string | null
           cancelled_by?: string | null
           coverage_type?: string
           created_at?: string
@@ -1062,6 +1071,21 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Json
       }
+      admin_list_cancellations: {
+        Args: { _limit?: number }
+        Returns: {
+          actor_name: string
+          actor_user_id: string
+          cancelled_at: string
+          cancelled_by: string
+          end_time: string
+          hospital: string
+          reason_code: string
+          reason_text: string
+          shift_id: string
+          start_time: string
+        }[]
+      }
       admin_list_flagged_accounts: { Args: never; Returns: Json }
       admin_list_trust: {
         Args: { _limit?: number; _only_flagged?: boolean }
@@ -1223,6 +1247,9 @@ export type Database = {
           base_amount: number | null
           billing_locked_at: string | null
           broadcast_started_at: string
+          cancellation_reason_code: string | null
+          cancellation_reason_text: string | null
+          cancelled_at: string | null
           cancelled_by: string | null
           coverage_type: string
           created_at: string
