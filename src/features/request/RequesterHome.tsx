@@ -1525,7 +1525,7 @@ function DispatchOverlay({
 
             <div className="mt-6 flex items-center gap-2.5">
               <button
-                onClick={() => setStage("configure")}
+                onClick={() => setEditOpen(true)}
                 className="flex-1 rounded-full bg-secondary/70 py-3 text-[13px] font-medium text-foreground/80 active:opacity-90"
               >
                 Edit Request
