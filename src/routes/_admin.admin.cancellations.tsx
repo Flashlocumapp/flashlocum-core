@@ -7,7 +7,7 @@ import {
   type AdminCancellationRow,
 } from "@/lib/admin.functions";
 import { AdminPageHeader, RefreshButton, Empty } from "@/lib/admin-ui";
-import { reasonLabelFor } from "@/lib/cancellation-reasons";
+import { labelForCode } from "@/lib/cancellation-reasons";
 
 export const Route = createFileRoute("/_admin/admin/cancellations")({
   ssr: false,
