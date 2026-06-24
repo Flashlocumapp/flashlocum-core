@@ -5,7 +5,6 @@
 // matching settlement as remitted via `mark_settlement_remitted`.
 
 import { createFileRoute } from "@tanstack/react-router";
-import { createHmac, timingSafeEqual } from "crypto";
 
 type DisbursementEvent = {
   eventType?: string;
@@ -18,33 +17,14 @@ type DisbursementEvent = {
   };
 };
 
-// Monnify signs with HMAC-SHA512 — output is exactly 128 hex chars.
-const SIG_HEX_LEN = 128;
-const HEX_RE = /^[0-9a-fA-F]+$/;
-
-function verify(signature: string | null, rawBody: string): boolean {
-  if (!signature) return false;
-  const sig = signature.trim().toLowerCase();
-  if (sig.length !== SIG_HEX_LEN || !HEX_RE.test(sig)) return false;
-  const secret = process.env.MONNIFY_SECRET_KEY;
-  if (!secret) {
-    console.error("[monnify-disbursement-webhook] MONNIFY_SECRET_KEY is not set; rejecting");
-    return false;
-  }
-  const expected = createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
-  const a = Buffer.from(sig, "hex");
-  const b = Buffer.from(expected, "hex");
-  if (a.length !== b.length || a.length === 0) return false;
-  return timingSafeEqual(a, b);
-}
-
 export const Route = createFileRoute("/api/public/monnify-disbursement-webhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const raw = await request.text();
         const sig = request.headers.get("monnify-signature");
-        if (!verify(sig, raw)) {
+        const { verifyMonnifySignature } = await import("./_monnify-signature.server");
+        if (!verifyMonnifySignature(sig, raw, "monnify-disbursement-webhook")) {
           return new Response("Invalid signature", { status: 401 });
         }
 

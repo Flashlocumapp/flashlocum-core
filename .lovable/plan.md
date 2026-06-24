@@ -1,143 +1,154 @@
-## 1. Post-Acceptance Edit Shift — Audit (no changes proposed)
+# Audit Findings & Remediation Plan (revised)
 
-**Trigger.** `src/features/request/RequesterHome.tsx:1655` — "Edit Shift" button on the accepted card calls `openEdit()` → `setEditOpen(true)`, mounting `EditShiftSheet` (`RequesterHome.tsx:1694`).
+## Issue 1 — Incoming coverage card not showing on the doctor side (ROOT CAUSE FOUND)
 
-**Save path.** `EditShiftSheet.onSave` → `handleSaveEdit` (`RequesterHome.tsx:1426-1472`). Behavior when the request is already accepted:
-- Lines 1457-1466 call `updateRequest(requestId, { note, start, end, durationHrs, amount, startTs, endTs, days })` — a **field-only patch**. No `status` field, no `broadcastStartedAt`, no `rev` reset.
-- Lines 1467-1469 only call `resumeRequest` when `cur.status === "paused" && !cur.acceptedBy`. **Accepted shifts skip resume** — so no `paused → broadcasting` transition is emitted.
-- `openEdit` (lines 1410-1422) only calls `pauseRequest` when `cur.status === "broadcasting" && !cur.acceptedBy`. **Accepted shifts are never paused.**
+**This matches the prior incident pattern exactly: a schema change without an RPC update.**
 
-**Network layer.** `updateRequest` (`src/lib/network.ts:887`) → `applyPatch` → `remoteUpdateRequest` writes the patch to `coverage_requests`. Since `status` does not change, the realtime ingester (`network.ts:365-419`) lands in the `oldStatus === newStatus` branch (line 406) and synthesizes an `action: "update"` event **only** when the row is in `broadcasting | accepted | active | paused`. For an accepted row this fires a single `"update"` lifecycle event, ingested by all clients holding the row.
+### Evidence from the live query path
 
-**Which clients hold the row?** `coverage_requests` is RLS-gated. Once `accepted_by` is set, only the requester and the assigned doctor read the row (`coverage-remote.ts:83` ownership filter + `list_open_coverage_requests` excludes accepted rows from the open-pool snapshot — comment at lines 78-79). No other doctor's client receives the UPDATE.
+Queried the production DB directly:
 
-**Push notifications.** A repo-wide grep for `sendPushToUser` in the edit path returns nothing — `coverage-notify.functions.ts` only ships `claimAndNotifyFn`, `cancelAndNotifyFn`, `startAndNotifyFn`. **There is no `editAndNotifyFn`.** The assigned doctor learns about the edit purely through the realtime UPDATE + the local `"update"` lifecycle event; no push is sent to anyone — assigned doctor included.
+1. `public.coverage_requests` currently has **58 columns** (verified via `information_schema.columns`). The last three columns were added by migration `20260624090708_7f896327...sql` (the post-acceptance cancellation reason work):
+   - `cancellation_reason_code` (ord. 56)
+   - `cancellation_reason_text` (ord. 57)
+   - `cancelled_at` (ord. 58)
 
-**Verified answers to your six checks:**
+2. `public.list_open_coverage_requests()` is declared `RETURNS SETOF coverage_requests` and its `SELECT` projects **55 columns**, ending at `surcharge_capped_at` (ord. 55). The function body has not been regenerated since the cancellation columns were added.
 
-| Check | Result | Evidence |
-|---|---|---|
-| Update sent only to assigned doctor | ✅ | RLS + `list_open_coverage_requests` exclusion |
-| Does NOT rebroadcast | ✅ | `handleSaveEdit` never resumes/republishes accepted rows |
-| No new offer created | ✅ | `updateRequest` patches in place; no insert |
-| No feed refresh for unrelated doctors | ✅ | open-pool RPC excludes accepted; pool hash unchanged |
-| No push to unrelated doctors | ✅ | no push call exists in this path |
-| Assigned doctor receives the update + new details | ⚠️ Partial | Realtime UPDATE delivers details and a `"shift.updated"` toast fires; **no push** — if the doctor's app is backgrounded they get nothing until next foreground |
-
-**Manual verification steps (no code change):**
-1. Sign in as Requester R and Doctor D in two browsers. R broadcasts; D accepts.
-2. Sign in as Doctor D2 on a third browser; confirm the card is gone from D2's feed (it was the moment D accepted).
-3. R taps Edit Shift, changes start time, Save & Notify. Watch D — assigned card text updates; toast "Hospital X updated your shift".
-4. Watch D2 — no card reappears, no toast.
-5. DB check (psql): `select id, status, accepted_by, rev, broadcast_started_at, updated_at from coverage_requests where id = '<id>';` — `status='accepted'`, `accepted_by=D`, `broadcast_started_at` unchanged, `rev` bumped by the field-change trigger only.
-
-> **Gap flagged, not fixed:** the assigned doctor receives no push on post-acceptance edit. Out of scope for this plan; flag it if you want a follow-up.
-
----
-
-## 2. Post-Acceptance Cancellation Reasons — Implementation Plan
-
-**Current state (audit).** `coverage_requests` has no `cancellation_reason*` column (grep: zero hits). `cancelAndNotifyFn` (`coverage-notify.functions.ts:89-167`) accepts `reason?: string` in its validator but **never writes it** — only `status='cancelled'` and `cancelled_by`. The post-accept `CancelFlow` (`RequesterHome.tsx:1684-1692`) uses the default reasons list but the selected reason is dropped on the client — `handleCancelPostAccept` (line 1485) ignores the `reason` argument and calls `netCancel(id)` with no reason. Doctor-side post-accept cancel (`dispatch.ts:550 cancelUpcoming(id, reason)`) is similar: reason accepted by signature, never persisted.
-
-### 2a. Schema changes (one migration)
-
-```sql
-ALTER TABLE public.coverage_requests
-  ADD COLUMN cancellation_reason_code text,
-  ADD COLUMN cancellation_reason_text text,
-  ADD COLUMN cancelled_at timestamptz;
-
--- Validation trigger (CHECK can't enforce conditional length cleanly):
---   * code required when status='cancelled'
---   * text required when code='other'
---   * code must be in the allowed set per actor
+```text
+table coverage_requests  : 58 columns
+list_open_coverage_requests SELECT list : 55 columns   ← missing the last 3
+RETURNS SETOF coverage_requests          ← row-type validated at runtime
 ```
 
-Allowed codes:
-- Requester: `no_longer_needed`, `schedule_changed`, `wrong_details`, `found_alternative`, `other`
-- Doctor: `personal_emergency`, `illness`, `scheduling_conflict`, `travel_issue`, `other`
+3. PostgreSQL validates the composite row shape against `SETOF coverage_requests` **on first row return**, not at `CREATE FUNCTION` time. That is why the migration succeeded silently. The function also has three guard clauses that `RETURN;` empty (not approved doctor / not online / restricted), so when a doctor is gated off the function returns 0 rows and never trips the validator. The first time the function actually tries to return a real `searching` row to an eligible doctor, PostgREST gets:
 
-No new table. Reason lives on the row it describes.
+```
+ERROR: 42804  structure of query does not match function result type
+DETAIL: Number of returned columns (55) does not match expected column count (58)
+```
 
-### 2b. Server function changes
+…which the client surfaces as the `[coverage-remote] pool fetch error` warning, then falls back to `lastPoolRows` (empty on a fresh load) → the Incoming card never appears.
 
-Update `cancelAndNotifyFn` input validator to require `{ requestId, reasonCode, reasonText? }` for post-acceptance cancels (`row.accepted_by != null`). Pre-acceptance silent cancel path (`removeRequest`) is untouched. The handler writes `cancellation_reason_code`, `cancellation_reason_text`, `cancelled_at = now()` in the same UPDATE that sets `status='cancelled'`.
+4. No other DB function returns `SETOF coverage_requests` (`pg_proc` confirmed), so this is the only stale projection.
 
-Add the same fields to the doctor cancel path used by `dispatch.cancelUpcoming` so doctor-initiated post-accept cancels also persist a reason.
+### Why prior diagnoses missed it
 
-### 2c. UI changes
+The realtime / presence work is correct in isolation: the `coverage_invalidations` broadcast fires on INSERT, the doctor receives it, and `coverage-remote` calls `list_open_coverage_requests()`. The RPC itself is what's broken — every eligibility check passes, the SELECT runs, and Postgres rejects the result shape on the way out. Nothing in the realtime path is at fault for #1.
 
-`CancelFlow` already implements the two-step "Are you sure → Reason" pattern (`src/components/CancelFlow.tsx:55-148`). Required tweaks:
-- Add an `otherTextRequired` prop. When the selected reason is `"Other"`, render a `<textarea>` below the list and disable "Confirm Cancellation" until non-empty.
-- Pass distinct `reasons={...}` lists for Requester (post-accept) and Doctor (post-accept) — already supported via the `reasons` prop.
-- `onCancelled` signature changes to `(reasonCode: string, reasonText?: string)`.
-- Map UI labels ↔ stable codes in a shared `src/lib/cancellation-reasons.ts` so server and admin share one source of truth.
+### Fix
 
-Wire `handleCancelPostAccept` (`RequesterHome.tsx:1485`) and `cancelUpcoming` callers (`CoverageScreen.tsx:1305`) to pass the code/text through to the server fn.
+Migration that recreates `public.list_open_coverage_requests()` with the three trailing columns appended in declared order:
 
-Pre-acceptance flow keeps `skipReason` (no change).
+```sql
+CREATE OR REPLACE FUNCTION public.list_open_coverage_requests()
+RETURNS SETOF public.coverage_requests
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.current_user_is_approved_doctor() THEN RETURN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.doctor_presence dp
+                 WHERE dp.user_id = auth.uid() AND dp.online = true) THEN RETURN; END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles p
+             WHERE p.id = auth.uid() AND p.account_restricted_at IS NOT NULL) THEN RETURN; END IF;
 
-### 2d. Admin visibility
+  RETURN QUERY
+    SELECT
+      cr.id, cr.requester_id, cr.hospital, cr.area, cr.coverage_type, cr.day,
+      cr.start_time, cr.end_time, cr.start_ts, cr.end_ts, cr.duration_hrs,
+      cr.amount, cr.fee_pct,
+      ''::text AS phone, NULL::text AS note, NULL::text AS accommodation,
+      cr.status, cr.accepted_by, cr.started_at, cr.accumulated_ms,
+      NULL::integer AS settled_amount, cr.days, cr.day_index, cr.cancelled_by,
+      cr.created_at, cr.updated_at,
+      NULL::text AS payment_provider, NULL::text AS payment_reference,
+      NULL::text AS payment_status, NULL::text AS payment_url,
+      NULL::timestamptz AS paid_at, NULL::timestamptz AS remitted_at,
+      cr.environment, NULL::timestamptz AS payment_due_at,
+      cr.payment_extension_count, NULL::timestamptz AS last_extended_at,
+      NULL::numeric AS total_billed_amount, NULL::timestamptz AS billing_locked_at,
+      cr.rev, cr.broadcast_started_at, cr.expired_at,
+      NULL::uuid AS pricing_version_id, NULL::jsonb AS rate_snapshot,
+      false AS requester_rating_submitted, NULL::smallint AS requester_rating_score,
+      NULL::timestamptz AS requester_rating_at,
+      false AS doctor_rating_submitted, NULL::smallint AS doctor_rating_score,
+      NULL::timestamptz AS doctor_rating_at,
+      NULL::jsonb AS payment_account, cr.first_started_at,
+      NULL::timestamptz AS reminder_sent_at,
+      NULL::numeric AS base_amount, NULL::numeric AS surcharge_amount,
+      NULL::timestamptz AS surcharge_capped_at,
+      NULL::text AS cancellation_reason_code,       -- NEW
+      NULL::text AS cancellation_reason_text,       -- NEW
+      NULL::timestamptz AS cancelled_at             -- NEW
+    FROM public.coverage_requests cr
+    WHERE cr.status = 'searching'::coverage_request_status
+      AND cr.accepted_by IS NULL
+      AND cr.broadcast_started_at > now() - interval '180 seconds'
+    ORDER BY cr.broadcast_started_at DESC
+    LIMIT 500;
+END
+$$;
 
-Add a new admin view `src/routes/_admin.admin.cancellations.tsx` listing rows where `status='cancelled' AND cancellation_reason_code IS NOT NULL`, columns: Shift ID · Cancelled by (role + name) · Cancelled at · Reason (label from code) · Free-text. Backed by an admin RPC that joins `profiles` for the actor's display name. Add a row link from the existing `_admin.admin.shifts.tsx` detail view.
+REVOKE ALL ON FUNCTION public.list_open_coverage_requests() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.list_open_coverage_requests() TO authenticated, service_role;
+```
 
-### 2e. Verification
+The three new columns are projected as `NULL` because doctor clients never need a requester's cancellation reason for a row they haven't even claimed; this preserves the PII-stripping intent of the original RPC.
 
-- Migration applies cleanly; trigger rejects `update set status='cancelled'` without `cancellation_reason_code`.
-- E2E: Requester cancels accepted shift → reason sheet appears, "Other" requires text, submit succeeds, DB row has code+text+timestamp, doctor receives existing cancel push (unchanged).
-- E2E: Doctor cancels accepted shift → same.
-- Admin page lists the row with all five fields visible.
+### Other filters audited (no issues found)
+
+- **Status enum**: `coverage_request_status` still contains `'searching'`; INSERTs from the requester set it to `'searching'` (verified in `coverage-remote.ts` create path).
+- **broadcast_started_at**: trigger `coverage_requests_emit_invalidate` and the requester create path both set this; 180s TTL is intentional.
+- **accepted_by IS NULL**: correct for the open pool.
+- **Approval / restriction / presence guards** (`current_user_is_approved_doctor`, `account_restricted_at`, `doctor_presence.online`): unchanged since 20260619; not the regression.
+- **RLS**: doctors are intentionally blocked from a direct `SELECT` on `searching` rows; access is through the SECURITY DEFINER RPC above. Once the RPC returns data, the rest of the client path works.
+- **Realtime publication**: `coverage_requests` is NOT in `supabase_realtime` (by design); discovery is via the `coverage_invalidations` broadcast, whose policy was restored by migration `20260624071434`.
+
+### Long-term hardening (added to plan)
+
+A `SETOF <table>` function is a hidden coupling: any future `ALTER TABLE ... ADD COLUMN` silently breaks it. Two options to pick from after this fix lands:
+
+1. **Switch the return type to an explicit composite type** (`RETURNS TABLE(...)`) so future column additions don't affect the contract. Lowest risk going forward.
+2. **Add a CI/test step** that calls every `SETOF <table>` function in a smoke test post-migration, so a column-count drift fails the migration deploy, not production.
+
+Both are non-blocking; I'd recommend Option 1 in a follow-up PR.
 
 ---
 
-## 3. Google Sign-Up — Audit
+## Issue 2 — Doctor online/offline icon takes ~1 min on requester side (unchanged)
 
-**Code path.** `src/routes/auth.$role.tsx:274-291` `handleGoogle` calls `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin })` — the Lovable managed broker, which is the correct API for Lovable Cloud (do not use raw `supabase.auth.signInWithOAuth` for Google). On success `adoptVerifiedSession(auth.session, "SIGNED_IN")` then `proceed()` which runs the same role/onboarding routing as email signup.
+Root cause: `doctor_presence` SELECT policy from `20260621032917` restricts requesters to presence rows for already-assigned doctors, so realtime `postgres_changes` is filtered out and only the 60s `list_online_approved_doctors` RPC reconcile updates the dot.
 
-**What I can verify from code:** ✅ uses managed broker · ✅ session adoption + `proceed()` routes to `/onboarding/$role` for new users (`_app.tsx` redirects when `isAccountOnboardedProfile` is false) · ✅ role selection persists via `setRole` before profile insert · ✅ `redirect_uri: window.location.origin` works for both `*.lovable.app` and the configured custom domains `app.flashlocum.com` / `admin.flashlocum.com` (broker handles the allowlist).
+Fix: migration adding an `OR (online = true AND doctor is approved cover)` clause to the SELECT policy. Same scope as the existing SECURITY DEFINER RPC already returns to every authenticated client — no new PII surface, just realtime parity.
 
-**What I cannot verify without tools/checks I'm not running in plan mode:**
-- Whether the Google provider is currently **enabled** in the Cloud auth config (managed credentials vs disabled). Needs `supabase--configure_social_auth` to assert or `cloud_status` to read.
-- Whether the project is using Lovable-managed Google credentials or a custom OAuth client (no env vars set for the latter).
-- Mobile deep-linking: `capacitor.config.ts` exists (project ships Capacitor) but the OAuth helper today returns `result.redirected` for a web popup. Native deep-link back into the Capacitor app via `app.flashlocum.com` Universal Links is **not configured in code** — no `appUrlOpen` handler reads OAuth callbacks.
-
-**Recommendation before claiming production-ready:** I will run `supabase--configure_social_auth({ providers: ["google"] })` in build mode (idempotent — enables managed Google if not already) and then perform a live sign-up test via Playwright against the preview to capture: new-user creation, session establishment, role/onboarding redirect, existing-user re-sign-in.
-
-**Mobile deep-link compatibility:** flag as a known gap — needs a `CapacitorApp.addListener('appUrlOpen', …)` bridge in `src/lib/native.ts` that hands the OAuth fragment back to `supabase.auth.exchangeCodeForSession`. Out of scope for this plan; surface as a follow-up.
+(SQL in the original plan body; carried over unchanged.)
 
 ---
 
-## 4. Email Verification — Audit
+## Issue 3 — Clean-clone build failure (unchanged)
 
-**Confirmed: the app already uses a 6-digit CODE, not a magic link.**
+Top-level `import { createHmac, timingSafeEqual } from "crypto"` in `src/routes/api/public/monnify-webhook.ts` and `src/routes/api/public/monnify-disbursement-webhook.ts` leaks into the client bundle (route files cannot use the `.server.ts` suffix). `src/lib/push.server.ts` is correctly named and unaffected.
 
-Evidence:
-- `auth.$role.tsx:160-165` calls `supabase.auth.signUp({ email, password, options: { emailRedirectTo } })`.
-- `auth.$role.tsx:242-246` calls `supabase.auth.verifyOtp({ email, token, type: "signup" })`.
-- UI copy at line 360: *"We've sent a 6-digit code to {email}. Enter it below to verify your account."*
-- Resend path (lines 307-310) uses `supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo } })`.
-- `supabase/templates/confirmation.html` renders `{{ .Token }}` as the 32-px letter-spaced 6-digit code (not `{{ .ConfirmationURL }}`). Subject configured in `supabase/config.toml`: *"Your FlashLocum verification code"*.
+Fix: create `src/routes/api/public/_monnify-signature.server.ts` with the `verifyMonnifySignature(signature, rawBody)` helper, drop the top-level `crypto` import from both webhook route files, and `await import("./_monnify-signature.server")` inside the POST handler. Webhook semantics, signature scheme, idempotency, and notification side-effects unchanged.
 
-**Audit trail:**
-- Trigger: `auth.$role.tsx:160` (`signUp`) sends the code; `auth.$role.tsx:242` (`verifyOtp`) consumes it.
-- Verification status: Supabase `auth.users.email_confirmed_at`; read via `auth.user?.email_confirmed_at` in `auth.$role.tsx:99,110,180,259` and gated in `src/routes/_app.tsx:31-37` which redirects unconfirmed users back to `/auth/$role`.
-- Onboarding gate: after `_app.tsx` confirms email, lines 40-78 check `effectiveOnboardedRole`/`getCachedOnboardingStatus` and redirect to `/onboarding/$role` until the profile is marked onboarded — so unverified users cannot reach `/home`.
-- Success log: structured `logAuthDebug("verify-otp:succeeded", {...})` at line 256 and `"resend:email-send-accepted"` at line 320.
-
-**`emailRedirectTo` clarification.** It is present in `signUp` and `resend` options but is only used by the magic-link button inside Supabase's default template — the **active template renders `{{ .Token }}`**, so users see a code regardless of whether they also see a fallback link. If you want to fully remove any clickable link, the template at `supabase/templates/confirmation.html` already does not embed `{{ .ConfirmationURL }}`, so nothing further is required. ✅
-
-**No implementation needed.** Code verification is already active. The follow-ups I would recommend:
-- Drop the `emailRedirectTo` option from `signUp`/`resend` calls (cosmetic; prevents Supabase from generating a URL the template ignores).
-- Add a unit-level assertion (or comment in `confirmation.html`) that `{{ .ConfirmationURL }}` is intentionally excluded so future template edits don't regress to magic-link.
+Full grep of `src/` confirms no other top-level Node-only imports in client-reachable files.
 
 ---
 
-## What to approve
+## Files touched
 
-Approving this plan authorizes:
-1. **No-op** for §1 (audit only — flag the missing assigned-doctor push as a follow-up if desired).
-2. **Build §2** in full: migration + trigger + `cancelAndNotifyFn` update + `CancelFlow` "Other" textarea + admin cancellations route.
-3. **§3 verification only**: run `supabase--configure_social_auth({ providers: ["google"] })` and a Playwright sign-up e2e against the preview; report findings. Mobile deep-link work stays out of scope.
-4. **No-op** for §4 (already correct); optionally remove the unused `emailRedirectTo` options.
+- **New migration**: `supabase/migrations/<ts>_fix_list_open_coverage_requests_row_shape.sql` — recreate the RPC with the 3 missing columns (Issue 1).
+- **New migration**: `supabase/migrations/<ts>_restore_presence_live_visibility.sql` — relax `doctor_presence` SELECT policy (Issue 2).
+- **New**: `src/routes/api/public/_monnify-signature.server.ts` (Issue 3).
+- **Edit**: `src/routes/api/public/monnify-webhook.ts` — dynamic import the helper (Issue 3).
+- **Edit**: `src/routes/api/public/monnify-disbursement-webhook.ts` — same (Issue 3).
+- **No change**: `src/lib/push.server.ts`, `src/lib/coverage-remote.ts`, `src/features/cover/dispatch.ts`.
 
-Reply "approved" or call out which items to skip / reorder.
+## Verification
+
+1. `bun install && bun run build` succeeds on a clean clone.
+2. After Issue 1 migration: from an approved + online + non-restricted doctor session, `select * from list_open_coverage_requests()` returns the live `searching` rows (currently 0; create one to verify end-to-end).
+3. Requester creates a request → doctor sees the Incoming card within ~1s (broadcast invalidation + working RPC).
+4. Doctor toggles Online → requester sees the dot within ~1s (presence policy fix).
+5. Monnify test webhook with valid signature → 200; tampered → 401; disbursement webhook still marks settlement remitted and pushes the doctor.
