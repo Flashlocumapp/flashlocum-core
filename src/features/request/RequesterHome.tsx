@@ -5,6 +5,7 @@ import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
+import { REQUESTER_REASONS } from "@/lib/cancellation-reasons";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { TimeField12h } from "@/components/TimeField12h";
 import { RatingPill } from "@/components/RatingPill";
