@@ -1,79 +1,64 @@
-## Plan — Reuse the proven Cancel withdrawal/republication path for Edit Request
+## Scope (strict)
 
-### Investigation finding
+Only the **pre-acceptance** state inside `DispatchOverlay` in `src/features/request/RequesterHome.tsx`. No changes to post-acceptance Edit Shift, post-acceptance Cancel, accepted/assigned flows, `network.ts`, or `coverage-remote.ts`.
 
-The working **Cancel Request** behavior and broken **Edit Request** behavior do not use the same control path.
+## Confirmed root cause
 
-- Cancel Request opens a modal while `DispatchOverlay` stays mounted.
-- Inside `DispatchOverlay`, `paused = cancelOpen || editOpen` triggers the reliable pre-acceptance gate:
-  - modal opens → `pauseRequest(requestId)` → server row becomes `paused` → doctors' `list_open_coverage_requests` no longer returns it.
-  - modal closes / Wait for Doctor → `resumeRequest(requestId)` → server row becomes `searching` again → doctors see it again.
-- The pre-acceptance **Edit Request** button currently does **not** open that modal/gate. It directly calls `setStage("configure")`, which unmounts `DispatchOverlay` and relies on a parent `stage === "configure"` effect to pause later.
+The two buttons live side-by-side at lines 1526–1538, but they take different code paths:
 
-That is the mismatch: Edit leaves the component that owns the proven Cancel pause/resume gate before the withdrawal is guaranteed.
+- **Cancel Request (works)** — `onClick={() => setCancelOpen(true)}`
+  - `DispatchOverlay` stays mounted.
+  - Derived `paused = cancelOpen || editOpen` flips true.
+  - The effect at line 1234 runs synchronously and calls `pauseRequest(cur.id)` while `cur.status === "broadcasting"`.
+  - Server flips the row to `paused` → doctor feeds drop the card.
 
-### Root cause
+- **Edit Request (broken)** — `onClick={() => setStage("configure")}`
+  - `DispatchOverlay` unmounts immediately.
+  - The proven `paused` gate never engages because `editOpen` is never set.
+  - Pause is left to a parent stage-watching effect that fires *after* unmount and races with re-render, so the doctor's card remains visible (and on later cycles the server-side `rev` keeps climbing while the doctor UI never refreshes).
 
-Pre-acceptance Edit has a transition-order race:
+That is the entire bug. Edit is not using the same withdrawal primitive as Cancel.
 
-1. User taps **Edit Request**.
-2. UI immediately leaves `DispatchOverlay` (`setStage("configure")`).
-3. The old broadcast card may remain visible to doctors until the parent effect runs and the server pause/invalidation/fetch cycle completes.
-4. On later cycles, local status echoes can make the effect/race worse, so the doctor feed can keep showing the old card or receive confusing duplicate refreshes.
+## Fix (single file, two-line change in behavior)
 
-Cancel works because it pauses while staying inside `DispatchOverlay`; Edit should do the same pause **before** leaving `DispatchOverlay`.
+Edit only `src/features/request/RequesterHome.tsx`.
 
-### Additional finding from the parallel code audit
-
-There is one more reliability gap outside the button click itself:
-
-- `applyRemoteEvent` already handles `paused → broadcasting` when the realtime row event arrives.
-- The snapshot fallback in `network.ts` does **not** synthesize a `paused → broadcasting` event if that realtime row event is missed/delayed.
-
-That means Edit can pause correctly, then republish correctly on the server, but the doctor-side fallback path may fail to treat the republished request as a fresh offer. Cancel is more reliable because its terminal delete/cancel transitions are already handled in all paths.
-
-### Exact remediation plan
-
-Edit only these files:
-
-- `src/features/request/RequesterHome.tsx`
-- `src/lib/network.ts`
-
-1. Add a parent handler `beginLiveRequestEdit()` in `HomeScreen`:
-   - if `activeRequestId` exists, call `pauseRequest(activeRequestId)` synchronously;
-   - remember that request id in `editingLiveRequestId`;
-   - then call `setStage("configure")`.
-
-2. Pass `beginLiveRequestEdit` into `DispatchOverlay` as `onEditRequest`.
-
-3. Change the pre-acceptance **Edit Request** button from:
-   - `onClick={() => setStage("configure")}`
+1. Change the pre-acceptance Edit Request button (line 1528) from:
+   ```
+   onClick={() => setStage("configure")}
+   ```
    to:
-   - `onClick={onEditRequest}`.
+   ```
+   onClick={() => setEditOpen(true)}
+   ```
+   This makes Edit hit the exact same `paused` gate as Cancel — `DispatchOverlay` stays mounted, the existing line-1234 effect calls `pauseRequest(cur.id)` synchronously, and the doctor feed drops the card immediately.
 
-4. Keep the request withdrawn for the entire edit flow:
-   - existing parent effect still calls `pauseRequest(activeRequestId)` while `stage === "configure" || stage === "match"`.
+2. Add a small effect inside `DispatchOverlay` that, once `editOpen` is true **and** the request has actually been paused on the server (`cur.status !== "broadcasting"`), transitions to the configure stage so the user can edit:
+   ```
+   useEffect(() => {
+     if (editOpen && cur && cur.status !== "broadcasting") {
+       setStage("configure");
+     }
+   }, [editOpen, cur?.status]);
+   ```
+   This guarantees the withdrawal lands before the overlay unmounts, mirroring Cancel's ordering.
 
-5. If the requester abandons editing by tapping outside/collapsing:
-   - when `editingLiveRequestId` is set and `stage === "collapsed"`, call `resumeRequest(editingLiveRequestId)` and clear it.
-   - This mirrors Cancel's “Wait for Doctor / outside tap restores the card” behavior.
+3. If the user dismisses the edit sheet without proceeding (taps outside / swipes the sheet), the existing `editOpen → false` path already triggers `resumeRequest` via the same derived `paused` effect Cancel uses. No extra resume code is needed for the abandon case.
 
-6. If the requester saves the edit:
-   - the existing configure → match → dispatch path updates the existing row and calls `resumeRequest`, republishing it as a fresh request.
-   - Clear `editingLiveRequestId` once the stage returns to `dispatch` or `accepted`.
+4. Save / republish on completion is unchanged — the existing configure → match → dispatch path already calls `resumeRequest` and the doctor sees the updated row.
 
-7. Add the missing snapshot fallback in `src/lib/network.ts`:
-   - when `old.status === "paused" && r.status === "broadcasting"`, synthesize a doctor-visible re-publication event.
-   - Use `action: "publish"` rather than only `"resume"` so the doctor feed treats the restored request like a fresh incoming offer, matching the expected user experience after saving an edit.
+## Out of scope (explicitly not touched)
 
-### Why this is the correct fix
+- Post-acceptance Edit Shift (`EditShiftSheet`)
+- Post-acceptance Cancel (`cancelUpcoming`)
+- Accepted / assigned shift behavior
+- `src/lib/network.ts` snapshot fallback (deferred — not the cause of the reported bug)
+- `src/lib/coverage-remote.ts`
+- Any prior `beginLiveRequestEdit` parent-level handler in `HomeScreen`
 
-It does not invent a new delivery model. It reuses the exact proven primitives Cancel already uses:
+## Verification after build mode
 
-- withdrawal = `pauseRequest`
-- doctor feed removal = `status != searching`
-- restoration/republication = `resumeRequest`
-
-The only change is moving Edit's first pause to the same moment Cancel already pauses: immediately on click, before any UI transition can unmount the dispatch overlay.
-
-The snapshot fallback addition ensures the saved edit also reappears reliably even if the lower-level realtime row event is delayed or dropped.
+1. Start broadcast → tap **Edit Request** → observe the doctor's feed: card must disappear within the same render frame, identical to Cancel.
+2. Dismiss the edit sheet without saving → card reappears on doctor's feed (resume path).
+3. Save an edit → updated card appears on doctor's feed as a fresh offer.
+4. Repeat the full Edit/Save cycle 5 times on the same request id without reload. Each cycle's withdrawal must be visually identical to Cancel's withdrawal.
