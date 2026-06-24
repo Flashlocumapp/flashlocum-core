@@ -145,8 +145,8 @@ export const Route = createFileRoute("/lovable/email/auth/webhook")({
 
         // Render React Email to HTML and plain text
         const element = React.createElement(EmailTemplate, templateProps)
-        const html = await renderAsync(element)
-        const text = await renderAsync(element, { plainText: true })
+        const html = await render(element)
+        const text = await render(element, { plainText: true })
 
         // Enqueue email for async processing by the dispatcher (process-email-queue).
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
