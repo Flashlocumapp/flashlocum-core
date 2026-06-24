@@ -44,6 +44,8 @@ import { Route as AdminAdminFlashboardRouteImport } from './routes/_admin.admin.
 import { Route as AdminAdminFinanceRouteImport } from './routes/_admin.admin.finance'
 import { Route as AdminAdminCancellationsRouteImport } from './routes/_admin.admin.cancellations'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
+import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as ApiPublicHooksSurchargeDrainRouteImport } from './routes/api/public/hooks/surcharge-drain'
 import { Route as ApiPublicHooksShiftRemindersRouteImport } from './routes/api/public/hooks/shift-reminders'
 import { Route as ApiPublicHooksReconcileSettlementsRouteImport } from './routes/api/public/hooks/reconcile-settlements'
@@ -224,6 +226,16 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
+const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
+  id: '/lovable/email/auth/webhook',
+  path: '/lovable/email/auth/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
+  id: '/lovable/email/auth/preview',
+  path: '/lovable/email/auth/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksSurchargeDrainRoute =
   ApiPublicHooksSurchargeDrainRouteImport.update({
     id: '/api/public/hooks/surcharge-drain',
@@ -286,6 +298,8 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/reconcile-settlements': typeof ApiPublicHooksReconcileSettlementsRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
+  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
+  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesByTo {
@@ -324,6 +338,8 @@ export interface FileRoutesByTo {
   '/api/public/hooks/reconcile-settlements': typeof ApiPublicHooksReconcileSettlementsRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
+  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
+  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRoutesById {
@@ -366,6 +382,8 @@ export interface FileRoutesById {
   '/api/public/hooks/reconcile-settlements': typeof ApiPublicHooksReconcileSettlementsRoute
   '/api/public/hooks/shift-reminders': typeof ApiPublicHooksShiftRemindersRoute
   '/api/public/hooks/surcharge-drain': typeof ApiPublicHooksSurchargeDrainRoute
+  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
+  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
 }
 export interface FileRouteTypes {
@@ -407,6 +425,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reconcile-settlements'
     | '/api/public/hooks/shift-reminders'
     | '/api/public/hooks/surcharge-drain'
+    | '/lovable/email/auth/preview'
+    | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -445,6 +465,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reconcile-settlements'
     | '/api/public/hooks/shift-reminders'
     | '/api/public/hooks/surcharge-drain'
+    | '/lovable/email/auth/preview'
+    | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
   id:
     | '__root__'
@@ -486,6 +508,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reconcile-settlements'
     | '/api/public/hooks/shift-reminders'
     | '/api/public/hooks/surcharge-drain'
+    | '/lovable/email/auth/preview'
+    | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
   fileRoutesById: FileRoutesById
 }
@@ -506,6 +530,8 @@ export interface RootRouteChildren {
   ApiPublicHooksReconcileSettlementsRoute: typeof ApiPublicHooksReconcileSettlementsRoute
   ApiPublicHooksShiftRemindersRoute: typeof ApiPublicHooksShiftRemindersRoute
   ApiPublicHooksSurchargeDrainRoute: typeof ApiPublicHooksSurchargeDrainRoute
+  LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
+  LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
 }
 
@@ -756,6 +782,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lovable/email/auth/webhook': {
+      id: '/lovable/email/auth/webhook'
+      path: '/lovable/email/auth/webhook'
+      fullPath: '/lovable/email/auth/webhook'
+      preLoaderRoute: typeof LovableEmailAuthWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/auth/preview': {
+      id: '/lovable/email/auth/preview'
+      path: '/lovable/email/auth/preview'
+      fullPath: '/lovable/email/auth/preview'
+      preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/surcharge-drain': {
       id: '/api/public/hooks/surcharge-drain'
       path: '/api/public/hooks/surcharge-drain'
@@ -876,6 +916,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksReconcileSettlementsRoute,
   ApiPublicHooksShiftRemindersRoute: ApiPublicHooksShiftRemindersRoute,
   ApiPublicHooksSurchargeDrainRoute: ApiPublicHooksSurchargeDrainRoute,
+  LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
+  LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
 }
 export const routeTree = rootRouteImport
