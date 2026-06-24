@@ -94,17 +94,11 @@ function CancellationsPage() {
       </div>
 
       {q.isLoading ? (
-        <Empty title="Loading…" subtitle="Fetching cancellations." />
+        <Empty>Loading cancellations…</Empty>
       ) : q.isError ? (
-        <Empty
-          title="Failed to load"
-          subtitle={(q.error as Error)?.message ?? "Unknown error"}
-        />
+        <Empty>Failed to load: {(q.error as Error)?.message ?? "Unknown error"}</Empty>
       ) : filtered.length === 0 ? (
-        <Empty
-          title="No cancellations"
-          subtitle="No cancelled shifts match the current filters."
-        />
+        <Empty>No cancelled shifts match the current filters.</Empty>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border/60">
           <table className="w-full min-w-[960px] text-[13px]">
