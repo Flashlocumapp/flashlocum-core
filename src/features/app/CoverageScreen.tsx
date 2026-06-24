@@ -1298,13 +1298,14 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         primaryLabel="Keep Shift"
         secondaryLabel="Cancel Shift"
         reasonTitle="Reason for cancellation"
-        reasons={["Emergency", "Illness", "Transport issue", "Schedule conflict", "Other"]}
-        onCancelled={(reason) => {
+        reasons={DOCTOR_REASONS}
+        onCancelled={(result) => {
           const id = cancelId;
           setCancelId(null);
-          if (id) cancelUpcoming(id, reason);
+          if (id && result) cancelUpcoming(id, { code: result.code, text: result.text });
         }}
       />
+
 
       <DoctorCoverageDetail
         item={detail}
