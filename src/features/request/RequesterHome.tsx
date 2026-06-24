@@ -1395,11 +1395,23 @@ function DispatchOverlay({
       durationHrs,
       note: draft.note ?? "",
     });
+    // Pause broadcasting BEFORE opening the sheet so doctors stop seeing the
+    // card immediately on every Edit click — not just the first one. Relying
+    // on the `paused = editOpen || cancelOpen` derived effect introduces a
+    // re-entry race on cycles 2+ where the previous render's _curStatus is
+    // stale and pauseRequest is skipped. Calling it explicitly is idempotent
+    // (pauseRequest guards on status !== "broadcasting" and is a no-op
+    // otherwise).
+    if (requestId) {
+      const cur = net.requests[requestId];
+      if (cur && cur.status === "broadcasting" && !cur.acceptedBy) {
+        pauseRequest(requestId);
+      }
+    }
     setEditOpen(true);
   };
 
   const handleSaveEdit = (next: EditableShift, changed: keyof EditableShift | "multiple") => {
-    setEditOpen(false);
     const label: Record<keyof EditableShift | "multiple", string> = {
       startTime: "Coverage start time updated",
       endTime: "Coverage end time updated",
@@ -1425,6 +1437,11 @@ function DispatchOverlay({
       const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
       const env: Environment = (cur?.environment ?? environment) ?? "normal";
       const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays, env);
+      // Order matters: send field updates FIRST (while server status is still
+      // 'paused' so the bump_request_rev_on_change trigger bumps rev), then
+      // resume EXPLICITLY (paused → searching, which itself bumps rev +
+      // broadcast_started_at). Closing the sheet last avoids the gate effect
+      // firing a redundant resumeRequest in the same render cycle.
       updateRequest(requestId, {
         note: next.note?.trim() || undefined,
         start: fmtAmPm(next.startTime),
@@ -1435,7 +1452,11 @@ function DispatchOverlay({
         endTs: newEndTs,
         days: bookedDays,
       });
+      if (cur && cur.status === "paused" && !cur.acceptedBy) {
+        resumeRequest(requestId);
+      }
     }
+    setEditOpen(false);
   };
 
 

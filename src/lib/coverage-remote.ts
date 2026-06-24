@@ -334,7 +334,9 @@ let lastCoverageSnapshotHash: string | null = null;
 function hashCoverageSnapshot(rows: NetRequest[]): string {
   let h = "";
   for (const r of rows) {
-    h += `${r.id}:${(r as { updated_at?: string }).updated_at ?? ""}:${(r as { status?: string }).status ?? ""}|`;
+    // Include rev + broadcastStartedAt so rev-only bumps (Save during Edit,
+    // material-field updates while paused) still propagate to subscribers.
+    h += `${r.id}:${r.updatedAt ?? ""}:${r.status ?? ""}:${r.rev ?? ""}:${r.broadcastStartedAt ?? ""}|`;
   }
   return h;
 }
