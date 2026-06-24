@@ -1,69 +1,79 @@
-## Plan — Reproduce the "Edit only works once" bug before any fix
+## Plan — Reuse the proven Cancel withdrawal/republication path for Edit Request
 
-You've approved the audit. The next step is the **5-cycle Playwright reproduction** with two browser contexts (requester + doctor) against the running preview. This requires switching to build mode so I can execute shell commands; no source files will be modified during this phase.
+### Investigation finding
 
-### What the repro will do
+The working **Cancel Request** behavior and broken **Edit Request** behavior do not use the same control path.
 
-Single Playwright script under `/tmp/browser/edit-cycles/`, two contexts in one browser:
+- Cancel Request opens a modal while `DispatchOverlay` stays mounted.
+- Inside `DispatchOverlay`, `paused = cancelOpen || editOpen` triggers the reliable pre-acceptance gate:
+  - modal opens → `pauseRequest(requestId)` → server row becomes `paused` → doctors' `list_open_coverage_requests` no longer returns it.
+  - modal closes / Wait for Doctor → `resumeRequest(requestId)` → server row becomes `searching` again → doctors see it again.
+- The pre-acceptance **Edit Request** button currently does **not** open that modal/gate. It directly calls `setStage("configure")`, which unmounts `DispatchOverlay` and relies on a parent `stage === "configure"` effect to pause later.
 
-- **Context A — Requester**: restore Supabase session, navigate to `/home`, publish a coverage request (or reuse one already broadcasting if present).
-- **Context B — Doctor**: restore a doctor's Supabase session, navigate to `/coverage` (or doctor home feed), confirm online.
+That is the mismatch: Edit leaves the component that owns the proven Cancel pause/resume gate before the withdrawal is guaranteed.
 
-Then run the exact cycle the user described, five times in a row:
+### Root cause
 
-```text
-for i in 1..5:
-  A: click "Edit Request"           → screenshot A, screenshot B
-  A: change one field, click Save   → screenshot A, screenshot B
-  wait 1500ms for realtime fanout   → screenshot B
-```
+Pre-acceptance Edit has a transition-order race:
 
-### Evidence captured per cycle
+1. User taps **Edit Request**.
+2. UI immediately leaves `DispatchOverlay` (`setStage("configure")`).
+3. The old broadcast card may remain visible to doctors until the parent effect runs and the server pause/invalidation/fetch cycle completes.
+4. On later cycles, local status echoes can make the effect/race worse, so the doctor feed can keep showing the old card or receive confusing duplicate refreshes.
 
-For each of the 5 cycles, persist to `/tmp/browser/edit-cycles/evidence/cycle-<n>/`:
+Cancel works because it pauses while staying inside `DispatchOverlay`; Edit should do the same pause **before** leaving `DispatchOverlay`.
 
-1. **Doctor screenshot** immediately after Edit click (the card should disappear).
-2. **Doctor screenshot** 1.5s after Save (the card should reappear with refreshed details).
-3. **Requester `state.requests[id]` JSON** — `localStorage.flash:net`.
-4. **Server row** — read via supabase RPC `read_query`:
-   `SELECT id, status, rev, broadcast_started_at, updated_at FROM coverage_requests WHERE id = '<id>'` immediately after the Edit click and again after Save.
-5. **Requester console log** — captured via `page.on("console")` for any `pauseRequest` / `resumeRequest` / `applyRemoteEvent` traces. (If none exist today, add `console.debug` calls in a throwaway local patch that is reverted before the fix phase — these will not be committed.)
-6. **Doctor network frames** — Playwright `page.on("websocket")` to record realtime frames on `coverage_invalidations` and `realtime:public:coverage_requests`.
+### Additional finding from the parallel code audit
 
-### Pass / fail criteria per cycle
+There is one more reliability gap outside the button click itself:
 
-For every cycle 1…5, all of the following must be true; the first cycle that violates any one of them is the failing cycle and pinpoints the root cause:
+- `applyRemoteEvent` already handles `paused → broadcasting` when the realtime row event arrives.
+- The snapshot fallback in `network.ts` does **not** synthesize a `paused → broadcasting` event if that realtime row event is missed/delayed.
 
-- Server row flips to `status='paused'` after Edit click.
-- `coverage_invalidations` broadcast frame observed by the doctor within 1s.
-- Doctor `list_open_coverage_requests` result no longer contains the row.
-- Doctor card is visually gone in the screenshot.
-- After Save, server flips back to `status='searching'`, `rev` increments by ≥1, and doctor card reappears.
+That means Edit can pause correctly, then republish correctly on the server, but the doctor-side fallback path may fail to treat the republished request as a fresh offer. Cancel is more reliable because its terminal delete/cancel transitions are already handled in all paths.
 
-### Root-cause mapping (what each failure mode proves)
+### Exact remediation plan
 
-- **Server still shows `status='searching'` after Edit click** → fix A (handleSaveEdit ordering / pause-effect race). Doctor never had a reason to drop the card.
-- **Server flips to `paused` but no `coverage_invalidations` frame on cycle ≥2** → trigger / realtime authorization regression (would also indicate the recent realtime policy migration needs another look).
-- **Frame received but doctor still shows the card** → fix C (snapshot-listener short-circuit). The hash bug at `coverage-remote.ts:337` is independently confirmed and will be fixed regardless.
-- **`pauseRequest` returns early without writing** → fix B (status-paused guard hit by stale echo).
+Edit only these files:
 
-### Deliverable from this phase
+- `src/features/request/RequesterHome.tsx`
+- `src/lib/network.ts`
 
-A short report posted back in chat with:
-- Which cycle failed (1, 2, 3, 4, or 5).
-- The four boolean checks above for the failing cycle.
-- The matching root cause from the mapping.
-- The exact fix to apply (1, 2, 3, or 4 from the previous audit, or a new one if the evidence rules them all out).
+1. Add a parent handler `beginLiveRequestEdit()` in `HomeScreen`:
+   - if `activeRequestId` exists, call `pauseRequest(activeRequestId)` synchronously;
+   - remember that request id in `editingLiveRequestId`;
+   - then call `setStage("configure")`.
 
-Only after you confirm the root cause will I propose the implementation plan for the fix.
+2. Pass `beginLiveRequestEdit` into `DispatchOverlay` as `onEditRequest`.
 
-### Out of scope (this phase)
+3. Change the pre-acceptance **Edit Request** button from:
+   - `onClick={() => setStage("configure")}`
+   to:
+   - `onClick={onEditRequest}`.
 
-- No source file edits.
-- No DB migrations.
-- No changes to the realtime authorization policy.
-- The doctor's session must already exist in `LOVABLE_BROWSER_AUTH_STATUS=injected` mode for context B; if only one Supabase session is injected, the second context will sign in by reusing the same session pattern via a service-issued token (read-only repro). If that's not feasible in this sandbox, I will fall back to a single-context repro that asserts via direct supabase reads what the doctor *would* have received (server row + RPC result + websocket frames on the requester's own connection joined to `coverage_invalidations`).
+4. Keep the request withdrawn for the entire edit flow:
+   - existing parent effect still calls `pauseRequest(activeRequestId)` while `stage === "configure" || stage === "match"`.
 
-### After you approve
+5. If the requester abandons editing by tapping outside/collapsing:
+   - when `editingLiveRequestId` is set and `stage === "collapsed"`, call `resumeRequest(editingLiveRequestId)` and clear it.
+   - This mirrors Cancel's “Wait for Doctor / outside tap restores the card” behavior.
 
-I switch to build mode, run the repro, and report findings. No code is touched until you confirm the root cause from the evidence.
+6. If the requester saves the edit:
+   - the existing configure → match → dispatch path updates the existing row and calls `resumeRequest`, republishing it as a fresh request.
+   - Clear `editingLiveRequestId` once the stage returns to `dispatch` or `accepted`.
+
+7. Add the missing snapshot fallback in `src/lib/network.ts`:
+   - when `old.status === "paused" && r.status === "broadcasting"`, synthesize a doctor-visible re-publication event.
+   - Use `action: "publish"` rather than only `"resume"` so the doctor feed treats the restored request like a fresh incoming offer, matching the expected user experience after saving an edit.
+
+### Why this is the correct fix
+
+It does not invent a new delivery model. It reuses the exact proven primitives Cancel already uses:
+
+- withdrawal = `pauseRequest`
+- doctor feed removal = `status != searching`
+- restoration/republication = `resumeRequest`
+
+The only change is moving Edit's first pause to the same moment Cancel already pauses: immediately on click, before any UI transition can unmount the dispatch overlay.
+
+The snapshot fallback addition ensures the saved edit also reappears reliably even if the lower-level realtime row event is delayed or dropped.
