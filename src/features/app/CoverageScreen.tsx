@@ -4,7 +4,7 @@ import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
 import { CancelFlow } from "@/components/CancelFlow";
-import { DOCTOR_REASONS } from "@/lib/cancellation-reasons";
+import { DOCTOR_REASONS, REQUESTER_REASONS } from "@/lib/cancellation-reasons";
 import { HistoryDetailSheet, type HistoryDetail } from "@/components/HistoryDetailSheet";
 import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet";
 import { DismissSheet } from "@/components/DismissSheet";
