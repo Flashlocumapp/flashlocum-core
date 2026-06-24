@@ -1306,6 +1306,18 @@ function DispatchOverlay({
     }
   }, [paused, requestId, stage, _curStatus, _curAcceptedBy]);
 
+  // Edit Request mirrors Cancel Request's withdrawal: setEditOpen(true) flips
+  // the shared `paused` gate so the effect above calls pauseRequest first.
+  // Only AFTER the server confirms the row left `broadcasting` do we transition
+  // to the configure stage — this guarantees the doctor's feed drops the card
+  // before DispatchOverlay unmounts (the original Edit race).
+  useEffect(() => {
+    if (editOpen && stage === "dispatch" && _curStatus && _curStatus !== "broadcasting") {
+      setStage("configure");
+    }
+  }, [editOpen, stage, _curStatus, setStage]);
+
+
   // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
   // re-publish and dismiss-resume (paused → searching) automatically restart
   // the window. Timer is invisible — no countdown shown to the requester.
