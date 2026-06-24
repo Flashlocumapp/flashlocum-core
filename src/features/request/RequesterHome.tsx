@@ -1473,7 +1473,7 @@ function DispatchOverlay({
   };
 
 
-  // Pre-acceptance cancel: remove silently (no notification, no history).
+  // Pre-acceptance cancel: remove silently (no notification, no history, no reason captured).
   const handleCancelPreAccept = () => {
     if (requestId) removeRequest(requestId);
     ownedIdRef.current = null;
