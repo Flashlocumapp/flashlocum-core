@@ -958,13 +958,12 @@ export function cancelRequest(
   // through `cancelAndNotifyFn`, which authorizes the actor, validates the
   // reason, and updates the row server-side. The realtime ingester then
   // flips local state to `cancelled` and synthesises the `cancel` event.
-  void remoteUpdateRequest(id, {
+  const patch: Partial<NetRequest> & { __cancelReason?: { code: string; text?: string } } = {
     status: "cancelled",
     cancelledBy: actorOf() === "doctor" ? "doctor" : "requester",
-    // Carry the reason via a typed sidecar so coverage-remote.ts can forward
-    // it to the server fn without polluting NetRequest itself.
-    ...(reason ? { __cancelReason: reason } : {}),
-  } as Partial<import("./network-types").NetRequest> & { __cancelReason?: { code: string; text?: string } });
+  };
+  if (reason) patch.__cancelReason = reason;
+  void remoteUpdateRequest(id, patch);
 }
 
 /**
