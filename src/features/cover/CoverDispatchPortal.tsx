@@ -1,6 +1,8 @@
 import { AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { DismissSheet } from "@/components/DismissSheet";
+import { CancelFlow, type CancelReasonResult } from "@/components/CancelFlow";
+import { DOCTOR_REASONS } from "@/lib/cancellation-reasons";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { RatingOverlay } from "@/components/RatingOverlay";
