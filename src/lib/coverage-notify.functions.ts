@@ -150,9 +150,11 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
       patch.cancelled_at = new Date().toISOString();
     }
 
+    // Cast: new cancellation_* columns are added in the latest migration and
+    // may not yet appear in the generated Database types until typegen runs.
     const { error: updateError } = await supabaseAdmin
       .from("coverage_requests")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.requestId);
     if (updateError) throw new Error(updateError.message);
 
