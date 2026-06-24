@@ -86,12 +86,29 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
  * Cancel an owned coverage request with server-side authorization. This avoids
  * silent zero-row browser updates when RLS filters the row out of the PATCH.
  */
+const REQUESTER_CODES = new Set([
+  "no_longer_needed",
+  "schedule_changed",
+  "wrong_details",
+  "found_alternative",
+  "other",
+]);
+const DOCTOR_CODES = new Set([
+  "personal_emergency",
+  "illness",
+  "scheduling_conflict",
+  "travel_issue",
+  "other",
+]);
+
 export const cancelAndNotifyFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { requestId: string; reason?: string }) => {
-    if (!isUuid(input?.requestId)) throw new Error("Invalid request id");
-    return input;
-  })
+  .inputValidator(
+    (input: { requestId: string; reasonCode?: string; reasonText?: string }) => {
+      if (!isUuid(input?.requestId)) throw new Error("Invalid request id");
+      return input;
+    },
+  )
   .handler(async ({ data, context }) => {
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -109,9 +126,33 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
     if (!actor) throw new Error("Not authorized");
     if (row.status === "cancelled") return { ok: true, cancelledBy: row.cancelled_by ?? actor };
 
+    // Post-acceptance cancels require a reason. Pre-acceptance (no accepted_by)
+    // skips reason capture — the silent abort path used before any doctor matches.
+    const postAcceptance = row.accepted_by != null;
+    const reasonCode = data.reasonCode?.trim() || null;
+    const reasonText = data.reasonText?.trim() || null;
+    if (postAcceptance) {
+      if (!reasonCode) throw new Error("A cancellation reason is required");
+      const allowed = actor === "doctor" ? DOCTOR_CODES : REQUESTER_CODES;
+      if (!allowed.has(reasonCode)) throw new Error("Invalid cancellation reason");
+      if (reasonCode === "other" && !reasonText) {
+        throw new Error("A short explanation is required when reason is Other");
+      }
+    }
+
+    const patch: Record<string, unknown> = {
+      status: "cancelled",
+      cancelled_by: actor,
+    };
+    if (postAcceptance) {
+      patch.cancellation_reason_code = reasonCode;
+      patch.cancellation_reason_text = reasonText;
+      patch.cancelled_at = new Date().toISOString();
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from("coverage_requests")
-      .update({ status: "cancelled", cancelled_by: actor })
+      .update(patch)
       .eq("id", data.requestId);
     if (updateError) throw new Error(updateError.message);
 
