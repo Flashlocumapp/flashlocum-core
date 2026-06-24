@@ -950,17 +950,21 @@ export async function acceptRequest(id: string): Promise<AcceptRequestResult> {
   }
 }
 
-export function cancelRequest(id: string) {
+export function cancelRequest(
+  id: string,
+  reason?: { code: string; text?: string },
+) {
   // Server-authoritative cancel. coverage-remote.ts routes the cancel
-  // through `cancelAndNotifyFn`, which authorizes the actor and updates
-  // the row server-side. The realtime ingester then flips local state to
-  // `cancelled` and synthesises the `cancel` event — no optimistic local
-  // write so a server rejection can never leave a phantom cancelled card
-  // in the feed.
+  // through `cancelAndNotifyFn`, which authorizes the actor, validates the
+  // reason, and updates the row server-side. The realtime ingester then
+  // flips local state to `cancelled` and synthesises the `cancel` event.
   void remoteUpdateRequest(id, {
     status: "cancelled",
     cancelledBy: actorOf() === "doctor" ? "doctor" : "requester",
-  });
+    // Carry the reason via a typed sidecar so coverage-remote.ts can forward
+    // it to the server fn without polluting NetRequest itself.
+    ...(reason ? { __cancelReason: reason } : {}),
+  } as Partial<import("./network-types").NetRequest> & { __cancelReason?: { code: string; text?: string } });
 }
 
 /**
