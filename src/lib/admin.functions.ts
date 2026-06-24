@@ -1192,3 +1192,33 @@ export const adminListRatings = createServerFn({ method: "POST" })
     });
   });
 
+
+// ---------- Cancellations ----------
+
+export type AdminCancellationRow = {
+  shift_id: string;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  reason_code: string | null;
+  reason_text: string | null;
+  hospital: string | null;
+  start_time: string | null;
+  end_time: string | null;
+};
+
+export const adminListCancellations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { limit?: number } | undefined) => ({
+    limit: Math.min(Math.max(input?.limit ?? 200, 1), 1000),
+  }))
+  .handler(async ({ data, context }): Promise<AdminCancellationRow[]> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = context.supabase as any;
+    const { data: rows, error } = await sb.rpc("admin_list_cancellations", {
+      _limit: data.limit,
+    });
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as AdminCancellationRow[];
+  });
