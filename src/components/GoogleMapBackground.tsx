@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Marker } from "@/components/MapBackground";
 import { hasMapsKey, loadMapsApi } from "@/lib/google-maps";
+import { getLastKnown, requestOnce, subscribe } from "@/lib/location";
 
 type Coords = { lat: number; lng: number };
 export type PlaceMapMarker = Coords & { key: string; title?: string };
@@ -101,29 +102,6 @@ function requesterDotIcon(): google.maps.Icon {
   };
 }
 
-// Module-level cache for the last known geolocation. Persists across map
-// remounts (e.g. switching tabs) so the requester "you are here" dot is
-// already on screen the moment Home re-renders — no second-long wait while
-// geolocation re-resolves.
-let cachedUserCenter: Coords | null = null;
-let cachedAccuracy: number | null = null;
-
-const MAX_ACCEPTED_ACCURACY_METERS = 1_000;
-
-// Coarse great-circle distance in metres. Good enough for drift filtering.
-function distanceMeters(a: Coords, b: Coords): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(x));
-}
-
 export function GoogleMapBackground({
   markers,
   center,
@@ -146,91 +124,17 @@ export function GoogleMapBackground({
   const selfMarker = useRef<google.maps.Marker | null>(null);
   const [failed, setFailed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const [userCenter, setUserCenterState] = useState<Coords | null>(cachedUserCenter);
+  const [userCenter, setUserCenterState] = useState<Coords | null>(() => {
+    const k = getLastKnown();
+    return k ? { lat: k.lat, lng: k.lng } : null;
+  });
 
-  // Accept a new geolocation sample only if it's reasonably accurate AND
-  // not a wild jump from the last known fix. IP-based fallbacks routinely
-  // hop between Ikeja / Lagos Island with accuracy in the kilometres —
-  // filtering those out keeps the blue dot stable.
-  const acceptSample = (coords: GeolocationCoordinates) => {
-    const next: Coords = { lat: coords.latitude, lng: coords.longitude };
-    const acc = coords.accuracy ?? Number.POSITIVE_INFINITY;
-    // Only browser-provided location is allowed to drive the requester/doctor
-    // position. Coarse IP/cell-tower fixes are what caused the Lagos Island ↔
-    // Ikeja jumps, so never treat those as the user's exact map location.
-    if (acc > MAX_ACCEPTED_ACCURACY_METERS) {
-      console.warn("[map] ignoring coarse geolocation sample", Math.round(acc));
-      return;
-    }
-    if (cachedUserCenter && cachedAccuracy != null) {
-      // Reject samples noticeably worse than what we already have.
-      if (acc > 2000 && acc > cachedAccuracy * 1.5) return;
-      // Reject a large jump unless the new fix is clearly more accurate.
-      const jump = distanceMeters(cachedUserCenter, next);
-      if (jump > 3000 && acc >= cachedAccuracy) return;
-    }
-    cachedUserCenter = next;
-    cachedAccuracy = acc;
-    setUserCenterState(next);
-  };
-
-  // Geolocate on mount and keep watching, so the requester "you are here"
-  // dot is on screen as quickly as possible and stays accurate as the user
-  // moves. High accuracy + short cache window prevents drift between cells.
+  // Map is a pure consumer of the central location service. It does NOT
+  // own geolocation — see `src/lib/location.ts`.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      console.warn("[map] navigator.geolocation unavailable");
-      return;
-    }
-
-    let gotFix = false;
-    // getCurrentPosition can't be cancelled — guard callbacks so late fixes
-    // arriving after unmount don't push samples into a stale component.
-    let cancelled = false;
-    const onErr = (err: GeolocationPositionError) => {
-      if (cancelled) return;
-      console.warn("[map] geolocation error", err.code, err.message);
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        gotFix = true;
-        acceptSample(pos.coords);
-      },
-      onErr,
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 },
-    );
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (cancelled) return;
-        gotFix = true;
-        acceptSample(pos.coords);
-      },
-      onErr,
-      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 15_000 },
-    );
-
-    // If high-accuracy fails or takes too long, also try a low-accuracy
-    // fix in parallel — some devices/browsers refuse high-accuracy outright.
-    const lowAccTimer = window.setTimeout(() => {
-      if (cancelled || gotFix) return;
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (cancelled) return;
-          gotFix = true;
-          acceptSample(pos.coords);
-        },
-        onErr,
-        { enableHighAccuracy: false, timeout: 15_000, maximumAge: 60_000 },
-      );
-    }, 4_000);
-
-    return () => {
-      cancelled = true;
-      navigator.geolocation.clearWatch(watchId);
-      window.clearTimeout(lowAccTimer);
-    };
+    const unsub = subscribe((c) => setUserCenterState({ lat: c.lat, lng: c.lng }));
+    void requestOnce();
+    return unsub;
   }, []);
 
   // Init map.

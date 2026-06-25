@@ -238,17 +238,11 @@ function HomeScreen({ active }: { active: boolean }) {
   }, [active, stage]);
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    // getCurrentPosition has no native cancellation — guard the callback so
-    // a late fix arriving after unmount can't setState on an unmounted tree.
     let cancelled = false;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 300_000 },
+    void import("@/lib/location").then(({ requestOnce }) =>
+      requestOnce().then((c) => {
+        if (!cancelled && c) setSearchOrigin({ lat: c.lat, lng: c.lng });
+      }),
     );
     return () => {
       cancelled = true;
