@@ -401,6 +401,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       ),
     [items, tab],
   );
+  const firstPaintSettled = useFirstPaintSettled(items.length > 0);
 
   // ---- Settlement sheet auto-restore ----
   // PAYMENT_SESSION_STABILITY: any request whose SERVER status is
