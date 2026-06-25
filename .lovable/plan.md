@@ -1,57 +1,98 @@
-## Findings
+# Remediation Plan — Straight Coverage Lifecycle + Stale Payment + 24h/48h Billing
 
-1. **Surcharge/payment page is still stale**
-   - The latest database function does clear `payment_account`, `payment_reference`, and advances `payment_due_at`, but the cron endpoint is failing repeatedly with: `cannot cast type record to coverage_requests`.
-   - That error comes from `drain_surcharge_due()` passing a loop `record` into `_surcharge_block_amount(rec)`, where the helper expects a `coverage_requests` row type.
-   - Evidence: the current awaiting-payment request still has `payment_extension_count = 0`, old `payment_due_at`, and cached account/reference still present after expiry.
-   - Client-side issue also remains: the billing poll only updates internal refs, not React state/props, so even when the server changes, the visible amount/timer/account may not reliably re-render.
+Single plan covering three connected issues:
+1. Make `straight_24h` / `straight_48h` behave as one continuous shift (lifecycle).
+2. Fix the stale payment-amount display after surcharge.
+3. Fix the `₦0` and stale-amount bugs in the 24h / 48h billing engine.
 
-2. **Info icon wording**
-   - Wording is hardcoded in two places:
-     - `RequesterHome.tsx` for requester rating/reliability.
-     - `CoverHome.tsx` for doctor rating/reliability.
+---
 
-3. **Delete Account modal style**
-   - `DeleteAccountSheet` is currently an account-page bottom sheet (`absolute inset-0 flex items-end`) rather than the existing app confirmation modal style used by Pause Shift / End Shift (`ConfirmDialog` over the page background).
+## Part A — Straight Coverage as One Continuous Shift
 
-## Implementation plan
+### A1. Booking flow (`src/features/request/RequesterHome.tsx`)
+- Hide the `<DaysStepper>` when `coverage === "24h"` or `coverage === "weekend"`. Render it only for `standard` and `home`.
+- `setCoverage("weekend")` pins `days = 1` (same pattern already used for `"24h"`). Published booking always has `days = 1` for both straight products.
+- No change to `durationHrsOf`: weekend stays at fixed 48h, 24h stays at 24h.
 
-### 1. Properly fix surcharge processing
-- Add a migration replacing `drain_surcharge_due()` so each loop row is loaded into a typed `public.coverage_requests` variable before calling `_surcharge_block_amount()`.
-- Keep the intended behavior:
-  - add one surcharge block,
-  - advance `payment_due_at` by 15 minutes,
-  - increment `payment_extension_count`,
-  - clear `payment_account`, `payment_reference`, and `payment_url`,
-  - broadcast `coverage_invalidations` with reason `surcharge`.
-- Also keep `extend_payment_window()` aligned with the same account-clearing and invalidation behavior.
+### A2. Server guard — block segmentation for straight products
+New migration. In each function, classify with `_effective_product(coverage_type, booked_per_day_min, days)`; if `straight_24h` or `straight_48h`:
+- `pause_shift`: return clean no-op error (`reason: 'straight_no_pause'`). No segment close, no status flip.
+- `resume_shift`: same — straight shifts are never paused.
+- `_auto_advance_day_boundary` cron: skip the row entirely (today it filters only `days > 1`).
+- `start_shift` / `end_shift`: unchanged. Straight branches already sum `sum_worked_min` across all segments.
 
-### 2. Make the payment UI refresh from server truth, not local refs
-- In `ShiftSettlement.tsx`, replace the current “ref-only” billing poll with React state for the server billing amount and due time.
-- Feed the effective server amount and due time into `CustomTransferPane` so the visible total and countdown re-render when the backend changes.
-- When server billing changes after surcharge:
-  - clear the old account UI,
+### A3. Client lifecycle UI (`src/features/app/CoverageScreen.tsx`)
+Add helper `isStraightProduct(item)` = `coverageKindFromLabel(item.coverage) === "straight24" || "straight48"`.
+Gate on `!isStraightProduct(item)`:
+- Pause Shift button (compact card ~860, expanded card ~1071).
+- "Day X of Y" header (~819, ~1002, ~1426).
+- Any client-side day-advance toast.
+End Shift / Start Shift stay visible.
+
+---
+
+## Part B — Stale Payment Amount Display
+
+### B1. Surcharge cron fix
+Migration replaces `drain_surcharge_due()`:
+- Loop rows typed as `public.coverage_requests` (not `record`) so `_surcharge_block_amount(rec)` accepts the row type — eliminates `cannot cast type record to coverage_requests`.
+- Each tick: add one surcharge block, advance `payment_due_at` by 15 min, increment `payment_extension_count`, clear `payment_account` / `payment_reference` / `payment_url`, broadcast `coverage_invalidations` (reason `surcharge`).
+- Align `extend_payment_window()` to the same account-clearing + invalidation behavior.
+
+### B2. Client refresh from server truth (`src/features/request/ShiftSettlement.tsx`)
+- Replace the ref-only billing poll with React state for `serverAmount` and `serverPaymentDueAt`.
+- Pipe both into `CustomTransferPane` so the visible total and countdown re-render whenever the server changes.
+- When `serverAmount` increases OR `serverPaymentDueAt` advances:
+  - drop the old account/reference from UI,
   - reset checkout state,
-  - force a fresh `beginSettlementCheckout()` call,
-  - show the newly minted account/reference and reset timer from the new `payment_due_at`.
-- Add an immediate expiry check path so if the visible timer reaches `00:00` before the invalidation lands, the sheet asks the server for fresh billing state instead of sitting stale.
+  - call `beginSettlementCheckout()` again,
+  - render the freshly minted account + reference,
+  - re-anchor the countdown to the new `payment_due_at`.
+- Immediate-expiry path: when the visible timer hits `00:00`, refetch billing state instead of sitting stale.
 
-### 3. Update trust info text exactly as requested
-- Doctor rating: `Reflects how satisfied requesters are with your service. Minimum: 4.0 stars.`
-- Requester rating: `Reflects how satisfied doctors are with their experience working with your facility. Minimum: 3.5 stars.`
-- Doctor reliability: `Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 85%.`
-- Requester reliability: `Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 75%.`
+---
 
-### 4. Convert Delete Account to modal-over-account pattern
-- Refactor the delete-account UI in `AccountScreen.tsx` to use the same modal behavior as Pause Shift / End Shift:
-  - account tab remains visible behind the overlay,
-  - centered confirmation content,
-  - same destructive-button style.
-- Preserve existing eligibility rules and final confirmation flow.
-- Keep deletion backend logic unchanged.
+## Part C — 24h / 48h Billing Logic Fix
 
-### 5. Verification
-- Check database evidence after migration: `drain_surcharge_due()` no longer returns the cast error, expired pending payments get extension count > 0, updated amount, new due time, and cleared cached account fields.
-- Verify the UI code path: server billing updates drive visible amount/timer/account refresh.
-- Verify wording locations were updated.
-- Verify Delete Account appears as a modal over the Account tab, not a bottom sheet.
+### C1. Root cause of `₦0`
+In the straight branches of `end_shift`:
+```
+ELSIF sum_worked_min < st24_lo THEN
+  hr_used := CEIL(sum_worked_min::numeric / 60.0)::int;   -- 0 when sum=0
+  v_total := ROUND(hr_used * st_ph * busy_mult);          -- = ₦0
+```
+A shift started and ended within seconds yields `sum_worked_min = 0`, `hr_used = 0`, `v_total = ₦0`. Same path for `straight_48h`.
+
+### C2. Root cause of "stale amount" on multi-end test
+- `_auto_advance_day_boundary` currently auto-pauses straight bookings booked as `days > 1` (e.g. legacy Weekend with `days = 2`) — producing multiple segments. Billing sums correctly across segments, but the per-day cron pause can race with manual End Shift and leave the displayed amount unsynced with the final `total_billed_amount`. Part A removes the underlying segmentation; this section fixes the math.
+
+### C3. Fixes (single migration)
+- Straight-product minimum: in `end_shift` straight branches, when `sum_worked_min < st24_lo` / `st48_lo`, charge `MAX(1, CEIL(sum_worked_min/60))` hours × `st_ph × busy_mult`, with a hard floor at `st_ph × busy_mult` (1 hour minimum). No straight shift may bill `₦0`.
+- Apply the same 1-hour minimum to `compute_quote` straight branches so pre-shift quote = post-shift floor when `sum_worked_min = 0`.
+- Multi-day standard: in the per-day loop of `_price_standard_day`, apply the same MAX(1, …) floor so a day with 0 worked minutes still bills 1 hour at the standard `per_hour` rate. Prevents the "10h × 3 days, all ended in <1 min" scenario from totaling ₦0.
+- After Part A removes pause/resume for straight shifts, `sum_worked_min` for straight products will always be one contiguous interval — the cumulative-segment sum stays correct.
+
+### C4. Verification queries
+- Recreate a 24h booking, start, end within seconds → expect `total_billed_amount = st_ph × busy_mult` (₦1,500 normal / ₦1,800 busy), not ₦0.
+- Recreate a 48h Weekend booking, run to 47h → expect flat ₦72,000.
+- Standard 10h × 3 days, each day ended within seconds → expect 3 × (1h × `per_hour`), not ₦0.
+- Surcharge expiry → confirm `drain_surcharge_due()` log has no cast error, `payment_extension_count` increments, account fields clear, client UI shows new amount + new account + reset 15-min timer without manual refresh.
+
+---
+
+## Part D — Verification Pass (end-to-end)
+
+- 24h booking: stepper hidden; published `days=1`; no Pause button; no Day X of Y.
+- Weekend booking: stepper hidden; published `days=1`; classified as `straight_48h`; no Pause; no Day X of Y.
+- Standard / home multi-day: stepper still shown; Pause + Day X of Y still work (regression check).
+- Calling `pause_shift` on a straight row returns the guard error.
+- `_auto_advance_day_boundary` does not touch straight rows past `booked_per_day_min`.
+- `drain_surcharge_due()` runs without cast errors; client UI re-renders amount + timer + account on surcharge.
+- 24h / 48h / multi-day standard with near-zero worked minutes all bill ≥ 1 hour at the correct rate.
+
+---
+
+## Out of scope
+- No backfill of historical `coverage_requests` rows.
+- No change to Monnify checkout / disbursement code.
+- Trust-info wording update and Delete Account modal refactor remain in `.lovable/plan.md` and will be handled in a separate pass unless you ask to fold them in here.

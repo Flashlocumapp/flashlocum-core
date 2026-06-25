@@ -83,6 +83,14 @@ type RequestItem = {
   paymentDueAt?: string;
 };
 
+/** Straight 24h / Weekend 48h are continuous single shifts — no pause, no day boundary. */
+function isStraightItem(item: { coverage: string }): boolean {
+  const kind = coverageKindFromLabel(String(item.coverage));
+  return kind === "straight24" || kind === "straight48";
+}
+
+
+
 
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
@@ -816,7 +824,7 @@ function RequesterDetailSheet({
 
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
             {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
-            {item.days > 1 && (
+            {item.days > 1 && !isStraightItem(item) && (
               <span className="ml-2 inline-flex h-4 items-center rounded-full bg-secondary/80 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
                 Day {Math.min(item.dayIndex, item.days)} of {item.days}
               </span>
@@ -857,7 +865,7 @@ function RequesterDetailSheet({
                 {startLabel ?? (item.everStarted ? "Resume Shift" : "Start Shift")}
               </button>
             )}
-            {item.status === "active" && item.days > 1 && item.dayIndex < item.days && (
+            {item.status === "active" && item.days > 1 && item.dayIndex < item.days && !isStraightItem(item) && (
               <button
                 onClick={() => { if (!pending) onPause(item.id); }}
                 disabled={!!pending}
@@ -999,7 +1007,7 @@ function RequestCard({
             <ReliabilityPill entityId={item.doctorRatingId} inline />
           </div>
 
-          {!isHistory && item.days > 1 && (
+          {!isHistory && item.days > 1 && !isStraightItem(item) && (
             <div className="mt-1">
               <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
                 Day {Math.min(item.dayIndex, item.days)} of {item.days}
@@ -1068,7 +1076,7 @@ function RequestCard({
               {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
             </button>
           )}
-          {isActive && item.days > 1 && item.dayIndex < item.days && (
+          {isActive && item.days > 1 && item.dayIndex < item.days && !isStraightItem(item) && (
             <button
               onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
               disabled={!!pending}
@@ -1423,7 +1431,7 @@ function CoverCard({
         )}
       </div>
 
-      {!isHistory && (item as CoverItem).days > 1 && (
+      {!isHistory && (item as CoverItem).days > 1 && !isStraightItem(item as CoverItem) && (
         <div className="mt-1.5">
           <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
             Day {Math.min((item as CoverItem).dayIndex ?? 1, (item as CoverItem).days)} of {(item as CoverItem).days}
