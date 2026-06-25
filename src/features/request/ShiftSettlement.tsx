@@ -1703,8 +1703,7 @@ function CustomTransferPane({
                 </span>
                 <span className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
                   Amount and payment details may change if payment is not
-                  completed in time. Always use the latest account number and
-                  payment reference displayed on this page.
+                  completed in time.
                 </span>
               </div>
               <span
