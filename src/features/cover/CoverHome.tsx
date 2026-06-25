@@ -504,7 +504,7 @@ function ReliabilityTile({ display }: { display: string }) {
         <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Reliability
         </div>
-        <TrustInfoPopover align="end" direction="up" showRatings={false} showReliability reliabilityText="Based on your last 20 shifts. Max 3 cancellations per 20 shifts. Minimum 85%." />
+        <TrustInfoPopover align="end" direction="up" showRatings={false} showReliability reliabilityText="Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 85%." />
       </div>
       <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
         {display}
