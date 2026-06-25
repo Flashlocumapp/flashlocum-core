@@ -219,27 +219,48 @@ export function ShiftSettlement({
     // closed-segment sum is the authoritative prior-day total.
     return sum;
   }, [segments]);
-  const totalAmount = useMemo(
-    () =>
-      computeWorkedPricing(
-        shift.coverageKind,
-        shift.startHHMM,
-        workedMin,
-        shift.endHHMM,
-        shift.days,
-        shift.environment ?? "normal",
-        bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
-        priorBilled,
-      ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled],
-  );
-  // Snapshot of the bill at the moment End Shift was pressed.
+  // ActivePane "Live billing" tile only. NEVER consumed by any
+  // payment-lifecycle pane (Settlement / Overtime / CustomTransfer /
+  // Confirmed). For multi-day shifts we additionally gate this estimate on
+  // `segments` being hydrated so the booked-length over-estimate never
+  // leaks onto the running-shift screen either.
+  const multiDay = (shift.days ?? 1) > 1;
+  const activeLiveAmount = useMemo(() => {
+    if (multiDay && priorBilled === undefined) return null;
+    return computeWorkedPricing(
+      shift.coverageKind,
+      shift.startHHMM,
+      workedMin,
+      shift.endHHMM,
+      shift.days,
+      shift.environment ?? "normal",
+      bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+      priorBilled,
+    ).amount;
+  }, [multiDay, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled]);
+  // Snapshot of the bill at the moment End Shift was pressed. SERVER-ONLY
+  // sources are allowed to write `frozenAmountRef` (end_shift response,
+  // serverTotalBilledAmount prop, getRequestBillingState poll). No client
+  // pricing estimator is ever permitted to seed this ref, anywhere.
   const frozenBilledMinRef = useRef<number>(0);
   const frozenAmountRef = useRef<number>(0);
+  // Bump on every server-side write so React re-renders panes that depend
+  // on the ref (refs don't trigger re-renders by themselves).
+  const [serverAmountTick, setServerAmountTick] = useState(0);
+  const bumpServerAmount = useCallback(() => setServerAmountTick((n) => n + 1), []);
+  // Keep ESLint happy — we read serverAmountTick to bind the dep.
+  void serverAmountTick;
   const frozenBilledMin = frozenBilledMinRef.current;
   const frozenAmount = frozenAmountRef.current;
+  // `serverAmount` is the ONLY number any payment-lifecycle pane may show.
+  // `null` ⇒ unknown ⇒ render "Calculating final amount…" + disable pay.
+  const serverAmount: number | null =
+    typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0
+      ? serverTotalBilledAmount
+      : frozenAmount > 0
+        ? frozenAmount
+        : null;
   const extensionMin = Math.max(0, billedMin - frozenBilledMin);
-  const extensionAmount = Math.max(0, totalAmount - frozenAmount);
 
   // Reset whenever opened fresh. Deps are IDENTITY-ONLY (open + initialPhase
   // + requestId + intent). Do NOT add shift.startedAt / shift.accumulatedMs —
@@ -322,30 +343,30 @@ export function ShiftSettlement({
     }
     confirmedAtRef.current = null;
     autoConfirmAt.current = null;
-    // Seed the frozen amount only if not already seeded. Prefer the
-    // server-frozen total (total_billed_amount). Live-timer fallback only
-    // runs on the very first End Shift press before the server responds.
+    // Seed the frozen amount ONLY from server-authoritative sources.
+    // No client-side pricing estimator is permitted to write frozenAmountRef
+    // (audit: payment-lifecycle must never display a locally-priced number).
+    // If the server total isn't on hand yet, the panes show
+    // "Calculating final amount…" until the billing poll / end_shift /
+    // serverTotalBilledAmount prop lands.
     if (effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime") {
       if (typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0) {
-        frozenAmountRef.current = serverTotalBilledAmount;
-      } else if (frozenAmountRef.current === 0) {
-        const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
-        const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-        const priced = computeWorkedPricing(
-          shift.coverageKind,
-          shift.startHHMM,
-          w,
-          shift.endHHMM,
-          shift.days,
-          shift.environment ?? "normal",
-          bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
-        );
-        frozenBilledMinRef.current = priced.billableMinutes;
-        frozenAmountRef.current = priced.amount;
+        if (frozenAmountRef.current !== serverTotalBilledAmount) {
+          frozenAmountRef.current = serverTotalBilledAmount;
+          bumpServerAmount();
+        }
+      }
+      // billedMin snapshot is a UI nicety derived from the live timer; it's
+      // not part of the payable amount. Keep it for the receipt rows.
+      if (frozenBilledMinRef.current === 0) {
+        frozenBilledMinRef.current = billableMinutes(workedMin);
       }
     } else {
-      frozenBilledMinRef.current = 0;
-      frozenAmountRef.current = 0;
+      if (frozenBilledMinRef.current !== 0 || frozenAmountRef.current !== 0) {
+        frozenBilledMinRef.current = 0;
+        frozenAmountRef.current = 0;
+        bumpServerAmount();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialPhase, requestId, intent, serverPaymentDueAt, serverTotalBilledAmount, alreadyAwaitingPayment]);
@@ -411,20 +432,12 @@ export function ShiftSettlement({
 
   const handleEndShift = async () => {
     const now = simNow();
-    // Freeze local UI billing snapshot (display fallback).
-    const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
-    const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-    const priced = computeWorkedPricing(
-      shift.coverageKind,
-      shift.startHHMM,
-      w,
-      shift.endHHMM,
-      shift.days,
-      shift.environment ?? "normal",
-      bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+    // Snapshot billed-minutes only (UI nicety for the receipt). The payable
+    // AMOUNT must never be pre-seeded from a client estimator — it is
+    // written only after `end_shift` returns the server-locked total.
+    frozenBilledMinRef.current = billableMinutes(
+      ((shift.accumulatedMs ?? 0) + (shift.startedAt ? Math.max(0, now - shift.startedAt) : 0)) / 60000,
     );
-    frozenBilledMinRef.current = priced.billableMinutes;
-    frozenAmountRef.current = priced.amount;
 
     if (requestId) {
       // Server-authoritative end_shift: locks the bill on the DB so the
@@ -449,6 +462,7 @@ export function ShiftSettlement({
           return;
         }
         frozenAmountRef.current = total;
+        bumpServerAmount();
         // Server confirmed end_shift AND billing is locked — open the single gate.
         settlementReadyRef.current = true;
       } catch (e) {
@@ -806,10 +820,11 @@ export function ShiftSettlement({
         const s = await fetchBilling({ data: { requestId } });
         if (cancelled || !s) return;
         if (typeof s.total_billed_amount === "number" && s.total_billed_amount > 0) {
-          frozenAmountRef.current = Math.max(
-            frozenAmountRef.current,
-            s.total_billed_amount,
-          );
+          const next = Math.max(frozenAmountRef.current, s.total_billed_amount);
+          if (next !== frozenAmountRef.current) {
+            frozenAmountRef.current = next;
+            bumpServerAmount();
+          }
         }
         if (Array.isArray(s.segments)) setSegments(s.segments as SegmentRow[]);
         if (typeof s.payment_extension_count === "number") {
@@ -854,7 +869,7 @@ export function ShiftSettlement({
             shift={shift}
             workedMin={workedMin}
             billedMin={billedMin}
-            liveAmount={totalAmount}
+            liveAmount={activeLiveAmount}
             onClose={onClose}
             onEnd={handleEndShift}
           />
@@ -866,8 +881,7 @@ export function ShiftSettlement({
             phase={phase}
             elapsed={elapsed}
             billedMin={frozenBilledMin}
-            amount={frozenAmount}
-            liveAmount={totalAmount}
+            amount={serverAmount}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -886,9 +900,9 @@ export function ShiftSettlement({
             key="overtime"
             shift={shift}
             overtimeSec={overtimeSec}
-            total={totalAmount}
+            total={serverAmount}
             extensionMin={extensionMin}
-            extensionAmount={extensionAmount}
+            extensionAmount={null}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -934,7 +948,7 @@ function ActivePane({
   shift: ShiftMeta;
   workedMin: number;
   billedMin: number;
-  liveAmount: number;
+  liveAmount: number | null;
   onClose: () => void;
   onEnd: () => void;
 }) {
@@ -979,7 +993,7 @@ function ActivePane({
             <div>
               <div className="text-[11.5px] text-muted-foreground">Live billing</div>
               <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight tabular-nums">
-                {fmtNaira(liveAmount)}
+                {liveAmount == null ? "—" : fmtNaira(liveAmount)}
               </div>
             </div>
             <span className="text-[11.5px] text-muted-foreground tabular-nums">
@@ -1012,7 +1026,6 @@ function SettlementPane({
   elapsed,
   billedMin,
   amount,
-  liveAmount,
   onCopy,
   onMadePayment,
   paymentTriggered,
@@ -1029,8 +1042,7 @@ function SettlementPane({
   phase: "settlement" | "grace";
   elapsed: number;
   billedMin: number;
-  amount: number;
-  liveAmount?: number;
+  amount: number | null;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
@@ -1082,9 +1094,15 @@ function SettlementPane({
         </div>
 
         <div className="mt-3 text-[13px] text-muted-foreground">Total Settlement</div>
-        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(amount)}
-        </div>
+        {amount == null ? (
+          <div className="mt-1 text-[18px] font-medium text-muted-foreground animate-pulse">
+            Calculating final amount…
+          </div>
+        ) : (
+          <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+            {fmtNaira(amount)}
+          </div>
+        )}
 
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
           <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -1150,9 +1168,9 @@ function OvertimePane({
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
-  total: number;
+  total: number | null;
   extensionMin: number;
-  extensionAmount: number;
+  extensionAmount: number | null;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
@@ -1199,9 +1217,15 @@ function OvertimePane({
           Coverage Extended
         </div>
         <div className="mt-3 text-[13px] text-muted-foreground">Total Settlement</div>
-        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(total)}
-        </div>
+        {total == null ? (
+          <div className="mt-1 text-[18px] font-medium text-muted-foreground animate-pulse">
+            Calculating final amount…
+          </div>
+        ) : (
+          <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+            {fmtNaira(total)}
+          </div>
+        )}
         <p className="mt-2 text-[12.5px] text-muted-foreground">
           Settlement grace period elapsed. Coverage automatically resumed billing.
         </p>
@@ -1231,7 +1255,7 @@ function OvertimePane({
             Extension
           </span>
           <span className="text-[14px] font-medium tabular-nums">
-            +{billedMin}min · +{fmtNaira(extra)}
+            {extra == null ? `+${billedMin}min` : `+${billedMin}min · +${fmtNaira(extra)}`}
           </span>
         </div>
         <p className="mt-1 text-[11.5px] text-muted-foreground">
@@ -1242,17 +1266,24 @@ function OvertimePane({
           {onPayWithMonnify ? (
             <>
               <button
-                disabled={payState === "starting" || payState === "waiting" || paymentTriggered}
+                disabled={
+                  total == null ||
+                  payState === "starting" ||
+                  payState === "waiting" ||
+                  paymentTriggered
+                }
                 onClick={onPayWithMonnify}
                 className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
               >
-                {payState === "starting"
-                  ? "Opening Monnify…"
-                  : payState === "waiting"
-                    ? "Waiting for payment…"
-                    : paymentTriggered
-                      ? "Verifying payment…"
-                      : `Pay ${fmtNaira(total)} with Monnify`}
+                {total == null
+                  ? "Calculating final amount…"
+                  : payState === "starting"
+                    ? "Opening Monnify…"
+                    : payState === "waiting"
+                      ? "Waiting for payment…"
+                      : paymentTriggered
+                        ? "Verifying payment…"
+                        : `Pay ${fmtNaira(total)} with Monnify`}
               </button>
               {payError && (
                 <p className="text-center text-[12px] text-destructive">{payError}</p>
@@ -1584,7 +1615,7 @@ function CustomTransferPane({
   onCheckPayment,
   paymentDueAt,
 }: {
-  amount: number;
+  amount: number | null;
   account: TransferAccount | null;
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
@@ -1634,8 +1665,9 @@ function CustomTransferPane({
   // to pay. We display `account.amount` verbatim — never an inflated local
   // estimate — so the headline always matches what the bank rails will accept.
   // Fallback to `amount` (server-frozen total_billed_amount) only while the
-  // account is being minted.
-  const displayAmount = account ? account.amount : amount;
+  // account is being minted. If neither is known yet, show the loading copy
+  // and never render a client-side number.
+  const displayAmount: number | null = account ? account.amount : amount;
 
   return (
     <motion.section
@@ -1650,9 +1682,15 @@ function CustomTransferPane({
           Complete Coverage
         </div>
         <div className="mt-3 text-[13px] text-muted-foreground">Transfer Exactly</div>
-        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(displayAmount)}
-        </div>
+        {displayAmount == null ? (
+          <div className="mt-1 text-[18px] font-medium text-muted-foreground animate-pulse">
+            Calculating final amount…
+          </div>
+        ) : (
+          <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+            {fmtNaira(displayAmount)}
+          </div>
+        )}
 
 
         {payState === "starting" || (!account && !payError) ? (
