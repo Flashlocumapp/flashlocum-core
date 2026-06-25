@@ -688,15 +688,14 @@ function DeleteAccountSheet({
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-end justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92%] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card p-5 pb-8"
-        style={{ boxShadow: "0 -20px 60px -20px rgba(0,0,0,0.45)" }}
+        className="max-h-[92%] w-full max-w-md overflow-y-auto rounded-3xl bg-card p-5"
+        style={{ boxShadow: "0 24px 60px -20px rgba(0,0,0,0.45)" }}
       >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/20" />
         <div className="text-[18px] font-semibold tracking-tight">
           Delete Account
         </div>
