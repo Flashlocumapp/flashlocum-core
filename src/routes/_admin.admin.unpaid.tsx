@@ -14,6 +14,9 @@ import {
   fmtNaira,
   fmtRelative,
 } from "@/lib/admin-ui";
+import { PaymentDetailDrawer } from "@/components/admin/PaymentDetailDrawer";
+import { ShiftDetailDrawer } from "@/components/admin/ShiftDetailDrawer";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 export const Route = createFileRoute("/_admin/admin/unpaid")({
   ssr: false,
@@ -37,6 +40,9 @@ function AdminUnpaidPage() {
   const [rows, setRows] = useState<AdminUnpaidShiftRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [q, setQ] = useState("");
+  const [openPaymentShiftId, setOpenPaymentShiftId] = useState<string | null>(null);
+  const [openShiftId, setOpenShiftId] = useState<string | null>(null);
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -124,7 +130,11 @@ function AdminUnpaidPage() {
                     .surcharge_capped_at;
                   const capped = !!cap;
                   return (
-                    <tr key={r.id} className="border-t hover:bg-secondary/30 align-top">
+                    <tr
+                      key={r.id}
+                      className="border-t hover:bg-secondary/30 align-top cursor-pointer"
+                      onClick={() => setOpenPaymentShiftId(r.id)}
+                    >
                       <td className="px-4 py-2.5">
                         <Chip color={ds.color}>{ds.label}</Chip>
                       </td>
@@ -173,6 +183,22 @@ function AdminUnpaidPage() {
           </div>
         )}
       </div>
+
+      <PaymentDetailDrawer
+        shiftId={openPaymentShiftId}
+        onClose={() => setOpenPaymentShiftId(null)}
+        onOpenShift={(id) => {
+          setOpenPaymentShiftId(null);
+          setOpenShiftId(id);
+        }}
+        onOpenUser={(id) => setOpenUserId(id)}
+      />
+      <ShiftDetailDrawer
+        shiftId={openShiftId}
+        onClose={() => setOpenShiftId(null)}
+        onOpenUser={(id) => setOpenUserId(id)}
+      />
+      <UserDetailDrawer userId={openUserId} onClose={() => setOpenUserId(null)} />
     </div>
   );
 }
