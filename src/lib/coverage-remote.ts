@@ -878,6 +878,9 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
           if (status === "SUBSCRIBED") {
             resetBackoff("invalidations");
             setChannelHealth("invalidations", "ok");
+            // Recover any broadcast missed while the channel was down —
+            // realtime is primary, snapshot reconcile is the safety net.
+            void refreshSnapshot();
           } else if (
             status === "CHANNEL_ERROR" ||
             status === "TIMED_OUT" ||
