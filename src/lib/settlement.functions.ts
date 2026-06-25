@@ -46,13 +46,16 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
       throw new Error("Shift is not ready for payment — end the shift first.");
     }
     // Zero-billed shift (e.g. paused/ended within seconds): nothing to charge.
-    // Finalize as paid for ₦0 instead of throwing, so the UI can close cleanly.
+    // Finalize as paid for ₦0 directly instead of throwing, so the UI closes.
     if (serverAmount <= 0) {
-      const { error: rpcErr } = await supabaseAdmin.rpc("mark_settlement_paid", {
-        _payment_reference: reqRow.payment_reference ?? `flsh_zero_${reqRow.id.replace(/-/g, "").slice(0, 16)}`,
-        _amount: 0,
-      });
-      if (rpcErr) throw new Error(rpcErr.message);
+      await supabaseAdmin
+        .from("coverage_requests")
+        .update({
+          payment_status: "paid",
+          settled_amount: 0,
+          status: "completed",
+        })
+        .eq("id", reqRow.id);
       return { alreadyPaid: true as const, paymentReference: reqRow.payment_reference ?? null, checkoutUrl: null };
     }
 
