@@ -27,6 +27,7 @@ import {
 } from "@/lib/network";
 
 import { computeCoveragePricing, coverageKindFromLabel, type Environment } from "@/lib/pricing";
+import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
 import {
   fetchHospitalSuggestions,
