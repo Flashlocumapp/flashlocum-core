@@ -25,7 +25,7 @@ import {
 } from "@/features/cover/dispatch";
 import { recordRating } from "@/lib/ratings";
 import { submitShiftRating } from "@/lib/trust";
-import { computeCoveragePricing, coverageKindFromLabel } from "@/lib/pricing";
+import { computeCoveragePricing, coverageKindFromLabel, bookedMinutesFromWindow, effectiveCoverageKind } from "@/lib/pricing";
 import { getDoctorIdentity, useDoctorIdentity } from "@/lib/doctor-identity";
 
 
