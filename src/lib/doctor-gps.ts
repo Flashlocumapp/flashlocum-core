@@ -6,48 +6,36 @@
 //
 //   * doctor app mount (sign-in / app open)
 //   * doctor toggles Online on
-//   * doctor taps "Refresh location"
 //   * a low-frequency 20-minute foreground tick while online
 //
-// If GPS permission is denied, presence still writes online=true with
-// lat/lng=null; the requester map simply omits the marker.
+// This module is a thin PRESENCE WRITER. It does not call
+// `navigator.geolocation` itself — every position read goes through the
+// single location service in `src/lib/location.ts`. If permission is denied
+// or no fix is available, presence still writes with lat/lng=null; the
+// requester map simply omits the marker.
 
+import { requestOnce } from "@/lib/location";
 import { upsertMyPresence } from "@/lib/presence-remote";
 
-const MAX_ACCEPTED_ACCURACY_METERS = 2_000;
-const REFRESH_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes — see comment above
+const REFRESH_INTERVAL_MS = 20 * 60 * 1000;
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
-let visibilityHandlerInstalled = false;
 let currentlyOnline = false;
 
-/** Capture a single GPS sample and write it to presence.
- *  Returns silently on permission denial / timeout — presence is still
- *  written with online=true and lat/lng=null elsewhere. */
+/** Capture one fix via the central location service and write it to
+ *  presence. Safe to call when GPS is denied — writes online state with
+ *  lat/lng=null in that case. */
 export function refreshDoctorLocation(online: boolean): void {
-  if (typeof navigator === "undefined" || !navigator.geolocation) {
-    void upsertMyPresence({ online, lat: null, lng: null });
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      if (accuracy != null && accuracy > MAX_ACCEPTED_ACCURACY_METERS) {
-        // Coarse fix — write online state without leaking a misleading point.
-        void upsertMyPresence({ online, lat: null, lng: null });
-        return;
-      }
-      void upsertMyPresence({ online, lat: latitude, lng: longitude });
-    },
-    () => {
+  void requestOnce().then((c) => {
+    if (c) {
+      void upsertMyPresence({ online, lat: c.lat, lng: c.lng });
+    } else {
       void upsertMyPresence({ online, lat: null, lng: null });
-    },
-    { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
-  );
+    }
+  });
 }
 
-/** Start the 20-minute foreground refresh tick. Idempotent. Cleared via
- *  stopDoctorLocationRefresh(). */
+/** Start the 20-minute foreground refresh tick. Idempotent. */
 export function startDoctorLocationRefresh(): void {
   currentlyOnline = true;
   if (refreshTimer) return;
@@ -56,11 +44,6 @@ export function startDoctorLocationRefresh(): void {
     if (!currentlyOnline) return;
     refreshDoctorLocation(true);
   }, REFRESH_INTERVAL_MS);
-  if (!visibilityHandlerInstalled && typeof document !== "undefined") {
-    visibilityHandlerInstalled = true;
-    // No-op handler — visibility is read inside the interval itself. We
-    // install a stub so future expansion (e.g. on-visible refresh) is easy.
-  }
 }
 
 export function stopDoctorLocationRefresh(): void {
