@@ -744,7 +744,7 @@ export const adminShiftMarkPaid = createServerFn({ method: "POST" })
     if (data.reference) patch.payment_reference = data.reference;
     const { error } = await supabaseAdmin
       .from("coverage_requests")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.shiftId);
     if (error) throw new Error(error.message);
     await logAction(supabaseAdmin, context.userId, {
@@ -1011,7 +1011,7 @@ export const adminPaymentRecordOffline = createServerFn({ method: "POST" })
     if (data.reference) patch.payment_reference = data.reference;
     const { error } = await supabaseAdmin
       .from("coverage_requests")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.shiftId);
     if (error) throw new Error(error.message);
     await logAction(supabaseAdmin, context.userId, {
