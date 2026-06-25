@@ -1,71 +1,65 @@
-## Audit summary
+## What's broken
 
-### Issue 1 — "Reconnecting…" pill stuck after payment + rating
+When the 15-min Monnify payment window elapses, the screen freezes at 00:00 with the stale ₦2,500 account. No surcharge appears, no new account number/reference, no new countdown — even though the server-side surcharge cron is running.
 
-`ReconnectingPill` (`src/features/app/CoverageScreen.tsx:211`) is driven by `realtime-health` which exposes three channel keys: `coverage`, `invalidations`, `presence`. It shows when any of them is in `reconnecting` for ≥ 800 ms.
+## Root causes (verified in code + DB)
 
-Tracing each watchdog in `src/lib/coverage-remote.ts`:
+1. **Surcharge cron updates the row silently.** `drain_surcharge_due()` (migration `20260623033342…`) bumps `payment_due_at`, `total_billed_amount`, `surcharge_amount`, `payment_extension_count` every minute. The cron job is active (`surcharge-drain-every-minute`, every `* * * * *`).
 
-- **`coverage` channel** (line 743) — on `CHANNEL_ERROR/TIMED_OUT/CLOSED`, calls `scheduleReconnect("coverage", run)`. `run` invokes `ensureChannelForUser`, which re-enters the same full subscribe (error states handled recursively). Self-healing — OK.
-- **`invalidations` channel** (line 850) — first subscribe is correct, but the **re-subscribe inside `scheduleReconnect("invalidations", …)` at line 869 only handles `SUBSCRIBED`**. If the rebuilt channel ever emits `CHANNEL_ERROR / TIMED_OUT / CLOSED` (mobile flap, server-side socket reset after a burst of post-payment row updates, etc.), nothing reschedules another reconnect and nothing flips health back to `ok`. The pill is left permanently at `reconnecting`.
-- **`presence` channel** (`src/lib/presence-remote.ts:250`) — `openPresenceChannel` is recursive via `schedulePresenceReconnect` → `openPresenceChannel`. Self-healing — OK.
+2. **No invalidation broadcast for surcharge.** The `coverage_requests_emit_invalidate` trigger (migration `20260625073003…`) only fires `realtime.send('invalidate', 'coverage_invalidations')` when `status`, `accepted_by`, `broadcast_started_at`, or `rev` change. The surcharge cron changes *none* of those, so subscribed clients are never told to refetch. `net.requests[id].paymentDueAt` / `totalBilledAmount` stay stale forever, so `ShiftSettlement`'s seed effect (which is keyed on `serverPaymentDueAt`) never re-runs.
 
-This matches the reported behaviour: it appears specifically *after* the payment/rating flow because that flow generates a burst of `coverage_invalidations` broadcasts (`mark_settlement_paid` → row update trigger → multiple invalidate messages) which is the exact moment the broadcast channel is most likely to flap and trip the buggy re-subscribe path.
+3. **The cached virtual account is never invalidated.** `coverage_requests.payment_account` (the cached Monnify JSON with the ₦2,500 account number/reference) is left intact by the surcharge cron. Even if the client manually re-invoked `beginSettlementCheckout`, the RESUME-IF-PENDING branch in `settlement.functions.ts` would only refresh when `cachedAmount !== serverAmount` — and it does — but the client never calls it again after the timer hits 00:00 because there is no signal that the row moved on.
 
-The recent realtime.messages policy is verified correct (SELECT for `topic='coverage_invalidations'` is allowed for `authenticated`), so the channel will subscribe successfully on retry — the only thing missing is the retry itself.
+4. **Client has no "expired → re-mint" path.** `ShiftSettlement.account` is set once by `startMonnifyCheckout` and never recomputed when `serverPaymentDueAt` / `serverTotalBilledAmount` props change post-expiry.
 
-### Issue 2 — Doctor-side History re-opens rating modal on completed shifts
+5. **Misleading UI copy.** The block under PRICE HOLD EXPIRED tells the user to "always use the latest account number and payment reference displayed on this page" — which is currently a lie because the page is *not* refreshing them. Per request, that sentence must go.
 
-In `DoctorCoverageDetail` (`src/features/app/CoverageScreen.tsx:1525`) the gate is:
+## Proper fix (no workarounds)
 
-```ts
-const showRating = isHist(item) && item.outcome === "completed" && item.rating === undefined;
-```
+### A. Database migration — make surcharge a first-class lifecycle event
 
-`item.rating` comes from `derivedHistory[].rating = historyRatings[r.id]` in `src/features/cover/dispatch.ts:220`. `historyRatings` is an **in-memory object** populated only by `recordHistoryRating()` in the current tab. It is never:
-- hydrated from the `ratings` table,
-- persisted to `sessionStorage`/`localStorage`,
-- updated by realtime when a rating is written.
+Update both `extend_payment_window(_request_id)` and `drain_surcharge_due()` in `public`:
 
-Consequences:
-1. Page refresh / new tab / app reopen → `historyRatings = {}` → every completed shift re-shows the rating form, even though the rating exists in the DB.
-2. After the post-shift `RatingOverlay` in `CoverDispatchPortal` submits, it does call `recordHistoryRating(...)` — that hides it within the session, but the bug returns on the next reload, exactly matching "initially shows submitted, later opens again".
+1. After applying a surcharge block to a row, also set:
+   - `payment_account = NULL`
+   - `payment_reference = NULL`
+   - `payment_url = NULL`
+   This guarantees the next `beginSettlementCheckout` call goes through the fresh-mint branch (the RESUME-IF-PENDING guard requires all three to be present), so the new virtual account is generated against the new `total_billed_amount`.
 
-The requester side already solved this with `rated-shifts.ts` (`isRated` + `markRated` + DB hydration via `hydrateRatedShifts`). The doctor history path was never wired to it. The submit handler at line 1652-1658 also doesn't call `markRated`.
+2. Immediately after each per-row update, call:
+   ```sql
+   PERFORM realtime.send(
+     jsonb_build_object('id', rec.id, 'reason', 'surcharge',
+                        'at', (extract(epoch from now())*1000)::bigint),
+     'invalidate', 'coverage_invalidations', false);
+   ```
+   This is the same channel/event the client (`coverage-remote.ts`) already subscribes to, so it will refetch the row and propagate the new `payment_due_at` + `total_billed_amount` into `net.requests[id]` with no extra wiring.
 
-## Fix plan
+3. Keep the `payment_surcharge_log` insert exactly as it is — auditing is unchanged.
 
-### Fix 1 — Invalidations re-subscribe self-healing
+### B. Client — `src/features/request/ShiftSettlement.tsx`
 
-In `src/lib/coverage-remote.ts`, extract the invalidations subscribe into a single internal helper (e.g. `openInvalidationChannel()`) that:
+1. Add an effect that watches `serverPaymentDueAt` while `phase` is in `settlement | grace | overtime`. When it changes (i.e. the surcharge cron just bumped the row), do, in order:
+   - `setAccount(null)`
+   - `setPayState("idle")`
+   - `setPayError(null)`
+   - `autoOpenedRef.current = false`
+   - call `startMonnifyCheckout()`
+   The existing seed effect (deps include `serverPaymentDueAt` and `serverTotalBilledAmount`) already re-anchors `phaseStartedAtRef` / `endedAtRef` / `frozenAmountRef` to the new server values, so the visible countdown jumps back to ~15:00 and the headline amount jumps to the new total. No further timer math changes needed.
 
-- Creates the channel + binds the `invalidate` broadcast handler.
-- In its `.subscribe()` callback handles **all** lifecycle statuses:
-  - `SUBSCRIBED` → `resetBackoff("invalidations")` + `setChannelHealth("invalidations", "ok")`.
-  - `CHANNEL_ERROR | TIMED_OUT | CLOSED` → `scheduleReconnect("invalidations", openInvalidationChannel)`.
+2. In `CustomTransferPane`:
+   - Replace the long sentence under PRICE HOLD EXPIRED with: *"Amount and payment details may change if payment is not completed in time."* (drop the "Always use the latest…" sentence per request).
+   - No other copy changes.
 
-Then use this helper both for the initial subscribe (replace the block at lines 845-877) and for the watchdog `run` callback, eliminating the broken inner subscribe. This mirrors how the `coverage` and `presence` channels already self-heal.
+### C. No new migrations beyond (A); no schema additions; no `payment_account` column changes.
 
-No change to security, RLS, broadcast topic, or message contract.
+## Why this is the right fix
 
-### Fix 2 — Doctor history rating persistence
+- The database remains the single source of truth for amount + deadline (the broadcast model the project mandates).
+- The fix closes the loop the surcharge feature was always missing: server state moves → realtime tells clients → client re-mints the Monnify account at the new total.
+- It piggybacks on the existing `coverage_invalidations` channel and the existing RESUME-IF-PENDING gate in `settlement.functions.ts` — no new endpoints, no new client polling, no client-side timers that drift from the server.
 
-1. In `src/features/app/CoverageScreen.tsx` `DoctorCoverageDetail`:
-   - Import `isRated`, `markRated`, `useRatedShiftsVersion` from `@/lib/rated-shifts` (already used elsewhere in the file).
-   - Subscribe via `useRatedShiftsVersion()` inside `DoctorCoverage` so the list re-renders when hydration completes.
-   - Change the gate to `showRating = isHist(item) && item.outcome === "completed" && item.rating === undefined && !isRated(item.id)`.
-   - In the submit `onClick` (line 1654), after `recordHistoryRating(item.id, rating)` also call `markRated(item.id)`.
-2. `hydrateRatedShifts()` already pulls every row from `ratings` where `rater_user_id = auth.uid()` — covers both doctor- and requester-submitted ratings, so no DB or RPC change is needed. The doctor will see "already rated" on reload because the same shared store is used.
-3. Show a small "You've already rated this coverage" line in the `DoctorCoverageDetail` body when the gate is hidden because of `isRated`, mirroring the requester `HistoryDetailSheet` UX, so the detail doesn't look empty.
+## Files touched
 
-### Verification
-
-- Issue 1: After completing a shift and submitting payment + rating end-to-end, the pill must not appear once channels are healthy. Force a CLOSED state (simulate by toggling network) twice in a row and confirm the pill clears within < 1 s of reconnection. Console must show one `setChannelHealth("invalidations", "ok")` per reconnect cycle.
-- Issue 2: Submit a rating from `RatingOverlay`, hard-refresh the doctor app, open History → the modal must NOT reappear; the detail shows "You've already rated this coverage." Repeat across browser session (sessionStorage) and after clearing storage (DB hydration path).
-
-## Scope / non-goals
-
-- No database migration.
-- No change to rating RPC, trust scoring, or notification logic.
-- No change to channel topic names or broadcast payload shape.
-- Only files touched: `src/lib/coverage-remote.ts` and `src/features/app/CoverageScreen.tsx`.
+- `supabase/migrations/<new>.sql` — replace `extend_payment_window` and `drain_surcharge_due` with the two additions above.
+- `src/features/request/ShiftSettlement.tsx` — new effect (~10 lines) and the one-line copy edit in `CustomTransferPane`.
