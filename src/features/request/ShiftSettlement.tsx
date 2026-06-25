@@ -1094,9 +1094,15 @@ function SettlementPane({
         </div>
 
         <div className="mt-3 text-[13px] text-muted-foreground">Total Settlement</div>
-        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(amount)}
-        </div>
+        {amount == null ? (
+          <div className="mt-1 text-[18px] font-medium text-muted-foreground animate-pulse">
+            Calculating final amount…
+          </div>
+        ) : (
+          <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+            {fmtNaira(amount)}
+          </div>
+        )}
 
         <div className="mt-6 rounded-2xl bg-surface-elevated p-5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.18)]">
           <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
