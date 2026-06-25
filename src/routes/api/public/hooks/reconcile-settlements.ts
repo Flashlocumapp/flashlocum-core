@@ -97,11 +97,11 @@ export const Route = createFileRoute("/api/public/hooks/reconcile-settlements")(
 
             if (row.accepted_by) {
               try {
-                const { sendPushToUser } = await import("@/lib/push.server");
+                const { notifyUser } = await import("@/lib/notify.server");
                 const hospital = row.hospital ?? "the hospital";
                 const t = row.updated_at ? Date.parse(row.updated_at as string) : Date.now();
                 const version = Number.isFinite(t) ? t : Date.now();
-                await sendPushToUser(row.accepted_by as string, {
+                await notifyUser(row.accepted_by as string, {
                   title: "Earnings remitted",
                   body: `Your earnings for ${hospital} have been successfully remitted to your bank account.`,
                   kind: "payment.settled",

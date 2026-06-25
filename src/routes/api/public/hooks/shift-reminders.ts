@@ -57,7 +57,7 @@ export const Route = createFileRoute("/api/public/hooks/shift-reminders")({
           });
         }
 
-        const { sendPushToUser } = await import("@/lib/push.server");
+        const { notifyUser } = await import("@/lib/notify.server");
         let sent = 0;
 
         // Batch-fetch the doctor display names for every reminder we're
@@ -89,7 +89,7 @@ export const Route = createFileRoute("/api/public/hooks/shift-reminders")({
           // FCM retries are best-effort by design and the in-app card already
           // shows the upcoming shift.
           await Promise.allSettled([
-            sendPushToUser(row.accepted_by, {
+            notifyUser(row.accepted_by, {
               title: "Reminder",
               body: `Reminder: your shift with ${hospital} starts in 1 hour.`,
               kind: "reminder.preshift",
@@ -104,7 +104,7 @@ export const Route = createFileRoute("/api/public/hooks/shift-reminders")({
               },
             }),
             row.requester_id
-              ? sendPushToUser(row.requester_id, {
+              ? notifyUser(row.requester_id, {
                   title: "Reminder",
                   body: `Reminder: Dr. ${doctorName}'s shift starts in 1 hour.`,
                   kind: "reminder.preshift",

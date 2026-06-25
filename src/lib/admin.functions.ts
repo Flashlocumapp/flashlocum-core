@@ -90,7 +90,7 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
 
     // Notify the doctor of the verification decision.
     try {
-      const { sendPushToUser } = await import("@/lib/push.server");
+      const { notifyUser } = await import("@/lib/notify.server");
       const titleByStatus: Record<VerificationStatus, string> = {
         approved: "Your account has been verified successfully.",
         rejected: "Your verification requires attention. Please review and resubmit.",
@@ -105,7 +105,7 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
         pending: "Your account is back under review.",
         action_required: "Your verification requires attention. Please review and resubmit.",
       };
-      await sendPushToUser(data.doctorId, {
+      await notifyUser(data.doctorId, {
         title: titleByStatus[data.status],
         body: bodyByStatus[data.status],
 
@@ -981,8 +981,8 @@ export const adminSendPushFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { sendPushToUser } = await import("@/lib/push.server");
-    await sendPushToUser(data.userId, {
+    const { notifyUser } = await import("@/lib/notify.server");
+    await notifyUser(data.userId, {
       title: data.title,
       body: data.body,
       kind: "admin.broadcast",

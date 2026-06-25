@@ -91,14 +91,14 @@ export const Route = createFileRoute("/api/public/monnify-disbursement-webhook")
             const hospital = row.hospital ?? "the hospital";
             const t = row.updated_at ? Date.parse(row.updated_at as string) : Date.now();
             const version = Number.isFinite(t) ? t : Date.now();
-            const { sendPushToUser } = await import("@/lib/push.server");
+            const { notifyUser } = await import("@/lib/notify.server");
             const extras: Record<string, string> = {
               type: "settlement_remitted",
               paymentReference: ref,
               requestId: row.id,
             };
             if (row.hospital) extras.hospitalName = row.hospital;
-            await sendPushToUser(row.accepted_by, {
+            await notifyUser(row.accepted_by, {
               title: "Earnings remitted",
               body: `Your earnings for ${hospital} have been successfully remitted to your bank account.`,
               kind: "payment.settled",
