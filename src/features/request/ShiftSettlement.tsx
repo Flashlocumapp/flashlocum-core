@@ -986,6 +986,7 @@ function SettlementPane({
   payCheckState,
   payCheckError,
   onCheckPayment,
+  paymentDueAt,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -1003,6 +1004,7 @@ function SettlementPane({
   payCheckState: "idle" | "checking" | "not_found" | "error";
   payCheckError: string | null;
   onCheckPayment: () => void;
+  paymentDueAt?: string | null;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
