@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DismissSheet } from "./DismissSheet";
+import { StableImage } from "./StableImage";
 import { EnvironmentBadge } from "./EnvironmentBadge";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
