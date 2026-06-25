@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DismissSheet } from "./DismissSheet";
+import { StableImage } from "./StableImage";
 import { EnvironmentBadge } from "./EnvironmentBadge";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDoctorIdentity } from "@/lib/doctor-identity";
@@ -97,7 +98,7 @@ export function HistoryDetailSheet({
           style={{ background: "var(--color-secondary)" }}
         >
           {identity.selfieUrl ? (
-            <img src={identity.selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+            <StableImage src={identity.selfieUrl} alt="" width={48} height={48} className="h-full w-full object-cover" />
           ) : (
             identity.initials
           )}

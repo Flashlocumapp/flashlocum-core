@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { StableImage } from "@/components/StableImage";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
@@ -799,7 +800,7 @@ function RequesterDetailSheet({
               style={{ background: "var(--color-secondary)" }}
             >
               {identity.selfieUrl ? (
-                <img src={identity.selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+                <StableImage src={identity.selfieUrl} alt="" width={56} height={56} className="h-full w-full object-cover" />
               ) : (
                 identity.initials
               )}
@@ -1197,7 +1198,7 @@ function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) =>
 
 
 
-function Avatar({
+const Avatar = memo(function Avatar({
   initials,
   dim,
   live,
@@ -1220,7 +1221,7 @@ function Avatar({
         }}
       >
         {selfieUrl ? (
-          <img src={selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+          <StableImage src={selfieUrl} alt="" width={44} height={44} className="h-full w-full object-cover" />
         ) : (
           initials
         )}
@@ -1238,7 +1239,7 @@ function Avatar({
       )}
     </span>
   );
-}
+});
 
 // ============ DOCTOR (unchanged behavior) ============
 
@@ -1275,37 +1276,60 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
           <EmptyState tab={tab} role="cover" />
         ) : (
           <ul className="space-y-2.5">
-            {tab === "active" && active && (
-              <li key={active.id}>
-                <CoverCard
-                  item={active}
-                  variant="active"
-                  onCancel={() => setCancelId(active.id)}
-                  onOpenDetail={() => setDetailId(active.id)}
-                />
-              </li>
-            )}
-            {tab === "upcoming" &&
-              upcomingOnly.map((c) => (
-                <li key={c.id}>
+            <AnimatePresence initial={false} mode="popLayout">
+              {tab === "active" && active && (
+                <motion.li
+                  key={active.id}
+                  layout
+                  initial={false}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                >
                   <CoverCard
-                    item={c}
-                    variant="upcoming"
-                    onCancel={() => setCancelId(c.id)}
-                    onOpenDetail={() => setDetailId(c.id)}
+                    item={active}
+                    variant="active"
+                    onCancel={() => setCancelId(active.id)}
+                    onOpenDetail={() => setDetailId(active.id)}
                   />
-                </li>
-              ))}
-            {tab === "completed" &&
-              history.map((h) => (
-                <li key={h.id}>
-                  <CoverCard
-                    item={h}
-                    variant="history"
-                    onOpenDetail={() => setDetailId(h.id)}
-                  />
-                </li>
-              ))}
+                </motion.li>
+              )}
+              {tab === "upcoming" &&
+                upcomingOnly.map((c) => (
+                  <motion.li
+                    key={c.id}
+                    layout
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <CoverCard
+                      item={c}
+                      variant="upcoming"
+                      onCancel={() => setCancelId(c.id)}
+                      onOpenDetail={() => setDetailId(c.id)}
+                    />
+                  </motion.li>
+                ))}
+              {tab === "completed" &&
+                history.map((h) => (
+                  <motion.li
+                    key={h.id}
+                    layout
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <CoverCard
+                      item={h}
+                      variant="history"
+                      onOpenDetail={() => setDetailId(h.id)}
+                    />
+                  </motion.li>
+                ))}
+            </AnimatePresence>
           </ul>
         )}
       </div>

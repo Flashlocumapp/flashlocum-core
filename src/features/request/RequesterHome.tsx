@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { GoogleMapBackground, type PlaceMapMarker } from "@/components/GoogleMapBackground";
+import { StableImage } from "@/components/StableImage";
 import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
@@ -1605,7 +1606,7 @@ function DispatchOverlay({
               <div className="mt-3 flex items-center gap-3 rounded-2xl bg-secondary/50 px-3.5 py-3">
                 <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-[13px] font-semibold">
                   {acceptedSelfie ? (
-                    <img src={acceptedSelfie} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+                    <StableImage src={acceptedSelfie} alt="" width={48} height={48} className="h-full w-full object-cover" />
                   ) : (
                     acceptedInitials
                   )}
