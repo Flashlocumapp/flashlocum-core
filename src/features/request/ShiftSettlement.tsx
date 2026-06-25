@@ -820,10 +820,11 @@ export function ShiftSettlement({
         const s = await fetchBilling({ data: { requestId } });
         if (cancelled || !s) return;
         if (typeof s.total_billed_amount === "number" && s.total_billed_amount > 0) {
-          frozenAmountRef.current = Math.max(
-            frozenAmountRef.current,
-            s.total_billed_amount,
-          );
+          const next = Math.max(frozenAmountRef.current, s.total_billed_amount);
+          if (next !== frozenAmountRef.current) {
+            frozenAmountRef.current = next;
+            bumpServerAmount();
+          }
         }
         if (Array.isArray(s.segments)) setSegments(s.segments as SegmentRow[]);
         if (typeof s.payment_extension_count === "number") {
