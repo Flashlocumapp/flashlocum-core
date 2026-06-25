@@ -993,7 +993,7 @@ function ActivePane({
             <div>
               <div className="text-[11.5px] text-muted-foreground">Live billing</div>
               <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight tabular-nums">
-                {fmtNaira(liveAmount)}
+                {liveAmount == null ? "—" : fmtNaira(liveAmount)}
               </div>
             </div>
             <span className="text-[11.5px] text-muted-foreground tabular-nums">
