@@ -533,6 +533,59 @@ function scheduleRefresh() {
 }
 
 /**
+ * Authoritative single-row re-read. Triggered by the `coverage_invalidations`
+ * broadcast with a row id — fetches just that row, applies it to the local
+ * cache, and notifies subscribers. If the row has left this user's RLS scope
+ * (accepted by someone else, expired out of the open pool, deleted), the
+ * fetch returns no row and we DROP it from the cache. This is the queue
+ * advancement path: accept / cancel / pause / edit / expire / delete all
+ * route through here, so every doctor's `.find()` advances within ~1s
+ * without waiting on a full snapshot refresh.
+ */
+async function fetchAndIngestRow(id: string): Promise<void> {
+  // First try a direct read — works for own/accepted rows under RLS.
+  let row: Row | null = null;
+  const direct = await supabase.from(TABLE).select("*").eq("id", id).maybeSingle();
+  if (direct.data) {
+    row = direct.data as Row;
+  } else {
+    // Row may belong to the open searching pool (RLS hides it from a
+    // direct select for non-accepting doctors). Look it up via the RPC.
+    const pool = await supabase.rpc("list_open_coverage_requests");
+    if (!pool.error && Array.isArray(pool.data)) {
+      const found = (pool.data as Row[]).find((r) => r.id === id);
+      if (found) row = found;
+    }
+  }
+
+  const strip = (r: Row) => ({ ...r, phone: "" });
+  if (row) {
+    const net = rowToNet(strip(row));
+    const idx = cachedSnapshot.findIndex((r) => r.id === net.id);
+    if (idx === -1) cachedSnapshot = [...cachedSnapshot, net];
+    else {
+      const next = cachedSnapshot.slice();
+      next[idx] = net;
+      cachedSnapshot = next;
+    }
+    writePersistedSnapshot(cachedSnapshot);
+    eventListeners.forEach((fn) =>
+      fn({ type: idx === -1 ? "INSERT" : "UPDATE", row: net, old: null } as RemoteEvent),
+    );
+    snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+  } else {
+    // Row is no longer visible to this user — drop it from local state.
+    const had = cachedSnapshot.some((r) => r.id === id);
+    if (had) {
+      cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
+      writePersistedSnapshot(cachedSnapshot);
+      eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+      snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    }
+  }
+}
+
+/**
  * Broadcast a coverage_requests change to every subscribed client.
  *
  * Why: Supabase postgres_changes events are filtered by RLS against the NEW
@@ -756,16 +809,24 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   });
 
   if (!invalidationChannel) {
+    const onInvalidate = (msg: { payload?: { id?: string } }) => {
+      markRealtimeActivity();
+      const id = msg?.payload?.id;
+      // Single-row re-read when the trigger gave us an id — this is the
+      // queue advancement path (accept / cancel / edit-pause / expire /
+      // delete). Falls back to a full snapshot refresh only when no id
+      // was provided (legacy / manual invalidate).
+      if (typeof id === "string" && id.length > 0) {
+        void fetchAndIngestRow(id);
+      } else {
+        scheduleRefresh();
+      }
+    };
     invalidationChannel = supabase
       .channel("coverage_invalidations", {
         config: { broadcast: { self: false } },
       })
-      .on("broadcast", { event: "invalidate" }, () => {
-        // RLS may have filtered the postgres_changes event for this client;
-        // re-fetching reconciles cache divergence.
-        markRealtimeActivity();
-        scheduleRefresh();
-      })
+      .on("broadcast", { event: "invalidate" }, onInvalidate)
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           resetBackoff("invalidations");
@@ -780,15 +841,11 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
               supabase.removeChannel(invalidationChannel);
               invalidationChannel = null;
             }
-            // Re-create on next subscriber tick; do so eagerly here.
             invalidationChannel = supabase
               .channel("coverage_invalidations", {
                 config: { broadcast: { self: false } },
               })
-              .on("broadcast", { event: "invalidate" }, () => {
-                markRealtimeActivity();
-                scheduleRefresh();
-              })
+              .on("broadcast", { event: "invalidate" }, onInvalidate)
               .subscribe((s) => {
                 if (s === "SUBSCRIBED") {
                   resetBackoff("invalidations");
