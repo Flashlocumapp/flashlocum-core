@@ -948,7 +948,7 @@ function ActivePane({
   shift: ShiftMeta;
   workedMin: number;
   billedMin: number;
-  liveAmount: number;
+  liveAmount: number | null;
   onClose: () => void;
   onEnd: () => void;
 }) {
