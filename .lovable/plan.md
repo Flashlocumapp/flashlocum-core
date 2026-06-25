@@ -1,84 +1,85 @@
-# Native-Feel Polish — Approved Items
+# Location Functionality Audit — Findings & Remediation
 
-Frontend/presentation only. No DB, RLS, or server-function changes.
+## Audit Findings (current state)
 
-## 1. Pull-to-refresh (non-required)
+| # | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | Single location service | ❌ FAIL | Three independent geolocation owners: `src/lib/doctor-gps.ts`, `src/features/request/RequesterHome.tsx` (lines 240-256), `src/components/GoogleMapBackground.tsx` (lines 180-234) |
+| 2 | Centralized permission requests | ❌ FAIL | Each of the three call sites calls `navigator.geolocation.getCurrentPosition` directly; the browser prompt can fire from any of them independently |
+| 3 | No direct browser geo calls outside the location layer | ❌ FAIL | `RequesterHome.tsx` and `GoogleMapBackground.tsx` both reach into `navigator.geolocation` directly. Only `doctor-gps.ts` is the "intended" layer |
+| 4 | Online/offline NOT dependent on fresh GPS | ✅ PASS | `setDoctorOnline` (`network.ts:688`) and `handleToggleOnline` (`CoverHome.tsx:72-91`) flip `online` synchronously; GPS refresh is a separate, fire-and-forget call that writes `lat/lng=null` on failure |
+| 5 | Maps consume location, do not own it | ❌ FAIL | `GoogleMapBackground` runs its own `watchPosition` + dual `getCurrentPosition` strategy, with its own module-level `cachedUserCenter` cache and accuracy filter |
+| 6 | Switchable to Capacitor Geolocation with minimal UI changes | ⚠️ PARTIAL | Possible but requires editing **three** files in lockstep, plus duplicating the accuracy filter logic. No abstraction seam exists |
+| 7 | No feature assumes continuous tracking | ❌ FAIL | `GoogleMapBackground` uses `watchPosition` for the requester "you are here" dot — that is continuous tracking by definition. Doctor side is correctly event-driven |
+| 8 | Request creation, doctor availability, shift acceptance work from centralized state | ❌ FAIL for requester | Request creation reads from a local `searchOrigin` populated by an ad-hoc `getCurrentPosition` in `RequesterHome`. Doctor availability/acceptance correctly route through `doctor-gps` → `presence-remote` |
 
-New `src/components/PullToRefresh.tsx`:
-- Pointer-event based (no library), engages only when host's `scrollTop === 0`.
-- Threshold ~64px; translateY content with rubber-band; spring back via shared token.
-- On release past threshold: light haptic, call `onRefresh()`, show a small spinner pill for max 1.2s or until promise resolves (whichever is later).
-- Honors `prefers-reduced-motion` (no translate, just spinner).
+**Net result:** 2 of 8 pass. The doctor side is reasonably centralized; the requester side and the map have parallel, uncoordinated GPS stacks.
 
-Wire into:
-- `HomeRouter` (requester + cover home lists, NOT the map gesture area)
-- `CoverageScreen` (history + active lists)
-- `EarningsScreen`
+## Root Cause
 
-**Guarantee:** realtime + cache continue to deliver updates automatically. PTR triggers an extra explicit re-fetch but is never the only path to fresh data — every screen keeps its existing subscriptions untouched.
+There is no `LocationService` abstraction. `doctor-gps.ts` is named for one consumer (the doctor presence write), so the requester form and the map each grew their own geolocation code instead of reusing it. The accuracy/drift filter is duplicated in `GoogleMapBackground` and partially in `doctor-gps`.
 
-## 2. Shared motion tokens
+## Remediation Plan
 
-New `src/lib/motion.ts`:
+### 1. New file: `src/lib/location.ts` (the single service)
+
+Owns every geolocation read in the app. API:
+
 ```ts
-export const springSnappy = { type: "spring", stiffness: 380, damping: 32 };
-export const springSoft   = { type: "spring", stiffness: 240, damping: 28 };
-export const fadeFast     = { duration: 0.16, ease: [0.22, 0.61, 0.36, 1] };
-export const sheetEnter   = { type: "spring", stiffness: 320, damping: 34 };
-export const REDUCED      = { duration: 0 };
-export function springFor(reduced: boolean, preset = springSnappy) { ... }
+type Coords = { lat: number; lng: number; accuracy: number };
+type PermissionState = "unknown" | "granted" | "denied" | "unavailable";
+
+getLastKnown(): Coords | null               // module cache, sync
+requestOnce(opts?): Promise<Coords | null>  // one-shot; cached on success
+subscribe(cb): Unsubscribe                  // pushes accepted samples
+ensurePermission(): Promise<PermissionState>
+getPermissionState(): PermissionState
 ```
 
-Migrate inline `transition={{...}}` props in: `_app.tsx` tab dock, `BottomSheet`, `RatingOverlay`, `HistoryDetailSheet`, `PaymentSummaryOverlay`, `EditShiftSheet`, `CancelFlow`, requester/cover list `motion.li`. No visual regression — just consolidation.
+Internals:
+- Single `getCurrentPosition` / `watchPosition` orchestration (no watch by default; only when at least one subscriber asks for live updates).
+- The accuracy + drift filter currently in `GoogleMapBackground.acceptSample` moves here verbatim — one implementation, one cache, one source of truth.
+- One transport seam: a private `readPosition()` that today calls `navigator.geolocation`. To switch to Capacitor Geolocation later, only this one function changes (dynamic import of `@capacitor/geolocation` when `isNative()`).
 
-## 3. Tab bar polish (`BottomTabs.tsx`)
+### 2. Refactor the three call sites to consume the service
 
-- Replace the per-tab static underline with a single `motion.span layoutId="tab-indicator"` so the indicator slides between active tabs (`AnimatePresence` not needed; layout animation handles it).
-- Cross-fade icon stroke weight by rendering both weights stacked with opacity transition (instead of binary `strokeWidth` swap).
-- Fire light "selection" haptic on tab press (export `emitHaptic` from `feedback.ts`).
-- Keep `preload="intent"` and current scale/opacity press states.
+- **`src/components/GoogleMapBackground.tsx`** — delete the entire geolocation `useEffect` (lines 177-234), `acceptSample`, and the module-level `cachedUserCenter`/`cachedAccuracy`. Replace with:
+  ```ts
+  useEffect(() => location.subscribe(setUserCenterState), []);
+  useEffect(() => { location.requestOnce(); }, []);
+  ```
+  Map becomes a pure consumer.
+- **`src/features/request/RequesterHome.tsx`** — replace the `useEffect` at lines 240-256 with `location.requestOnce().then(c => c && setSearchOrigin(c))`. Request creation now reads from the same centralized state the map uses.
+- **`src/lib/doctor-gps.ts`** — keep the file as the **presence writer** but delete its direct `navigator.geolocation` usage. It calls `location.requestOnce()` and forwards the result to `upsertMyPresence`. Event-driven cadence (mount, online toggle, 20-min foreground tick) is unchanged.
 
-## 4. Scroll containment
+### 3. Continuous-tracking removal
 
-Add `overscrollBehavior: "contain"` to:
-- The outer fixed shell in `_app.tsx`
-- Each `PersistentLayer` scroll container
-- The non-persistent `<Outlet />` wrapper
-- `BottomSheet` inner scroll region
+`GoogleMapBackground`'s `watchPosition` is dropped. The map gets a single `requestOnce` plus whatever samples the doctor-side 20-minute tick pushes through the subscriber channel. Requesters get one fix per Home mount — sufficient for the "you are here" dot and `searchOrigin`, and consistent with the project's stated "FlashLocum is not a real-time tracking platform" constraint in `doctor-gps.ts`.
 
-Prevents iOS PWA rubber-band leaking past sheets/lists into the shell.
+### 4. Permission centralization
 
-## 5. Safe-area pass
+`ensurePermission()` is the only path that may trigger the browser prompt. Call sites read `getPermissionState()` for UI ("Location off — tap to enable") instead of inferring from a failed `getCurrentPosition`.
 
-- `PaymentSummaryOverlay`: add `paddingBottom: max(env(safe-area-inset-bottom), 16px)` to content container.
-- `RatingOverlay`: same.
-- `BottomSheet`: confirm and standardize.
-- `RestrictionBanner`: already uses `safe-area-inset-top`; verify after item 7 refactor.
+### 5. Capacitor switch path (documented, not implemented now)
 
-## 6. First-paint flash on Coverage
+After this refactor, swapping to `@capacitor/geolocation` is a single edit to `readPosition()` in `location.ts` (≈10 lines), plus adding `NSLocationWhenInUseUsageDescription` / `ACCESS_FINE_LOCATION` to the native shells per `CAPACITOR.md`. No UI file changes.
 
-In `CoverageScreen.tsx`: if first realtime/cache snapshot hasn't arrived yet (`status === "loading"` and no cached rows), render a 2-row `Skeleton` placeholder matching card geometry instead of empty space. Replace with real rows once snapshot lands (single re-render — no flicker thanks to matched height).
+## Files Touched
 
-## 7. RestrictionBanner re-render isolation
+- **New:** `src/lib/location.ts`
+- **Edit:** `src/components/GoogleMapBackground.tsx` (remove its geo stack)
+- **Edit:** `src/features/request/RequesterHome.tsx` (use service for `searchOrigin`)
+- **Edit:** `src/lib/doctor-gps.ts` (delegate position read to service; keep presence-write role)
 
-`RestrictionBanner.tsx` is fine in isolation (own 60s poll), but it's mounted in `_app.tsx` which re-renders on `pathname`. Fix:
-- Wrap `RestrictionBanner` in `React.memo` (no props).
-- Move `useServerFn(getMyPaymentRestriction)` result through a ref to avoid the function-identity dependency triggering effect re-runs.
-- Memoize the rendered banner body with `useMemo` keyed on the relevant restriction fields so a no-op poll doesn't re-render the DOM subtree.
+## Out of Scope
 
-No subscription changes; purely local memoization.
+- No change to presence schema, RLS, or `upsertMyPresence` signature.
+- No change to online/offline semantics — already correctly decoupled from GPS.
+- No Capacitor Geolocation install in this pass (path is unblocked but deferred).
 
-## Verification
+## Verification After Build
 
-- Typecheck after each item.
-- Manual: tab between Home ↔ Coverage ↔ Earnings ↔ Account — indicator slides, no flicker, scroll positions persist.
-- Pull down on Home list → spinner shows → releases with spring → list refreshes.
-- Open and dismiss each sheet — consistent spring, bottom padding clears home indicator.
-- Throw a fake restriction state in dev → banner appears once, doesn't re-render on tab switches.
-
-## Out of scope (deferred)
-
-- Broader haptic coverage on every CTA (only tab-press tick added here).
-- Input affordances pass (enterKeyHint / inputMode).
-- Reduced-motion audit across all `motion.*` sites.
-- Native push / service worker wiring.
+1. Grep confirms `navigator.geolocation` appears **only** in `src/lib/location.ts`.
+2. Doctor toggles Online → presence row updates `online=true` even if permission denied (lat/lng null).
+3. Requester Home renders map dot and pre-fills `searchOrigin` from a single GPS prompt, not two.
+4. Switching tabs and returning does not re-prompt for permission and does not flash a default map center.
