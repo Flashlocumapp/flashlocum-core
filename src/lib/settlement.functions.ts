@@ -187,13 +187,33 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
       throw new Error(`Couldn't start the payment: ${msg}`);
     }
 
+    // Monnify's bank-transfer/init-payment occasionally returns a transient
+    // 5xx ("There was an error processing the request"). Retry with backoff
+    // before surfacing a user-facing error.
     let account;
-    try {
-      account = await initBankTransferAccount(txRef);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[settlement] initBankTransferAccount failed:", msg);
-      throw new Error("Couldn't generate a transfer account. Please try again.");
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        account = await initBankTransferAccount(txRef);
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        const transient = /\(5\d\d\)/.test(msg) || /processing the request/i.test(msg);
+        console.error(`[settlement] initBankTransferAccount attempt ${attempt} failed:`, msg);
+        if (!transient || attempt === 3) break;
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+    if (!account) {
+      const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      const transient = /\(5\d\d\)/.test(msg) || /processing the request/i.test(msg);
+      throw new Error(
+        transient
+          ? "Our payment provider is having a temporary issue generating a transfer account. Please try again in a moment."
+          : "Couldn't generate a transfer account. Please try again.",
+      );
     }
 
     // 7. Persist reference + cached virtual-account so a retry returns the
