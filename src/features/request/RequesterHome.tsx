@@ -257,7 +257,8 @@ function HomeScreen({ active }: { active: boolean }) {
   const setCoverage = (c: CoverageId) => {
     setCoverageRaw(c);
     setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
-    if (c === "24h") setDays(1);
+    // Straight products (24h / Weekend 48h) are continuous single shifts.
+    if (c === "24h" || c === "weekend") setDays(1);
     else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > MAX_BOOKING_DAYS ? 1 : d));
   };
 
