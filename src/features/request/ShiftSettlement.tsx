@@ -1681,7 +1681,7 @@ function CustomTransferPane({
                 className="text-[18px] font-semibold tabular-nums"
                 style={{ color: remaining <= 60 ? "var(--color-destructive)" : "var(--color-foreground)" }}
               >
-                {fmtClock(remaining)}
+                {hasAnchor ? fmtClock(remaining) : "—:—"}
               </span>
             </div>
 
