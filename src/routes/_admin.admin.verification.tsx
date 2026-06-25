@@ -17,6 +17,7 @@ import {
   statusTone,
   type VerificationStatus,
 } from "@/lib/admin-ui";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 export const Route = createFileRoute("/_admin/admin/verification")({
   ssr: false,
@@ -64,6 +65,7 @@ function AdminVerificationPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
   const [actionFor, setActionFor] = useState<DoctorRow | null>(null);
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
