@@ -83,9 +83,13 @@ type RequestItem = {
   paymentDueAt?: string;
 };
 
-/** Straight 24h / Weekend 48h are continuous single shifts — no pause, no day boundary. */
-function isStraightItem(item: { coverage: string }): boolean {
-  const kind = coverageKindFromLabel(String(item.coverage));
+/** Straight 24h / Weekend 48h are continuous single shifts — no pause, no day boundary.
+ *  Mirrors the server's _effective_product upgrade so a Standard label whose
+ *  window is exactly 24h × 1–2 days is also treated as straight. */
+function isStraightItem(item: { coverage: string; start: string; end: string; days: number }): boolean {
+  const labelKind = coverageKindFromLabel(String(item.coverage));
+  const perDayMin = bookedMinutesFromWindow(ampmTo24h(item.start), ampmTo24h(item.end));
+  const kind = effectiveCoverageKind(labelKind, perDayMin, item.days);
   return kind === "straight24" || kind === "straight48";
 }
 
