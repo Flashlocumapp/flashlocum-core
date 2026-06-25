@@ -50,6 +50,7 @@ import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
 import { subscribeRealtimeHealth, isCoverageReconnecting } from "@/lib/realtime-health";
 import { isRated, markRated, useRatedShiftsVersion } from "@/lib/rated-shifts";
+import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 
 
 
