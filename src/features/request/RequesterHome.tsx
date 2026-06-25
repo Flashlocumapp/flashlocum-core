@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { GoogleMapBackground, type PlaceMapMarker } from "@/components/GoogleMapBackground";
+import { StableImage } from "@/components/StableImage";
 import type { Marker } from "@/components/MapBackground";
 import { setImmersive } from "@/lib/immersion";
 import { fmtElapsed } from "@/lib/format";
