@@ -293,12 +293,17 @@ export function onUserIdChange(fn: (id: string | null) => void): () => void {
 }
 
 // Keep the cached id in sync with auth events (sign-in, sign-out, refresh).
+// Only notify listeners on actual identity transitions — TOKEN_REFRESHED,
+// INITIAL_SESSION, and tab focus re-fire auth events with the same uid; a
+// blanket notify would blank the coverage cache (History tab flashes empty
+// for ~1s until refreshSnapshot repopulates).
 if (typeof window !== "undefined") {
   subscribeAuthState(({ event, userId }) => {
     if (event === "SIGNED_OUT") clearPersistedSnapshot();
+    const changed = cachedUserId !== userId;
     cachedUserId = userId;
     userIdResolved = true;
-    userListeners.forEach((fn) => fn(cachedUserId));
+    if (changed) userListeners.forEach((fn) => fn(cachedUserId));
   });
 }
 
