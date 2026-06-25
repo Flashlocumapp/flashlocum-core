@@ -971,8 +971,9 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     if (onVisibility && typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", onVisibility);
     }
-    if (onOnline && typeof window !== "undefined") {
-      window.removeEventListener("online", onOnline);
+    if (typeof window !== "undefined") {
+      if (onOnlineWindow) window.removeEventListener("online", onOnlineWindow);
+      if (onFocus) window.removeEventListener("focus", onFocus);
     }
     activeSubscribers--;
     if (activeSubscribers === 0) {
