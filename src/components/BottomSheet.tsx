@@ -27,12 +27,7 @@ export function BottomSheet({
 
   useEffect(() => {
     const target = expanded ? 0 : collapsedY;
-    const controls = animate(y, target, {
-      type: "spring",
-      stiffness: 260,
-      damping: 32,
-      mass: 0.9,
-    });
+    const controls = animate(y, target, springSoft);
     return controls.stop;
   }, [expanded, collapsedY, y]);
 
@@ -74,7 +69,15 @@ export function BottomSheet({
         >
           <span className="h-1.5 w-10 rounded-full bg-muted-foreground/30" />
         </button>
-        <div className="h-[calc(100%-1.5rem)] overflow-hidden">{children}</div>
+        <div
+          className="h-[calc(100%-1.5rem)] overflow-y-auto"
+          style={{
+            overscrollBehavior: "contain",
+            paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
+          }}
+        >
+          {children}
+        </div>
       </motion.section>
     </>
   );
