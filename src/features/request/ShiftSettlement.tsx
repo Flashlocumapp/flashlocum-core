@@ -1255,7 +1255,7 @@ function OvertimePane({
             Extension
           </span>
           <span className="text-[14px] font-medium tabular-nums">
-            +{billedMin}min · +{fmtNaira(extra)}
+            {extra == null ? `+${billedMin}min` : `+${billedMin}min · +${fmtNaira(extra)}`}
           </span>
         </div>
         <p className="mt-1 text-[11.5px] text-muted-foreground">
