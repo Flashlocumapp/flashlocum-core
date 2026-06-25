@@ -1665,8 +1665,9 @@ function CustomTransferPane({
   // to pay. We display `account.amount` verbatim — never an inflated local
   // estimate — so the headline always matches what the bank rails will accept.
   // Fallback to `amount` (server-frozen total_billed_amount) only while the
-  // account is being minted.
-  const displayAmount = account ? account.amount : amount;
+  // account is being minted. If neither is known yet, show the loading copy
+  // and never render a client-side number.
+  const displayAmount: number | null = account ? account.amount : amount;
 
   return (
     <motion.section
@@ -1681,9 +1682,15 @@ function CustomTransferPane({
           Complete Coverage
         </div>
         <div className="mt-3 text-[13px] text-muted-foreground">Transfer Exactly</div>
-        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(displayAmount)}
-        </div>
+        {displayAmount == null ? (
+          <div className="mt-1 text-[18px] font-medium text-muted-foreground animate-pulse">
+            Calculating final amount…
+          </div>
+        ) : (
+          <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+            {fmtNaira(displayAmount)}
+          </div>
+        )}
 
 
         {payState === "starting" || (!account && !payError) ? (
