@@ -17,6 +17,15 @@ function isUuid(v: unknown): v is string {
   );
 }
 
+/** JSON-safe value, used for any wire-serialized payload field. */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function assertAdmin(context: { supabase: any; userId: string }) {
   const { data: isAdmin, error } = await context.supabase.rpc("has_role", {
