@@ -205,11 +205,13 @@ function VerificationCard({
   busy,
   onAct,
   onActionRequired,
+  onOpenUser,
 }: {
   doctor: DoctorRow;
   busy: string | null;
   onAct: (id: string, s: VerificationStatus) => void;
   onActionRequired: () => void;
+  onOpenUser: () => void;
 }) {
   const isBusy = (s: string) => busy === doctor.id + s;
   const anyBusy = busy?.startsWith(doctor.id) ?? false;
