@@ -42,8 +42,21 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
 
     // SERVER-AUTHORITATIVE AMOUNT. end_shift must have run; no client input.
     const serverAmount = Math.max(0, Math.round(Number(reqRow.total_billed_amount ?? 0)));
-    if (!reqRow.billing_locked_at || serverAmount <= 0) {
+    if (!reqRow.billing_locked_at) {
       throw new Error("Shift is not ready for payment — end the shift first.");
+    }
+    // Zero-billed shift (e.g. paused/ended within seconds): nothing to charge.
+    // Finalize as paid for ₦0 directly instead of throwing, so the UI closes.
+    if (serverAmount <= 0) {
+      await supabaseAdmin
+        .from("coverage_requests")
+        .update({
+          payment_status: "paid",
+          settled_amount: 0,
+          status: "completed",
+        })
+        .eq("id", reqRow.id);
+      return { alreadyPaid: true as const, paymentReference: reqRow.payment_reference ?? null, checkoutUrl: null };
     }
 
     // 1b. RESUME-IF-PENDING. If a pending reference + cached virtual-account
