@@ -1026,7 +1026,6 @@ function SettlementPane({
   elapsed,
   billedMin,
   amount,
-  liveAmount,
   onCopy,
   onMadePayment,
   paymentTriggered,
@@ -1043,8 +1042,7 @@ function SettlementPane({
   phase: "settlement" | "grace";
   elapsed: number;
   billedMin: number;
-  amount: number;
-  liveAmount?: number;
+  amount: number | null;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
