@@ -1193,6 +1193,10 @@ function DispatchOverlay({
   // misread as a new doctor acceptance.
   const ownedIdRef = useRef<string | null>(null);
   const net = useNetwork();
+  // Watchful reconcile while we're staring at this in-flight request.
+  // Realtime is primary; this catches missed accept / cancel / start events
+  // when the channel was down or reconnecting at the exact moment.
+  useLifecycleReconcile(requestId, { enabled: !!requestId });
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedSid = acceptedRequest?.acceptedBy;
   const doctorIdentity = useDoctorIdentity(acceptedSid ?? null);
