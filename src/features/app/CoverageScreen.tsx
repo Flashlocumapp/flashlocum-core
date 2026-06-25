@@ -204,6 +204,46 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
+/** True once the first realtime/cache snapshot has had a chance to arrive
+ *  (either data is non-empty, OR ~220ms has elapsed). Used to render a
+ *  shimmer placeholder during the brief cold-start window instead of
+ *  flashing the empty state. */
+function useFirstPaintSettled(hasData: boolean): boolean {
+  const [settled, setSettled] = useState<boolean>(() => hasData);
+  useEffect(() => {
+    if (hasData) {
+      setSettled(true);
+      return;
+    }
+    const id = window.setTimeout(() => setSettled(true), 220);
+    return () => window.clearTimeout(id);
+  }, [hasData]);
+  return settled;
+}
+
+function ListSkeleton() {
+  return (
+    <ul className="space-y-2.5" aria-hidden>
+      {[0, 1].map((i) => (
+        <li
+          key={i}
+          className="rounded-2xl p-4"
+          style={{ background: "color-mix(in oklab, var(--color-foreground) 4%, transparent)" }}
+        >
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-11 w-11 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-1/2" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="mt-3 h-3 w-3/4" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 
 export function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
