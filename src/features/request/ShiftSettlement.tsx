@@ -432,20 +432,12 @@ export function ShiftSettlement({
 
   const handleEndShift = async () => {
     const now = simNow();
-    // Freeze local UI billing snapshot (display fallback).
-    const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
-    const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-    const priced = computeWorkedPricing(
-      shift.coverageKind,
-      shift.startHHMM,
-      w,
-      shift.endHHMM,
-      shift.days,
-      shift.environment ?? "normal",
-      bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+    // Snapshot billed-minutes only (UI nicety for the receipt). The payable
+    // AMOUNT must never be pre-seeded from a client estimator — it is
+    // written only after `end_shift` returns the server-locked total.
+    frozenBilledMinRef.current = billableMinutes(
+      ((shift.accumulatedMs ?? 0) + (shift.startedAt ? Math.max(0, now - shift.startedAt) : 0)) / 60000,
     );
-    frozenBilledMinRef.current = priced.billableMinutes;
-    frozenAmountRef.current = priced.amount;
 
     if (requestId) {
       // Server-authoritative end_shift: locks the bill on the DB so the
@@ -470,6 +462,7 @@ export function ShiftSettlement({
           return;
         }
         frozenAmountRef.current = total;
+        bumpServerAmount();
         // Server confirmed end_shift AND billing is locked — open the single gate.
         settlementReadyRef.current = true;
       } catch (e) {
