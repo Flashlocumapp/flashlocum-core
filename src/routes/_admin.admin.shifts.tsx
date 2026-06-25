@@ -13,6 +13,8 @@ import {
   fmtNaira,
   fmtRelative,
 } from "@/lib/admin-ui";
+import { ShiftDetailDrawer } from "@/components/admin/ShiftDetailDrawer";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 export const Route = createFileRoute("/_admin/admin/shifts")({
   ssr: false,
