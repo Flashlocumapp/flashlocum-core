@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AccountScreen } from "@/features/app/AccountScreen";
 
+// AccountScreen is mounted as a persistent layer inside AppShell
+// (`src/routes/_app.tsx`).
 export const Route = createFileRoute("/_app/account")({
-  component: AccountScreen,
+  component: () => null,
 });
