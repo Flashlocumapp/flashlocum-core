@@ -133,18 +133,41 @@ function acquireHeartbeat(): () => void {
   };
 }
 
+// Persistent tab paths. Each of these screens is mounted once on first
+// visit and kept alive thereafter — tab switches just toggle visibility
+// via CSS `display`. Scroll position, expanded cards, filter state, image
+// decode state, realtime subscriptions, and the Google Map instance all
+// survive switching between tabs and coming back. Sub-routes that aren't
+// in this list (help, support, sub-pages) render through <Outlet /> on
+// top of the hidden persistent layers and remount as normal.
+const PERSISTENT_TAB_PATHS = ["/home", "/coverage", "/earnings", "/account"] as const;
+type PersistentTabPath = (typeof PERSISTENT_TAB_PATHS)[number];
+
 function AppShell() {
   const immersive = useImmersive();
-  // The Home tab content (map, search sheet) is mounted exactly once for
-  // the lifetime of the session. Tab switches just toggle its visibility
-  // via CSS `display`, so the Google Map instance, markers, camera state,
-  // and watchPosition subscription all survive switching to Coverage /
-  // Account and back. Without this, `<Outlet />` would unmount the map
-  // every time the user touches another tab.
-  const isHome = useRouterState({ select: (s) => s.location.pathname === "/home" });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const activeTab: PersistentTabPath | null = useMemo(() => {
+    return (PERSISTENT_TAB_PATHS as readonly string[]).includes(pathname)
+      ? (pathname as PersistentTabPath)
+      : null;
+  }, [pathname]);
+
+  // Track which persistent tabs have ever been visited so we mount them
+  // lazily (first paint is fast; memory only grows as the user explores).
+  const visitedRef = useRef<Set<PersistentTabPath>>(new Set());
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (activeTab && !visitedRef.current.has(activeTab)) {
+      visitedRef.current.add(activeTab);
+      force((n) => n + 1);
+    }
+  }, [activeTab]);
 
   useEffect(() => acquireHeartbeat(), []);
 
+  // Non-persistent routes (e.g. /help, /support, /admin children if rendered
+  // here) display the Outlet on top of all hidden persistent layers.
+  const showOutlet = activeTab === null;
 
   return (
     <div
@@ -167,26 +190,50 @@ function AppShell() {
         className="absolute inset-x-0 top-0"
         style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
-        {/* Persistent Home layer — always mounted, visibility toggled by
-            CSS so the map instance is never torn down on tab switch. */}
-        <div
-          className="absolute inset-0 overflow-hidden"
-          style={{
-            display: isHome ? "block" : "none",
-            background: "var(--color-background)",
-          }}
-          aria-hidden={!isHome}
+        {/* Persistent Home layer. The map lives here and is never torn down. */}
+        <PersistentLayer
+          mounted={visitedRef.current.has("/home")}
+          visible={activeTab === "/home"}
+          scroll={false}
         >
-          <HomeRouter active={isHome} />
-        </div>
-        {/* Non-home routes render here. On `/home` this stays empty (the
-            route's component is `() => null`) so the persistent layer
-            above is what the user sees. On other routes this covers the
-            persistent layer naturally because the home layer is hidden. */}
+          <HomeRouter active={activeTab === "/home"} />
+        </PersistentLayer>
+
+        {/* Persistent Coverage layer. */}
+        <PersistentLayer
+          mounted={visitedRef.current.has("/coverage")}
+          visible={activeTab === "/coverage"}
+          scroll
+        >
+          <CoverageScreen />
+        </PersistentLayer>
+
+        {/* Persistent Earnings layer (cover role only — the screen
+            self-guards via role checks; mounting it for requesters is
+            harmless because the route is gated above). */}
+        <PersistentLayer
+          mounted={visitedRef.current.has("/earnings")}
+          visible={activeTab === "/earnings"}
+          scroll
+        >
+          <EarningsScreen active={activeTab === "/earnings"} />
+        </PersistentLayer>
+
+        {/* Persistent Account layer. */}
+        <PersistentLayer
+          mounted={visitedRef.current.has("/account")}
+          visible={activeTab === "/account"}
+          scroll
+        >
+          <AccountScreen />
+        </PersistentLayer>
+
+        {/* Non-persistent routes render here on top. They remount as normal
+            and the persistent layers below are hidden via display:none. */}
         <div
           className="absolute inset-0 overflow-y-auto overflow-x-hidden"
           style={{
-            display: isHome ? "none" : "block",
+            display: showOutlet ? "block" : "none",
             WebkitOverflowScrolling: "touch",
             touchAction: "pan-y",
             background: "var(--color-background)",
@@ -216,3 +263,36 @@ function AppShell() {
     </div>
   );
 }
+
+function PersistentLayer({
+  mounted,
+  visible,
+  scroll,
+  children,
+}: {
+  mounted: boolean;
+  visible: boolean;
+  scroll: boolean;
+  children: React.ReactNode;
+}) {
+  if (!mounted) return null;
+  return (
+    <div
+      className={
+        scroll
+          ? "absolute inset-0 overflow-y-auto overflow-x-hidden"
+          : "absolute inset-0 overflow-hidden"
+      }
+      style={{
+        display: visible ? "block" : "none",
+        background: "var(--color-background)",
+        WebkitOverflowScrolling: scroll ? "touch" : undefined,
+        touchAction: scroll ? "pan-y" : undefined,
+      }}
+      aria-hidden={!visible}
+    >
+      {children}
+    </div>
+  );
+}
+
