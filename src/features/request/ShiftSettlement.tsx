@@ -247,7 +247,7 @@ export function ShiftSettlement({
   // Bump on every server-side write so React re-renders panes that depend
   // on the ref (refs don't trigger re-renders by themselves).
   const [serverAmountTick, setServerAmountTick] = useState(0);
-  const bumpServerAmount = useCallback(() => setServerAmountTick((n) => n + 1);
+  const bumpServerAmount = useCallback(() => setServerAmountTick((n) => n + 1), []);
   // Keep ESLint happy — we read serverAmountTick to bind the dep.
   void serverAmountTick;
   const frozenBilledMin = frozenBilledMinRef.current;
