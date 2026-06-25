@@ -913,7 +913,6 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   // If the refetch itself fails or returns nothing, the snapshot pipeline
   // will surface that on its own.
   let onVisibility: (() => void) | null = null;
-  let onOnline: (() => void) | null = null;
   if (typeof document !== "undefined") {
     onVisibility = () => {
       if (document.visibilityState === "visible") {
