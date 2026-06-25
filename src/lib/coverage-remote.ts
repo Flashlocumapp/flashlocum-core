@@ -922,11 +922,21 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     };
     document.addEventListener("visibilitychange", onVisibility);
   }
+  let onOnlineWindow: (() => void) | null = null;
+  let onFocus: (() => void) | null = null;
   if (typeof window !== "undefined") {
-    onOnline = () => {
+    onOnlineWindow = () => {
       void refreshSnapshot();
     };
-    window.addEventListener("online", onOnline);
+    onFocus = () => {
+      void refreshSnapshot();
+    };
+    window.addEventListener("online", onOnlineWindow);
+    // iOS Safari / PWA shells sometimes fire `focus` without firing
+    // `visibilitychange` (e.g. returning from a system sheet). Belt-and-
+    // braces: reconcile on focus too. refreshSnapshot is coalesced so
+    // overlapping visibility+focus events collapse to one fetch.
+    window.addEventListener("focus", onFocus);
   }
 
   // Re-bind the filtered channel whenever auth identity changes — the
