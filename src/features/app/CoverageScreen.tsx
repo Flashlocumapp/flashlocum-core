@@ -1198,7 +1198,7 @@ function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) =>
 
 
 
-function Avatar({
+const Avatar = memo(function Avatar({
   initials,
   dim,
   live,
@@ -1221,7 +1221,7 @@ function Avatar({
         }}
       >
         {selfieUrl ? (
-          <img src={selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+          <StableImage src={selfieUrl} alt="" width={44} height={44} className="h-full w-full object-cover" />
         ) : (
           initials
         )}
@@ -1239,7 +1239,7 @@ function Avatar({
       )}
     </span>
   );
-}
+});
 
 // ============ DOCTOR (unchanged behavior) ============
 
