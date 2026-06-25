@@ -14,6 +14,7 @@ import {
   type Coverage,
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
+import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 import { useRating } from "@/lib/ratings";
 import { useReliability } from "@/lib/reliability";
 import { useVerificationStatus } from "@/lib/verification";
