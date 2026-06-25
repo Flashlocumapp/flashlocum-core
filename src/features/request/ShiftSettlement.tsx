@@ -1108,6 +1108,7 @@ function OvertimePane({
   payCheckState,
   payCheckError,
   onCheckPayment,
+  paymentDueAt,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -1124,6 +1125,7 @@ function OvertimePane({
   payCheckState: "idle" | "checking" | "not_found" | "error";
   payCheckError: string | null;
   onCheckPayment: () => void;
+  paymentDueAt?: string | null;
 }) {
   if (onPayWithMonnify) {
     return (
