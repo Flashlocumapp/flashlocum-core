@@ -44,6 +44,11 @@ export function CoverHome({ active = true }: { active?: boolean }) {
     null;
   const isActive = !!focus?.active;
 
+  // Watchful reconcile on the focused engagement (active or next upcoming).
+  // Realtime is primary; this is the safety net for missed start / pause /
+  // resume / end / cancel broadcasts (channel down, app backgrounded).
+  useLifecycleReconcile(focus?.id ?? null, { enabled: !!focus });
+
   // Shared doctor rating — same source used in every requester view.
   const myRating = useRating(doctorEntityId(getSessionId()));
   const myReliability = useReliability(doctorEntityId(getSessionId()));
