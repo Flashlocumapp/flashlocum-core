@@ -1,65 +1,57 @@
-## What's broken
+## Findings
 
-When the 15-min Monnify payment window elapses, the screen freezes at 00:00 with the stale ₦2,500 account. No surcharge appears, no new account number/reference, no new countdown — even though the server-side surcharge cron is running.
+1. **Surcharge/payment page is still stale**
+   - The latest database function does clear `payment_account`, `payment_reference`, and advances `payment_due_at`, but the cron endpoint is failing repeatedly with: `cannot cast type record to coverage_requests`.
+   - That error comes from `drain_surcharge_due()` passing a loop `record` into `_surcharge_block_amount(rec)`, where the helper expects a `coverage_requests` row type.
+   - Evidence: the current awaiting-payment request still has `payment_extension_count = 0`, old `payment_due_at`, and cached account/reference still present after expiry.
+   - Client-side issue also remains: the billing poll only updates internal refs, not React state/props, so even when the server changes, the visible amount/timer/account may not reliably re-render.
 
-## Root causes (verified in code + DB)
+2. **Info icon wording**
+   - Wording is hardcoded in two places:
+     - `RequesterHome.tsx` for requester rating/reliability.
+     - `CoverHome.tsx` for doctor rating/reliability.
 
-1. **Surcharge cron updates the row silently.** `drain_surcharge_due()` (migration `20260623033342…`) bumps `payment_due_at`, `total_billed_amount`, `surcharge_amount`, `payment_extension_count` every minute. The cron job is active (`surcharge-drain-every-minute`, every `* * * * *`).
+3. **Delete Account modal style**
+   - `DeleteAccountSheet` is currently an account-page bottom sheet (`absolute inset-0 flex items-end`) rather than the existing app confirmation modal style used by Pause Shift / End Shift (`ConfirmDialog` over the page background).
 
-2. **No invalidation broadcast for surcharge.** The `coverage_requests_emit_invalidate` trigger (migration `20260625073003…`) only fires `realtime.send('invalidate', 'coverage_invalidations')` when `status`, `accepted_by`, `broadcast_started_at`, or `rev` change. The surcharge cron changes *none* of those, so subscribed clients are never told to refetch. `net.requests[id].paymentDueAt` / `totalBilledAmount` stay stale forever, so `ShiftSettlement`'s seed effect (which is keyed on `serverPaymentDueAt`) never re-runs.
+## Implementation plan
 
-3. **The cached virtual account is never invalidated.** `coverage_requests.payment_account` (the cached Monnify JSON with the ₦2,500 account number/reference) is left intact by the surcharge cron. Even if the client manually re-invoked `beginSettlementCheckout`, the RESUME-IF-PENDING branch in `settlement.functions.ts` would only refresh when `cachedAmount !== serverAmount` — and it does — but the client never calls it again after the timer hits 00:00 because there is no signal that the row moved on.
+### 1. Properly fix surcharge processing
+- Add a migration replacing `drain_surcharge_due()` so each loop row is loaded into a typed `public.coverage_requests` variable before calling `_surcharge_block_amount()`.
+- Keep the intended behavior:
+  - add one surcharge block,
+  - advance `payment_due_at` by 15 minutes,
+  - increment `payment_extension_count`,
+  - clear `payment_account`, `payment_reference`, and `payment_url`,
+  - broadcast `coverage_invalidations` with reason `surcharge`.
+- Also keep `extend_payment_window()` aligned with the same account-clearing and invalidation behavior.
 
-4. **Client has no "expired → re-mint" path.** `ShiftSettlement.account` is set once by `startMonnifyCheckout` and never recomputed when `serverPaymentDueAt` / `serverTotalBilledAmount` props change post-expiry.
+### 2. Make the payment UI refresh from server truth, not local refs
+- In `ShiftSettlement.tsx`, replace the current “ref-only” billing poll with React state for the server billing amount and due time.
+- Feed the effective server amount and due time into `CustomTransferPane` so the visible total and countdown re-render when the backend changes.
+- When server billing changes after surcharge:
+  - clear the old account UI,
+  - reset checkout state,
+  - force a fresh `beginSettlementCheckout()` call,
+  - show the newly minted account/reference and reset timer from the new `payment_due_at`.
+- Add an immediate expiry check path so if the visible timer reaches `00:00` before the invalidation lands, the sheet asks the server for fresh billing state instead of sitting stale.
 
-5. **Misleading UI copy.** The block under PRICE HOLD EXPIRED tells the user to "always use the latest account number and payment reference displayed on this page" — which is currently a lie because the page is *not* refreshing them. Per request, that sentence must go.
+### 3. Update trust info text exactly as requested
+- Doctor rating: `Reflects how satisfied requesters are with your service. Minimum: 4.0 stars.`
+- Requester rating: `Reflects how satisfied doctors are with their experience working with your facility. Minimum: 3.5 stars.`
+- Doctor reliability: `Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 85%.`
+- Requester reliability: `Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 75%.`
 
-## Proper fix (no workarounds)
+### 4. Convert Delete Account to modal-over-account pattern
+- Refactor the delete-account UI in `AccountScreen.tsx` to use the same modal behavior as Pause Shift / End Shift:
+  - account tab remains visible behind the overlay,
+  - centered confirmation content,
+  - same destructive-button style.
+- Preserve existing eligibility rules and final confirmation flow.
+- Keep deletion backend logic unchanged.
 
-### A. Database migration — make surcharge a first-class lifecycle event
-
-Update both `extend_payment_window(_request_id)` and `drain_surcharge_due()` in `public`:
-
-1. After applying a surcharge block to a row, also set:
-   - `payment_account = NULL`
-   - `payment_reference = NULL`
-   - `payment_url = NULL`
-   This guarantees the next `beginSettlementCheckout` call goes through the fresh-mint branch (the RESUME-IF-PENDING guard requires all three to be present), so the new virtual account is generated against the new `total_billed_amount`.
-
-2. Immediately after each per-row update, call:
-   ```sql
-   PERFORM realtime.send(
-     jsonb_build_object('id', rec.id, 'reason', 'surcharge',
-                        'at', (extract(epoch from now())*1000)::bigint),
-     'invalidate', 'coverage_invalidations', false);
-   ```
-   This is the same channel/event the client (`coverage-remote.ts`) already subscribes to, so it will refetch the row and propagate the new `payment_due_at` + `total_billed_amount` into `net.requests[id]` with no extra wiring.
-
-3. Keep the `payment_surcharge_log` insert exactly as it is — auditing is unchanged.
-
-### B. Client — `src/features/request/ShiftSettlement.tsx`
-
-1. Add an effect that watches `serverPaymentDueAt` while `phase` is in `settlement | grace | overtime`. When it changes (i.e. the surcharge cron just bumped the row), do, in order:
-   - `setAccount(null)`
-   - `setPayState("idle")`
-   - `setPayError(null)`
-   - `autoOpenedRef.current = false`
-   - call `startMonnifyCheckout()`
-   The existing seed effect (deps include `serverPaymentDueAt` and `serverTotalBilledAmount`) already re-anchors `phaseStartedAtRef` / `endedAtRef` / `frozenAmountRef` to the new server values, so the visible countdown jumps back to ~15:00 and the headline amount jumps to the new total. No further timer math changes needed.
-
-2. In `CustomTransferPane`:
-   - Replace the long sentence under PRICE HOLD EXPIRED with: *"Amount and payment details may change if payment is not completed in time."* (drop the "Always use the latest…" sentence per request).
-   - No other copy changes.
-
-### C. No new migrations beyond (A); no schema additions; no `payment_account` column changes.
-
-## Why this is the right fix
-
-- The database remains the single source of truth for amount + deadline (the broadcast model the project mandates).
-- The fix closes the loop the surcharge feature was always missing: server state moves → realtime tells clients → client re-mints the Monnify account at the new total.
-- It piggybacks on the existing `coverage_invalidations` channel and the existing RESUME-IF-PENDING gate in `settlement.functions.ts` — no new endpoints, no new client polling, no client-side timers that drift from the server.
-
-## Files touched
-
-- `supabase/migrations/<new>.sql` — replace `extend_payment_window` and `drain_surcharge_due` with the two additions above.
-- `src/features/request/ShiftSettlement.tsx` — new effect (~10 lines) and the one-line copy edit in `CustomTransferPane`.
+### 5. Verification
+- Check database evidence after migration: `drain_surcharge_due()` no longer returns the cast error, expired pending payments get extension count > 0, updated amount, new due time, and cleared cached account fields.
+- Verify the UI code path: server billing updates drive visible amount/timer/account refresh.
+- Verify wording locations were updated.
+- Verify Delete Account appears as a modal over the Account tab, not a bottom sheet.
