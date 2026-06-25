@@ -84,7 +84,7 @@ type RequestItem = {
 };
 
 /** Straight 24h / Weekend 48h are continuous single shifts — no pause, no day boundary. */
-function isStraightItem(item: { coverage: Coverage }): boolean {
+function isStraightItem(item: { coverage: string }): boolean {
   const kind = coverageKindFromLabel(String(item.coverage));
   return kind === "straight24" || kind === "straight48";
 }
