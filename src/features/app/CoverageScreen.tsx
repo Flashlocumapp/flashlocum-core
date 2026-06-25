@@ -800,7 +800,7 @@ function RequesterDetailSheet({
               style={{ background: "var(--color-secondary)" }}
             >
               {identity.selfieUrl ? (
-                <img src={identity.selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+                <StableImage src={identity.selfieUrl} alt="" width={56} height={56} className="h-full w-full object-cover" />
               ) : (
                 identity.initials
               )}
