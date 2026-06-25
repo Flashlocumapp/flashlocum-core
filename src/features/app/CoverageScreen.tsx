@@ -1235,6 +1235,10 @@ function Avatar({
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { upcoming, history } = useDispatch();
   const net = useNetwork();
+  // Re-render when the shared "already rated" store hydrates from the DB
+  // so doctor History reflects ratings persisted in previous sessions.
+  useRatedShiftsVersion();
+
 
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
