@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { sheetEnter, fadeFast } from "@/lib/motion";
 
 export function RatingOverlay({
   open,
@@ -23,13 +24,14 @@ export function RatingOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={fadeFast}
         >
           <div className="absolute inset-0 bg-foreground/30" onClick={onDismiss} aria-hidden />
           <motion.div
             initial={{ y: 28, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 28, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 32 }}
+            transition={sheetEnter}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.35 }}
@@ -38,7 +40,10 @@ export function RatingOverlay({
               if (info.velocity.y > 280 || info.offset.y > 90) onDismiss();
             }}
             className="relative z-10 w-full rounded-t-3xl pt-2"
-            style={{ background: "var(--color-surface-elevated)" }}
+            style={{
+              background: "var(--color-surface-elevated)",
+              paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+            }}
           >
             <div className="flex w-full justify-center pt-1.5 pb-1">
               <span className="h-1.5 w-10 rounded-full bg-muted-foreground/30" />

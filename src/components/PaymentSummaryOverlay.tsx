@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { sheetEnter } from "@/lib/motion";
 
 function fmtNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
@@ -70,7 +71,9 @@ export function PaymentSummaryOverlay({
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={sheetEnter}
       className="fixed inset-0 z-[70] flex flex-col bg-background safe-top"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
     >
       <div className="flex h-12 w-full items-center justify-between px-4">
         <button
