@@ -340,6 +340,12 @@ function VerificationCard({
             {isBusy("rejected") ? "Rejecting…" : "Reject"}
           </button>
         )}
+        <button
+          onClick={onOpenUser}
+          className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold"
+        >
+          History & details
+        </button>
       </div>
     </div>
   );
