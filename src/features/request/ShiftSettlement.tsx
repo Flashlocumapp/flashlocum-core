@@ -219,27 +219,48 @@ export function ShiftSettlement({
     // closed-segment sum is the authoritative prior-day total.
     return sum;
   }, [segments]);
-  const totalAmount = useMemo(
-    () =>
-      computeWorkedPricing(
-        shift.coverageKind,
-        shift.startHHMM,
-        workedMin,
-        shift.endHHMM,
-        shift.days,
-        shift.environment ?? "normal",
-        bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
-        priorBilled,
-      ).amount,
-    [shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled],
-  );
-  // Snapshot of the bill at the moment End Shift was pressed.
+  // ActivePane "Live billing" tile only. NEVER consumed by any
+  // payment-lifecycle pane (Settlement / Overtime / CustomTransfer /
+  // Confirmed). For multi-day shifts we additionally gate this estimate on
+  // `segments` being hydrated so the booked-length over-estimate never
+  // leaks onto the running-shift screen either.
+  const multiDay = (shift.days ?? 1) > 1;
+  const activeLiveAmount = useMemo(() => {
+    if (multiDay && priorBilled === undefined) return null;
+    return computeWorkedPricing(
+      shift.coverageKind,
+      shift.startHHMM,
+      workedMin,
+      shift.endHHMM,
+      shift.days,
+      shift.environment ?? "normal",
+      bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
+      priorBilled,
+    ).amount;
+  }, [multiDay, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled]);
+  // Snapshot of the bill at the moment End Shift was pressed. SERVER-ONLY
+  // sources are allowed to write `frozenAmountRef` (end_shift response,
+  // serverTotalBilledAmount prop, getRequestBillingState poll). No client
+  // pricing estimator is ever permitted to seed this ref, anywhere.
   const frozenBilledMinRef = useRef<number>(0);
   const frozenAmountRef = useRef<number>(0);
+  // Bump on every server-side write so React re-renders panes that depend
+  // on the ref (refs don't trigger re-renders by themselves).
+  const [serverAmountTick, setServerAmountTick] = useState(0);
+  const bumpServerAmount = useCallback(() => setServerAmountTick((n) => n + 1);
+  // Keep ESLint happy — we read serverAmountTick to bind the dep.
+  void serverAmountTick;
   const frozenBilledMin = frozenBilledMinRef.current;
   const frozenAmount = frozenAmountRef.current;
+  // `serverAmount` is the ONLY number any payment-lifecycle pane may show.
+  // `null` ⇒ unknown ⇒ render "Calculating final amount…" + disable pay.
+  const serverAmount: number | null =
+    typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0
+      ? serverTotalBilledAmount
+      : frozenAmount > 0
+        ? frozenAmount
+        : null;
   const extensionMin = Math.max(0, billedMin - frozenBilledMin);
-  const extensionAmount = Math.max(0, totalAmount - frozenAmount);
 
   // Reset whenever opened fresh. Deps are IDENTITY-ONLY (open + initialPhase
   // + requestId + intent). Do NOT add shift.startedAt / shift.accumulatedMs —
