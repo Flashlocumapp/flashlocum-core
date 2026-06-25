@@ -1530,7 +1530,15 @@ function DoctorCoverageDetail({
     !!item &&
     isHist(item) &&
     item.outcome === "completed" &&
-    item.rating === undefined;
+    item.rating === undefined &&
+    !isRated(item.id);
+  const alreadyRatedHint =
+    !!item &&
+    isHist(item) &&
+    item.outcome === "completed" &&
+    item.rating === undefined &&
+    isRated(item.id);
+
 
   return (
     <AnimatePresence>
