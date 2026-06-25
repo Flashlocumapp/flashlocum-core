@@ -1666,6 +1666,7 @@ function DoctorCoverageDetail({
                 onClick={() => {
                   void recordRating(hospitalEntityId(item.hospital), rating, item.id, feedback);
                   recordHistoryRating(item.id, rating);
+                  markRated(item.id);
                   onDismiss();
                 }}
                 className="mt-3 h-10 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground disabled:opacity-40 active:opacity-90"
@@ -1674,6 +1675,12 @@ function DoctorCoverageDetail({
               </button>
             </div>
           )}
+          {alreadyRatedHint && (
+            <div className="mt-3 text-[12.5px] text-muted-foreground">
+              You've already rated this coverage.
+            </div>
+          )}
+
         </DismissSheet>
       )}
     </AnimatePresence>
