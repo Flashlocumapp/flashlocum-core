@@ -229,7 +229,7 @@ function ReconnectingPill() {
     // flash without hiding real connectivity issues.
     let pendingTimer: number | null = null;
     const unsub = subscribeRealtimeHealth((h) => {
-      const bad = isAnyReconnecting(h);
+      const bad = isCoverageReconnecting(h);
       if (bad) {
         if (pendingTimer == null) {
           pendingTimer = window.setTimeout(() => {
