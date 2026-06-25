@@ -1,9 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminPageHeader, RefreshButton, Empty } from "@/lib/admin-ui";
+import { AdminPageHeader, RefreshButton, Empty, fmt } from "@/lib/admin-ui";
 import type { TrustSnapshot } from "@/lib/trust";
+import {
+  adminListTrustHistory,
+  adminTrustClear,
+  adminTrustRestrict,
+  adminTrustFreeze,
+  adminTrustUnfreeze,
+  adminTrustEscalate,
+  type TrustHistoryRow,
+} from "@/lib/admin-ops.functions";
+import { pushToast } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_admin/admin/trust")({
   ssr: false,
@@ -28,8 +39,14 @@ async function fetchTrustList(onlyFlagged: boolean): Promise<TrustRow[]> {
 
 function TrustPage() {
   const qc = useQueryClient();
+  const restrictFn = useServerFn(adminTrustRestrict);
+  const clearFn = useServerFn(adminTrustClear);
+  const freezeFn = useServerFn(adminTrustFreeze);
+  const unfreezeFn = useServerFn(adminTrustUnfreeze);
+  const escalateFn = useServerFn(adminTrustEscalate);
   const [onlyFlagged, setOnlyFlagged] = useState(true);
   const [reasonDraft, setReasonDraft] = useState<Record<string, string>>({});
+  const [historyFor, setHistoryFor] = useState<TrustRow | null>(null);
 
   const q = useQuery({
     queryKey: ["admin", "trust", onlyFlagged],
@@ -37,23 +54,58 @@ function TrustPage() {
     staleTime: 30_000,
   });
 
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "trust"] });
+    qc.invalidateQueries({ queryKey: ["admin", "trust-history"] });
+    qc.invalidateQueries({ queryKey: ["admin", "actions"] });
+  };
+
   const restrict = useMutation({
-    mutationFn: async (vars: { userId: string; reason: string }) => {
-      const { error } = await supabase.rpc("admin_apply_trust_restriction", {
-        _user_id: vars.userId,
-        _reason: vars.reason || undefined,
-      });
-      if (error) throw error;
+    mutationFn: (vars: { userId: string; reason: string }) =>
+      restrictFn({ data: { userId: vars.userId, reason: vars.reason } }),
+    onSuccess: () => {
+      pushToast({ tone: "presence", title: "Restriction applied." });
+      invalidate();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "trust"] }),
+    onError: (e) => pushToast({ tone: "warn", title: (e as Error).message }),
   });
 
   const clear = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await supabase.rpc("admin_clear_trust_restriction", { _user_id: userId });
-      if (error) throw error;
+    mutationFn: (userId: string) => clearFn({ data: { userId } }),
+    onSuccess: () => {
+      pushToast({ tone: "presence", title: "Restriction cleared." });
+      invalidate();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "trust"] }),
+    onError: (e) => pushToast({ tone: "warn", title: (e as Error).message }),
+  });
+
+  const freeze = useMutation({
+    mutationFn: (vars: { userId: string; reason: string }) =>
+      freezeFn({ data: { userId: vars.userId, reason: vars.reason } }),
+    onSuccess: () => {
+      pushToast({ tone: "presence", title: "User trust frozen." });
+      invalidate();
+    },
+    onError: (e) => pushToast({ tone: "warn", title: (e as Error).message }),
+  });
+
+  const unfreeze = useMutation({
+    mutationFn: (userId: string) => unfreezeFn({ data: { userId } }),
+    onSuccess: () => {
+      pushToast({ tone: "presence", title: "Freeze lifted." });
+      invalidate();
+    },
+    onError: (e) => pushToast({ tone: "warn", title: (e as Error).message }),
+  });
+
+  const escalate = useMutation({
+    mutationFn: (vars: { userId: string; note: string }) =>
+      escalateFn({ data: { userId: vars.userId, note: vars.note } }),
+    onSuccess: () => {
+      pushToast({ tone: "presence", title: "Escalated." });
+      invalidate();
+    },
+    onError: (e) => pushToast({ tone: "warn", title: (e as Error).message }),
   });
 
   const rows = q.data ?? [];
@@ -62,7 +114,7 @@ function TrustPage() {
     <div className="space-y-6 p-6">
       <AdminPageHeader
         title="Trust Snapshots"
-        subtitle="Computed rating + reliability per user. Restriction is admin-controlled only — scores never auto-restrict."
+        subtitle="Computed rating + reliability per user. Restrict, freeze, or escalate from this page; every action is recorded in the audit log."
         right={<RefreshButton onClick={() => q.refetch()} busy={q.isFetching} />}
       />
 
@@ -91,7 +143,6 @@ function TrustPage() {
                 <th className="px-3 py-2">Role</th>
                 <th className="px-3 py-2">Rating</th>
                 <th className="px-3 py-2">Reliability</th>
-                <th className="px-3 py-2">Last block</th>
                 <th className="px-3 py-2">Eligibility</th>
                 <th className="px-3 py-2">Restriction</th>
                 <th className="px-3 py-2">Actions</th>
@@ -102,7 +153,6 @@ function TrustPage() {
                 const s = row.snapshot;
                 const flagged = s?.eligibility?.any;
                 const restricted = s?.restriction?.restricted;
-                const lastRel = s?.reliability?.last_block;
                 return (
                   <tr key={row.user_id} className="border-t align-top">
                     <td className="px-3 py-2">
@@ -138,11 +188,6 @@ function TrustPage() {
                         {s?.reliability?.block_index ?? 0} block{(s?.reliability?.block_index ?? 0) === 1 ? "" : "s"} · {s?.reliability?.in_progress_count ?? 0}/{s?.reliability?.block_size ?? 20} pending
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-[11px] text-muted-foreground">
-                      {lastRel
-                        ? `${lastRel.completed}c · ${lastRel.cancelled}x · ${lastRel.no_show}ns`
-                        : "—"}
-                    </td>
                     <td className="px-3 py-2">
                       {flagged ? (
                         <div className="space-y-1">
@@ -172,44 +217,81 @@ function TrustPage() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      {restricted ? (
-                        <button
-                          className="text-xs rounded border px-2 py-1 hover:bg-muted"
-                          onClick={() => {
-                            if (confirm(`Clear restriction for ${row.full_name || row.user_id}?`)) {
-                              clear.mutate(row.user_id);
-                            }
-                          }}
-                          disabled={clear.isPending}
-                        >
-                          Clear restriction
-                        </button>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          <input
-                            className="text-xs rounded border px-2 py-1 w-40"
-                            placeholder="Reason (optional)"
-                            value={reasonDraft[row.user_id] ?? ""}
-                            onChange={(e) =>
-                              setReasonDraft((prev) => ({ ...prev, [row.user_id]: e.target.value }))
-                            }
-                          />
+                      <div className="flex flex-col gap-1.5">
+                        {restricted ? (
                           <button
-                            className="text-xs rounded bg-destructive text-destructive-foreground px-2 py-1"
+                            className="text-xs rounded border px-2 py-1 hover:bg-muted"
                             onClick={() => {
-                              if (confirm(`Restrict account for ${row.full_name || row.user_id}?`)) {
-                                restrict.mutate({
-                                  userId: row.user_id,
-                                  reason: reasonDraft[row.user_id] ?? "",
-                                });
+                              if (confirm(`Clear restriction for ${row.full_name || row.user_id}?`)) {
+                                clear.mutate(row.user_id);
                               }
                             }}
-                            disabled={restrict.isPending}
+                            disabled={clear.isPending}
                           >
-                            Restrict account
+                            Clear restriction
+                          </button>
+                        ) : (
+                          <>
+                            <input
+                              className="text-xs rounded border px-2 py-1 w-40"
+                              placeholder="Reason (optional)"
+                              value={reasonDraft[row.user_id] ?? ""}
+                              onChange={(e) =>
+                                setReasonDraft((prev) => ({ ...prev, [row.user_id]: e.target.value }))
+                              }
+                            />
+                            <button
+                              className="text-xs rounded bg-destructive text-destructive-foreground px-2 py-1"
+                              onClick={() => {
+                                if (confirm(`Restrict account for ${row.full_name || row.user_id}?`)) {
+                                  restrict.mutate({
+                                    userId: row.user_id,
+                                    reason: reasonDraft[row.user_id] ?? "",
+                                  });
+                                }
+                              }}
+                              disabled={restrict.isPending}
+                            >
+                              Restrict account
+                            </button>
+                          </>
+                        )}
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            className="text-[11px] rounded border px-2 py-1 hover:bg-muted"
+                            onClick={() => {
+                              const reason = prompt("Reason to freeze trust?");
+                              if (reason?.trim()) freeze.mutate({ userId: row.user_id, reason });
+                            }}
+                            disabled={freeze.isPending}
+                          >
+                            Freeze
+                          </button>
+                          <button
+                            className="text-[11px] rounded border px-2 py-1 hover:bg-muted"
+                            onClick={() => unfreeze.mutate(row.user_id)}
+                            disabled={unfreeze.isPending}
+                          >
+                            Unfreeze
+                          </button>
+                          <button
+                            className="text-[11px] rounded border px-2 py-1 hover:bg-muted"
+                            onClick={() => {
+                              const note = prompt("Escalation note?");
+                              if (note?.trim()) escalate.mutate({ userId: row.user_id, note });
+                            }}
+                            disabled={escalate.isPending}
+                          >
+                            Escalate
+                          </button>
+                          <button
+                            className="text-[11px] rounded border px-2 py-1 hover:bg-muted"
+                            onClick={() => setHistoryFor(row)}
+                          >
+                            History
                           </button>
                         </div>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -218,6 +300,81 @@ function TrustPage() {
           </table>
         </div>
       )}
+
+      {historyFor && (
+        <TrustHistoryOverlay
+          row={historyFor}
+          onClose={() => setHistoryFor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TrustHistoryOverlay({
+  row,
+  onClose,
+}: {
+  row: TrustRow;
+  onClose: () => void;
+}) {
+  const fetchHistory = useServerFn(adminListTrustHistory);
+  const q = useQuery({
+    queryKey: ["admin", "trust-history", row.user_id],
+    queryFn: () => fetchHistory({ data: { userId: row.user_id } }),
+    staleTime: 30_000,
+  });
+  const rows = (q.data ?? []) as TrustHistoryRow[];
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-foreground/30" />
+      <div
+        className="relative z-10 h-full w-full max-w-lg overflow-y-auto p-6"
+        style={{ background: "var(--color-surface-elevated)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+              Trust history
+            </div>
+            <div className="text-[15px] font-semibold">{row.full_name || row.user_id}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full bg-secondary px-3 py-1 text-[12px]"
+          >
+            Close
+          </button>
+        </div>
+
+        {q.isLoading ? (
+          <Empty>Loading…</Empty>
+        ) : rows.length === 0 ? (
+          <Empty>No trust actions recorded yet.</Empty>
+        ) : (
+          <ul className="space-y-3">
+            {rows.map((h) => (
+              <li key={h.id} className="rounded-xl border p-3 text-[12.5px]">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-mono text-[11.5px]">{h.action}</div>
+                  <div className="text-[10.5px] text-muted-foreground">{fmt(h.created_at)}</div>
+                </div>
+                <div className="mt-1 text-[11.5px] text-muted-foreground">
+                  by {h.actor_name || h.actor_user_id.slice(0, 8)}
+                </div>
+                {h.reason && <div className="mt-1">{h.reason}</div>}
+                {h.note && <div className="mt-1 text-muted-foreground">{h.note}</div>}
+                {h.payload && (
+                  <div className="mt-1 font-mono text-[10.5px] text-muted-foreground">
+                    {JSON.stringify(h.payload)}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

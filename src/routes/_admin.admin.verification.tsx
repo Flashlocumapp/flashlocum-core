@@ -17,6 +17,7 @@ import {
   statusTone,
   type VerificationStatus,
 } from "@/lib/admin-ui";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 export const Route = createFileRoute("/_admin/admin/verification")({
   ssr: false,
@@ -64,6 +65,7 @@ function AdminVerificationPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
   const [actionFor, setActionFor] = useState<DoctorRow | null>(null);
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -171,6 +173,7 @@ function AdminVerificationPage() {
                 busy={busy}
                 onAct={(id, status) => void act(id, status)}
                 onActionRequired={() => setActionFor(d)}
+                onOpenUser={() => setOpenUserId(d.id)}
               />
             ))}
           </div>
@@ -188,6 +191,11 @@ function AdminVerificationPage() {
           }}
         />
       )}
+
+      <UserDetailDrawer
+        userId={openUserId}
+        onClose={() => setOpenUserId(null)}
+      />
     </div>
   );
 }
@@ -197,11 +205,13 @@ function VerificationCard({
   busy,
   onAct,
   onActionRequired,
+  onOpenUser,
 }: {
   doctor: DoctorRow;
   busy: string | null;
   onAct: (id: string, s: VerificationStatus) => void;
   onActionRequired: () => void;
+  onOpenUser: () => void;
 }) {
   const isBusy = (s: string) => busy === doctor.id + s;
   const anyBusy = busy?.startsWith(doctor.id) ?? false;
@@ -330,6 +340,12 @@ function VerificationCard({
             {isBusy("rejected") ? "Rejecting…" : "Reject"}
           </button>
         )}
+        <button
+          onClick={onOpenUser}
+          className="h-9 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold"
+        >
+          History & details
+        </button>
       </div>
     </div>
   );
@@ -408,6 +424,11 @@ function DoctorAvatar({
   );
 }
 
+function isImagePath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  return /\.(png|jpe?g|webp|gif|heic|heif|avif)(\?.*)?$/i.test(path);
+}
+
 function DocRow({
   label,
   path,
@@ -417,12 +438,37 @@ function DocRow({
 }) {
   const { url, loading, error } = useSignedDoctorUrl(path);
   const disabled = !url;
+  const showThumb = isImagePath(path) && url;
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12px]">
-      <div className="min-w-0 truncate">
-        <span className="font-medium">{label}</span>
-        {!path && <span className="ml-1 text-muted-foreground">— not uploaded</span>}
-        {error && <span className="ml-1 text-destructive">— {error}</span>}
+    <div className="flex items-center gap-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12px]">
+      {showThumb ? (
+        <a
+          href={url ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 overflow-hidden rounded-md"
+          style={{ width: 44, height: 44, background: "var(--color-secondary)" }}
+        >
+          <img
+            src={url ?? ""}
+            alt={label}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </a>
+      ) : (
+        <div
+          className="shrink-0 rounded-md text-center text-[10px] font-semibold leading-[44px] text-muted-foreground"
+          style={{ width: 44, height: 44, background: "var(--color-secondary)" }}
+          aria-hidden
+        >
+          DOC
+        </div>
+      )}
+      <div className="min-w-0 flex-1 truncate">
+        <div className="font-medium">{label}</div>
+        {!path && <div className="text-[11px] text-muted-foreground">not uploaded</div>}
+        {error && <div className="text-[11px] text-destructive">{error}</div>}
       </div>
       {path && (
         <div className="flex shrink-0 items-center gap-1.5">

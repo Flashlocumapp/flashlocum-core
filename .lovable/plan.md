@@ -1,102 +1,133 @@
-# Payment Lifecycle — Eliminate All Client-Side Pricing Displays
+# Admin Dashboard — Approved Operational Gap Closure
 
-## A. Root Cause (stale ₦42,000 / ₦77,500)
+Scope: 6 capabilities. Excluded (not approved): Payment Investigation Tools, Notification Logs.
 
-In `src/features/request/ShiftSettlement.tsx`, the displayed payable amount is seeded from a **client-side estimate** before the server reply lands. For multi-day shifts whose prior days were already closed on the server at the 1-hour minimum, the local estimator doesn't know the real prior-day totals and falls back to "every prior day ran its full booked window." That assumption produces the inflated numbers the user is seeing.
+Approach: extend existing admin routes. No new sidebar entries. No parallel workflows.
 
-Three call sites perform this client estimate today:
+---
 
-1. **`totalAmount` memo (lines 212–235)** — calls `computeWorkedPricing(..., priorBilled)` where `priorBilled` is derived from `segments`. `segments` is `[]` until `getRequestBillingState` resolves, so the pricer guesses prior-day totals from booked length.
-2. **`handleEndShift` pre-seed (lines 415–427)** — writes a local estimate into `frozenAmountRef` *before* awaiting `endShiftRpc`. The SettlementPane mounts and renders the inflated value during the round-trip; line 451 then overwrites it with the server total.
-3. **Open useEffect fallback (lines 328–345)** — re-runs the same client estimator whenever `serverTotalBilledAmount` is null/0 on first open (typical on refresh / reopened payment sessions).
+## 0. Foundation — Audit log table (enables §6)
 
-`computeWorkedPricing` is doing what it was asked. The bug is that we are calling it at all for any amount the user sees on the payment screen.
+Extend `admin_payment_actions` into a generic admin action log (or add sibling `admin_actions` — one migration, whichever keeps existing rows intact).
 
-## B. Why the Display Flashes
+Columns: `actor_user_id`, `action`, `target_user_id`, `target_shift_id`, `target_payment_ref`, `reason`, `note`, `payload jsonb`, `created_at`.
 
-```
-t0  End Shift tapped
-t0  handleEndShift seeds frozenAmountRef = ₦42,000   ← client estimate
-t0  setPhase("settlement") → SettlementPane shows ₦42,000  ← USER SEES
-t0+Δ endShiftRpc resolves → frozenAmountRef = ₦6,000      ← server total
-t0+Δ re-render → ₦6,000                                    ← FLIPS
-```
+Every admin write across the console inserts one row before returning. Backfilled call sites: verification approve/reject/suspend/request-action, trust restrict/clear/freeze/escalate, shift force-cancel/force-complete/extend-window/lift-cap/mark-paid, payment refund/write-off/record-offline, push send.
 
-On a refresh into `awaiting_payment`, the same flip happens via the open-effect fallback while `getRequestBillingState` is in flight.
+RLS: admin-only SELECT via `has_role(auth.uid(),'admin')`. GRANTs to authenticated + service_role.
 
-## C. Hardened Requirement (user-mandated)
+---
 
-**Nowhere in the payment lifecycle may the UI display a client-side pricing calculation.** No estimated totals, no temporary totals, no fallback totals, no locally-priced numbers. When the server-authoritative amount is unknown, show a loading state and disable payment actions.
+## 1. User Detail Drawer  *(new)*
 
-Scope covered: Settlement screen, Overtime screen, Payment summary, Awaiting payment, Reopened sessions, Multi-day, Single-day, Straight 24h, Straight 48h.
+Opened by clicking any user row in `/admin/users`, and reused from Verification, Trust, Cancellations, Ratings, and Shifts row clicks.
 
-The only authoritative sources for any payable number are:
-- `coverage_requests.total_billed_amount` (server, set by `end_shift`)
-- `shift_segments.billed_amount` summed (server ledger)
-- Server-returned settlement records (for the Confirmed pane history)
+Tabs (all read-only):
+- **Overview** — profile, contact, area, surfaces, joined, last seen, online state.
+- **Verification** — current state + history (reuses §4).
+- **Shifts** — paginated list filtered to this user (extend `adminListShifts` with `userId`).
+- **Payments** — their settled / unpaid shifts with Monnify refs.
+- **Ratings** — given and received (filter `adminListRatings`).
+- **Cancellations** — by/against (filter `adminListCancellations`).
+- **Restrictions** — current state + history (reuses §5).
+- **Devices** — `device_tokens` rows (platform, last_seen).
+- **Audit** — every admin action targeting this user (from §0).
 
-## D. Audit — Surfaces That Currently Display a Number in the Payment Lifecycle
+New server fn: `adminGetUserDetail({ userId })` returning a composed profile + counts payload. Per-tab data lazy-loaded via existing list fns extended with `userId` filter.
 
-All in `src/features/request/ShiftSettlement.tsx` unless noted.
+---
 
-| # | Site | Currently fed by | Action |
-|---|---|---|---|
-| 1 | `SettlementPane` amount (L1086) | `frozenAmount` (mixed: server or client estimate) | Make server-only |
-| 2 | `SettlementPane` liveAmount (L982) | `totalAmount` memo (client estimate) | Replace with server amount or skeleton |
-| 3 | `OvertimePane` total (L1203) | `totalAmount` memo (client estimate) | Replace with server amount or skeleton |
-| 4 | `OvertimePane` "+₦X" surcharge tag (L1234) | `totalAmount − frozenAmount` (client math) | Derive from server `total_billed_amount − base` (server-known) |
-| 5 | `Pay with Monnify` button label (L1255) | `total` (client estimate) | Use server amount; show "Calculating…" + disabled while unknown |
-| 6 | `ConfirmedPane` total (L1429, L1467, L1475) | `frozenAmount` + server `segments` | Already server-derived; assert no estimate fallback |
-| 7 | Final receipt amount (L1654) | `displayAmount` | Trace and ensure server-only |
-| 8 | `PaymentSummaryOverlay` totals (L125–127) | Props from caller | Audit caller; require server amount |
+## 2. Shift Detail Drawer  *(extend existing RatingDetailDrawer)*
 
-`RequesterHome.tsx` `computePricing` (L141, L473, L1210) is the **request-builder** preview before a request is created (no shift exists, no server bill possible). That is outside the payment lifecycle and stays as-is.
+`/admin/shifts` already opens a drawer with `RatingBlock` only. Replace its body with tabs:
 
-`EarningsScreen.tsx` / `HistoryDetailSheet.tsx` render historical settled rows from the server — already server-authoritative; will be re-verified, not changed.
+- **Timeline** — created → broadcast → accepted → started → paused/resumed (from `shift_segments`) → ended → billing_locked → paid → settled. Each event with timestamp.
+- **Parties** — requester + doctor cards that open the User drawer (§1).
+- **Billing** — coverage_type, environment, days, start/end, worked_min, paused_total, segments table, surcharge ticks (`payment_surcharge_log`), frozen total, base/surcharge breakdown.
+- **Payment** — Monnify ref, webhook receipts list, disbursement status, underpayment record if any. (Read-only view of the same data §3 surfaces from Unpaid; no action buttons here.)
+- **Ratings** — keep current `RatingBlock` pair.
+- **Cancellation** — reason + free text + actor if cancelled.
+- **Admin actions** — Force-cancel, Force-complete, Extend payment window (+15 min), Lift 24h surcharge cap, Mark paid manually (with reason). Each writes an audit row (§0).
 
-## E. Correct Behaviour
+Filters: add `paused` and `awaiting_payment` to the existing status pills. Add a copyable shift-ID column.
 
-For every payment-lifecycle surface:
-1. Render the amount only when a server-authoritative number is in hand.
-2. Otherwise render a skeleton with the copy **"Calculating final amount…"**.
-3. Disable all payment-trigger actions (Pay with Monnify, "I've paid", manual transfer copy CTA) while the amount is unknown.
-4. Never call `computeWorkedPricing` (or any local pricer) inside a payment-lifecycle component.
+New server fns: `adminGetShiftDetail({ shiftId })`, `adminShiftForceCancel`, `adminShiftForceComplete`, `adminShiftExtendPaymentWindow`, `adminShiftLiftSurchargeCap`, `adminShiftMarkPaid`.
 
-## F. Implementation Plan
+---
 
-All changes in `src/features/request/ShiftSettlement.tsx` plus a small prop tightening in `src/components/PaymentSummaryOverlay.tsx`. No SQL changes. No pricing-engine changes.
+## 3. Payment Detail Drawer  *(new)*
 
-1. **Make the displayed amount strictly server-sourced.**
-   - Change `frozenAmountRef` initial value to `null`. Introduce `serverAmount: number | null` derived from: `serverTotalBilledAmount` prop → `endShiftRpc` response → `getRequestBillingState` poll. Whichever lands first wins; later server values may only raise it (Math.max) — never a client value.
-   - Delete the pre-seed in `handleEndShift` (lines 415–427) and the fallback in the open useEffect (lines 331–345). Replace with: kick `getRequestBillingState` immediately on mount whenever `serverAmount === null`.
+Opened from `/admin/unpaid` rows and from the Shift drawer's Payment tab.
 
-2. **Stop computing `totalAmount` for any payment-lifecycle pane.**
-   - Remove `liveAmount` / `total` props sourced from `totalAmount` on `SettlementPane` and `OvertimePane`. They consume `serverAmount` only.
-   - Retain the `totalAmount` memo **only** as input to `ActivePane`'s live ticker during the *running shift* (pre-end). That is not a payment screen. To eliminate the same booked-length over-estimate from leaking into the live ticker for multi-day, gate `ActivePane`'s amount on `segments.length > 0`; until then show "—".
+Sections:
+- Monnify checkout reference + init timestamp.
+- Webhook receipts (timestamps + status) from existing webhook log surface.
+- Settlement disbursement: reference, 85/15 split, status, attempt count.
+- Surcharge tick history (`payment_surcharge_log`).
+- Underpayment record if any (`payment_underpayments`).
+- `admin_payment_actions` history for this shift.
 
-3. **Surface a real loading state.**
-   - Add an `AmountLine` subcomponent: renders `fmtNaira(serverAmount)` when present; otherwise renders the shimmer + text "Calculating final amount…".
-   - Use it in `SettlementPane`, `OvertimePane`, and the final receipt row (L1654).
+Actions: **Reconcile now** (one-shot Monnify poll), **Initiate refund** (with reason), **Write off** (with reason), **Record offline settlement** (amount + note). All write to audit log (§0).
 
-4. **Gate all payment actions on `serverAmount !== null`.**
-   - `Pay with Monnify` button: `disabled` until `serverAmount` is known; label switches to "Calculating final amount…".
-   - `I've paid` / manual confirm CTA: same gate.
-   - Bank-transfer copy CTA: visible, but the amount line above it shows the loading state until known.
-   - `settlementReadyRef` already gates End-Shift path; extend the same gate to the reopen path so the button is never enabled with an unknown amount.
+Unpaid table additions: Monnify ref column, last-webhook-seen column.
 
-5. **Derive overtime "+₦X" from server data only.**
-   - Replace `extensionAmount = totalAmount − frozenAmount` with `extensionAmount = serverAmount − baseAmount`, where `baseAmount` is `coverage_requests.total_billed_amount` captured at the moment `payment_extension_count` first becomes > 0 (already provided by `getRequestBillingState`). If unavailable, hide the "+₦X" tag instead of guessing.
+New server fns: `adminGetPaymentDetail({ shiftId })`, `adminPaymentReconcile`, `adminPaymentRefund`, `adminPaymentWriteOff`, `adminPaymentRecordOffline`.
 
-6. **Tighten `PaymentSummaryOverlay`.**
-   - Document and assert in the component that `total` MUST be a server-confirmed settled amount. Add a prop `source: 'server'` (typed literal) so every call site is forced to acknowledge it. Verify the two existing call sites already pass server-derived values; no display change expected.
+---
 
-7. **Verification (must all pass before declaring done).**
-   - Reproduce test cases 1 (3d×10h, 20s/day) and 2 (4d×10h busy, 20s/day): sheet opens, briefly shows "Calculating final amount…", then ₦6,000 / ₦10,000. Never displays ₦42,000 / ₦77,500 or any other intermediate number.
-   - Refresh mid-settlement on each: identical behaviour, never a stale flash.
-   - Single-day standard, Straight 24h, Straight 48h: same — no client number ever rendered on Settlement / Overtime / Awaiting / Reopened.
-   - Grep the repo to confirm `computeWorkedPricing` is no longer imported by any file under `src/features/request/ShiftSettlement.tsx`'s payment panes; the only allowed callers are the request-builder (`RequesterHome` pre-create preview) and the `ActivePane` running-shift ticker.
-   - Manually disable network / throttle to 3G and confirm the Pay button stays disabled and the loading copy is visible the entire time the server amount is in flight.
+## 4. Verification Document Visibility  *(extend `/admin/verification`)*
 
-### Outcome
+Today: approve/reject/suspend/request-action with reason/target/note. Files are uploaded but not previewed; no per-doctor history.
 
-After this change there is no code path in the payment lifecycle that can render a client-priced number. Every naira the requester sees from End Shift through Confirmed comes from the server ledger. The ₦42,000 / ₦77,500 flash is structurally impossible — not hidden behind a faster poll, but removed at the source.
+Extend the verification row in place:
+- Inline thumbnails for medical license, MDCN card, NYSC document, selfie. Click to enlarge. Signed URLs cached via existing `selfie-url` helper.
+- MDCN external-validation badge (auto-check result if available, else "Manual review").
+- Bank validation badge from Monnify account-name match result.
+- **History panel** per doctor: every state change with actor, timestamp, reason, target, note — sourced from §0 audit rows written by `updateDoctorVerificationFn` (which we extend to log).
+
+New server fn: `adminGetVerificationDetail({ userId })` returning signed file URLs + history. Surfaced in the User drawer's Verification tab too.
+
+---
+
+## 5. Restriction History  *(extend `/admin/trust`)*
+
+Today: current rating / reliability / flagged/restricted, restrict + clear actions. `trust_blocks` exists but is not surfaced; no history.
+
+Extend `/admin/trust`:
+- Per-row History disclosure: every restrict / clear / freeze / escalate event (actor, timestamp, reason).
+- `trust_blocks` panel inside the row: each reliability block with completed/cancelled/no-show counts.
+- Outstanding-balance line (sum of unpaid for this user).
+- New actions: **Freeze** (soft — blocks new bookings, allows active shifts to finish), **Escalate** (mark for senior review with note), **Set expiry** on restriction. Implemented via `admin_apply_trust_restriction` extended with `mode` + `expires_at`, or sibling RPCs.
+
+New server fns / RPCs: `admin_list_trust_history({ user_id })`, `admin_freeze_user`, `admin_escalate_user`. Surfaced inside the User drawer's Restrictions tab.
+
+---
+
+## 6. Audit Logs  *(surface §0)*
+
+Two surfaces, no new sidebar entry:
+- **`/admin/system`** — full audit table with filters by actor, target, action type, time range. CSV export.
+- **Scoped views** inside the User drawer (Audit tab) and Shift drawer (Admin actions tab).
+
+New server fn: `adminListActions({ filters })`. Every admin write fn from §1–§5 inserts one row before returning.
+
+---
+
+## Cross-cutting
+
+- All new server fns use the existing `requireSupabaseAuth` + admin role-check pattern from `src/lib/admin.functions.ts`.
+- New RPCs ship with GRANTs + RLS scoped via `has_role(auth.uid(),'admin')`.
+- Drawers are pure client components in `src/components/admin/`, keyed by entity id via TanStack Query.
+- Tables get a small "Actions" column or inline disclosure — never a new screen.
+
+## Delivery order
+
+1. §0 audit-log table + write-through from existing actions.
+2. §2 Shift Detail Drawer (extends the ratings drawer that already exists).
+3. §1 User Detail Drawer (reuses §2, §4, §5, §6 panels).
+4. §3 Payment Detail Drawer + Unpaid integration.
+5. §4 Verification document previews + history.
+6. §5 Restriction history + freeze/escalate.
+7. §6 Audit log surface in `/admin/system` + CSV export.
+
+Outcome: support, verification, payment investigation, restriction, and shift investigation are completable from the dashboard with no direct DB access.

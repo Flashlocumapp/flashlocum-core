@@ -13,6 +13,8 @@ import {
   fmtNaira,
   fmtRelative,
 } from "@/lib/admin-ui";
+import { ShiftDetailDrawer } from "@/components/admin/ShiftDetailDrawer";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 export const Route = createFileRoute("/_admin/admin/shifts")({
   ssr: false,
@@ -52,7 +54,8 @@ function AdminShiftsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState<Status>("all");
   const [q, setQ] = useState("");
-  const [openRow, setOpenRow] = useState<AdminShiftRow | null>(null);
+  const [openShiftId, setOpenShiftId] = useState<string | null>(null);
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -198,7 +201,7 @@ function AdminShiftsPage() {
                   <tr
                     key={r.id}
                     className="border-t hover:bg-secondary/30 align-top cursor-pointer"
-                    onClick={() => setOpenRow(r)}
+                    onClick={() => setOpenShiftId(r.id)}
                   >
                     <td className="px-4 py-2.5">
                       <Chip color={statusColor(r.status)}>{r.status}</Chip>
@@ -269,7 +272,12 @@ function AdminShiftsPage() {
           </div>
         )}
       </div>
-      {openRow && <RatingDetailDrawer row={openRow} onClose={() => setOpenRow(null)} />}
+      <ShiftDetailDrawer
+        shiftId={openShiftId}
+        onClose={() => setOpenShiftId(null)}
+        onOpenUser={(id) => setOpenUserId(id)}
+      />
+      <UserDetailDrawer userId={openUserId} onClose={() => setOpenUserId(null)} />
     </div>
   );
 }
@@ -308,77 +316,4 @@ function RatingsCell({ row }: { row: AdminShiftRow }) {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
-}
-
-function RatingDetailDrawer({ row, onClose }: { row: AdminShiftRow; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-foreground/30" />
-      <div
-        className="relative z-10 h-full w-full max-w-md overflow-y-auto p-6"
-        style={{ background: "var(--color-surface-elevated)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Shift</div>
-            <div className="text-[15px] font-medium">{row.hospital}</div>
-            <div className="text-[12px] text-muted-foreground">
-              {row.day} · {row.start_time}–{row.end_time}
-            </div>
-          </div>
-          <button onClick={onClose} className="rounded-full px-3 py-1 text-[12px] bg-secondary">
-            Close
-          </button>
-        </div>
-
-        <div className="mt-6 space-y-5">
-          <RatingBlock
-            title="Requester → Doctor"
-            rater={row.requester_name}
-            ratee={row.doctor_name}
-            rating={row.requester_to_doctor}
-          />
-          <RatingBlock
-            title="Doctor → Requester"
-            rater={row.doctor_name}
-            ratee={row.requester_name}
-            rating={row.doctor_to_requester}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RatingBlock({
-  title,
-  rater,
-  ratee,
-  rating,
-}: {
-  title: string;
-  rater: string | null;
-  ratee: string | null;
-  rating: { score: number; feedback: string | null; created_at: string } | null;
-}) {
-  return (
-    <div className="rounded-xl border p-4">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{title}</div>
-      <div className="mt-1 text-[12.5px] text-muted-foreground">
-        {rater || "—"} <span className="opacity-50">→</span> {ratee || "—"}
-      </div>
-      {rating ? (
-        <>
-          <div className="mt-2 text-[20px] font-semibold tracking-tight">★ {rating.score}/5</div>
-          <div className="mt-2 whitespace-pre-wrap text-[13px]">
-            {rating.feedback || <span className="text-muted-foreground">No comment.</span>}
-          </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">{fmt(rating.created_at)}</div>
-        </>
-      ) : (
-        <div className="mt-2 text-[13px] text-muted-foreground">Not yet rated.</div>
-      )}
-    </div>
-  );
 }
