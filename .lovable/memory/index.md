@@ -9,4 +9,5 @@
 
 ## Memories
 - [Notification contract](mem://constraints/notification-contract.md) — contract vs operational toasts, foreground push suppression, payment-complete rule
+- [Notification event catalog](mem://constraints/notification-events.md) — locked canonical `kind` strings; OneSignal / future providers MUST key off these names. Server emits via `notify.server.ts`; client ingests via `feedback.ts`.
 - [Monnify settlement](mem://features/monnify-settlement.md) — collection + disbursement webhook URLs, daily reconciliation cron
