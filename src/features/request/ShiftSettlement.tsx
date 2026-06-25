@@ -1217,9 +1217,15 @@ function OvertimePane({
           Coverage Extended
         </div>
         <div className="mt-3 text-[13px] text-muted-foreground">Total Settlement</div>
-        <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtNaira(total)}
-        </div>
+        {total == null ? (
+          <div className="mt-1 text-[18px] font-medium text-muted-foreground animate-pulse">
+            Calculating final amount…
+          </div>
+        ) : (
+          <div className="mt-1 text-[44px] font-semibold leading-none tracking-tight tabular-nums">
+            {fmtNaira(total)}
+          </div>
+        )}
         <p className="mt-2 text-[12.5px] text-muted-foreground">
           Settlement grace period elapsed. Coverage automatically resumed billing.
         </p>
