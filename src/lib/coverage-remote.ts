@@ -756,16 +756,24 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   });
 
   if (!invalidationChannel) {
+    const onInvalidate = (msg: { payload?: { id?: string } }) => {
+      markRealtimeActivity();
+      const id = msg?.payload?.id;
+      // Single-row re-read when the trigger gave us an id — this is the
+      // queue advancement path (accept / cancel / edit-pause / expire /
+      // delete). Falls back to a full snapshot refresh only when no id
+      // was provided (legacy / manual invalidate).
+      if (typeof id === "string" && id.length > 0) {
+        void fetchAndIngestRow(id);
+      } else {
+        scheduleRefresh();
+      }
+    };
     invalidationChannel = supabase
       .channel("coverage_invalidations", {
         config: { broadcast: { self: false } },
       })
-      .on("broadcast", { event: "invalidate" }, () => {
-        // RLS may have filtered the postgres_changes event for this client;
-        // re-fetching reconciles cache divergence.
-        markRealtimeActivity();
-        scheduleRefresh();
-      })
+      .on("broadcast", { event: "invalidate" }, onInvalidate)
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           resetBackoff("invalidations");
@@ -780,15 +788,11 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
               supabase.removeChannel(invalidationChannel);
               invalidationChannel = null;
             }
-            // Re-create on next subscriber tick; do so eagerly here.
             invalidationChannel = supabase
               .channel("coverage_invalidations", {
                 config: { broadcast: { self: false } },
               })
-              .on("broadcast", { event: "invalidate" }, () => {
-                markRealtimeActivity();
-                scheduleRefresh();
-              })
+              .on("broadcast", { event: "invalidate" }, onInvalidate)
               .subscribe((s) => {
                 if (s === "SUBSCRIBED") {
                   resetBackoff("invalidations");

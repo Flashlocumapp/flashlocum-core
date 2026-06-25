@@ -1218,6 +1218,9 @@ export function broadcastingRequests(s: NetState): NetRequest[] {
   // and dismiss-resume (paused → searching) restart the 180s window
   // server-side via the bump_request_rev trigger. Falls back to createdAt
   // for any legacy row without a broadcast_started_at column populated.
+  //
+  // FIFO sort (oldest first) so every online doctor sees the same "next"
+  // request as the queue head. Matches list_open_coverage_requests ASC.
   const now = Date.now();
   return Object.values(s.requests)
     .filter(
@@ -1225,7 +1228,7 @@ export function broadcastingRequests(s: NetState): NetRequest[] {
         r.status === "broadcasting" &&
         now - (r.broadcastStartedAt ?? r.createdAt) < BROADCAST_TTL_MS,
     )
-    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt));
+    .sort((a, b) => (a.broadcastStartedAt ?? a.createdAt) - (b.broadcastStartedAt ?? b.createdAt));
 }
 
 
