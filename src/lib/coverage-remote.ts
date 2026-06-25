@@ -293,12 +293,17 @@ export function onUserIdChange(fn: (id: string | null) => void): () => void {
 }
 
 // Keep the cached id in sync with auth events (sign-in, sign-out, refresh).
+// Only notify listeners on actual identity transitions — TOKEN_REFRESHED,
+// INITIAL_SESSION, and tab focus re-fire auth events with the same uid; a
+// blanket notify would blank the coverage cache (History tab flashes empty
+// for ~1s until refreshSnapshot repopulates).
 if (typeof window !== "undefined") {
   subscribeAuthState(({ event, userId }) => {
     if (event === "SIGNED_OUT") clearPersistedSnapshot();
+    const changed = cachedUserId !== userId;
     cachedUserId = userId;
     userIdResolved = true;
-    userListeners.forEach((fn) => fn(cachedUserId));
+    if (changed) userListeners.forEach((fn) => fn(cachedUserId));
   });
 }
 
@@ -913,6 +918,13 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   // identity so a previously-cached row cannot survive sign-in as a
   // different user. UI shows empty until the fresh server snapshot arrives.
   const offAuth = onUserIdChange((id) => {
+    // Same-user re-entry: do NOT blank the cache. Token refresh / focus /
+    // INITIAL_SESSION can replay the same uid; emitting [] here is what
+    // briefly empties the History tab. Quietly reconcile in the background.
+    if (id && id === cachedSnapshotUserId) {
+      void refreshSnapshot();
+      return;
+    }
     setLiveSnapshotSeen(false);
     cachedSnapshot = [];
     cachedSnapshotUserId = null;

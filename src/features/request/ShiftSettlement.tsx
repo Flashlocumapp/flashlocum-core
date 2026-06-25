@@ -841,6 +841,7 @@ export function ShiftSettlement({
             payCheckState={payCheckState}
             payCheckError={payCheckError}
             onCheckPayment={checkMonnifyPaymentNow}
+            paymentDueAt={serverPaymentDueAt}
           />
         )}
         {phase === "overtime" && (
@@ -861,6 +862,7 @@ export function ShiftSettlement({
             payCheckState={payCheckState}
             payCheckError={payCheckError}
             onCheckPayment={checkMonnifyPaymentNow}
+            paymentDueAt={serverPaymentDueAt}
           />
         )}
         {phase === "confirmed" && (
@@ -984,6 +986,7 @@ function SettlementPane({
   payCheckState,
   payCheckError,
   onCheckPayment,
+  paymentDueAt,
 }: {
   shift: ShiftMeta;
   phase: "settlement" | "grace";
@@ -1001,6 +1004,7 @@ function SettlementPane({
   payCheckState: "idle" | "checking" | "not_found" | "error";
   payCheckError: string | null;
   onCheckPayment: () => void;
+  paymentDueAt?: string | null;
 }) {
   // Monnify custom-transfer flow.
   if (onPayWithMonnify) {
@@ -1015,6 +1019,7 @@ function SettlementPane({
         payCheckState={payCheckState}
         payCheckError={payCheckError}
         onCheckPayment={onCheckPayment}
+        paymentDueAt={paymentDueAt}
       />
     );
   }
@@ -1104,6 +1109,7 @@ function OvertimePane({
   payCheckState,
   payCheckError,
   onCheckPayment,
+  paymentDueAt,
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
@@ -1120,6 +1126,7 @@ function OvertimePane({
   payCheckState: "idle" | "checking" | "not_found" | "error";
   payCheckError: string | null;
   onCheckPayment: () => void;
+  paymentDueAt?: string | null;
 }) {
   if (onPayWithMonnify) {
     return (
@@ -1133,6 +1140,7 @@ function OvertimePane({
         payCheckState={payCheckState}
         payCheckError={payCheckError}
         onCheckPayment={onCheckPayment}
+        paymentDueAt={paymentDueAt}
       />
     );
   }
@@ -1537,6 +1545,7 @@ function CustomTransferPane({
   payCheckState,
   payCheckError,
   onCheckPayment,
+  paymentDueAt,
 }: {
   amount: number;
   account: TransferAccount | null;
@@ -1547,6 +1556,7 @@ function CustomTransferPane({
   payCheckState: "idle" | "checking" | "not_found" | "error";
   payCheckError: string | null;
   onCheckPayment: () => void;
+  paymentDueAt?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
@@ -1559,19 +1569,22 @@ function CustomTransferPane({
     }
   };
 
-  // 15-minute price-hold countdown. ANCHORED EXCLUSIVELY to the server-issued
-  // `account.expiresOn` (returned by Monnify and persisted in
-  // `coverage_requests.payment_account` on the server). Refreshing the page,
-  // signing out, or reopening the sheet continues from the original deadline;
-  // the timer only resets when the server mints a fresh virtual account with
-  // a new expiry.
+  // 15-minute price-hold countdown. Anchored, in priority order, to:
+  //   1. `paymentDueAt` — the authoritative server deadline persisted on
+  //      `coverage_requests.payment_due_at`. Survives refresh and re-mounts.
+  //   2. `account.expiresOn` — Monnify's account expiry (often null in sandbox).
+  // If neither is available yet (account still being minted), render `—:—`
+  // instead of falsely restarting at 15:00 every render.
   const PRICE_HOLD_SEC = 15 * 60;
   const tick = useSimClock(1000);
-  const expiresAtMs = account?.expiresOn ? Date.parse(account.expiresOn) : NaN;
-  const remaining = Number.isFinite(expiresAtMs)
-    ? Math.max(0, Math.floor((expiresAtMs - tick) / 1000))
+  const dueMs = paymentDueAt ? Date.parse(paymentDueAt) : NaN;
+  const expMs = account?.expiresOn ? Date.parse(account.expiresOn) : NaN;
+  const anchorMs = Number.isFinite(dueMs) ? dueMs : (Number.isFinite(expMs) ? expMs : NaN);
+  const hasAnchor = Number.isFinite(anchorMs);
+  const remaining = hasAnchor
+    ? Math.max(0, Math.floor((anchorMs - tick) / 1000))
     : PRICE_HOLD_SEC;
-  const expired = Number.isFinite(expiresAtMs) && remaining === 0;
+  const expired = hasAnchor && remaining === 0;
 
   // Price-hold expiry is informational only. The amount on screen is whatever
   // the server-frozen Monnify virtual account says — we do NOT silently
@@ -1668,7 +1681,7 @@ function CustomTransferPane({
                 className="text-[18px] font-semibold tabular-nums"
                 style={{ color: remaining <= 60 ? "var(--color-destructive)" : "var(--color-foreground)" }}
               >
-                {fmtClock(remaining)}
+                {hasAnchor ? fmtClock(remaining) : "—:—"}
               </span>
             </div>
 
