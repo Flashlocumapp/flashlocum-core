@@ -408,7 +408,7 @@ function HomeScreen({ active }: { active: boolean }) {
                 style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
               />
               <ReliabilityPill entityId={selfEntityId} inline />
-              <TrustInfoPopover align="end" className="ml-0.5" ratingsText="Doctors rate you based on your last 20 shifts. Minimum 3.5 stars." reliabilityText="Based on your last 20 shifts. Max 5 cancellations per 20 shifts. Minimum 75%." />
+              <TrustInfoPopover align="end" className="ml-0.5" ratingsText="Reflects how satisfied doctors are with their experience working with your facility. Minimum: 3.5 stars." reliabilityText="Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 75%." />
             </div>
           </div>
         </header>
