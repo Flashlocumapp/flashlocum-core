@@ -603,38 +603,42 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
       <div
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
-        style={{ height: "calc(100% - 140px)" }}
+        style={{ height: "calc(100% - 140px)", overscrollBehavior: "contain" }}
       >
-        {filtered.length === 0 ? (
-          <EmptyState tab={tab} role="request" />
-        ) : (
-          <ul className="space-y-2.5">
-            <AnimatePresence initial={false} mode="popLayout">
-              {filtered.map((item) => (
-                <motion.li
-                  key={item.id}
-                  layout
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <RequestCard
-                    item={item}
-                    onStart={() => moveToActive(item.id)}
-                    onPause={() => requestPause(item.id)}
-                    onEnd={() => requestEnd(item.id)}
-
-                    onCancel={() => setCancelTargetId(item.id)}
-                    onEdit={() => openEdit(item.id)}
-                    onOpenHistory={() => setHistoryId(item.id)}
-                    onOpenDetail={() => setDetailId(item.id)}
-                  />
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
+        <PullToRefresh>
+          {(() => {
+            const settled = useFirstPaintSettled(filtered.length > 0);
+            if (!settled) return <ListSkeleton />;
+            if (filtered.length === 0) return <EmptyState tab={tab} role="request" />;
+            return (
+              <ul className="space-y-2.5">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {filtered.map((item) => (
+                    <motion.li
+                      key={item.id}
+                      layout
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <RequestCard
+                        item={item}
+                        onStart={() => moveToActive(item.id)}
+                        onPause={() => requestPause(item.id)}
+                        onEnd={() => requestEnd(item.id)}
+                        onCancel={() => setCancelTargetId(item.id)}
+                        onEdit={() => openEdit(item.id)}
+                        onOpenHistory={() => setHistoryId(item.id)}
+                        onOpenDetail={() => setDetailId(item.id)}
+                      />
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
+              </ul>
+            );
+          })()}
+        </PullToRefresh>
       </div>
 
       <AnimatePresence>
