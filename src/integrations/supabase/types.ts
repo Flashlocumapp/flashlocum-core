@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_actions: {
+        Row: {
+          action: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          note: string | null
+          payload: Json | null
+          reason: string | null
+          target_payment_ref: string | null
+          target_shift_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          payload?: Json | null
+          reason?: string | null
+          target_payment_ref?: string | null
+          target_shift_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          payload?: Json | null
+          reason?: string | null
+          target_payment_ref?: string | null
+          target_shift_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       admin_payment_actions: {
         Row: {
           action: string
@@ -673,6 +712,11 @@ export type Database = {
           phone: string | null
           role: string | null
           selfie_url: string | null
+          trust_escalated_at: string | null
+          trust_escalated_note: string | null
+          trust_frozen_at: string | null
+          trust_frozen_reason: string | null
+          trust_restriction_expires_at: string | null
           trust_snapshot: Json | null
           trust_snapshot_at: string | null
           updated_at: string
@@ -710,6 +754,11 @@ export type Database = {
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
+          trust_escalated_at?: string | null
+          trust_escalated_note?: string | null
+          trust_frozen_at?: string | null
+          trust_frozen_reason?: string | null
+          trust_restriction_expires_at?: string | null
           trust_snapshot?: Json | null
           trust_snapshot_at?: string | null
           updated_at?: string
@@ -747,6 +796,11 @@ export type Database = {
           phone?: string | null
           role?: string | null
           selfie_url?: string | null
+          trust_escalated_at?: string | null
+          trust_escalated_note?: string | null
+          trust_frozen_at?: string | null
+          trust_frozen_reason?: string | null
+          trust_restriction_expires_at?: string | null
           trust_snapshot?: Json | null
           trust_snapshot_at?: string | null
           updated_at?: string
@@ -1094,6 +1148,19 @@ export type Database = {
           role: string
           snapshot: Json
           user_id: string
+        }[]
+      }
+      admin_list_trust_history: {
+        Args: { _user_id: string }
+        Returns: {
+          action: string
+          actor_name: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          note: string
+          payload: Json
+          reason: string
         }[]
       }
       admin_list_users: {
