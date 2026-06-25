@@ -41,6 +41,17 @@ export function isAnyReconnecting(h: HealthMap = state): boolean {
   return h.coverage !== "ok" || h.invalidations !== "ok" || h.presence !== "ok";
 }
 
+/**
+ * Reconnecting indicator scoped to surfaces that depend on coverage data
+ * (Coverage screen, RequesterHome, CoverHome). Presence is intentionally
+ * excluded — it is a doctor-roster signal; the requester-side presence
+ * channel does not reach SUBSCRIBED, so including it would leave the pill
+ * stuck on "Reconnecting…" forever.
+ */
+export function isCoverageReconnecting(h: HealthMap = state): boolean {
+  return h.coverage !== "ok" || h.invalidations !== "ok";
+}
+
 export function subscribeRealtimeHealth(cb: (h: HealthMap) => void): () => void {
   listeners.add(cb);
   cb({ ...state });

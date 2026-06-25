@@ -45,7 +45,7 @@ import {
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
-import { subscribeRealtimeHealth, isAnyReconnecting } from "@/lib/realtime-health";
+import { subscribeRealtimeHealth, isCoverageReconnecting } from "@/lib/realtime-health";
 import { isRated, markRated, useRatedShiftsVersion } from "@/lib/rated-shifts";
 
 
@@ -229,7 +229,7 @@ function ReconnectingPill() {
     // flash without hiding real connectivity issues.
     let pendingTimer: number | null = null;
     const unsub = subscribeRealtimeHealth((h) => {
-      const bad = isAnyReconnecting(h);
+      const bad = isCoverageReconnecting(h);
       if (bad) {
         if (pendingTimer == null) {
           pendingTimer = window.setTimeout(() => {

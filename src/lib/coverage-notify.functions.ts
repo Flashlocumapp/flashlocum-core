@@ -55,7 +55,7 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
         supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
       ]);
       if (req?.requester_id) {
-        const { sendPushToUser } = await import("@/lib/push.server");
+        const { notifyUser } = await import("@/lib/notify.server");
         const doctorName = doc?.full_name ?? "your doctor";
         const version = rowVersion(req.updated_at as string | null);
         const extras: Record<string, string> = {
@@ -64,7 +64,7 @@ export const claimAndNotifyFn = createServerFn({ method: "POST" })
           doctorName,
         };
         if (req.hospital) extras.hospitalName = req.hospital;
-        await sendPushToUser(req.requester_id, {
+        await notifyUser(req.requester_id, {
           title: "Request accepted",
           body: `Dr. ${doctorName} accepted your request.`,
           kind: "offer.accepted",
@@ -184,14 +184,14 @@ export const cancelAndNotifyFn = createServerFn({ method: "POST" })
           actor === "doctor"
             ? `Dr. ${doctorName ?? "your doctor"} cancelled the shift.`
             : `${hospital} cancelled the shift.`;
-        const { sendPushToUser } = await import("@/lib/push.server");
+        const { notifyUser } = await import("@/lib/notify.server");
         const cancelExtras: Record<string, string> = {
           type: "coverage_cancelled",
           requestId: data.requestId,
         };
         if (doctorName) cancelExtras.doctorName = doctorName;
         if (row.hospital) cancelExtras.hospitalName = row.hospital;
-        await sendPushToUser(notifyUserId, {
+        await notifyUser(notifyUserId, {
           title: "Shift cancelled",
           body,
           kind: "shift.cancelled",
@@ -247,8 +247,8 @@ export const startAndNotifyFn = createServerFn({ method: "POST" })
     if (!alreadyStarted && row?.accepted_by) {
       try {
         const hospital = row.hospital ?? "the hospital";
-        const { sendPushToUser } = await import("@/lib/push.server");
-        await sendPushToUser(row.accepted_by, {
+        const { notifyUser } = await import("@/lib/notify.server");
+        await notifyUser(row.accepted_by, {
           title: "Shift started",
           body: `Your shift with ${hospital} has started.`,
           kind: "shift.started",

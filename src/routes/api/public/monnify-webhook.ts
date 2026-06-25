@@ -85,7 +85,7 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
             .eq("payment_reference", ref)
             .maybeSingle();
           if (row) {
-            const { sendPushToUser } = await import("@/lib/push.server");
+            const { notifyUser } = await import("@/lib/notify.server");
             const naira = Number(row.settled_amount ?? amount ?? 0);
             const hospital = row.hospital ?? "the hospital";
             const t = row.updated_at ? Date.parse(row.updated_at as string) : Date.now();
@@ -113,7 +113,7 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
               if (row.hospital) doctorExtras.hospitalName = row.hospital;
               if (naira > 0) doctorExtras.amount = String(naira);
               tasks.push(
-                sendPushToUser(row.accepted_by, {
+                notifyUser(row.accepted_by, {
                   title: "Payment received",
                   body: `Payment received for your shift with ${hospital}. Remittance will be made by 10PM today.`,
                   kind: "payment.settled",
