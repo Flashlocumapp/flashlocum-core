@@ -841,6 +841,7 @@ export function ShiftSettlement({
             payCheckState={payCheckState}
             payCheckError={payCheckError}
             onCheckPayment={checkMonnifyPaymentNow}
+            paymentDueAt={serverPaymentDueAt}
           />
         )}
         {phase === "overtime" && (
