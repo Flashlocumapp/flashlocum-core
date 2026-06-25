@@ -1615,7 +1615,7 @@ function CustomTransferPane({
   onCheckPayment,
   paymentDueAt,
 }: {
-  amount: number;
+  amount: number | null;
   account: TransferAccount | null;
   payState: "idle" | "starting" | "waiting" | "error";
   payError: string | null;
