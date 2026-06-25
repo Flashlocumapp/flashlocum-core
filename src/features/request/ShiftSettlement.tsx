@@ -1140,6 +1140,7 @@ function OvertimePane({
         payCheckState={payCheckState}
         payCheckError={payCheckError}
         onCheckPayment={onCheckPayment}
+        paymentDueAt={paymentDueAt}
       />
     );
   }
