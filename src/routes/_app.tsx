@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -7,6 +7,10 @@ import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
 import { ensureDoctorSession } from "@/features/cover/dispatch";
 import { HomeRouter } from "@/features/app/HomeRouter";
+import { CoverageScreen } from "@/features/app/CoverageScreen";
+import { AccountScreen } from "@/features/app/AccountScreen";
+import { EarningsScreen } from "@/features/app/EarningsScreen";
+
 
 
 import { RestrictionBanner } from "@/components/RestrictionBanner";
