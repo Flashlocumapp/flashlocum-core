@@ -477,7 +477,7 @@ function ScoreTile({ score }: { score: number }) {
         <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Ratings
         </div>
-        <TrustInfoPopover align="start" direction="up" showRatings showReliability={false} ratingsText="Based on your last 20 shifts. Updated every 20 shifts. Minimum 3.5 stars." />
+        <TrustInfoPopover align="start" direction="up" showRatings showReliability={false} ratingsText="Reflects how satisfied requesters are with your service. Minimum: 4.0 stars." />
       </div>
       <div className="mt-0.5 flex items-baseline gap-1">
         <span className="text-[18px] font-semibold tabular-nums tracking-tight">
