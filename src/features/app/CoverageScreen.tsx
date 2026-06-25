@@ -83,6 +83,14 @@ type RequestItem = {
   paymentDueAt?: string;
 };
 
+/** Straight 24h / Weekend 48h are continuous single shifts — no pause, no day boundary. */
+function isStraightItem(item: { coverage: Coverage }): boolean {
+  const kind = coverageKindFromLabel(String(item.coverage));
+  return kind === "straight24" || kind === "straight48";
+}
+
+
+
 
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
