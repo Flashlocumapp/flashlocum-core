@@ -561,6 +561,36 @@ export function ShiftSettlement({
     void startMonnifyCheckout();
   }, [open, requestId, phase, payState]);
 
+  // SURCHARGE RE-MINT. When the server-owned payment_due_at advances (the
+  // surcharge cron applied a block and cleared payment_account/reference),
+  // drop the stale cached Monnify account and re-invoke beginCheckout so the
+  // user sees the new amount, new account number, and a fresh 15-minute
+  // countdown — no manual refresh, no stuck 00:00.
+  const lastSeenDueAtRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !requestId) return;
+    if (phase !== "settlement" && phase !== "grace" && phase !== "overtime") return;
+    if (!serverPaymentDueAt) return;
+    if (lastSeenDueAtRef.current === null) {
+      lastSeenDueAtRef.current = serverPaymentDueAt;
+      return;
+    }
+    if (lastSeenDueAtRef.current === serverPaymentDueAt) return;
+    lastSeenDueAtRef.current = serverPaymentDueAt;
+    setAccount(null);
+    setPayError(null);
+    setPayCheckState("idle");
+    setPayCheckError(null);
+    autoOpenedRef.current = false;
+    setPayState("idle");
+    // Defer to the auto-open effect above, which fires as soon as payState
+    // returns to "idle" with settlementReadyRef already true.
+  }, [open, requestId, phase, serverPaymentDueAt]);
+
+  useEffect(() => {
+    if (!open) lastSeenDueAtRef.current = null;
+  }, [open]);
+
   useEffect(() => {
     if (!open) {
       autoOpenedRef.current = false;
