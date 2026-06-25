@@ -173,6 +173,7 @@ function AdminVerificationPage() {
                 busy={busy}
                 onAct={(id, status) => void act(id, status)}
                 onActionRequired={() => setActionFor(d)}
+                onOpenUser={() => setOpenUserId(d.id)}
               />
             ))}
           </div>
@@ -190,6 +191,11 @@ function AdminVerificationPage() {
           }}
         />
       )}
+
+      <UserDetailDrawer
+        userId={openUserId}
+        onClose={() => setOpenUserId(null)}
+      />
     </div>
   );
 }
