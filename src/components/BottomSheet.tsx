@@ -1,5 +1,6 @@
 import { motion, useMotionValue, useTransform, animate, type PanInfo } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
+import { springSoft } from "@/lib/motion";
 
 type Props = {
   expanded: boolean;
