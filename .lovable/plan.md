@@ -1,85 +1,130 @@
-# Plan — Reconnecting pill, OTP email, OneSignal readiness (minimal)
 
-## 1. Requester "Reconnecting…" pill stays visible
+# FlashLocum — Native-Feel Audit
 
-**Root cause:** `ReconnectingPill` in `src/features/app/CoverageScreen.tsx` uses `isAnyReconnecting(h)`, which OR's all three channels including `presence`. On the requester side the `presence` channel never reaches `SUBSCRIBED`, so the pill stays on forever.
+Scope: read-only audit of `_app` shell, Home/Coverage/Account/Earnings tabs, image surfaces, map persistence, list rerenders, and realtime UX. No code in this turn.
 
-**Fix:**
-- Add `isCoverageReconnecting(h)` to `src/lib/realtime-health.ts` — true only when `coverage` or `invalidations` is unhealthy. Presence excluded (it's a doctor-roster signal).
-- `CoverageScreen.tsx` `ReconnectingPill` switches to `isCoverageReconnecting`.
-- `isAnyReconnecting` kept for any future doctor-only surface that genuinely depends on presence.
+---
 
-## 2. Sign-up email shows a link instead of the 6-digit code
+## A. Current Behaviour Map (what happens today)
 
-**Root cause:** Lovable Auth Emails intercept via `src/routes/lovable/email/auth/webhook.ts` and render `src/lib/email-templates/signup.tsx`, which renders a `Verify Email` button. The OTP `token` is already passed to the component (webhook line 140) but the component ignores it.
+- **Shell (`src/routes/_app.tsx`)**: Two stacked absolute layers. The **Home** layer (`HomeRouter` → `RequesterHome` / `CoverHome`) is mounted once and toggled via `display:none`. The **non-home** layer is a single `<Outlet />` that re-mounts whenever `pathname` changes.
+- **Tabs**: Only `/home` is persistent. `/coverage`, `/account`, `/earnings`, `/help`, `/support` fully unmount/remount on every visit.
+- **Map**: Lives inside `RequesterHome`/`CoverHome` under the persistent Home layer, so the Google Map instance, markers, and `watchPosition` survive tab switches. Good baseline — but only for Home.
+- **Data**: Almost no TanStack Query usage in feature screens (`rg` finds only `useQueryClient` in `AccountScreen`). Lists and details are fetched via custom hooks/Supabase calls that re-run on mount. There is no shared cache, no `staleTime`, no background revalidation pattern across tabs.
+- **Images**: `<img>` tags with `loading="eager"` on selfies in `RequesterHome`, `CoverageScreen`, `HistoryDetailSheet`, `AccountScreen`. URLs come from a signed-URL cache (added earlier), but the surrounding components remount on tab switch, so the browser must re-decode each time; some signed URLs are regenerated and break the HTTP cache key.
+- **Realtime**: Invalidation broadcasts trigger refetches that swap whole lists; on Coverage screen list items can briefly disappear and reappear during reorder/status change.
+- **Transitions**: `AnimatePresence` is only on the bottom tab bar (immersive toggle). Route changes have no enter/exit animation; they cut hard between mounted trees.
 
-**Fix:**
-- Update `src/lib/email-templates/signup.tsx`:
-  - Add `token: string` to props.
-  - Drop the `Button` + `confirmationUrl` UI.
-  - Render the 6-digit code in a large, letter-spaced block matching the look of `supabase/templates/confirmation.html`.
-- No webhook / Supabase template change needed.
-- Other auth templates untouched.
+---
 
-## 3. OneSignal readiness — minimal preparation (no OneSignal yet)
+## B. Native-Feel Gaps
 
-Per your scope: only a provider abstraction layer + a documented event catalog. **Not adding** `notification_prefs` table or `device_tokens.provider` column.
+1. **Non-home tabs fully remount.** Coverage, Account, Earnings each rebuild their tree, re-run queries, re-decode images, lose scroll, lose expanded-card state, lose filter state on every visit.
+2. **No URL state for filters/sorts.** Returning to a tab cannot restore filter state because it lives in `useState`.
+3. **No shared query cache.** Each mount fetches from scratch instead of showing cached data + revalidating in background.
+4. **Signed-URL churn.** Selfie URLs are regenerated frequently enough that the browser image cache misses, producing visible fade-in.
+5. **List rerenders on every realtime event.** Whole-list re-renders cause layout jumps when one row's status changes.
+6. **No skeleton-vs-cache discipline.** Skeletons show even when prior data exists locally.
+7. **No route transitions.** Tab swaps cut hard; combined with remount this reads as "page reload".
+8. **Heavy components not memoized.** Map marker layers, list rows, and avatars re-render on parent state changes.
 
-### A. Provider abstraction — `src/lib/notify.server.ts`
+---
 
-New thin file. Exports a single function:
+## C. Performance Risks
 
-```ts
-export async function notifyUser(
-  userId: string,
-  payload: PushPayload,
-  opts?: { skipOutbox?: boolean },
-): Promise<void>
-```
+- Coverage list (`CoverageScreen.tsx`, >1200 LoC): one component owns header, filters, list, detail sheet, settlement — any state change re-renders all of it.
+- `RequesterHome.tsx` (>1600 LoC): same monolith risk; safe today only because it never unmounts.
+- Realtime invalidation handlers refetch entire collections instead of patching the changed row.
+- `touchLastSeen` heartbeat is fine (singleton), but `visibilitychange` also triggers some screens' own refresh paths — compounding work on tab refocus.
 
-Implementation today: forwards directly to `sendPushToUser` from `push.server.ts`. When OneSignal lands, this file is the only swap point — replace the body with the OneSignal call. No call site changes required at that time.
+---
 
-All existing call sites migrate to `notifyUser` from `notify.server.ts`:
-- `src/lib/coverage-notify.functions.ts` (3 call sites)
-- `src/lib/admin.functions.ts` (2 call sites)
-- `src/routes/api/public/monnify-webhook.ts`
-- `src/routes/api/public/monnify-disbursement-webhook.ts`
-- `src/routes/api/public/hooks/shift-reminders.ts` (2 call sites)
-- `src/routes/api/public/hooks/reconcile-settlements.ts`
-- `src/routes/api/public/hooks/outbox-drain.ts` (drain keeps importing `sendPushToUser` directly since it owns the FCM-specific failure semantics; will be refactored when OneSignal swap happens)
+## D. Screen Persistence Audit
 
-`push.server.ts` stays as the FCM adapter — unchanged behavior, outbox semantics preserved.
+| Tab | Mounted once | Scroll kept | Filters kept | Data cached | Verdict |
+|---|---|---|---|---|---|
+| Home | Yes | Yes | n/a | Yes (in-component) | Native-feel OK |
+| Coverage | No | No | No | No | Remounts every visit |
+| History (sub-view in Coverage) | No | No | No | No | Remounts |
+| Account | No | No | n/a | No | Remounts |
+| Earnings | No | No | No | No | Remounts |
+| Admin/* | No | No | No | No | Remounts (lower priority) |
 
-### B. Canonical event catalog — `mem://constraints/notification-events.md`
+---
 
-A single project-memory file documenting the locked event kinds. OneSignal templates / tags will key off these names, so locking them now prevents drift:
+## E. Image & Map Audit
 
-- `offer.new` — new coverage request broadcast to eligible doctors
-- `shift.accepted` — doctor accepted a request (notify requester)
-- `shift.started` / `shift.paused` / `shift.resumed` / `shift.ended`
-- `shift.cancelled` — by either party
-- `payment.completed` — successful Monnify collection
-- `payment.disbursed` — Monnify split-payout to doctor confirmed
-- `rating.submitted`
-- `reminder.shift_starting` / `reminder.shift_ending` / `reminder.payment_due`
-- `verification.approved` / `verification.rejected`
+- **Map**: Already persistent on Home. No work needed there. Verify markers are diffed (add/remove/update) rather than cleared+rebuilt on every realtime tick.
+- **Profile/selfie images**: Re-decoded because parent screens remount and because signed-URL TTL refresh swaps the `src`. Need stable URLs per session + memoized `<img>` wrappers.
+- **Hospital/avatar lists**: No explicit lazy/eager strategy other than `loading="eager"` on big selfies; small list avatars should be `loading="lazy"` + fixed dimensions to avoid layout shift.
+- **Icons/logos**: Bundled SVGs — fine.
 
-Each line: kind, audience (doctor / requester / both), trigger (DB trigger or server fn), and the canonical `entityId` shape (`coverage_request.id` in all cases except `offer.new` which uses the offer/request id, and `verification.*` which uses `user_id`).
+---
 
-Index updated to reference the new memory.
+## F. Correct Behaviour Definition
 
-## Files touched
+- Returning to any tab shows the **previous screen instantly**: same scroll, same filters, same expanded rows, same images already decoded. Any new data arrives via silent background refresh.
+- Loading skeletons appear only on **first ever fetch in the session**. After that, stale data is shown immediately and replaced in place.
+- Realtime updates patch the affected row only; the row animates (fade/scale) without list reflow.
+- Tab transitions: crossfade or none — never white flash.
+- Map: never re-initialises after first paint of the session.
+- Signed image URLs: stable for the session; cache hits on revisit.
 
-- `src/lib/realtime-health.ts` — add `isCoverageReconnecting`
-- `src/features/app/CoverageScreen.tsx` — pill condition
-- `src/lib/email-templates/signup.tsx` — OTP, drop button
-- `src/lib/notify.server.ts` *(new)* — provider abstraction wrapping `sendPushToUser`
-- `src/lib/coverage-notify.functions.ts`, `src/lib/admin.functions.ts`, `src/routes/api/public/monnify-webhook.ts`, `src/routes/api/public/monnify-disbursement-webhook.ts`, `src/routes/api/public/hooks/shift-reminders.ts`, `src/routes/api/public/hooks/reconcile-settlements.ts` — switch to `notifyUser`
-- `mem://constraints/notification-events.md` *(new)* + index update
+---
 
-## Explicitly out of scope (per your instruction)
+## G. Implementation Plan (phased, no code)
 
-- No `notification_prefs` table
-- No `device_tokens.provider` column
-- No OneSignal SDK / REST integration
-- No in-app notifications center / email / SMS adapters
+### Phase 1 — Persistent tab shell (biggest single win)
+- Convert `_app.tsx` to a **multi-layer persistent shell**: keep one always-mounted layer per primary tab (Home, Coverage, Account, Earnings). Active tab is `display:block`; others `display:none`.
+- Each layer renders its own subtree mounted on first visit and kept alive thereafter. Admin and secondary routes (help, support) keep the current Outlet/remount model.
+- Wire `BottomTabs` to switch the visible layer; preserve route URL for deep-linking, but the layer mount lifecycle is driven by "has this tab ever been visited" rather than `pathname`.
+- Acceptance: leave Coverage scrolled mid-list, switch to Account and back — same scroll, no skeleton, no image flicker.
+
+### Phase 2 — Shared cache + background revalidation
+- Adopt TanStack Query (already in the stack) as the default read path for Coverage list, History, Account profile, Earnings summary.
+- `staleTime` ≥ 30s, `gcTime` ≥ 30m, `placeholderData: keepPreviousData`. Initial mount uses cached data; revalidation happens silently.
+- Remove ad-hoc `useEffect+fetch` patterns in the four feature screens.
+
+### Phase 3 — URL-backed filter/sort state
+- Move Coverage/History filter, search, and tab state into `validateSearch` so returning to the tab restores them naturally and deep links work.
+
+### Phase 4 — Realtime: patch, don't refetch
+- Replace "invalidate → refetch list" with row-level updates: realtime payload updates the single row in the Query cache via `setQueryData`. Reorders animate via `framer-motion` `layout`.
+- Keep the existing watchdog as a periodic safety reconcile, but make it diff-and-patch, not full replace.
+
+### Phase 5 — Image stability
+- Make the signed-URL cache return a **session-stable URL** per object (cache key = storage path, TTL ≥ session); never swap the `src` mid-session unless the underlying file changed.
+- Wrap selfies/avatars in a memoised `<StableImage>` that fixes width/height, preloads once, and uses `decoding="async"` + `fetchpriority="high"` only for above-the-fold.
+- Add `loading="lazy"` and intrinsic dimensions on list avatars.
+
+### Phase 6 — Transitions & micro-polish
+- Crossfade (80–120ms) between persistent tab layers via `framer-motion` `AnimatePresence mode="popLayout"`.
+- Memoise list rows (`React.memo` + stable keys). Split `CoverageScreen` and `RequesterHome` into header/list/detail subcomponents so state changes don't re-render siblings.
+- Remove skeletons when cached data exists; show a subtle top-edge refresh bar instead.
+
+### Phase 7 — Verification
+- Manual: Playwright run capturing screenshots before/after tab switches; assert no layout shift, no image fade.
+- Scorecard re-rated; target ≥ 9/10 in all categories.
+
+---
+
+## H. Native-Feel Scorecard (today)
+
+| Area | Score | Reason |
+|---|---|---|
+| Navigation | 6 | Bottom tabs feel right, but content under them rebuilds |
+| Screen Persistence | 3 | Only Home persists |
+| Image Stability | 5 | Signed-URL cache exists but parents remount; visible fade |
+| Map Stability | 9 | Home map fully persistent |
+| Realtime Smoothness | 5 | Whole-list refetches cause flashes/reorder pops |
+| Overall Native Feel | 5 | Strong shell foundation, weak per-tab persistence |
+
+Target after Phases 1–6: 9/10 across the board.
+
+---
+
+## Risk Notes
+
+- Phase 1 changes the shell's mount model — needs a careful pass on heartbeats, realtime subscriptions, and dispatch portals (already singleton-safe, but verify).
+- Phase 2 introduces TanStack Query in screens that today own their fetch logic; rollout per-screen, not big-bang.
+- Memory: keeping all primary tabs mounted increases RSS modestly (~10–20MB on mid-range Android). Acceptable for an Uber-class app.
