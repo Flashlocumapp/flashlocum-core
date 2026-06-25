@@ -860,7 +860,7 @@ function dateBounds(): { min: string; max: string } {
 }
 
 function CoverageFields({
-  coverage: _coverage,
+  coverage,
   days,
   setDays,
   draft,
@@ -875,6 +875,9 @@ function CoverageFields({
   beforeNoteSlot?: React.ReactNode;
 }) {
   const bounds = dateBounds();
+  // Straight products (24h / Weekend 48h) are continuous single shifts —
+  // no day stepper, no multi-day lifecycle. Pinned to days=1 in setCoverage.
+  const isStraight = coverage === "24h" || coverage === "weekend";
   // Clamp start date into the 14-day operational window if it drifts.
   useEffect(() => {
     if (draft.startDate < bounds.min) patchDraft({ startDate: bounds.min });
@@ -908,7 +911,7 @@ function CoverageFields({
           value={draft.endTime}
           onChange={(v) => patchDraft({ endTime: v })}
         />
-        <DaysStepper value={days} setValue={setDays} />
+        {!isStraight && <DaysStepper value={days} setValue={setDays} />}
       </Row>
       {beforeNoteSlot}
       <NoteField value={draft.note} onChange={(v) => patchDraft({ note: v })} />
