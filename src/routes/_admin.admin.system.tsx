@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { adminSystemHealth } from "@/lib/admin.functions";
 import { AdminPageHeader, RefreshButton, StatCard, Empty, fmtRelative } from "@/lib/admin-ui";
+import { AuditLogPanel } from "@/components/admin/AuditLogPanel";
 
 export const Route = createFileRoute("/_admin/admin/system")({
   ssr: false,
@@ -142,6 +143,14 @@ function SystemPage() {
             {(q.error as Error).message}
           </div>
         )}
+      </Panel>
+
+      <Panel title="Admin action log">
+        <p className="mb-3 text-[12px] text-muted-foreground">
+          Every privileged admin action — verification decisions, trust changes,
+          shift overrides, payment write-offs — is recorded here.
+        </p>
+        <AuditLogPanel filter={{}} limit={200} />
       </Panel>
     </div>
   );
