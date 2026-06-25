@@ -48,7 +48,7 @@ async function logAction(
     targetPaymentRef?: string | null;
     reason?: string | null;
     note?: string | null;
-    payload?: Record<string, unknown> | null;
+    payload?: JsonValue | null;
   },
 ) {
   try {
@@ -82,7 +82,7 @@ export type AdminActionRow = {
   target_payment_ref: string | null;
   reason: string | null;
   note: string | null;
-  payload: Record<string, unknown> | null;
+  payload: JsonValue | null;
   created_at: string;
 };
 
@@ -152,7 +152,7 @@ export const adminListActions = createServerFn({ method: "POST" })
         target_payment_ref: r.target_payment_ref,
         reason: r.reason,
         note: r.note,
-        payload: r.payload as Record<string, unknown> | null,
+        payload: r.payload as JsonValue | null,
         created_at: r.created_at,
       }),
     );
@@ -780,7 +780,7 @@ export type AdminPaymentDetail = {
   base_amount: number | null;
   surcharge_amount: number | null;
   settled_amount: number | null;
-  payment_account: Record<string, unknown> | null;
+  payment_account: JsonValue | null;
   requester_id: string;
   requester_name: string | null;
   doctor_id: string | null;
@@ -877,7 +877,7 @@ export const adminGetPaymentDetail = createServerFn({ method: "POST" })
       surcharge_amount:
         shift.surcharge_amount == null ? null : Number(shift.surcharge_amount),
       settled_amount: shift.settled_amount ?? null,
-      payment_account: (shift.payment_account as Record<string, unknown> | null) ?? null,
+      payment_account: (shift.payment_account as JsonValue | null) ?? null,
       requester_id: shift.requester_id,
       requester_name: nameMap.get(shift.requester_id) ?? null,
       doctor_id: shift.accepted_by ?? null,
@@ -909,7 +909,7 @@ export const adminGetPaymentDetail = createServerFn({ method: "POST" })
           target_payment_ref: r.target_payment_ref,
           reason: r.reason,
           note: r.note,
-          payload: r.payload as Record<string, unknown> | null,
+          payload: r.payload as JsonValue | null,
           created_at: r.created_at,
         }),
       ),
@@ -1181,7 +1181,7 @@ export const adminGetVerificationDetail = createServerFn({ method: "POST" })
         target_payment_ref: r.target_payment_ref,
         reason: r.reason,
         note: r.note,
-        payload: r.payload as Record<string, unknown> | null,
+        payload: r.payload as JsonValue | null,
         created_at: r.created_at,
       })),
     };
@@ -1198,7 +1198,7 @@ export type TrustHistoryRow = {
   note: string | null;
   actor_user_id: string;
   actor_name: string | null;
-  payload: Record<string, unknown> | null;
+  payload: JsonValue | null;
   created_at: string;
 };
 
