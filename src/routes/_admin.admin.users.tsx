@@ -14,6 +14,7 @@ import {
   fmtRelative,
   statusTone,
 } from "@/lib/admin-ui";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 export const Route = createFileRoute("/_admin/admin/users")({
   ssr: false,
@@ -36,6 +37,7 @@ function AdminUsersPage() {
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -141,7 +143,11 @@ function AdminUsersPage() {
                   const tone = statusTone(u.verification_status);
                   const showStatus = !!u.onboarded_cover_at;
                   return (
-                    <tr key={u.id} className="border-t hover:bg-secondary/30">
+                    <tr
+                      key={u.id}
+                      className="border-t hover:bg-secondary/30 cursor-pointer"
+                      onClick={() => setOpenUserId(u.id)}
+                    >
                       <td className="px-4 py-2.5">
                         <div className="font-medium tracking-tight">
                           {u.full_name || "Unnamed"}
@@ -172,6 +178,7 @@ function AdminUsersPage() {
           </div>
         )}
       </div>
+      <UserDetailDrawer userId={openUserId} onClose={() => setOpenUserId(null)} />
     </div>
   );
 }
