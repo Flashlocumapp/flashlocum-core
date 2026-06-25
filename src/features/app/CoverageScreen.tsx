@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { StableImage } from "@/components/StableImage";
+import { PullToRefresh } from "@/components/PullToRefresh";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { ShiftSettlement } from "@/features/request/ShiftSettlement";
 import { fmtNairaK, fmtElapsed, fmtHistoryMeta, fmtOpMeta } from "@/lib/format";
@@ -202,6 +204,46 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
+/** True once the first realtime/cache snapshot has had a chance to arrive
+ *  (either data is non-empty, OR ~220ms has elapsed). Used to render a
+ *  shimmer placeholder during the brief cold-start window instead of
+ *  flashing the empty state. */
+function useFirstPaintSettled(hasData: boolean): boolean {
+  const [settled, setSettled] = useState<boolean>(() => hasData);
+  useEffect(() => {
+    if (hasData) {
+      setSettled(true);
+      return;
+    }
+    const id = window.setTimeout(() => setSettled(true), 220);
+    return () => window.clearTimeout(id);
+  }, [hasData]);
+  return settled;
+}
+
+function ListSkeleton() {
+  return (
+    <ul className="space-y-2.5" aria-hidden>
+      {[0, 1].map((i) => (
+        <li
+          key={i}
+          className="rounded-2xl p-4"
+          style={{ background: "color-mix(in oklab, var(--color-foreground) 4%, transparent)" }}
+        >
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-11 w-11 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-1/2" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="mt-3 h-3 w-3/4" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 
 export function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
@@ -359,6 +401,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       ),
     [items, tab],
   );
+  const firstPaintSettled = useFirstPaintSettled(items.length > 0);
 
   // ---- Settlement sheet auto-restore ----
   // PAYMENT_SESSION_STABILITY: any request whose SERVER status is
@@ -561,38 +604,41 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
 
       <div
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
-        style={{ height: "calc(100% - 140px)" }}
+        style={{ height: "calc(100% - 140px)", overscrollBehavior: "contain" }}
       >
-        {filtered.length === 0 ? (
-          <EmptyState tab={tab} role="request" />
-        ) : (
-          <ul className="space-y-2.5">
-            <AnimatePresence initial={false} mode="popLayout">
-              {filtered.map((item) => (
-                <motion.li
-                  key={item.id}
-                  layout
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <RequestCard
-                    item={item}
-                    onStart={() => moveToActive(item.id)}
-                    onPause={() => requestPause(item.id)}
-                    onEnd={() => requestEnd(item.id)}
-
-                    onCancel={() => setCancelTargetId(item.id)}
-                    onEdit={() => openEdit(item.id)}
-                    onOpenHistory={() => setHistoryId(item.id)}
-                    onOpenDetail={() => setDetailId(item.id)}
-                  />
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
+        <PullToRefresh>
+          {!firstPaintSettled ? (
+            <ListSkeleton />
+          ) : filtered.length === 0 ? (
+            <EmptyState tab={tab} role="request" />
+          ) : (
+            <ul className="space-y-2.5">
+              <AnimatePresence initial={false} mode="popLayout">
+                {filtered.map((item) => (
+                  <motion.li
+                    key={item.id}
+                    layout
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <RequestCard
+                      item={item}
+                      onStart={() => moveToActive(item.id)}
+                      onPause={() => requestPause(item.id)}
+                      onEnd={() => requestEnd(item.id)}
+                      onCancel={() => setCancelTargetId(item.id)}
+                      onEdit={() => openEdit(item.id)}
+                      onOpenHistory={() => setHistoryId(item.id)}
+                      onOpenDetail={() => setDetailId(item.id)}
+                    />
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+          )}
+        </PullToRefresh>
       </div>
 
       <AnimatePresence>
@@ -1255,6 +1301,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
 
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
+  const firstPaintSettled = useFirstPaintSettled(upcoming.length + history.length > 0);
 
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -1265,39 +1312,27 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
     history.find((h) => h.id === detailId) ??
     null;
 
+  const isEmpty =
+    (tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0;
+
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
       <CoverageHeader subtitle="Your operational coverage" tab={tab} setTab={setTab} />
       <div
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
-        style={{ height: "calc(100% - 140px)" }}
+        style={{ height: "calc(100% - 140px)", overscrollBehavior: "contain" }}
       >
-        {(tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0 ? (
-          <EmptyState tab={tab} role="cover" />
-        ) : (
-          <ul className="space-y-2.5">
-            <AnimatePresence initial={false} mode="popLayout">
-              {tab === "active" && active && (
-                <motion.li
-                  key={active.id}
-                  layout
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <CoverCard
-                    item={active}
-                    variant="active"
-                    onCancel={() => setCancelId(active.id)}
-                    onOpenDetail={() => setDetailId(active.id)}
-                  />
-                </motion.li>
-              )}
-              {tab === "upcoming" &&
-                upcomingOnly.map((c) => (
+        <PullToRefresh>
+          {!firstPaintSettled ? (
+            <ListSkeleton />
+          ) : isEmpty ? (
+            <EmptyState tab={tab} role="cover" />
+          ) : (
+            <ul className="space-y-2.5">
+              <AnimatePresence initial={false} mode="popLayout">
+                {tab === "active" && active && (
                   <motion.li
-                    key={c.id}
+                    key={active.id}
                     layout
                     initial={false}
                     animate={{ opacity: 1, y: 0 }}
@@ -1305,33 +1340,52 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
                     transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                   >
                     <CoverCard
-                      item={c}
-                      variant="upcoming"
-                      onCancel={() => setCancelId(c.id)}
-                      onOpenDetail={() => setDetailId(c.id)}
+                      item={active}
+                      variant="active"
+                      onCancel={() => setCancelId(active.id)}
+                      onOpenDetail={() => setDetailId(active.id)}
                     />
                   </motion.li>
-                ))}
-              {tab === "completed" &&
-                history.map((h) => (
-                  <motion.li
-                    key={h.id}
-                    layout
-                    initial={false}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <CoverCard
-                      item={h}
-                      variant="history"
-                      onOpenDetail={() => setDetailId(h.id)}
-                    />
-                  </motion.li>
-                ))}
-            </AnimatePresence>
-          </ul>
-        )}
+                )}
+                {tab === "upcoming" &&
+                  upcomingOnly.map((c) => (
+                    <motion.li
+                      key={c.id}
+                      layout
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <CoverCard
+                        item={c}
+                        variant="upcoming"
+                        onCancel={() => setCancelId(c.id)}
+                        onOpenDetail={() => setDetailId(c.id)}
+                      />
+                    </motion.li>
+                  ))}
+                {tab === "completed" &&
+                  history.map((h) => (
+                    <motion.li
+                      key={h.id}
+                      layout
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <CoverCard
+                        item={h}
+                        variant="history"
+                        onOpenDetail={() => setDetailId(h.id)}
+                      />
+                    </motion.li>
+                  ))}
+              </AnimatePresence>
+            </ul>
+          )}
+        </PullToRefresh>
       </div>
 
       <CancelFlow

@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/rea
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
+import { sheetEnter } from "@/lib/motion";
 
 import { useImmersive } from "@/lib/immersion";
 import { CoverDispatchPortal } from "@/features/cover/CoverDispatchPortal";
@@ -177,6 +178,7 @@ function AppShell() {
         ["--tab-bar-h" as string]: immersive ? "0px" : `${TAB_BAR_HEIGHT}px`,
         WebkitOverflowScrolling: "touch",
         touchAction: "pan-y",
+        overscrollBehavior: "contain",
       }}
     >
       {/* Persistent backdrop matches body/page background so no lighter
@@ -236,6 +238,7 @@ function AppShell() {
             display: showOutlet ? "block" : "none",
             WebkitOverflowScrolling: "touch",
             touchAction: "pan-y",
+            overscrollBehavior: "contain",
             background: "var(--color-background)",
           }}
         >
@@ -250,7 +253,7 @@ function AppShell() {
             initial={{ y: 64, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 64, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            transition={sheetEnter}
             className="absolute inset-x-0 bottom-0"
           >
             <BottomTabs />
@@ -288,6 +291,7 @@ function PersistentLayer({
         background: "var(--color-background)",
         WebkitOverflowScrolling: scroll ? "touch" : undefined,
         touchAction: scroll ? "pan-y" : undefined,
+        overscrollBehavior: scroll ? "contain" : undefined,
       }}
       aria-hidden={!visible}
     >
