@@ -545,14 +545,21 @@ function scheduleRefresh() {
 async function fetchAndIngestRow(id: string): Promise<void> {
   // First try a direct read — works for own/accepted rows under RLS.
   let row: Row | null = null;
+  let directOk = true;
+  let poolOk = true;
   const direct = await supabase.from(TABLE).select("*").eq("id", id).maybeSingle();
-  if (direct.data) {
+  if (direct.error) {
+    directOk = false;
+  } else if (direct.data) {
     row = direct.data as Row;
-  } else {
+  }
+  if (!row) {
     // Row may belong to the open searching pool (RLS hides it from a
     // direct select for non-accepting doctors). Look it up via the RPC.
     const pool = await supabase.rpc("list_open_coverage_requests");
-    if (!pool.error && Array.isArray(pool.data)) {
+    if (pool.error) {
+      poolOk = false;
+    } else if (Array.isArray(pool.data)) {
       const found = (pool.data as Row[]).find((r) => r.id === id);
       if (found) row = found;
     }
@@ -574,14 +581,22 @@ async function fetchAndIngestRow(id: string): Promise<void> {
     );
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
   } else {
-    // Row is no longer visible to this user — drop it from local state.
-    const had = cachedSnapshot.some((r) => r.id === id);
-    if (had) {
-      cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
-      writePersistedSnapshot(cachedSnapshot);
-      eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
-      snapshotListeners.forEach((fn) => fn(cachedSnapshot));
-    }
+    // Row not returned by either read path. We DROP it from the cache only
+    // when:
+    //   (1) both reads completed successfully (absence is authoritative), AND
+    //   (2) the cached row is non-terminal (still in-flight / claimable).
+    // Terminal rows (completed/cancelled) are historical and must never be
+    // evicted by a transient RLS hiccup, a stray DELETE invalidation, or a
+    // network blip — that was the root cause of History Coverage briefly
+    // emptying and then re-populating on the next snapshot refresh.
+    if (!directOk || !poolOk) return;
+    const existing = cachedSnapshot.find((r) => r.id === id);
+    if (!existing) return;
+    if (existing.status === "completed" || existing.status === "cancelled") return;
+    cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
+    writePersistedSnapshot(cachedSnapshot);
+    eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
+    snapshotListeners.forEach((fn) => fn(cachedSnapshot));
   }
 }
 

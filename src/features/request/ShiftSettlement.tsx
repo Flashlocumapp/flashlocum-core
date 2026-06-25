@@ -1559,19 +1559,19 @@ function CustomTransferPane({
     }
   };
 
-  // 15-minute price-hold countdown. Anchored to when the account first
-  // appears so the timer stays in sync with the locked transfer amount.
+  // 15-minute price-hold countdown. ANCHORED EXCLUSIVELY to the server-issued
+  // `account.expiresOn` (returned by Monnify and persisted in
+  // `coverage_requests.payment_account` on the server). Refreshing the page,
+  // signing out, or reopening the sheet continues from the original deadline;
+  // the timer only resets when the server mints a fresh virtual account with
+  // a new expiry.
   const PRICE_HOLD_SEC = 15 * 60;
   const tick = useSimClock(1000);
-  const startedAtRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (account && startedAtRef.current == null) startedAtRef.current = simNow();
-    if (!account) startedAtRef.current = null;
-  }, [account]);
-  const remaining = startedAtRef.current
-    ? Math.max(0, PRICE_HOLD_SEC - Math.floor((tick - startedAtRef.current) / 1000))
+  const expiresAtMs = account?.expiresOn ? Date.parse(account.expiresOn) : NaN;
+  const remaining = Number.isFinite(expiresAtMs)
+    ? Math.max(0, Math.floor((expiresAtMs - tick) / 1000))
     : PRICE_HOLD_SEC;
-  const expired = startedAtRef.current != null && remaining === 0;
+  const expired = Number.isFinite(expiresAtMs) && remaining === 0;
 
   // Price-hold expiry is informational only. The amount on screen is whatever
   // the server-frozen Monnify virtual account says — we do NOT silently
