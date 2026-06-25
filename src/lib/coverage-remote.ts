@@ -984,12 +984,42 @@ export async function remoteUpdateRequest(
   if (patch.status === "cancelled") {
     try {
       const reason = patch.__cancelReason;
+      // Post-acceptance cancels require a reason server-side. If the caller
+      // somehow lost the reason in transit, look up accepted_by first and
+      // route the call appropriately — never throw a "reason required" error
+      // up the UI when we can recover silently for pre-acceptance rows.
+      if (!reason?.code) {
+        const { data: row } = await supabase
+          .from(TABLE)
+          .select("accepted_by, status")
+          .eq("id", id)
+          .maybeSingle();
+        if (!row || row.status === "cancelled") return;
+        if (row.accepted_by) {
+          console.error(
+            "[coverage-remote] post-acceptance cancel attempted without a reason",
+            new Error("missing __cancelReason").stack,
+          );
+          return;
+        }
+        // Pre-acceptance: silent direct update; no notify path needed.
+        const { error: directErr } = await supabase
+          .from(TABLE)
+          .update({ status: "cancelled" })
+          .eq("id", id);
+        if (directErr) {
+          console.warn("[coverage-remote] silent cancel error:", directErr.message);
+          return;
+        }
+        emitInvalidate(id);
+        return;
+      }
       const { cancelAndNotifyFn } = await import("@/lib/coverage-notify.functions");
       const res = await cancelAndNotifyFn({
         data: {
           requestId: id,
-          reasonCode: reason?.code,
-          reasonText: reason?.text,
+          reasonCode: reason.code,
+          reasonText: reason.text,
         },
       });
       if (!res?.ok) {
