@@ -1266,17 +1266,24 @@ function OvertimePane({
           {onPayWithMonnify ? (
             <>
               <button
-                disabled={payState === "starting" || payState === "waiting" || paymentTriggered}
+                disabled={
+                  total == null ||
+                  payState === "starting" ||
+                  payState === "waiting" ||
+                  paymentTriggered
+                }
                 onClick={onPayWithMonnify}
                 className="h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-70 active:opacity-90"
               >
-                {payState === "starting"
-                  ? "Opening Monnify…"
-                  : payState === "waiting"
-                    ? "Waiting for payment…"
-                    : paymentTriggered
-                      ? "Verifying payment…"
-                      : `Pay ${fmtNaira(total)} with Monnify`}
+                {total == null
+                  ? "Calculating final amount…"
+                  : payState === "starting"
+                    ? "Opening Monnify…"
+                    : payState === "waiting"
+                      ? "Waiting for payment…"
+                      : paymentTriggered
+                        ? "Verifying payment…"
+                        : `Pay ${fmtNaira(total)} with Monnify`}
               </button>
               {payError && (
                 <p className="text-center text-[12px] text-destructive">{payError}</p>
