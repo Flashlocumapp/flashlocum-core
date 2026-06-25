@@ -97,7 +97,7 @@ export function HistoryDetailSheet({
           style={{ background: "var(--color-secondary)" }}
         >
           {identity.selfieUrl ? (
-            <img src={identity.selfieUrl} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+            <StableImage src={identity.selfieUrl} alt="" width={48} height={48} className="h-full w-full object-cover" />
           ) : (
             identity.initials
           )}
