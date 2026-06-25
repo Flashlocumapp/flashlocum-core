@@ -1235,6 +1235,10 @@ function Avatar({
 function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { upcoming, history } = useDispatch();
   const net = useNetwork();
+  // Re-render when the shared "already rated" store hydrates from the DB
+  // so doctor History reflects ratings persisted in previous sessions.
+  useRatedShiftsVersion();
+
 
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
@@ -1526,7 +1530,15 @@ function DoctorCoverageDetail({
     !!item &&
     isHist(item) &&
     item.outcome === "completed" &&
-    item.rating === undefined;
+    item.rating === undefined &&
+    !isRated(item.id);
+  const alreadyRatedHint =
+    !!item &&
+    isHist(item) &&
+    item.outcome === "completed" &&
+    item.rating === undefined &&
+    isRated(item.id);
+
 
   return (
     <AnimatePresence>
@@ -1654,6 +1666,7 @@ function DoctorCoverageDetail({
                 onClick={() => {
                   void recordRating(hospitalEntityId(item.hospital), rating, item.id, feedback);
                   recordHistoryRating(item.id, rating);
+                  markRated(item.id);
                   onDismiss();
                 }}
                 className="mt-3 h-10 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground disabled:opacity-40 active:opacity-90"
@@ -1662,6 +1675,12 @@ function DoctorCoverageDetail({
               </button>
             </div>
           )}
+          {alreadyRatedHint && (
+            <div className="mt-3 text-[12.5px] text-muted-foreground">
+              You've already rated this coverage.
+            </div>
+          )}
+
         </DismissSheet>
       )}
     </AnimatePresence>

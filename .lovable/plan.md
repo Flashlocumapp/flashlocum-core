@@ -1,53 +1,71 @@
-## Root Causes (re-audit)
+## Audit summary
 
-### 1. History Coverage temporarily empties
+### Issue 1 — "Reconnecting…" pill stuck after payment + rating
 
-`onUserIdChange` in `src/lib/coverage-remote.ts` (lines 915-926) fires on **every** auth event — `INITIAL_SESSION`, `TOKEN_REFRESHED`, tab focus, etc. — because `subscribeAuthState` (lines 297-302) unconditionally writes `cachedUserId` and notifies all listeners, even when the user id hasn't changed.
+`ReconnectingPill` (`src/features/app/CoverageScreen.tsx:211`) is driven by `realtime-health` which exposes three channel keys: `coverage`, `invalidations`, `presence`. It shows when any of them is in `reconnecting` for ≥ 800 ms.
 
-The listener then:
-1. Resets `cachedSnapshot = []`
-2. Immediately fires `snapshotListeners.forEach(fn => fn([]))` → `network.ts` rebuilds `state.requests` as `{}` → `CoverageScreen` filter returns 0 items → "Your past coverage will appear here"
-3. Kicks off `refreshSnapshot()`, which repopulates 0.5-2 s later
+Tracing each watchdog in `src/lib/coverage-remote.ts`:
 
-The previous "skip eviction" guard in `fetchAndIngestRow` does not help here — the snapshot is blanked **before** the refresh runs, not by the row-level path.
+- **`coverage` channel** (line 743) — on `CHANNEL_ERROR/TIMED_OUT/CLOSED`, calls `scheduleReconnect("coverage", run)`. `run` invokes `ensureChannelForUser`, which re-enters the same full subscribe (error states handled recursively). Self-healing — OK.
+- **`invalidations` channel** (line 850) — first subscribe is correct, but the **re-subscribe inside `scheduleReconnect("invalidations", …)` at line 869 only handles `SUBSCRIBED`**. If the rebuilt channel ever emits `CHANNEL_ERROR / TIMED_OUT / CLOSED` (mobile flap, server-side socket reset after a burst of post-payment row updates, etc.), nothing reschedules another reconnect and nothing flips health back to `ok`. The pill is left permanently at `reconnecting`.
+- **`presence` channel** (`src/lib/presence-remote.ts:250`) — `openPresenceChannel` is recursive via `schedulePresenceReconnect` → `openPresenceChannel`. Self-healing — OK.
 
-DB confirms John has 8 completed + 6 cancelled rows for his requester_id, so the data exists and RLS allows reading them.
+This matches the reported behaviour: it appears specifically *after* the payment/rating flow because that flow generates a burst of `coverage_invalidations` broadcasts (`mark_settlement_paid` → row update trigger → multiple invalidate messages) which is the exact moment the broadcast channel is most likely to flap and trip the buggy re-subscribe path.
 
-### 2. Monnify countdown restarts on refresh
+The recent realtime.messages policy is verified correct (SELECT for `topic='coverage_invalidations'` is allowed for `authenticated`), so the channel will subscribe successfully on retry — the only thing missing is the retry itself.
 
-`BankTransferPanel` (`src/features/request/ShiftSettlement.tsx` line 1570) anchors the 15-minute timer exclusively to `account.expiresOn`. When Monnify returns `expiresOn = null` (which it does in many cases), the code falls back to `PRICE_HOLD_SEC` (15:00) on **every** render. That's what the user perceives as "the countdown restarts after refresh".
+### Issue 2 — Doctor-side History re-opens rating modal on completed shifts
 
-The authoritative anchor `coverage_requests.payment_due_at` is already persisted server-side and exposed on the NetRequest row (`paymentDueAt`). The settlement sheet's outer `useEffect` (lines 242-310) already treats `paymentDueAt` as the only valid anchor for phase/end-shift refs, but the BankTransferPanel sub-component was not wired to it.
+In `DoctorCoverageDetail` (`src/features/app/CoverageScreen.tsx:1525`) the gate is:
 
----
+```ts
+const showRating = isHist(item) && item.outcome === "completed" && item.rating === undefined;
+```
 
-## Remediation
+`item.rating` comes from `derivedHistory[].rating = historyRatings[r.id]` in `src/features/cover/dispatch.ts:220`. `historyRatings` is an **in-memory object** populated only by `recordHistoryRating()` in the current tab. It is never:
+- hydrated from the `ratings` table,
+- persisted to `sessionStorage`/`localStorage`,
+- updated by realtime when a rating is written.
 
-### Fix A — Stop blanking the snapshot on identity-no-op auth events
-File: `src/lib/coverage-remote.ts`
+Consequences:
+1. Page refresh / new tab / app reopen → `historyRatings = {}` → every completed shift re-shows the rating form, even though the rating exists in the DB.
+2. After the post-shift `RatingOverlay` in `CoverDispatchPortal` submits, it does call `recordHistoryRating(...)` — that hides it within the session, but the bug returns on the next reload, exactly matching "initially shows submitted, later opens again".
 
-1. In `subscribeAuthState` (line 297) compare `userId` against the previous `cachedUserId` and **only** notify `userListeners` when the id actually changes. `SIGNED_OUT` clearing remains as-is.
-2. In `onUserIdChange` callback at lines 915-926, additionally guard against same-user re-entry: if the incoming id equals `cachedSnapshotUserId` and we already have rows, do **not** zero the cache or emit `[]`. Just trigger a background `refreshSnapshot()` so any drift reconciles silently.
+The requester side already solved this with `rated-shifts.ts` (`isRated` + `markRated` + DB hydration via `hydrateRatedShifts`). The doctor history path was never wired to it. The submit handler at line 1652-1658 also doesn't call `markRated`.
 
-Result: the only paths that emit an empty array are real sign-out and a real account switch — never token refresh, tab focus, or `INITIAL_SESSION` replays.
+## Fix plan
 
-### Fix B — Anchor Monnify countdown to `payment_due_at`
-Files: `src/features/request/ShiftSettlement.tsx`
+### Fix 1 — Invalidations re-subscribe self-healing
 
-1. Thread the existing `serverPaymentDueAt` value (already in scope at the parent — line 250) down into `BankTransferPanel` as a new prop `paymentDueAt: string | null`.
-2. In `BankTransferPanel` (line 1568-1574) compute the deadline in this priority order:
-   - `paymentDueAt` (server-anchored, persisted in DB) — **primary**
-   - `account.expiresOn` (Monnify-returned) — fallback only when DB value absent
-   - `PRICE_HOLD_SEC` constant — last-resort fallback for the brief window before the row hydrates
-3. Remove the silent "always shows 15:00" behaviour: when neither anchor is available, render the timer as `—:—` instead of resetting to 15:00 (prevents the visual "restart" the user reported).
+In `src/lib/coverage-remote.ts`, extract the invalidations subscribe into a single internal helper (e.g. `openInvalidationChannel()`) that:
 
-Result: refresh, app reopen, and re-mount all continue the countdown from the original server deadline.
+- Creates the channel + binds the `invalidate` broadcast handler.
+- In its `.subscribe()` callback handles **all** lifecycle statuses:
+  - `SUBSCRIBED` → `resetBackoff("invalidations")` + `setChannelHealth("invalidations", "ok")`.
+  - `CHANNEL_ERROR | TIMED_OUT | CLOSED` → `scheduleReconnect("invalidations", openInvalidationChannel)`.
 
----
+Then use this helper both for the initial subscribe (replace the block at lines 845-877) and for the watchdog `run` callback, eliminating the broken inner subscribe. This mirrors how the `coverage` and `presence` channels already self-heal.
 
-## Verification
+No change to security, RLS, broadcast topic, or message contract.
 
-- **History**: instrument a temporary `console.log` around the `onUserIdChange` early-exit to confirm it short-circuits on `TOKEN_REFRESHED` / focus events. Sign in as `john@gmail.com`, switch tabs and wait for a token refresh — History tab must never blank.
-- **Countdown**: open the settlement sheet, note remaining time, hard-refresh the page; remaining must continue (±1 s) from the same deadline, not reset to 15:00.
+### Fix 2 — Doctor history rating persistence
 
-No DB migrations required.
+1. In `src/features/app/CoverageScreen.tsx` `DoctorCoverageDetail`:
+   - Import `isRated`, `markRated`, `useRatedShiftsVersion` from `@/lib/rated-shifts` (already used elsewhere in the file).
+   - Subscribe via `useRatedShiftsVersion()` inside `DoctorCoverage` so the list re-renders when hydration completes.
+   - Change the gate to `showRating = isHist(item) && item.outcome === "completed" && item.rating === undefined && !isRated(item.id)`.
+   - In the submit `onClick` (line 1654), after `recordHistoryRating(item.id, rating)` also call `markRated(item.id)`.
+2. `hydrateRatedShifts()` already pulls every row from `ratings` where `rater_user_id = auth.uid()` — covers both doctor- and requester-submitted ratings, so no DB or RPC change is needed. The doctor will see "already rated" on reload because the same shared store is used.
+3. Show a small "You've already rated this coverage" line in the `DoctorCoverageDetail` body when the gate is hidden because of `isRated`, mirroring the requester `HistoryDetailSheet` UX, so the detail doesn't look empty.
+
+### Verification
+
+- Issue 1: After completing a shift and submitting payment + rating end-to-end, the pill must not appear once channels are healthy. Force a CLOSED state (simulate by toggling network) twice in a row and confirm the pill clears within < 1 s of reconnection. Console must show one `setChannelHealth("invalidations", "ok")` per reconnect cycle.
+- Issue 2: Submit a rating from `RatingOverlay`, hard-refresh the doctor app, open History → the modal must NOT reappear; the detail shows "You've already rated this coverage." Repeat across browser session (sessionStorage) and after clearing storage (DB hydration path).
+
+## Scope / non-goals
+
+- No database migration.
+- No change to rating RPC, trust scoring, or notification logic.
+- No change to channel topic names or broadcast payload shape.
+- Only files touched: `src/lib/coverage-remote.ts` and `src/features/app/CoverageScreen.tsx`.

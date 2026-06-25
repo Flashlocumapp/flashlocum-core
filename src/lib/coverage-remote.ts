@@ -842,40 +842,36 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
         scheduleRefresh();
       }
     };
-    invalidationChannel = supabase
-      .channel("coverage_invalidations", {
-        config: { broadcast: { self: false } },
-      })
-      .on("broadcast", { event: "invalidate" }, onInvalidate)
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          resetBackoff("invalidations");
-          setChannelHealth("invalidations", "ok");
-        } else if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          status === "CLOSED"
-        ) {
-          scheduleReconnect("invalidations", () => {
-            if (invalidationChannel) {
-              supabase.removeChannel(invalidationChannel);
-              invalidationChannel = null;
-            }
-            invalidationChannel = supabase
-              .channel("coverage_invalidations", {
-                config: { broadcast: { self: false } },
-              })
-              .on("broadcast", { event: "invalidate" }, onInvalidate)
-              .subscribe((s) => {
-                if (s === "SUBSCRIBED") {
-                  resetBackoff("invalidations");
-                  setChannelHealth("invalidations", "ok");
-                }
-              });
-          });
-        }
-      });
+    // Self-healing subscribe — the reconnect path used to only handle
+    // SUBSCRIBED, so a second flap (e.g. burst of invalidations during
+    // payment completion) left health permanently in "reconnecting" and
+    // the global pill stuck on. Mirrors the coverage / presence channels.
+    const openInvalidationChannel = () => {
+      if (invalidationChannel) {
+        supabase.removeChannel(invalidationChannel);
+        invalidationChannel = null;
+      }
+      invalidationChannel = supabase
+        .channel("coverage_invalidations", {
+          config: { broadcast: { self: false } },
+        })
+        .on("broadcast", { event: "invalidate" }, onInvalidate)
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            resetBackoff("invalidations");
+            setChannelHealth("invalidations", "ok");
+          } else if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            scheduleReconnect("invalidations", openInvalidationChannel);
+          }
+        });
+    };
+    openInvalidationChannel();
   }
+
 
   // Stage 0 safety net: low-frequency reconciliation timer. Fires only when
   // tab is visible AND no realtime activity for `RECONCILE_AFTER_SILENCE_MS`.
