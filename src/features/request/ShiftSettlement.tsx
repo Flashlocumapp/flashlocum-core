@@ -1019,6 +1019,7 @@ function SettlementPane({
         payCheckState={payCheckState}
         payCheckError={payCheckError}
         onCheckPayment={onCheckPayment}
+        paymentDueAt={paymentDueAt}
       />
     );
   }
