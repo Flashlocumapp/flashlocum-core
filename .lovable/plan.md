@@ -1,85 +1,85 @@
-# Location Functionality Audit — Findings & Remediation
+## Audit — where stale state can trap a user
 
-## Audit Findings (current state)
+Source of truth audit (every surface that reads `coverage_requests` state and could miss a realtime event):
 
-| # | Requirement | Status | Evidence |
+| Surface | Lifecycle state it watches | Current reconcile path | Gap |
 |---|---|---|---|
-| 1 | Single location service | ❌ FAIL | Three independent geolocation owners: `src/lib/doctor-gps.ts`, `src/features/request/RequesterHome.tsx` (lines 240-256), `src/components/GoogleMapBackground.tsx` (lines 180-234) |
-| 2 | Centralized permission requests | ❌ FAIL | Each of the three call sites calls `navigator.geolocation.getCurrentPosition` directly; the browser prompt can fire from any of them independently |
-| 3 | No direct browser geo calls outside the location layer | ❌ FAIL | `RequesterHome.tsx` and `GoogleMapBackground.tsx` both reach into `navigator.geolocation` directly. Only `doctor-gps.ts` is the "intended" layer |
-| 4 | Online/offline NOT dependent on fresh GPS | ✅ PASS | `setDoctorOnline` (`network.ts:688`) and `handleToggleOnline` (`CoverHome.tsx:72-91`) flip `online` synchronously; GPS refresh is a separate, fire-and-forget call that writes `lat/lng=null` on failure |
-| 5 | Maps consume location, do not own it | ❌ FAIL | `GoogleMapBackground` runs its own `watchPosition` + dual `getCurrentPosition` strategy, with its own module-level `cachedUserCenter` cache and accuracy filter |
-| 6 | Switchable to Capacitor Geolocation with minimal UI changes | ⚠️ PARTIAL | Possible but requires editing **three** files in lockstep, plus duplicating the accuracy filter logic. No abstraction seam exists |
-| 7 | No feature assumes continuous tracking | ❌ FAIL | `GoogleMapBackground` uses `watchPosition` for the requester "you are here" dot — that is continuous tracking by definition. Doctor side is correctly event-driven |
-| 8 | Request creation, doctor availability, shift acceptance work from centralized state | ❌ FAIL for requester | Request creation reads from a local `searchOrigin` populated by an ad-hoc `getCurrentPosition` in `RequesterHome`. Doctor availability/acceptance correctly route through `doctor-gps` → `presence-remote` |
+| RequesterHome — dispatch slider | `searching → accepted / cancelled / expired` | Realtime invalidate + postgres_changes only | **No fallback while the sheet is open** |
+| RequesterHome — accepted card | `accepted → cancelled (by doctor)` and shift start | Realtime only | **No fallback** |
+| CoverHome — Incoming feed | new `searching` rows, accept-by-other (drop), edit-pause (drop), expire | Invalidate broadcast → `fetchAndIngestRow` / `refreshSnapshot` | OK in steady state, but no reconcile on invalidations channel `SUBSCRIBED` (re)connect |
+| CoverHome — Upcoming / Active card | `accepted → active → paused → awaiting_payment → completed / cancelled` | Realtime only | **No fallback** |
+| CoverageScreen tabs (Active / Upcoming / History) | same as above, both roles | Realtime only | **No fallback** |
+| ShiftSettlement | `awaiting_payment → completed`, surcharge window, payment_due_at extensions | Realtime only | **No fallback while sheet is mounted** |
 
-**Net result:** 2 of 8 pass. The doctor side is reasonably centralized; the requester side and the map have parallel, uncoordinated GPS stacks.
+`src/lib/coverage-remote.ts` already wires:
+- `visibilitychange → refreshSnapshot()` ✓
+- `online → refreshSnapshot()` ✓
+- Coverage channel `SUBSCRIBED → refreshSnapshot()` ✓
+- Idle "silence" reconcile timer ✓ (passive only — only fires when realtime has been quiet)
 
-## Root Cause
+Missing pieces that allowed today's incident:
+1. The **invalidations** channel SUBSCRIBED handler only resets backoff — it does NOT `refreshSnapshot()`. If that channel reconnects after dropping the accept broadcast, the missed event is never recovered.
+2. There is no `window.focus` listener. On iOS Safari / PWA shells, `focus` fires when `visibilitychange` does not (e.g. coming back from a system sheet).
+3. There is no **per-row "watchful" reconcile** while a screen is actively staring at a specific in-flight row. The full-snapshot refresh covers it, but only fires on visibility/focus/reconnect — between those events, any screen showing a single live row (dispatch slider, accepted card, active shift, settlement) has zero fallback if its channel dropped the most recent event.
+4. There is no explicit "reconcile this row now" entry point for lifecycle screens to call on mount and on stage transitions.
 
-There is no `LocationService` abstraction. `doctor-gps.ts` is named for one consumer (the doctor presence write), so the requester form and the map each grew their own geolocation code instead of reusing it. The accuracy/drift filter is duplicated in `GoogleMapBackground` and partially in `doctor-gps`.
+## Remediation — unified reconciliation strategy
 
-## Remediation Plan
+Realtime stays primary. Snapshot reconciliation becomes the universal safety net, exposed through one small API and wired into every lifecycle surface.
 
-### 1. New file: `src/lib/location.ts` (the single service)
+### A. `src/lib/coverage-remote.ts` — global reconcile surface
 
-Owns every geolocation read in the app. API:
+1. Export `reconcileNow()` → coalesces onto `refreshSnapshot()` (full snapshot).
+2. Export `reconcileRequest(id)` → coalesces onto `fetchAndIngestRow(id)` (single-row authoritative re-read).
+3. Add a `window.focus` listener that calls `reconcileNow()` (in addition to `visibilitychange` and `online`).
+4. In the **invalidations** channel SUBSCRIBED handler, also call `reconcileNow()` so any broadcast missed while the channel was down is recovered on reconnect.
+5. After every server-side mutation initiated by THIS client (claim, start, pause, resume, end, cancel, extend payment window, mark paid), call `reconcileRequest(id)` once after the awaited RPC resolves — this guarantees the local cache reflects authoritative server state regardless of whether the trigger's broadcast round-tripped.
 
-```ts
-type Coords = { lat: number; lng: number; accuracy: number };
-type PermissionState = "unknown" | "granted" | "denied" | "unavailable";
+### B. New `useLifecycleReconcile(id, opts)` hook in `src/lib/use-lifecycle-reconcile.ts`
 
-getLastKnown(): Coords | null               // module cache, sync
-requestOnce(opts?): Promise<Coords | null>  // one-shot; cached on success
-subscribe(cb): Unsubscribe                  // pushes accepted samples
-ensurePermission(): Promise<PermissionState>
-getPermissionState(): PermissionState
-```
+A small hook that any lifecycle screen mounts. While mounted, it:
+- Calls `reconcileRequest(id)` immediately on mount.
+- Re-runs `reconcileRequest(id)` every 4 s (cheap single-row read; coalesced).
+- Re-runs on `visibilitychange → visible`, `window.focus`, and `online`.
+- Auto-stops once the row enters a terminal state defined by the caller (e.g. `cancelled` / `completed` / `expired`, or a custom predicate like "left dispatch stage").
 
-Internals:
-- Single `getCurrentPosition` / `watchPosition` orchestration (no watch by default; only when at least one subscriber asks for live updates).
-- The accuracy + drift filter currently in `GoogleMapBackground.acceptSample` moves here verbatim — one implementation, one cache, one source of truth.
-- One transport seam: a private `readPosition()` that today calls `navigator.geolocation`. To switch to Capacitor Geolocation later, only this one function changes (dynamic import of `@capacitor/geolocation` when `isNative()`).
+Implementation note: the 4 s heartbeat is bounded — every lifecycle screen has a natural exit (180 s dispatch timer, shift end, completion). At realistic scale this is < 1 read/s per active user with one shift in flight, well within Supabase budget and gated to active windows only.
 
-### 2. Refactor the three call sites to consume the service
+### C. Wire the hook into every lifecycle surface
 
-- **`src/components/GoogleMapBackground.tsx`** — delete the entire geolocation `useEffect` (lines 177-234), `acceptSample`, and the module-level `cachedUserCenter`/`cachedAccuracy`. Replace with:
-  ```ts
-  useEffect(() => location.subscribe(setUserCenterState), []);
-  useEffect(() => { location.requestOnce(); }, []);
-  ```
-  Map becomes a pure consumer.
-- **`src/features/request/RequesterHome.tsx`** — replace the `useEffect` at lines 240-256 with `location.requestOnce().then(c => c && setSearchOrigin(c))`. Request creation now reads from the same centralized state the map uses.
-- **`src/lib/doctor-gps.ts`** — keep the file as the **presence writer** but delete its direct `navigator.geolocation` usage. It calls `location.requestOnce()` and forwards the result to `upsertMyPresence`. Event-driven cadence (mount, online toggle, 20-min foreground tick) is unchanged.
+- `src/features/request/RequesterHome.tsx` — mount the hook for `requestId` while `stage ∈ {dispatch, accepted}`; terminal predicate: row leaves `broadcasting|paused|accepted|active`.
+- `src/features/cover/CoverHome.tsx` — for the doctor's currently-engaged shift (the Upcoming/Active card); terminal predicate: row is `completed|cancelled|awaiting_payment` and the sheet has been dismissed.
+- `src/features/app/CoverageScreen.tsx` — when the user expands any card showing an in-flight shift (Active or Upcoming tab); terminal: row leaves the tab's category.
+- `src/features/request/ShiftSettlement.tsx` — for the entire mounted lifetime; terminal: `payment_status === "paid"` or `status === "cancelled"`.
 
-### 3. Continuous-tracking removal
+### D. Lifecycle-action reconcile fan-out (already partly in place)
 
-`GoogleMapBackground`'s `watchPosition` is dropped. The map gets a single `requestOnce` plus whatever samples the doctor-side 20-minute tick pushes through the subscriber channel. Requesters get one fix per Home mount — sufficient for the "you are here" dot and `searchOrigin`, and consistent with the project's stated "FlashLocum is not a real-time tracking platform" constraint in `doctor-gps.ts`.
+Confirm every server-mutating helper in `src/lib/coverage-remote.ts` emits an invalidate AND, on the caller side, awaits one `reconcileRequest(id)` so the actor's UI is never left behind its own action:
+- `remoteClaimRequest`, `pauseRequest`, `resumeRequest`, `startShift`, `endShift`, `cancelRequest`, `extendPaymentWindow`, `markPaid`.
 
-### 4. Permission centralization
+### E. No changes to
 
-`ensurePermission()` is the only path that may trigger the browser prompt. Call sites read `getPermissionState()` for UI ("Location off — tap to enable") instead of inferring from a failed `getCurrentPosition`.
+- The broadcast model (every online Lagos doctor still receives every new request — core product constraint).
+- RLS, triggers, RPCs, schema.
+- The realtime channel topology — realtime remains primary.
+- The 180 s pre-acceptance expiry.
 
-### 5. Capacitor switch path (documented, not implemented now)
+## Files to touch
 
-After this refactor, swapping to `@capacitor/geolocation` is a single edit to `readPosition()` in `location.ts` (≈10 lines), plus adding `NSLocationWhenInUseUsageDescription` / `ACCESS_FINE_LOCATION` to the native shells per `CAPACITOR.md`. No UI file changes.
+- `src/lib/coverage-remote.ts` — `reconcileNow`/`reconcileRequest` exports, `window.focus` listener, invalidations-channel SUBSCRIBED reconcile, post-mutation reconcile in each helper.
+- `src/lib/use-lifecycle-reconcile.ts` *(new)* — the shared hook.
+- `src/features/request/RequesterHome.tsx` — mount hook in `Dispatch` + `DispatchAccepted`.
+- `src/features/cover/CoverHome.tsx` — mount hook for the engaged shift card.
+- `src/features/app/CoverageScreen.tsx` — mount hook for the expanded in-flight card.
+- `src/features/request/ShiftSettlement.tsx` — mount hook for the open settlement.
 
-## Files Touched
+## Acceptance criteria
 
-- **New:** `src/lib/location.ts`
-- **Edit:** `src/components/GoogleMapBackground.tsx` (remove its geo stack)
-- **Edit:** `src/features/request/RequesterHome.tsx` (use service for `searchOrigin`)
-- **Edit:** `src/lib/doctor-gps.ts` (delegate position read to service; keep presence-write role)
+With realtime artificially blocked (channel forced offline):
+- A doctor accept becomes visible to the requester within ≤4 s, anywhere in the requester app.
+- A requester cancel/pause/resume/end becomes visible to the doctor within ≤4 s, in CoverHome and CoverageScreen.
+- Payment completion / extension / surcharge timer change becomes visible to both sides within ≤4 s in ShiftSettlement.
+- Returning to the tab (visibility / focus / online / reconnect) ALWAYS triggers a snapshot reconcile.
+- No screen can remain in a stale state indefinitely because a realtime event was missed.
 
-## Out of Scope
-
-- No change to presence schema, RLS, or `upsertMyPresence` signature.
-- No change to online/offline semantics — already correctly decoupled from GPS.
-- No Capacitor Geolocation install in this pass (path is unblocked but deferred).
-
-## Verification After Build
-
-1. Grep confirms `navigator.geolocation` appears **only** in `src/lib/location.ts`.
-2. Doctor toggles Online → presence row updates `online=true` even if permission denied (lat/lng null).
-3. Requester Home renders map dot and pre-fills `searchOrigin` from a single GPS prompt, not two.
-4. Switching tabs and returning does not re-prompt for permission and does not flash a default map center.
+Negative test: with realtime fully connected, the 4 s heartbeat is a no-op (single-row read returns identical data; coalesced refresh detects no hash change and skips re-render) — zero visible cost.
