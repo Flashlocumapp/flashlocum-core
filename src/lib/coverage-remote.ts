@@ -636,6 +636,24 @@ export function notifyCoverageChanged(id: string) {
 }
 
 /**
+ * Universal reconciliation surface. Realtime stays the primary update
+ * mechanism; these two helpers are the safety net every lifecycle screen
+ * uses to recover from a missed event (channel down during the event,
+ * reconnect race, app backgrounded, etc.).
+ *
+ *   - `reconcileNow()` — full snapshot re-read; coalesces concurrent callers.
+ *   - `reconcileRequest(id)` — single-row authoritative re-read; cheap.
+ */
+export function reconcileNow(): Promise<void> {
+  return refreshSnapshot();
+}
+
+export function reconcileRequest(id: string): Promise<void> {
+  if (!id) return Promise.resolve();
+  return fetchAndIngestRow(id);
+}
+
+/**
  * Handle a single postgres_changes payload. Shared between the per-user
  * filtered bindings (own rows + open searching rows) so the dedupe logic
  * lives in one place. Bindings can overlap — e.g. when a doctor accepts
