@@ -875,7 +875,7 @@ export function ShiftSettlement({
             shift={shift}
             workedMin={workedMin}
             billedMin={billedMin}
-            liveAmount={totalAmount}
+            liveAmount={activeLiveAmount}
             onClose={onClose}
             onEnd={handleEndShift}
           />
@@ -887,8 +887,7 @@ export function ShiftSettlement({
             phase={phase}
             elapsed={elapsed}
             billedMin={frozenBilledMin}
-            amount={frozenAmount}
-            liveAmount={totalAmount}
+            amount={serverAmount}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
@@ -907,9 +906,9 @@ export function ShiftSettlement({
             key="overtime"
             shift={shift}
             overtimeSec={overtimeSec}
-            total={totalAmount}
+            total={serverAmount}
             extensionMin={extensionMin}
-            extensionAmount={extensionAmount}
+            extensionAmount={null}
             onCopy={handleCopy}
             onMadePayment={handleMadePayment}
             paymentTriggered={autoConfirmAt.current !== null}
