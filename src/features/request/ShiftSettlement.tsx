@@ -343,30 +343,30 @@ export function ShiftSettlement({
     }
     confirmedAtRef.current = null;
     autoConfirmAt.current = null;
-    // Seed the frozen amount only if not already seeded. Prefer the
-    // server-frozen total (total_billed_amount). Live-timer fallback only
-    // runs on the very first End Shift press before the server responds.
+    // Seed the frozen amount ONLY from server-authoritative sources.
+    // No client-side pricing estimator is permitted to write frozenAmountRef
+    // (audit: payment-lifecycle must never display a locally-priced number).
+    // If the server total isn't on hand yet, the panes show
+    // "Calculating final amount…" until the billing poll / end_shift /
+    // serverTotalBilledAmount prop lands.
     if (effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime") {
       if (typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0) {
-        frozenAmountRef.current = serverTotalBilledAmount;
-      } else if (frozenAmountRef.current === 0) {
-        const segment = shift.startedAt ? Math.max(0, now - shift.startedAt) : 0;
-        const w = ((shift.accumulatedMs ?? 0) + segment) / 60000;
-        const priced = computeWorkedPricing(
-          shift.coverageKind,
-          shift.startHHMM,
-          w,
-          shift.endHHMM,
-          shift.days,
-          shift.environment ?? "normal",
-          bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
-        );
-        frozenBilledMinRef.current = priced.billableMinutes;
-        frozenAmountRef.current = priced.amount;
+        if (frozenAmountRef.current !== serverTotalBilledAmount) {
+          frozenAmountRef.current = serverTotalBilledAmount;
+          bumpServerAmount();
+        }
+      }
+      // billedMin snapshot is a UI nicety derived from the live timer; it's
+      // not part of the payable amount. Keep it for the receipt rows.
+      if (frozenBilledMinRef.current === 0) {
+        frozenBilledMinRef.current = billableMinutes(workedMin);
       }
     } else {
-      frozenBilledMinRef.current = 0;
-      frozenAmountRef.current = 0;
+      if (frozenBilledMinRef.current !== 0 || frozenAmountRef.current !== 0) {
+        frozenBilledMinRef.current = 0;
+        frozenAmountRef.current = 0;
+        bumpServerAmount();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialPhase, requestId, intent, serverPaymentDueAt, serverTotalBilledAmount, alreadyAwaitingPayment]);
