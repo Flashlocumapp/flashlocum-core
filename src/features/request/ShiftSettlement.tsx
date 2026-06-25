@@ -16,6 +16,7 @@ import {
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
 import { getRequestBillingState, endShift as endShiftFn } from "@/lib/shift.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 
 
 type TransferAccount = {
@@ -128,6 +129,12 @@ export function ShiftSettlement({
 }) {
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
+
+  // Watchful reconcile while the settlement sheet is open. Payment-completion
+  // and end-shift broadcasts are the highest-stakes events in the system —
+  // a missed `payment_confirmed` would otherwise trap the requester staring
+  // at the 15-minute countdown forever. Cheap single-row poll heals it.
+  useLifecycleReconcile(open ? (requestId ?? null) : null, { enabled: open && !!requestId });
   const settlementReadyRef = useRef(false);
   const directEndStartedRef = useRef(false);
   // Anchor timestamps drive every elapsed/overtime computation so that a

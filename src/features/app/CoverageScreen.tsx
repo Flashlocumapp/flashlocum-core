@@ -50,6 +50,7 @@ import { shiftCue } from "@/lib/feedback";
 import { useSimClock } from "@/lib/clock";
 import { subscribeRealtimeHealth, isCoverageReconnecting } from "@/lib/realtime-health";
 import { isRated, markRated, useRatedShiftsVersion } from "@/lib/rated-shifts";
+import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 
 
 
@@ -344,6 +345,23 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map(toRequestItem);
   }, [net, sid]);
+
+  // Watchful reconcile on the requester's most recent in-flight row so any
+  // missed start / pause / resume / end / payment broadcast is healed within
+  // ~4 s. Coalesced in coverage-remote; cheap single-row read.
+  const focusInFlightId = useMemo(() => {
+    const inFlight = items.find(
+      (i) =>
+        i.status === "active" ||
+        i.status === "payment_pending" ||
+        // accepted / paused live in the same "engaged" bucket from a
+        // realtime-safety perspective.
+        (i as unknown as { status: string }).status === "accepted" ||
+        (i as unknown as { status: string }).status === "paused",
+    );
+    return inFlight?.id ?? null;
+  }, [items]);
+  useLifecycleReconcile(focusInFlightId, { enabled: !!focusInFlightId });
 
   // Cross-flow acceptance / cancellation toasts are emitted by the canonical
   // feedback engine (offer.accepted / shift.cancelled). No local listener

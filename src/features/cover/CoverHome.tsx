@@ -14,6 +14,7 @@ import {
   type Coverage,
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
+import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 import { useRating } from "@/lib/ratings";
 import { useReliability } from "@/lib/reliability";
 import { useVerificationStatus } from "@/lib/verification";
@@ -42,6 +43,11 @@ export function CoverHome({ active = true }: { active?: boolean }) {
     upcoming[0] ??
     null;
   const isActive = !!focus?.active;
+
+  // Watchful reconcile on the focused engagement (active or next upcoming).
+  // Realtime is primary; this is the safety net for missed start / pause /
+  // resume / end / cancel broadcasts (channel down, app backgrounded).
+  useLifecycleReconcile(focus?.id ?? null, { enabled: !!focus });
 
   // Shared doctor rating — same source used in every requester view.
   const myRating = useRating(doctorEntityId(getSessionId()));

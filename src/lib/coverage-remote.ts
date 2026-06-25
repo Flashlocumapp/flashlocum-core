@@ -636,6 +636,24 @@ export function notifyCoverageChanged(id: string) {
 }
 
 /**
+ * Universal reconciliation surface. Realtime stays the primary update
+ * mechanism; these two helpers are the safety net every lifecycle screen
+ * uses to recover from a missed event (channel down during the event,
+ * reconnect race, app backgrounded, etc.).
+ *
+ *   - `reconcileNow()` — full snapshot re-read; coalesces concurrent callers.
+ *   - `reconcileRequest(id)` — single-row authoritative re-read; cheap.
+ */
+export function reconcileNow(): Promise<void> {
+  return refreshSnapshot();
+}
+
+export function reconcileRequest(id: string): Promise<void> {
+  if (!id) return Promise.resolve();
+  return fetchAndIngestRow(id);
+}
+
+/**
  * Handle a single postgres_changes payload. Shared between the per-user
  * filtered bindings (own rows + open searching rows) so the dedupe logic
  * lives in one place. Bindings can overlap — e.g. when a doctor accepts
@@ -860,6 +878,9 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
           if (status === "SUBSCRIBED") {
             resetBackoff("invalidations");
             setChannelHealth("invalidations", "ok");
+            // Recover any broadcast missed while the channel was down —
+            // realtime is primary, snapshot reconcile is the safety net.
+            void refreshSnapshot();
           } else if (
             status === "CHANNEL_ERROR" ||
             status === "TIMED_OUT" ||
@@ -892,7 +913,6 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   // If the refetch itself fails or returns nothing, the snapshot pipeline
   // will surface that on its own.
   let onVisibility: (() => void) | null = null;
-  let onOnline: (() => void) | null = null;
   if (typeof document !== "undefined") {
     onVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -901,11 +921,21 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     };
     document.addEventListener("visibilitychange", onVisibility);
   }
+  let onOnlineWindow: (() => void) | null = null;
+  let onFocus: (() => void) | null = null;
   if (typeof window !== "undefined") {
-    onOnline = () => {
+    onOnlineWindow = () => {
       void refreshSnapshot();
     };
-    window.addEventListener("online", onOnline);
+    onFocus = () => {
+      void refreshSnapshot();
+    };
+    window.addEventListener("online", onOnlineWindow);
+    // iOS Safari / PWA shells sometimes fire `focus` without firing
+    // `visibilitychange` (e.g. returning from a system sheet). Belt-and-
+    // braces: reconcile on focus too. refreshSnapshot is coalesced so
+    // overlapping visibility+focus events collapse to one fetch.
+    window.addEventListener("focus", onFocus);
   }
 
   // Re-bind the filtered channel whenever auth identity changes — the
@@ -941,8 +971,9 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     if (onVisibility && typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", onVisibility);
     }
-    if (onOnline && typeof window !== "undefined") {
-      window.removeEventListener("online", onOnline);
+    if (typeof window !== "undefined") {
+      if (onOnlineWindow) window.removeEventListener("online", onOnlineWindow);
+      if (onFocus) window.removeEventListener("focus", onFocus);
     }
     activeSubscribers--;
     if (activeSubscribers === 0) {
