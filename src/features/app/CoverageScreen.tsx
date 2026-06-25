@@ -1301,6 +1301,7 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
 
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
+  const firstPaintSettled = useFirstPaintSettled(upcoming.length + history.length > 0);
 
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -1311,39 +1312,27 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
     history.find((h) => h.id === detailId) ??
     null;
 
+  const isEmpty =
+    (tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0;
+
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
       <CoverageHeader subtitle="Your operational coverage" tab={tab} setTab={setTab} />
       <div
         className="mx-auto mt-3 max-w-md overflow-y-auto px-5 pb-6"
-        style={{ height: "calc(100% - 140px)" }}
+        style={{ height: "calc(100% - 140px)", overscrollBehavior: "contain" }}
       >
-        {(tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0 ? (
-          <EmptyState tab={tab} role="cover" />
-        ) : (
-          <ul className="space-y-2.5">
-            <AnimatePresence initial={false} mode="popLayout">
-              {tab === "active" && active && (
-                <motion.li
-                  key={active.id}
-                  layout
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <CoverCard
-                    item={active}
-                    variant="active"
-                    onCancel={() => setCancelId(active.id)}
-                    onOpenDetail={() => setDetailId(active.id)}
-                  />
-                </motion.li>
-              )}
-              {tab === "upcoming" &&
-                upcomingOnly.map((c) => (
+        <PullToRefresh>
+          {!firstPaintSettled ? (
+            <ListSkeleton />
+          ) : isEmpty ? (
+            <EmptyState tab={tab} role="cover" />
+          ) : (
+            <ul className="space-y-2.5">
+              <AnimatePresence initial={false} mode="popLayout">
+                {tab === "active" && active && (
                   <motion.li
-                    key={c.id}
+                    key={active.id}
                     layout
                     initial={false}
                     animate={{ opacity: 1, y: 0 }}
@@ -1351,33 +1340,52 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
                     transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                   >
                     <CoverCard
-                      item={c}
-                      variant="upcoming"
-                      onCancel={() => setCancelId(c.id)}
-                      onOpenDetail={() => setDetailId(c.id)}
+                      item={active}
+                      variant="active"
+                      onCancel={() => setCancelId(active.id)}
+                      onOpenDetail={() => setDetailId(active.id)}
                     />
                   </motion.li>
-                ))}
-              {tab === "completed" &&
-                history.map((h) => (
-                  <motion.li
-                    key={h.id}
-                    layout
-                    initial={false}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <CoverCard
-                      item={h}
-                      variant="history"
-                      onOpenDetail={() => setDetailId(h.id)}
-                    />
-                  </motion.li>
-                ))}
-            </AnimatePresence>
-          </ul>
-        )}
+                )}
+                {tab === "upcoming" &&
+                  upcomingOnly.map((c) => (
+                    <motion.li
+                      key={c.id}
+                      layout
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <CoverCard
+                        item={c}
+                        variant="upcoming"
+                        onCancel={() => setCancelId(c.id)}
+                        onOpenDetail={() => setDetailId(c.id)}
+                      />
+                    </motion.li>
+                  ))}
+                {tab === "completed" &&
+                  history.map((h) => (
+                    <motion.li
+                      key={h.id}
+                      layout
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <CoverCard
+                        item={h}
+                        variant="history"
+                        onOpenDetail={() => setDetailId(h.id)}
+                      />
+                    </motion.li>
+                  ))}
+              </AnimatePresence>
+            </ul>
+          )}
+        </PullToRefresh>
       </div>
 
       <CancelFlow
