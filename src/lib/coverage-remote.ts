@@ -918,6 +918,13 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   // identity so a previously-cached row cannot survive sign-in as a
   // different user. UI shows empty until the fresh server snapshot arrives.
   const offAuth = onUserIdChange((id) => {
+    // Same-user re-entry: do NOT blank the cache. Token refresh / focus /
+    // INITIAL_SESSION can replay the same uid; emitting [] here is what
+    // briefly empties the History tab. Quietly reconcile in the background.
+    if (id && id === cachedSnapshotUserId) {
+      void refreshSnapshot();
+      return;
+    }
     setLiveSnapshotSeen(false);
     cachedSnapshot = [];
     cachedSnapshotUserId = null;
