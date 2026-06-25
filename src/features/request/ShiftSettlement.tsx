@@ -1168,9 +1168,9 @@ function OvertimePane({
 }: {
   shift: ShiftMeta;
   overtimeSec: number;
-  total: number;
+  total: number | null;
   extensionMin: number;
-  extensionAmount: number;
+  extensionAmount: number | null;
   onCopy: () => void;
   onMadePayment: () => void;
   paymentTriggered: boolean;
