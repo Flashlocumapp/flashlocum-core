@@ -174,7 +174,29 @@ export type PricingResult = {
   amount: number;
   billableMinutes: number;
   explanation: string;
+  /**
+   * User-friendly coverage label, e.g. "9-hour Single-Day Coverage" or
+   * "24-hour Straight Coverage (Busy Environment)". Free of any pricing
+   * arithmetic — safe to show in marketing/checkout surfaces.
+   */
+  displayLabel: string;
 };
+
+function friendlyCoverageLabel(
+  coverage: CoverageKind,
+  totalMin: number,
+  days: number,
+  environment: Environment,
+): string {
+  const hrs = Math.max(1, Math.round(totalMin / 60));
+  const busy =
+    environment === "busy" && coverage !== "home" ? " (Busy Environment)" : "";
+  if (coverage === "home") return `${hrs}-hour Home Care Coverage`;
+  if (coverage === "straight24") return `24-hour Straight Coverage${busy}`;
+  if (coverage === "straight48") return `48-hour Straight Coverage${busy}`;
+  const span = days > 1 ? "Multi-Day" : "Single-Day";
+  return `${hrs}-hour ${span} Coverage${busy}`;
+}
 
 function tierFor(perDayHr: number, table: PricingTable): { day: number; night: number; label: "<4h" | "4-6h" | ">6h" } {
   if (perDayHr > 6) return { ...table.rates[">6h"], label: ">6h" };
