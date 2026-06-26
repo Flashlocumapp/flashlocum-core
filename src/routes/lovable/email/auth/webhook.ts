@@ -31,7 +31,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "flashlocum-core"
+const SITE_NAME = "FlashLocum"
 const SENDER_DOMAIN = "notify.app.flashlocum.com"
 const ROOT_DOMAIN = "app.flashlocum.com"
 const FROM_DOMAIN = "app.flashlocum.com"

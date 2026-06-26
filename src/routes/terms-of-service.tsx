@@ -8,10 +8,10 @@ export const Route = createFileRoute("/terms-of-service")({
       { name: "description", content: "Terms of Service for the FlashLocum platform. Read how we connect verified locum doctors with healthcare professionals." },
       { property: "og:title", content: "Terms of Service — FlashLocum" },
       { property: "og:description", content: "Terms of Service for the FlashLocum platform." },
-      { property: "og:url", content: "https://flashlocum-core.lovable.app/terms-of-service" },
+      { property: "og:url", content: "https://app.flashlocum.com/terms-of-service" },
       { property: "og:type", content: "website" },
     ],
-    links: [{ rel: "canonical", href: "https://flashlocum-core.lovable.app/terms-of-service" }],
+    links: [{ rel: "canonical", href: "https://app.flashlocum.com/terms-of-service" }],
   }),
 });
 
