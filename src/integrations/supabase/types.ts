@@ -53,6 +53,48 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_actions_archive: {
+        Row: {
+          action: string
+          actor_user_id: string
+          archived_at: string
+          created_at: string
+          id: string
+          note: string | null
+          payload: Json | null
+          reason: string | null
+          target_payment_ref: string | null
+          target_shift_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          archived_at?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          payload?: Json | null
+          reason?: string | null
+          target_payment_ref?: string | null
+          target_shift_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          archived_at?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          payload?: Json | null
+          reason?: string | null
+          target_payment_ref?: string | null
+          target_shift_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       admin_payment_actions: {
         Row: {
           action: string
@@ -470,6 +512,66 @@ export type Database = {
           version: number
         }
         Update: {
+          attempts?: number
+          audience?: string
+          body?: string
+          created_at?: string
+          delivered_at?: string | null
+          entity_id?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          occurred_at?: number
+          payload?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      notification_outbox_archive: {
+        Row: {
+          archived_at: string
+          attempts: number
+          audience: string
+          body: string
+          created_at: string
+          delivered_at: string | null
+          entity_id: string
+          id: string
+          kind: string
+          last_error: string | null
+          next_attempt_at: string
+          occurred_at: number
+          payload: Json
+          title: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          archived_at?: string
+          attempts?: number
+          audience: string
+          body: string
+          created_at?: string
+          delivered_at?: string | null
+          entity_id: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          next_attempt_at?: string
+          occurred_at: number
+          payload?: Json
+          title: string
+          updated_at?: string
+          user_id: string
+          version: number
+        }
+        Update: {
+          archived_at?: string
           attempts?: number
           audience?: string
           body?: string
@@ -1196,6 +1298,7 @@ export type Database = {
       }
       admin_risk_overview: { Args: { _days?: number }; Returns: Json }
       admin_system_health: { Args: never; Returns: Json }
+      archive_old_logs: { Args: never; Returns: Json }
       claim_coverage_request: {
         Args: { _request_id: string }
         Returns: boolean
