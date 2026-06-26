@@ -111,6 +111,10 @@ async function initialFetch(force = false) {
     const { data, error } = await supabase.rpc("list_online_approved_doctors");
     if (error) {
       console.warn("[presence-remote] rpc error:", error.message);
+      // Schedule a short retry so a transient RPC failure (permission
+      // propagation, cold start, network blip) doesn't leave the requester
+      // map empty until the 60s reconcile tick fires.
+      scheduleInitialFetchRetry();
     } else {
       rawRows.clear();
       for (const r of (data ?? []) as Array<{
@@ -132,13 +136,28 @@ async function initialFetch(force = false) {
           lng: r.lng,
         });
       }
+      lastFetchedUserId = auth.userId;
+      emit();
     }
-    lastFetchedUserId = auth.userId;
-    emit();
   })().finally(() => {
     initialFetchInFlight = null;
   });
   return initialFetchInFlight;
+}
+
+let initialFetchRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let initialFetchRetryDelayMs = 1500;
+const INITIAL_FETCH_RETRY_MAX_MS = 15_000;
+function scheduleInitialFetchRetry() {
+  if (initialFetchRetryTimer) return;
+  const delay = initialFetchRetryDelayMs;
+  initialFetchRetryDelayMs = Math.min(INITIAL_FETCH_RETRY_MAX_MS, Math.round(initialFetchRetryDelayMs * 2));
+  initialFetchRetryTimer = setTimeout(() => {
+    initialFetchRetryTimer = null;
+    void initialFetch(true).then(() => {
+      if (rawRows.size > 0) initialFetchRetryDelayMs = 1500;
+    });
+  }, delay);
 }
 
 function applyPresencePayload(payload: RealtimePayload) {
