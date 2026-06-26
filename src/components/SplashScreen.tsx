@@ -14,7 +14,6 @@ const PHRASES: Phrase[] = [
   { text: "Let's request", ms: 2000 },
   { text: "Let's respond", ms: 2000 },
   { text: "Let's cover", ms: 2000 },
-  { text: "FlashLocum", ms: 3000 },
 ];
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
