@@ -237,10 +237,12 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
 
   switch (ev.kind) {
     case "offer.new":
-      // Card is the signal; no toast. Medium haptic for the doctor only —
-      // this is the ONLY event in the system that emits a haptic.
+      // Card is the signal; no toast under any circumstance. Medium haptic for
+      // the doctor only — this is the ONLY event in the system that emits a
+      // haptic. Title overrides are intentionally ignored so callers can't
+      // accidentally bring the toast back.
       return {
-        toast: tOverride ? toast("presence", tOverride) : undefined,
+        toast: undefined,
         haptic: !skipHaptic && isDoctor ? "medium" : undefined,
       };
     case "offer.accepted":
