@@ -1,133 +1,92 @@
-# Admin Dashboard — Approved Operational Gap Closure
 
-Scope: 6 capabilities. Excluded (not approved): Payment Investigation Tools, Notification Logs.
+## 1. Remove Google sign-up / continue with Google
 
-Approach: extend existing admin routes. No new sidebar entries. No parallel workflows.
+`src/routes/auth.$role.tsx` is the only consumer.
+- Delete `handleGoogle`, the "Continue with Google" button, the divider above it, the `GoogleIcon` component, and the `lovable.auth.signInWithOAuth` import.
+- Leave the email/password form and the role layout untouched.
+- No backend disable call — the social provider stays available at the Cloud level but the UI no longer reaches it (the user only asked to remove the flow from the app).
 
----
+## 2. Splash screen
 
-## 0. Foundation — Audit log table (enables §6)
+`src/components/SplashScreen.tsx`
+- Drop the final `{ text: "FlashLocum", ms: 3000 }` entry from `PHRASES`.
+- Keep the existing animation, timing, and `onDone` call so the next screen still mounts immediately after "Let's Cover" finishes.
 
-Extend `admin_payment_actions` into a generic admin action log (or add sibling `admin_actions` — one migration, whichever keeps existing rows intact).
+## 3. Friendly coverage card labels
 
-Columns: `actor_user_id`, `action`, `target_user_id`, `target_shift_id`, `target_payment_ref`, `reason`, `note`, `payload jsonb`, `created_at`.
+The "About to request" card reads `pricing.explanation` from `priceFor(...)` in `src/lib/pricing.ts` (lines ~262–303). That string is also what produces lines like `10h day · ₦2,000/hr × 3 days · Busy ×1.25`.
 
-Every admin write across the console inserts one row before returning. Backfilled call sites: verification approve/reject/suspend/request-action, trust restrict/clear/freeze/escalate, shift force-cancel/force-complete/extend-window/lift-cap/mark-paid, payment refund/write-off/record-offline, push send.
+Replacement (UI-only, no pricing math touched):
+- Introduce a new helper `coverageLabel({ coverage, totalHours, days, environment })` that returns a single sentence:
+  - Standard, single day → `"{H}-hour Single-Day Coverage"` (+ ` (Busy Environment)` when `environment === "busy"`).
+  - Standard, multi day → `"{H}-hour Multi-Day Coverage"` using the booked total hours across the span (+ busy suffix).
+  - `straight24` → `"24-hour Straight Coverage"` (+ busy suffix).
+  - `straight48` → `"48-hour Straight Coverage"` (+ busy suffix).
+  - `home` → `"{H}-hour Home Care Coverage"` (busy never applies, per existing rule).
+- `priceFor` keeps returning `{ amount, explanation }` so server/audit logs are unchanged, but `SettlementSheet` in `src/features/request/RequesterHome.tsx` renders the new label from `coverageLabel(...)` instead of `pricing.explanation`.
+- No other consumer of `explanation` is shown to users in the request flow; admin/audit surfaces keep the technical string.
 
-RLS: admin-only SELECT via `has_role(auth.uid(),'admin')`. GRANTs to authenticated + service_role.
+## 4. Email template branding (FlashLocum, not flashlocum-core)
 
----
+- `src/routes/lovable/email/auth/preview.ts` and `src/routes/lovable/email/auth/webhook.ts`: change `SITE_NAME` to `"FlashLocum"`. Update `SAMPLE_PROJECT_URL` display copy only if it shows the slug to users (URL itself stays).
+- Templates already render `{siteName}`, so the subject lines, preview text, and body copy in `signup.tsx`, `recovery.tsx`, `magic-link.tsx`, `invite.tsx`, `email-change.tsx`, `reauthentication.tsx` will pick up the new name automatically.
+- Grep for any remaining `flashlocum-core` literal in the email pipeline and replace with `FlashLocum` (display) — but leave the deployed URL (`flashlocum-core.lovable.app`) alone where it's a real link.
 
-## 1. User Detail Drawer  *(new)*
+## 5. Toast cleanup
 
-Opened by clicking any user row in `/admin/users`, and reused from Verification, Trust, Cancellations, Ratings, and Shifts row clicks.
+In `src/lib/feedback.ts` (single engine that fans out to `pushToast`):
+- `shift.resumed`: drop the toast entirely for **both** sides. Keep haptic + presence-pill update so the UI transition is still felt.
+- `shift.updated`: keep as today (this is what fires after a real edit). The doctor-side false positive comes from the resume path re-emitting `shift.updated`; audit `src/lib/coverage-notify.functions.ts` + `src/features/request/RequesterHome.tsx` (resume call site) and make sure resume only emits `shift.resumed` and never also `shift.updated`.
+- `offer.new` ("New Incoming Coverage Request"): set `toast: undefined` (the incoming card is already the signal). Haptic stays.
 
-Tabs (all read-only):
-- **Overview** — profile, contact, area, surfaces, joined, last seen, online state.
-- **Verification** — current state + history (reuses §4).
-- **Shifts** — paginated list filtered to this user (extend `adminListShifts` with `userId`).
-- **Payments** — their settled / unpaid shifts with Monnify refs.
-- **Ratings** — given and received (filter `adminListRatings`).
-- **Cancellations** — by/against (filter `adminListCancellations`).
-- **Restrictions** — current state + history (reuses §5).
-- **Devices** — `device_tokens` rows (platform, last_seen).
-- **Audit** — every admin action targeting this user (from §0).
+For the duplicated "Your shift with X has ended. Payment processing has started." toast (see attached video):
+- Engine already has `TERMINAL_KINDS` + a `lkey` dedup window; the duplication points to multiple emit sites firing with non-matching keys.
+- Audit emitters: `coverage-notify.functions.ts` (`shift_ended` broadcast), `ShiftSettlement.tsx` reconcile loop, and the lifecycle watchdog. Consolidate to a single emission keyed on `shiftId + "shift.ended"`, and ignore further `shift.ended` events for that shift id for the lifetime of the session (small in-memory `Set<string>`).
+- No change to the user-visible copy or business semantics — payment continues unchanged whether or not the toast fires again.
 
-New server fn: `adminGetUserDetail({ userId })` returning a composed profile + counts payload. Per-tab data lazy-loaded via existing list fns extended with `userId` filter.
+## 6. In-app OTP password reset
 
----
+Goal: no email links, no `/reset-password` route landing from a browser link. Flow lives entirely inside the app.
 
-## 2. Shift Detail Drawer  *(extend existing RatingDetailDrawer)*
+Routes / UI:
+- New `src/routes/forgot-password.tsx` (or extend the existing entry point already linked from the sign-in screen) with three steps in a single component:
+  1. **Email** input → calls `requestPasswordOtpFn` (server function).
+  2. **6-digit code** input (reuse `src/components/ui/input-otp.tsx`) → calls `verifyPasswordOtpFn`.
+  3. **New password** input → calls `setNewPasswordFn`.
+- Existing `src/routes/reset-password.tsx` (link-based) is removed; any internal `<Link to="/reset-password">` references switch to the new in-app flow.
 
-`/admin/shifts` already opens a drawer with `RatingBlock` only. Replace its body with tabs:
+Server functions (new file `src/lib/password-reset.functions.ts`, all `createServerFn`):
+- `requestPasswordOtpFn({ email })` — calls `supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: undefined } })`. This triggers Supabase's recovery/OTP path which we already render via the `signup` (OTP) email template; we'll reuse it by mapping the `recovery` action type in `src/routes/lovable/email/auth/webhook.ts` to the OTP template (`SignupEmail`) so users get a 6-digit code instead of a link.
+- `verifyPasswordOtpFn({ email, token })` — `supabase.auth.verifyOtp({ email, token, type: "recovery" })`. Returns the resulting session tokens to the client; the client calls `supabase.auth.setSession(...)` so the next call is authenticated.
+- `setNewPasswordFn({ password })` — guarded by `requireSupabaseAuth`, runs `supabase.auth.updateUser({ password })`, then signs out and returns success so the UI navigates to `/role`.
 
-- **Timeline** — created → broadcast → accepted → started → paused/resumed (from `shift_segments`) → ended → billing_locked → paid → settled. Each event with timestamp.
-- **Parties** — requester + doctor cards that open the User drawer (§1).
-- **Billing** — coverage_type, environment, days, start/end, worked_min, paused_total, segments table, surcharge ticks (`payment_surcharge_log`), frozen total, base/surcharge breakdown.
-- **Payment** — Monnify ref, webhook receipts list, disbursement status, underpayment record if any. (Read-only view of the same data §3 surfaces from Unpaid; no action buttons here.)
-- **Ratings** — keep current `RatingBlock` pair.
-- **Cancellation** — reason + free text + actor if cancelled.
-- **Admin actions** — Force-cancel, Force-complete, Extend payment window (+15 min), Lift 24h surcharge cap, Mark paid manually (with reason). Each writes an audit row (§0).
+Webhook update:
+- `src/routes/lovable/email/auth/webhook.ts`: when `email_action_type === "recovery"`, render `SignupEmail` (which already shows a prominent `{token}` code) instead of `RecoveryEmail`. Update its body copy slightly so it reads as a password-reset code rather than a signup code (small prop tweak — no new template file needed if we generalize `SignupEmail`'s heading; otherwise add a tiny `password-reset.tsx` mirroring `SignupEmail`).
+- The link-based `RecoveryEmail` template is retained only as fallback if Supabase forces a magic link (it won't, because we'll request OTP type), but unused in the new flow.
 
-Filters: add `paused` and `awaiting_payment` to the existing status pills. Add a copyable shift-ID column.
-
-New server fns: `adminGetShiftDetail({ shiftId })`, `adminShiftForceCancel`, `adminShiftForceComplete`, `adminShiftExtendPaymentWindow`, `adminShiftLiftSurchargeCap`, `adminShiftMarkPaid`.
-
----
-
-## 3. Payment Detail Drawer  *(new)*
-
-Opened from `/admin/unpaid` rows and from the Shift drawer's Payment tab.
-
-Sections:
-- Monnify checkout reference + init timestamp.
-- Webhook receipts (timestamps + status) from existing webhook log surface.
-- Settlement disbursement: reference, 85/15 split, status, attempt count.
-- Surcharge tick history (`payment_surcharge_log`).
-- Underpayment record if any (`payment_underpayments`).
-- `admin_payment_actions` history for this shift.
-
-Actions: **Reconcile now** (one-shot Monnify poll), **Initiate refund** (with reason), **Write off** (with reason), **Record offline settlement** (amount + note). All write to audit log (§0).
-
-Unpaid table additions: Monnify ref column, last-webhook-seen column.
-
-New server fns: `adminGetPaymentDetail({ shiftId })`, `adminPaymentReconcile`, `adminPaymentRefund`, `adminPaymentWriteOff`, `adminPaymentRecordOffline`.
+Cleanup:
+- Delete `src/routes/reset-password.tsx` and remove `clearRecoveryTokensFromUrl` / `validateResetSessionOnce` callers.
+- Remove any `resetPasswordForEmail` call sites that still send magic links.
 
 ---
 
-## 4. Verification Document Visibility  *(extend `/admin/verification`)*
+### Out of scope
 
-Today: approve/reject/suspend/request-action with reason/target/note. Files are uploaded but not previewed; no per-doctor history.
+No pricing math, no shift lifecycle logic, no realtime/ratings/reliability, no Capacitor wiring. The webhook reroute in step 6 only swaps the rendered template for the `recovery` action — it does not change Supabase auth settings or DNS.
 
-Extend the verification row in place:
-- Inline thumbnails for medical license, MDCN card, NYSC document, selfie. Click to enlarge. Signed URLs cached via existing `selfie-url` helper.
-- MDCN external-validation badge (auto-check result if available, else "Manual review").
-- Bank validation badge from Monnify account-name match result.
-- **History panel** per doctor: every state change with actor, timestamp, reason, target, note — sourced from §0 audit rows written by `updateDoctorVerificationFn` (which we extend to log).
+### Files touched (summary)
 
-New server fn: `adminGetVerificationDetail({ userId })` returning signed file URLs + history. Surfaced in the User drawer's Verification tab too.
-
----
-
-## 5. Restriction History  *(extend `/admin/trust`)*
-
-Today: current rating / reliability / flagged/restricted, restrict + clear actions. `trust_blocks` exists but is not surfaced; no history.
-
-Extend `/admin/trust`:
-- Per-row History disclosure: every restrict / clear / freeze / escalate event (actor, timestamp, reason).
-- `trust_blocks` panel inside the row: each reliability block with completed/cancelled/no-show counts.
-- Outstanding-balance line (sum of unpaid for this user).
-- New actions: **Freeze** (soft — blocks new bookings, allows active shifts to finish), **Escalate** (mark for senior review with note), **Set expiry** on restriction. Implemented via `admin_apply_trust_restriction` extended with `mode` + `expires_at`, or sibling RPCs.
-
-New server fns / RPCs: `admin_list_trust_history({ user_id })`, `admin_freeze_user`, `admin_escalate_user`. Surfaced inside the User drawer's Restrictions tab.
-
----
-
-## 6. Audit Logs  *(surface §0)*
-
-Two surfaces, no new sidebar entry:
-- **`/admin/system`** — full audit table with filters by actor, target, action type, time range. CSV export.
-- **Scoped views** inside the User drawer (Audit tab) and Shift drawer (Admin actions tab).
-
-New server fn: `adminListActions({ filters })`. Every admin write fn from §1–§5 inserts one row before returning.
-
----
-
-## Cross-cutting
-
-- All new server fns use the existing `requireSupabaseAuth` + admin role-check pattern from `src/lib/admin.functions.ts`.
-- New RPCs ship with GRANTs + RLS scoped via `has_role(auth.uid(),'admin')`.
-- Drawers are pure client components in `src/components/admin/`, keyed by entity id via TanStack Query.
-- Tables get a small "Actions" column or inline disclosure — never a new screen.
-
-## Delivery order
-
-1. §0 audit-log table + write-through from existing actions.
-2. §2 Shift Detail Drawer (extends the ratings drawer that already exists).
-3. §1 User Detail Drawer (reuses §2, §4, §5, §6 panels).
-4. §3 Payment Detail Drawer + Unpaid integration.
-5. §4 Verification document previews + history.
-6. §5 Restriction history + freeze/escalate.
-7. §6 Audit log surface in `/admin/system` + CSV export.
-
-Outcome: support, verification, payment investigation, restriction, and shift investigation are completable from the dashboard with no direct DB access.
+```text
+src/routes/auth.$role.tsx                       (#1)
+src/components/SplashScreen.tsx                 (#2)
+src/lib/pricing.ts                              (#3 helper export)
+src/features/request/RequesterHome.tsx          (#3 render)
+src/routes/lovable/email/auth/webhook.ts        (#4, #6)
+src/routes/lovable/email/auth/preview.ts        (#4)
+src/lib/feedback.ts                             (#5)
+src/lib/coverage-notify.functions.ts            (#5 dedup audit)
+src/features/request/ShiftSettlement.tsx        (#5 dedup audit)
+src/routes/forgot-password.tsx                  (#6 new)
+src/lib/password-reset.functions.ts             (#6 new)
+src/routes/reset-password.tsx                   (#6 deleted)
+```
