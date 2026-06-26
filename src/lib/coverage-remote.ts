@@ -604,10 +604,16 @@ function scheduleRefresh() {
  * without waiting on a full snapshot refresh.
  */
 async function fetchAndIngestRow(id: string): Promise<void> {
+  // CONTRACT (see fetchOpenListCoalesced): bust the open-list cache before
+  // any event-driven re-read so Realtime invalidations never serve stale
+  // pool data. The 1.5s coalesce window is for *simultaneous duplicates*
+  // only — never for propagating database truth.
+  bustOpenListCache();
   // First try a direct read — works for own/accepted rows under RLS.
   let row: Row | null = null;
   let directOk = true;
   let poolOk = true;
+
   const direct = await supabase.from(TABLE).select("*").eq("id", id).maybeSingle();
   if (direct.error) {
     directOk = false;
