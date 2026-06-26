@@ -51,6 +51,8 @@ export type Coverage = {
   environment?: "normal" | "busy";
   /** True once the shift has ever been activated. Server-owned, monotonic. */
   everStarted?: boolean;
+  /** Requester's user UUID — used to look up live requester trust scores. */
+  requesterSessionId?: string;
 };
 
 
@@ -89,6 +91,7 @@ function toCoverage(r: NetRequest): Coverage {
     settledAmount: r.settledAmount,
     environment: r.environment ?? "normal",
     everStarted: !!r.everStarted,
+    requesterSessionId: r.requesterSessionId,
   };
 }
 

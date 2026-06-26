@@ -13,8 +13,9 @@ import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import { TrustInfoPopover } from "@/components/TrustInfoPopover";
 import { pushToast } from "@/lib/notifications";
-import { hospitalEntityId } from "@/features/cover/dispatch";
+import { userEntityId } from "@/lib/trust";
 import {
+  getSessionId,
   onlineDoctors,
   pauseRequest,
   publishRequest,
@@ -378,10 +379,9 @@ function HomeScreen({ active }: { active: boolean }) {
         .filter((s) => s.lat != null && s.lng != null)
         .map((s) => ({ key: s.placeId, title: s.primary, lat: s.lat!, lng: s.lng! }));
 
-  // Requester's own trust scope — use most recent hospital they booked for
-  // (doctors' ratings & reliability accumulate against that hospital name).
-  const selfHospitalName = location?.name ?? recents[0]?.name ?? null;
-  const selfEntityId = selfHospitalName ? hospitalEntityId(selfHospitalName) : null;
+  // Requester's own trust scope — anchored to the requester's user id so
+  // pills reflect their rolling-20 rating/reliability across every facility.
+  const selfEntityId = userEntityId(getSessionId());
 
   return (
     <section className="relative h-full w-full overflow-hidden">

@@ -19,13 +19,13 @@ import { ReliabilityPill } from "@/components/ReliabilityPill";
 import {
   cancelUpcoming,
   doctorEntityId,
-  hospitalEntityId,
   nairaK,
   recordHistoryRating,
   useDispatch,
   type Coverage as CoverItem,
   type HistoryItem,
 } from "@/features/cover/dispatch";
+import { userEntityId } from "@/lib/trust";
 import { recordRating } from "@/lib/ratings";
 import { submitShiftRating } from "@/lib/trust";
 import { computeCoveragePricing, coverageKindFromLabel, bookedMinutesFromWindow, effectiveCoverageKind } from "@/lib/pricing";
@@ -1502,9 +1502,9 @@ function CoverCard({
           <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
             <span className="truncate">{item.area}</span>
             <span>·</span>
-            <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
+            <RatingPill entityId={userEntityId(item.requesterSessionId)} role="requester" inline />
             <span>·</span>
-            <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+            <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
           </div>
 
         </div>
@@ -1666,8 +1666,8 @@ function DoctorCoverageDetail({
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="text-[20px] font-semibold tracking-tight">{item.hospital}</div>
             <div className="inline-flex items-center gap-2">
-              <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
-              <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+              <RatingPill entityId={userEntityId(item.requesterSessionId)} role="requester" inline />
+              <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
             </div>
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
@@ -1772,7 +1772,7 @@ function DoctorCoverageDetail({
               <button
                 disabled={!rating}
                 onClick={() => {
-                  void recordRating(hospitalEntityId(item.hospital), rating, item.id, feedback);
+                  void recordRating("", rating, item.id, feedback);
                   recordHistoryRating(item.id, rating);
                   markRated(item.id);
                   onDismiss();

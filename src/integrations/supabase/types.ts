@@ -1376,6 +1376,7 @@ export type Database = {
       get_request_phone: { Args: { _request_id: string }; Returns: string }
       get_shift_rating_state: { Args: { _request_id: string }; Returns: Json }
       get_trust: { Args: { _user_id: string }; Returns: Json }
+      get_trust_summary: { Args: { _user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
