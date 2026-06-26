@@ -814,7 +814,7 @@ export function startHeartbeat() {
   window.addEventListener("beforeunload", onPageHide);
   window.addEventListener("pagehide", onPageHide);
   return () => {
-    if (t) window.clearTimeout(t);
+    if (t) clearTimeout(t);
     document.removeEventListener("visibilitychange", visibility);
     window.removeEventListener("beforeunload", onPageHide);
     window.removeEventListener("pagehide", onPageHide);
