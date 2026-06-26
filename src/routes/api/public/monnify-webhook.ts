@@ -20,7 +20,7 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
       POST: async ({ request }) => {
         const raw = await request.text();
         const sig = request.headers.get("monnify-signature");
-        const { verifyMonnifySignature } = await import("./_monnify-signature.server");
+        const { verifyMonnifySignature } = await import("@/lib/monnify/signature.server");
         if (!verifyMonnifySignature(sig, raw, "monnify-webhook")) {
           return new Response("Invalid signature", { status: 401 });
         }
