@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { setRole, type Role } from "@/lib/role";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { fetchMyProfile } from "@/lib/profile-remote";
 import { adoptVerifiedSession, ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
@@ -10,7 +9,13 @@ export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
 });
 
-type View = "form" | "verify" | "forgot" | "forgot-sent";
+type View =
+  | "form"
+  | "verify"
+  | "forgot"
+  | "forgot-code"
+  | "forgot-new-password"
+  | "forgot-done";
 
 const AUTH_DEBUG_PREFIX = "[FlashLocum auth debug]";
 
