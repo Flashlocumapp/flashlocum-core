@@ -281,12 +281,15 @@ export function computeCoveragePricing(
   const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
   const homeRate = t.flats.home_hour;
 
+  const label = friendlyCoverageLabel(coverage, totalMin, d, environment);
+
   if (coverage === "home") {
     const amount = Math.round((totalMin / 60) * homeRate);
     return {
       amount,
       billableMinutes: totalMin,
       explanation: `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr.`,
+      displayLabel: label,
     };
   }
   if (coverage === "straight24") {
@@ -296,6 +299,7 @@ export function computeCoveragePricing(
       explanation:
         `24-hour straight · flat ₦${t.flats.straight_24h.toLocaleString("en-NG")} (22h–25h window).` +
         busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: label,
     };
   }
   if (coverage === "straight48") {
@@ -305,6 +309,7 @@ export function computeCoveragePricing(
       explanation:
         `48-hour straight · flat ₦${t.flats.straight_48h.toLocaleString("en-NG")} (46h–49h window).` +
         busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: label,
     };
   }
 
@@ -323,6 +328,7 @@ export function computeCoveragePricing(
     amount,
     billableMinutes: totalMin,
     explanation: (parts.join(" + ") || "Standard coverage rate.") + perDayLabel + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    displayLabel: label,
   };
 }
 
