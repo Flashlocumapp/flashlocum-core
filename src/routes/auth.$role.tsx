@@ -319,6 +319,7 @@ function AuthScreen() {
     }
   };
 
+  // === In-app password reset (OTP-based, no deep links) ===
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -329,13 +330,87 @@ function AuthScreen() {
     setBusy(true);
     setError(null);
     try {
-      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email);
+      if (err) throw err;
+      setCode("");
+      setInfo(null);
+      setView("forgot-code");
+    } catch (err) {
+      setError((err as Error).message || "Could not send reset code.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleVerifyResetCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setError(null);
+    const token = code.trim();
+    if (token.length < 6) {
+      setError("Enter the 6-digit code from your email.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data, error: err } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "recovery",
       });
       if (err) throw err;
-      setView("forgot-sent");
+      if (!data.session) {
+        setError("Verification failed. Please try again.");
+        return;
+      }
+      adoptVerifiedSession(data.session);
+      setNewPassword("");
+      setView("forgot-new-password");
     } catch (err) {
-      setError((err as Error).message || "Could not send reset email.");
+      setError((err as Error).message || "Invalid or expired code.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResendReset = async () => {
+    if (!email) {
+      setError("Enter your email first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email);
+      if (err) throw err;
+      setInfo("New code sent. Check your email.");
+    } catch (err) {
+      setError((err as Error).message || "Could not resend code.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const { error: err } = await supabase.auth.updateUser({ password: newPassword });
+      if (err) throw err;
+      // Sign out so the user re-enters with the new password.
+      await supabase.auth.signOut();
+      setNewPassword("");
+      setPassword("");
+      setView("forgot-done");
+    } catch (err) {
+      setError((err as Error).message || "Could not update password.");
     } finally {
       setBusy(false);
     }
@@ -395,33 +470,12 @@ function AuthScreen() {
     );
   }
 
-  if (view === "forgot-sent") {
-    return (
-      <Shell
-        roleLabel={roleLabel}
-        title="Check your email"
-        subtitle="We’ve sent a password reset link. Open it on this device to set a new password."
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setView("form");
-            setMode("login");
-          }}
-          className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90"
-        >
-          Back to sign in
-        </button>
-      </Shell>
-    );
-  }
-
   if (view === "forgot") {
     return (
       <Shell
         roleLabel={roleLabel}
         title="Reset your password"
-        subtitle="Enter your email and we’ll send you a reset link."
+        subtitle="Enter your email and we’ll send you a 6-digit verification code."
       >
         <form onSubmit={handleForgot} className="mt-7 space-y-3">
           <Field
@@ -439,7 +493,7 @@ function AuthScreen() {
             disabled={busy}
             className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
           >
-            {busy ? "Sending…" : "Send reset link"}
+            {busy ? "Sending…" : "Send verification code"}
           </button>
           <button
             type="button"
@@ -452,6 +506,123 @@ function AuthScreen() {
             Cancel
           </button>
         </form>
+      </Shell>
+    );
+  }
+
+  if (view === "forgot-code") {
+    return (
+      <Shell
+        roleLabel={roleLabel}
+        title="Enter reset code"
+        subtitle={`We’ve sent a 6-digit code to ${email || "your email"}. Enter it below to continue.`}
+      >
+        <form onSubmit={handleVerifyResetCode} className="mt-6 space-y-3">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="000000"
+            className="h-14 w-full rounded-2xl bg-secondary px-4 text-center text-[22px] font-semibold tracking-[0.5em] outline-none placeholder:text-muted-foreground/40"
+          />
+          {info && <p className="text-[13px] text-muted-foreground">{info}</p>}
+          {error && <ErrorBox>{error}</ErrorBox>}
+          <button
+            type="submit"
+            disabled={busy || code.length < 6}
+            className="mt-2 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+          >
+            {busy ? "Verifying…" : "Verify code"}
+          </button>
+          <button
+            type="button"
+            onClick={handleResendReset}
+            disabled={busy}
+            className="mt-1 h-12 w-full rounded-2xl bg-secondary text-[14px] font-medium disabled:opacity-60"
+          >
+            Resend code
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setView("form");
+              setMode("login");
+              setInfo(null);
+              setError(null);
+            }}
+            className="mt-1 h-11 w-full text-[13px] font-medium text-muted-foreground underline underline-offset-4"
+          >
+            Back to sign in
+          </button>
+        </form>
+      </Shell>
+    );
+  }
+
+  if (view === "forgot-new-password") {
+    return (
+      <Shell
+        roleLabel={roleLabel}
+        title="Choose a new password"
+        subtitle="Pick a password you haven’t used before. Minimum 6 characters."
+      >
+        <form onSubmit={handleSetNewPassword} className="mt-6 space-y-3">
+          <div>
+            <label className="text-[12px] font-medium text-muted-foreground">New password</label>
+            <div className="mt-1.5 flex items-center rounded-2xl bg-secondary px-4">
+              <input
+                type={showPw ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/70"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                aria-label={showPw ? "Hide password" : "Show password"}
+                className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground active:bg-accent"
+              >
+                {showPw ? <EyeOff /> : <Eye />}
+              </button>
+            </div>
+          </div>
+          {error && <ErrorBox>{error}</ErrorBox>}
+          <button
+            type="submit"
+            disabled={busy || newPassword.length < 6}
+            className="mt-2 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+          >
+            {busy ? "Updating…" : "Update password"}
+          </button>
+        </form>
+      </Shell>
+    );
+  }
+
+  if (view === "forgot-done") {
+    return (
+      <Shell
+        roleLabel={roleLabel}
+        title="Password updated"
+        subtitle="You can now sign in with your new password."
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setView("form");
+            setMode("login");
+            setError(null);
+          }}
+          className="mt-4 h-13 w-full rounded-2xl bg-primary py-3.5 text-[15px] font-semibold text-primary-foreground active:opacity-90"
+        >
+          Back to sign in
+        </button>
       </Shell>
     );
   }
