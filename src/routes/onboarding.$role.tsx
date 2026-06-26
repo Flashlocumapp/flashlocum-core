@@ -62,9 +62,20 @@ function OnboardingScreen() {
     else saveProfile("request", requester);
   };
 
-  // Phone: digits only, must be 11 digits starting with 0 (NG mobile, e.g. 080XXXXXXXX).
+  // Phone: digits only, exactly 11 digits, must be a valid Nigerian mobile
+  // prefix (070, 080, 081, 090, 091, 0701-0916 range).
   const sanitizePhone = (v: string) => v.replace(/\D/g, "").slice(0, 11);
-  const isValidPhone = (v?: string) => !!v && /^0\d{10}$/.test(v);
+  const NG_MOBILE_REGEX = /^0(70[1-9]|8[01]\d|90[1-9]|91[0-6])\d{7}$/;
+  const isValidPhone = (v?: string) => !!v && NG_MOBILE_REGEX.test(v);
+  const phoneError = (v?: string) => {
+    if (!v) return null;
+    if (v.length < 11) return "Phone number must be 11 digits";
+    if (v.length > 11) return "Phone number must be 11 digits";
+    if (!NG_MOBILE_REGEX.test(v)) return "Please enter a valid Nigerian mobile number";
+    return null;
+  };
+  const requesterPhoneError = phoneError(requester.phone);
+  const doctorPhoneError = phoneError(doctor.phone);
 
   const mdcnValue = doctor.mdcn?.trim() ?? "";
   const mdcnValid = MDCN_REGEX.test(mdcnValue);
@@ -208,6 +219,9 @@ function OnboardingScreen() {
                 value={requester.phone ?? ""}
                 onChange={(v) => setRequester((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
+              {requesterPhoneError && (
+                <p className="-mt-1.5 text-[12.5px] text-destructive">{requesterPhoneError}</p>
+              )}
               <SelectField
                 label="Gender"
                 value={requester.gender ?? ""}
@@ -226,6 +240,9 @@ function OnboardingScreen() {
                 value={doctor.phone ?? ""}
                 onChange={(v) => setDoctor((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
+              {doctorPhoneError && (
+                <p className="-mt-1.5 text-[12.5px] text-destructive">{doctorPhoneError}</p>
+              )}
               <SelectField
                 label="Gender"
                 value={doctor.gender ?? ""}
@@ -259,13 +276,13 @@ function OnboardingScreen() {
                 <Field
                   label="MDCN number"
                   type="text"
-                  placeholder="MDCN/R/12345"
+                  placeholder=""
                   value={doctor.mdcn ?? ""}
                   onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
                 />
                 {mdcnError && (
                   <p className="mt-1.5 text-[12.5px] text-destructive">
-                    Please enter the correct format
+                    Please enter the correct format (e.g. MDCN/X/YYYYYY)
                   </p>
                 )}
               </div>
