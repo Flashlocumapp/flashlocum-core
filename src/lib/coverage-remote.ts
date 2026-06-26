@@ -502,7 +502,7 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
       .or(ownFilter)
       .order("created_at", { ascending: true })
       .limit(SNAPSHOT_LIMIT),
-    supabase.rpc("list_open_coverage_requests"),
+    fetchOpenListCoalesced(),
   ]);
   if (ownRes.error) {
     console.warn("[coverage-remote] fetch error:", ownRes.error.message);
