@@ -244,19 +244,21 @@ export function GoogleMapBackground({
       const existing = pool.get(m.key);
       if (existing) {
         existing.setPosition(pos);
+        existing.setIcon(doctorIcon(markerScale));
       } else {
         pool.set(
           m.key,
           new google.maps.Marker({
             position: pos,
             map: mapRef.current!,
-            icon: doctorIcon(),
+            icon: doctorIcon(markerScale),
             optimized: false, // SMIL pulse requires non-optimized rendering
             zIndex: 40,
           }),
         );
       }
     });
+
     // Remove markers that are no longer in the input (or lost their GPS fix).
     for (const [key, marker] of pool) {
       if (!seen.has(key)) {
