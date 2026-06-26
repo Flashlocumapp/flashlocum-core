@@ -534,13 +534,15 @@ export function declineIncoming() {
   if (!id) return;
   const r = currentRequest(id);
   markDeclined(id, r?.rev);
-  // Force an authoritative re-fetch so any other eligible requests that
-  // were already in the open pool (but were obscured behind this one in
-  // the dispatch queue) surface immediately. Without this, a second
-  // back-to-back request could remain invisible until the next reconcile
-  // tick or a fresh broadcast.
+  // Force an authoritative re-read so any sibling request already in the
+  // open pool (e.g. a second requester broadcast that arrived during a
+  // channel flap) surfaces as the next incoming card without requiring
+  // anyone to cancel and rebroadcast. Bust the 1.5s coalesce cache first
+  // so the RPC returns fresh DB truth, not a stale window.
+  bustOpenListCache();
   void reconcileNow();
 }
+
 
 
 export function dismissAccepted() {
