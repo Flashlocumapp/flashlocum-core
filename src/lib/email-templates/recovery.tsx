@@ -12,7 +12,7 @@ import {
 
 interface RecoveryEmailProps {
   siteName: string
-  recipient: string
+  recipient?: string
   token: string
 }
 
@@ -32,7 +32,8 @@ export const RecoveryEmail = ({
         </Text>
         <Text style={code}>{token}</Text>
         <Text style={text}>
-          Enter this code in {siteName} to choose a new password for {recipient}.
+          Enter this 6-digit code in {siteName}
+          {recipient ? ` to choose a new password for ${recipient}` : ''}.
           The code expires shortly — request a new one if it does not work.
         </Text>
         <Text style={footer}>

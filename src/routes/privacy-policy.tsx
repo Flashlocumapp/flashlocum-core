@@ -8,10 +8,10 @@ export const Route = createFileRoute("/privacy-policy")({
       { name: "description", content: "Privacy Policy for the FlashLocum platform. Learn how we collect, use, and protect your information." },
       { property: "og:title", content: "Privacy Policy — FlashLocum" },
       { property: "og:description", content: "Privacy Policy for the FlashLocum platform." },
-      { property: "og:url", content: "https://flashlocum-core.lovable.app/privacy-policy" },
+      { property: "og:url", content: "https://app.flashlocum.com/privacy-policy" },
       { property: "og:type", content: "website" },
     ],
-    links: [{ rel: "canonical", href: "https://flashlocum-core.lovable.app/privacy-policy" }],
+    links: [{ rel: "canonical", href: "https://app.flashlocum.com/privacy-policy" }],
   }),
 });
 

@@ -2,7 +2,7 @@
 // Public API kept stable for CoverHome, CoverDispatchPortal, and coverage tab.
 
 import { useEffect, useState } from "react";
-import { hasLiveSnapshot, onLiveSnapshotChange } from "@/lib/coverage-remote";
+import { hasLiveSnapshot, onLiveSnapshotChange, reconcileNow } from "@/lib/coverage-remote";
 import {
   acceptRequest,
   type AcceptBlockReason,
@@ -534,6 +534,12 @@ export function declineIncoming() {
   if (!id) return;
   const r = currentRequest(id);
   markDeclined(id, r?.rev);
+  // Force an authoritative re-fetch so any other eligible requests that
+  // were already in the open pool (but were obscured behind this one in
+  // the dispatch queue) surface immediately. Without this, a second
+  // back-to-back request could remain invisible until the next reconcile
+  // tick or a fresh broadcast.
+  void reconcileNow();
 }
 
 

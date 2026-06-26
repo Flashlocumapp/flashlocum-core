@@ -30,7 +30,6 @@ const config: CapacitorConfig = {
     // Allow Lovable preview + Supabase + Google APIs the WebView may navigate to.
     allowNavigation: [
       "app.flashlocum.com",
-      "flashlocum-core.lovable.app",
       "*.lovable.app",
       "*.supabase.co",
       "*.googleapis.com",

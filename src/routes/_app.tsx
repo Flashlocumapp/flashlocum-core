@@ -25,6 +25,7 @@ import {
   touchLastSeen,
 } from "@/lib/profile-remote";
 import { ensureAuthReady } from "@/lib/auth-ready";
+import { mountPreshiftReminderScheduler } from "@/lib/preshift-reminder";
 
 export const Route = createFileRoute("/_app")({
   ssr: false,
@@ -165,6 +166,7 @@ function AppShell() {
   }, [activeTab]);
 
   useEffect(() => acquireHeartbeat(), []);
+  useEffect(() => mountPreshiftReminderScheduler(), []);
 
   // Non-persistent routes (e.g. /help, /support, /admin children if rendered
   // here) display the Outlet on top of all hidden persistent layers.
