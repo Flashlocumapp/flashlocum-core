@@ -8,13 +8,12 @@ import { TrustInfoPopover } from "@/components/TrustInfoPopover";
 import { fmtOpMeta } from "@/lib/format";
 
 import {
-  doctorEntityId,
-  hospitalEntityId,
   setOnline,
   useDispatch,
   type Coverage,
 } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
+import { userEntityId } from "@/lib/trust";
 import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 import { useRating } from "@/lib/ratings";
 import { useReliability } from "@/lib/reliability";
@@ -51,8 +50,9 @@ export function CoverHome({ active = true }: { active?: boolean }) {
   useLifecycleReconcile(focus?.id ?? null, { enabled: !!focus });
 
   // Shared doctor rating — same source used in every requester view.
-  const myRating = useRating(doctorEntityId(getSessionId()));
-  const myReliability = useReliability(doctorEntityId(getSessionId()));
+  const myEntityId = userEntityId(getSessionId());
+  const myRating = useRating(myEntityId);
+  const myReliability = useReliability(myEntityId);
 
   // Hard-revoke online state if verification is lost (suspension, rejection).
   useEffect(() => {
@@ -434,8 +434,8 @@ function CoverageTile({
         ) : (
           <span className="inline-flex items-center gap-2">
             <EnvironmentBadge environment={coverage.environment ?? null} size="xs" />
-            <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
-            <ReliabilityPill entityId={hospitalEntityId(coverage.hospital)} inline />
+            <RatingPill entityId={userEntityId(coverage.requesterSessionId)} role="requester" inline />
+            <ReliabilityPill entityId={userEntityId(coverage.requesterSessionId)} inline />
           </span>
         )}
 

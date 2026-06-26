@@ -23,13 +23,13 @@ import {
   dismissAccepted,
   dismissPendingRating,
   feeOf,
-  hospitalEntityId,
   nairaK,
   netOf,
   recordHistoryRating,
   useDispatch,
   type Coverage,
 } from "@/features/cover/dispatch";
+import { userEntityId } from "@/lib/trust";
 
 export function CoverDispatchPortal() {
   const [role, setLocalRole] = useState<Role | null>(() => getRole());
@@ -164,8 +164,8 @@ function IncomingBody({ item }: { item: Coverage }) {
           </span>
         </div>
         <div className="inline-flex items-center gap-2">
-          <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
-          <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+          <RatingPill entityId={userEntityId(item.requesterSessionId)} role="requester" inline />
+          <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
           <EnvironmentBadge environment={item.environment ?? "normal"} size="sm" />
         </div>
 
@@ -246,8 +246,8 @@ function AcceptedBody({ item }: { item: Coverage }) {
           Coverage confirmed
         </div>
         <div className="inline-flex items-center gap-2">
-          <RatingPill entityId={hospitalEntityId(item.hospital)} role="requester" inline />
-          <ReliabilityPill entityId={hospitalEntityId(item.hospital)} inline />
+          <RatingPill entityId={userEntityId(item.requesterSessionId)} role="requester" inline />
+          <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
         </div>
 
       </div>
