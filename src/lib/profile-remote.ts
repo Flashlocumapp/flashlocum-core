@@ -31,6 +31,8 @@ export type ProfileRow = {
   last_seen_at: string | null;
   location: string | null;
   verification_receipt_url: string | null;
+  trust_frozen_at?: string | null;
+  trust_frozen_reason?: string | null;
   created_at?: string;
 };
 
@@ -345,6 +347,8 @@ const MEANINGFUL_PROFILE_KEYS: ReadonlyArray<keyof ProfileRow> = [
   "verification_status",
   "location",
   "verification_receipt_url",
+  "trust_frozen_at",
+  "trust_frozen_reason",
 ];
 
 function profilesDifferMeaningfully(

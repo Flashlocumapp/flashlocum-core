@@ -27,6 +27,7 @@ type Status =
   | "accepted"
   | "active"
   | "paused"
+  | "awaiting_payment"
   | "completed"
   | "cancelled";
 
@@ -39,6 +40,8 @@ function statusColor(s: string): string {
       return "#2563eb";
     case "paused":
       return "#c2410c";
+    case "awaiting_payment":
+      return "#b45309";
     case "completed":
       return "var(--color-muted-foreground)";
     case "cancelled":
@@ -115,12 +118,16 @@ function AdminShiftsPage() {
   }, [shifts, q]);
 
   const counts = useMemo(() => {
+    const awaiting = shifts.filter(
+      (r) => r.status === "completed" && !r.paid_at && (r.total_billed_amount ?? 0) > 0,
+    ).length;
     const c: Record<string, number> = {
       all: shifts.length,
       searching: 0,
       accepted: 0,
       active: 0,
       paused: 0,
+      awaiting_payment: awaiting,
       completed: 0,
       cancelled: 0,
     };
@@ -134,9 +141,12 @@ function AdminShiftsPage() {
     { id: "accepted", label: `Accepted (${counts.accepted})` },
     { id: "active", label: `Active (${counts.active})` },
     { id: "paused", label: `Paused (${counts.paused})` },
+    { id: "awaiting_payment", label: `Awaiting Payment (${counts.awaiting_payment})` },
     { id: "completed", label: `Completed (${counts.completed})` },
     { id: "cancelled", label: `Cancelled (${counts.cancelled})` },
   ];
+
+  const isAwaiting = status === "awaiting_payment";
 
   return (
     <div className="p-6 lg:p-8">
@@ -240,10 +250,17 @@ function AdminShiftsPage() {
                           );
                         }
                         if (r.total_billed_amount != null) {
+                          const payable = r.current_payable_amount ?? r.total_billed_amount;
+                          const hasSurcharge =
+                            payable != null && payable > (r.total_billed_amount ?? 0);
                           return (
                             <>
-                              <div>{fmtNaira(r.total_billed_amount)}</div>
-                              <div className="text-[11px] text-muted-foreground">Due</div>
+                              <div>{fmtNaira(payable ?? 0)}</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {hasSurcharge
+                                  ? `Base ${fmtNaira(r.total_billed_amount)} + surcharge`
+                                  : "Due"}
+                              </div>
                             </>
                           );
                         }
@@ -256,7 +273,17 @@ function AdminShiftsPage() {
                       })()}
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
-                      {r.payment_status || "—"}
+                      <div>{r.payment_status || "—"}</div>
+                      {isAwaiting && (
+                        <>
+                          <div className="text-[11px] truncate max-w-[160px]" title={r.payment_reference ?? ""}>
+                            {r.payment_reference || "no ref"}
+                          </div>
+                          {r.ended_at && (
+                            <div className="text-[11px]">Ended {fmtRelative(r.ended_at)}</div>
+                          )}
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
                       <RatingsCell row={r} />

@@ -1,13 +1,18 @@
 import { memo } from "react";
 
 /**
- * Image with explicit intrinsic dimensions and a key tied to `src` so the
- * browser doesn't reuse the DOM node across URL changes — that node reuse
- * was the source of the brief "blank → decoded" flicker every time a row
- * re-rendered with the same logical avatar.
+ * Image with explicit intrinsic dimensions and a stable React key so the
+ * browser does not reuse the DOM node across logically distinct images — but
+ * also does not tear the node down when only the URL's query-string token
+ * changes (e.g. signed-URL refresh).
  *
- * Memoised so unchanged `src` values skip the render entirely; the
- * surrounding card can re-render freely without touching the <img>.
+ * Key derivation:
+ *   • If `stableKey` is provided, use it verbatim (e.g. storage path).
+ *   • Otherwise strip the query string from `src` so signed-URL refreshes
+ *     within the same logical asset keep the same <img> node.
+ *
+ * Memoised so unchanged props skip the render entirely; surrounding cards
+ * can re-render freely without touching the <img>.
  */
 type StableImageProps = {
   src: string;
@@ -15,12 +20,20 @@ type StableImageProps = {
   width: number;
   height: number;
   className?: string;
+  /** Stable identity for this image (e.g. storage path). Optional. */
+  stableKey?: string;
 };
 
-function StableImageBase({ src, alt, width, height, className }: StableImageProps) {
+function stripQuery(url: string): string {
+  const q = url.indexOf("?");
+  return q === -1 ? url : url.slice(0, q);
+}
+
+function StableImageBase({ src, alt, width, height, className, stableKey }: StableImageProps) {
+  const key = stableKey ?? stripQuery(src);
   return (
     <img
-      key={src}
+      key={key}
       src={src}
       alt={alt}
       width={width}

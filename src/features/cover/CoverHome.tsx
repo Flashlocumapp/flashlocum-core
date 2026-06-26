@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { GoogleMapBackground } from "@/components/GoogleMapBackground";
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
+import { EnvironmentBadge } from "@/components/EnvironmentBadge";
 import { TrustInfoPopover } from "@/components/TrustInfoPopover";
 
 import { fmtOpMeta } from "@/lib/format";
@@ -432,6 +433,7 @@ function CoverageTile({
           </span>
         ) : (
           <span className="inline-flex items-center gap-2">
+            <EnvironmentBadge environment={coverage.environment ?? null} size="xs" />
             <RatingPill entityId={hospitalEntityId(coverage.hospital)} role="requester" inline />
             <ReliabilityPill entityId={hospitalEntityId(coverage.hospital)} inline />
           </span>

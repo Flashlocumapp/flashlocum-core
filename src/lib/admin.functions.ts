@@ -141,12 +141,17 @@ export type AdminShiftRow = {
   amount: number;
   fee_pct: number;
   payment_status: string | null;
+  payment_reference: string | null;
+  payment_due_at: string | null;
   total_billed_amount: number | null;
+  current_payable_amount: number | null;
   settled_amount: number | null;
   paid_at: string | null;
   billing_locked_at: string | null;
   cancelled_by: string | null;
   started_at: number | null;
+  first_started_at: string | null;
+  ended_at: string | null;
   created_at: string;
   updated_at: string;
   requester_name: string | null;
@@ -178,11 +183,17 @@ export const adminListShifts = createServerFn({ method: "POST" })
     let query = supabaseAdmin
       .from("coverage_requests")
       .select(
-        "id,status,requester_id,accepted_by,hospital,area,coverage_type,day,start_time,end_time,start_ts,end_ts,duration_hrs,amount,fee_pct,payment_status,total_billed_amount,settled_amount,paid_at,billing_locked_at,cancelled_by,started_at,created_at,updated_at",
+        "id,status,requester_id,accepted_by,hospital,area,coverage_type,day,start_time,end_time,start_ts,end_ts,duration_hrs,amount,fee_pct,payment_status,payment_reference,payment_due_at,total_billed_amount,settled_amount,paid_at,billing_locked_at,cancelled_by,started_at,first_started_at,created_at,updated_at",
       )
       .order("created_at", { ascending: false })
       .limit(data.limit);
-    if (data.status && data.status !== "all") {
+    if (data.status === "awaiting_payment") {
+      // Completed but not yet settled (and there is something to pay).
+      query = query
+        .eq("status", "completed")
+        .is("paid_at", null)
+        .gt("total_billed_amount", 0);
+    } else if (data.status && data.status !== "all") {
       query = query.eq("status", data.status as "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled");
     }
     const { data: rows, error } = await query;
@@ -242,12 +253,34 @@ export const adminListShifts = createServerFn({ method: "POST" })
       }
     }
 
+    // Aggregate outstanding payment surcharges per shift so "Current payable"
+    // reflects the live invoice (base + accrued surcharge).
+    const surchargeByShift = new Map<string, number>();
+    if (shiftIds.length) {
+      const { data: surchargeRows } = await supabaseAdmin
+        .from("payment_surcharge_log")
+        .select("request_id, block_amount")
+        .in("request_id", shiftIds);
+      for (const s of surchargeRows ?? []) {
+        const id = s.request_id as string;
+        surchargeByShift.set(id, (surchargeByShift.get(id) ?? 0) + Number(s.block_amount ?? 0));
+      }
+    }
+
     const out: AdminShiftRow[] = shifts.map((r) => {
       const req = profileMap.get(r.requester_id);
       const doc = r.accepted_by ? profileMap.get(r.accepted_by) : undefined;
       const rt = ratingsByShift.get(r.id);
+      const base = r.total_billed_amount ?? null;
+      const surcharge = surchargeByShift.get(r.id) ?? 0;
+      const payable = base != null ? Number(base) + surcharge : null;
+      // We don't store a dedicated `ended_at`; for completed/awaiting_payment
+      // shifts, `updated_at` is the end-shift commit timestamp.
+      const ended_at = r.status === "completed" || r.status === "cancelled" ? r.updated_at : null;
       return {
         ...r,
+        current_payable_amount: payable,
+        ended_at,
         requester_name: req?.full_name ?? null,
         requester_email: emailMap.get(r.requester_id) ?? null,
         doctor_name: doc?.full_name ?? null,
