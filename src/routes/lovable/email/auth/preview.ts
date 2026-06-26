@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { render } from '@react-email/components'
+import { render } from 'react-email'
 import { createFileRoute } from '@tanstack/react-router'
 import { SignupEmail } from '@/lib/email-templates/signup'
 import { InviteEmail } from '@/lib/email-templates/invite'
@@ -18,7 +18,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "FlashLocum"
+const SITE_NAME = "flashlocum-core"
 const ROOT_DOMAIN = "app.flashlocum.com"
 
 // Sample data for preview mode ONLY (not used in actual email sending).
@@ -41,8 +41,7 @@ const SAMPLE_DATA: Record<string, object> = {
   },
   recovery: {
     siteName: SITE_NAME,
-    recipient: SAMPLE_EMAIL,
-    token: "123456",
+    confirmationUrl: SAMPLE_PROJECT_URL,
   },
   invite: {
     siteName: SITE_NAME,

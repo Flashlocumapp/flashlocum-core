@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import {
   Body,
+  Button,
   Container,
   Head,
   Heading,
@@ -12,31 +13,28 @@ import {
 
 interface RecoveryEmailProps {
   siteName: string
-  recipient: string
-  token: string
+  confirmationUrl: string
 }
 
 export const RecoveryEmail = ({
   siteName,
-  recipient,
-  token,
+  confirmationUrl,
 }: RecoveryEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Your {siteName} password reset code is {token}</Preview>
+    <Preview>Reset your password for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
         <Heading style={h1}>Reset your password</Heading>
         <Text style={text}>
-          Your {siteName} password reset code is:
+          We received a request to reset your password for {siteName}. Click
+          the button below to choose a new password.
         </Text>
-        <Text style={code}>{token}</Text>
-        <Text style={text}>
-          Enter this code in {siteName} to choose a new password for {recipient}.
-          The code expires shortly — request a new one if it does not work.
-        </Text>
+        <Button style={button} href={confirmationUrl}>
+          Reset Password
+        </Button>
         <Text style={footer}>
-          If you didn&apos;t request a password reset, you can safely ignore this
+          If you didn't request a password reset, you can safely ignore this
           email. Your password will not be changed.
         </Text>
       </Container>
@@ -58,14 +56,14 @@ const text = {
   fontSize: '14px',
   color: '#55575d',
   lineHeight: '1.5',
-  margin: '0 0 20px',
+  margin: '0 0 25px',
 }
-const code = {
-  fontSize: '32px',
-  lineHeight: '40px',
-  fontWeight: 'bold' as const,
-  letterSpacing: '8px',
-  color: '#111827',
-  margin: '8px 0 24px',
+const button = {
+  backgroundColor: '#000000',
+  color: '#ffffff',
+  fontSize: '14px',
+  borderRadius: '8px',
+  padding: '12px 20px',
+  textDecoration: 'none',
 }
 const footer = { fontSize: '12px', color: '#999999', margin: '30px 0 0' }
