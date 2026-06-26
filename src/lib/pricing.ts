@@ -461,6 +461,7 @@ export function computeWorkedPricing(
         `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr` +
         (d > 1 ? ` · ${d} days (per-day)` : "") +
         busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: friendlyCoverageLabel("home", bookedPerDay * d, d, environment),
     };
   }
 
