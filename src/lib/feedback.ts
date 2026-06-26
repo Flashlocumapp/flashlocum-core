@@ -353,6 +353,13 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
   const ceiling = versionCeiling.get(ckey) ?? 0;
   if (ev.version < ceiling) return "stale";
 
+  // Permanent guard for terminal events. Once a shift has ended/cancelled,
+  // never re-toast that fact even if the row's `updated_at` (version) keeps
+  // bumping post-completion (e.g. surcharge accrual, settlement bookkeeping).
+  if (TERMINAL_KINDS.has(ev.kind) && terminalEmitted.has(ckey)) {
+    return "suppressed";
+  }
+
   // Terminal kinds raise the ceiling for sibling lifecycle kinds.
   if (TERMINAL_KINDS.has(ev.kind)) {
     for (const sib of ["shift.paused", "shift.resumed", "shift.updated", "shift.started"] as EventKind[]) {
@@ -380,10 +387,17 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
     }
   }
 
-  // G8 — throttle shift.updated.
+  // G8 — throttle shift.updated AND suppress when it piggybacks on a lifecycle
+  // transition the user already saw (e.g. the row bump that follows a resume).
   if (ev.kind === "shift.updated") {
     const tkey = `shift.updated:${ev.entityId}`;
     const last = lastUpdateEmittedAt.get(tkey) ?? 0;
+    const sinceLifecycle = Date.now() - (lastLifecycleAt.get(ev.entityId) ?? 0);
+    if (sinceLifecycle < LIFECYCLE_SUPPRESS_WINDOW_MS) {
+      ledger.set(lkey, { decision: "suppressed", firstSource: ev.source, firstAt: Date.now() });
+      scheduleLedgerSweep();
+      return "suppressed";
+    }
     if (Date.now() - last < UPDATE_THROTTLE_MS) {
       ledger.set(lkey, { decision: "suppressed", firstSource: ev.source, firstAt: Date.now() });
       scheduleLedgerSweep();
