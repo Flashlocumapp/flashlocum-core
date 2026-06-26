@@ -911,6 +911,10 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   if (!invalidationChannel) {
     const onInvalidate = (msg: { payload?: { id?: string } }) => {
       markRealtimeActivity();
+      // Bust the open-list cache BEFORE any refetch — Realtime events must
+      // always read fresh DB truth, never a 1.5s-stale snapshot.
+      bustOpenListCache();
+
       const id = msg?.payload?.id;
       // Single-row re-read when the trigger gave us an id — this is the
       // queue advancement path (accept / cancel / edit-pause / expire /
