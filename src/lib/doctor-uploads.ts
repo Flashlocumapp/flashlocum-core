@@ -37,12 +37,20 @@ async function currentUserId(): Promise<string> {
 }
 
 async function uploadAt(path: string, body: Blob, contentType: string): Promise<string> {
-  const { error } = await supabase.storage.from(BUCKET).upload(path, body, {
-    upsert: true,
-    contentType,
-  });
-  if (error) throw error;
-  return path;
+  // One retry on transient errors (mobile network blips, brief 5xx). The
+  // second attempt waits 1.5 s, then we surface the error to the caller so
+  // the user is not forced to reshoot / re-pick on a single bad packet.
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { error } = await supabase.storage.from(BUCKET).upload(path, body, {
+      upsert: true,
+      contentType,
+    });
+    if (!error) return path;
+    lastErr = error;
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Upload failed");
 }
 
 async function getProfileField(
