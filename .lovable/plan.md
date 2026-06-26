@@ -1,65 +1,53 @@
-## Issue 1 — Missing online doctors on Requester Home (root cause)
+## Root cause
 
-**Why it happens**
-- The requester subscribes to `doctor_presence` via Realtime `postgres_changes`, which is RLS-filtered against each delivered row.
-- The current SELECT policy on `doctor_presence` (`Presence readable by self admin assigned requester or online ap…`) only lets a requester see an online approved doctor's presence row **if that requester already has an active `coverage_requests` row** in `searching | accepted | active | paused | awaiting_payment`.
-- Consequence: a requester sitting on Home with no active request receives **zero** presence updates. The initial SECURITY DEFINER RPC (`list_online_approved_doctors`) populates the map once, but every subsequent doctor toggling online, moving, or coming back online after a stale window is invisible to that requester — even though the doctor is fully eligible and receives broadcasts.
-- The broadcast pathway is unaffected because `list_open_coverage_requests` runs SECURITY DEFINER and bypasses this RLS.
+The server scoring (`recompute_trust`) and its triggers already work correctly — every rating insert and every terminal coverage status change recomputes and writes `profiles.trust_snapshot`. The bug is on the read side.
 
-**Fix (single source of truth)**
-1. Replace the gated SELECT policy with one that lets every authenticated user read presence rows for `online = true AND verification_status = 'approved' AND account_restricted_at IS NULL` doctors, plus the existing self / admin / assigned-requester clauses. This matches the constraint already in `mem://constraints/broadcast-delivery.md` (all online Lagos doctors are visible) and aligns presence visibility with broadcast eligibility.
-2. Add `AND account_restricted_at IS NULL` to `list_online_approved_doctors` so the initial RPC and the realtime stream apply the exact same filter.
-3. Keep all sensitive presence concerns intact: only `online`, `last_seen`, `top`, `left`, `lat`, `lng`, `user_id` are exposed (already the case); no PII columns exist on `doctor_presence`.
-4. Update `mem://security-memory` to record that broadcast-aligned presence visibility is intentional, so the scanner does not re-flag this as `doctor_presence_online_broadcast_leak`.
+1. **Hospital pills never resolve to a user.** On requester-side cards, ratings/reliability are rendered with `hospitalEntityId(item.hospital)` → `"hosp:<slug>"`. `userIdFromEntity()` requires a UUID suffix and rejects this, so `useTrust(null)` short-circuits to the hard-coded `DEFAULT_SNAPSHOT` (5.0★ / 100%). Result: every doctor and every requester *looks* like a fresh-baseline user, regardless of real performance. Affected surfaces:
+   - `CoverHome.tsx` (next coverage / incoming card)
+   - `CoverDispatchPortal.tsx` (incoming + queued cards)
+   - `CoverageScreen.tsx` upcoming + history hospital pills
+   - any place a doctor sees a requester's score.
+2. **`get_trust` cross-user gate is too narrow.** It only allows the viewer when a `coverage_requests` row already links the two parties. So even if we passed the correct UUID, a doctor seeing a brand-new incoming request — or a requester seeing an online doctor on the map — would get "Not authorized" and silently fall back to the baseline.
+3. **No realtime push for trust changes.** `trust.ts` only invalidates its cache on local dispatch actions (`accept`/`complete`/`cancel`). When the *other* party submits a rating, or a different shift terminates, an open client never refetches; combined with the 30s client TTL and the 5-minute server staleness window, scores look stuck at 5.0/100% long after they should have moved.
+4. **Self-pills also drift to the baseline if the snapshot RPC ever 401s during early render**, because nothing re-fetches afterwards.
 
-## Issue 2 — Smaller doctor icons on Requester Home only
+There is exactly one source of truth (`profiles.trust_snapshot`); the UI just isn't reading it.
 
-- Doctor markers are rendered by `GoogleMapBackground` from the `markers` prop. Both `RequesterHome` and `CoverHome` pass markers through the same component at the same size.
-- Add a single optional prop `markerScale?: number` (default `1`) to `GoogleMapBackground` (and the underlying `MapBackground` if it also renders the same markers). Multiply the marker avatar size (and presence-dot size) by this scale.
-- Set `markerScale={0.78}` only at the `RequesterHome` call site. Doctor Home is untouched.
-- Spacing, halo, and shadow scale proportionally so layout stays clean.
+## Fix
 
-## Issue 3 — Queue not advancing after a decline
+### Backend (one migration)
 
-**Why it happens**
-After a doctor declines Request A while Request B is also broadcasting, `useDispatch` should immediately surface B because:
-- `liveRequests` (from `broadcastingRequests(net)`) contains both A and B,
-- `markDeclined(A)` excludes A via `isDeclined`,
-- `Array.find(...)` returns B.
+- Add `public.get_trust_summary(_user_id uuid) → jsonb` (SECURITY DEFINER, `STABLE`, `search_path=public`). Returns only the safe summary needed by pills:
+  ```json
+  { "user_id", "role", "rating": { "score", "sample_size", "block_index" },
+    "reliability": { "score", "sample_size", "block_index" } }
+  ```
+  Reads `profiles.trust_snapshot` directly (always fresh — triggers maintain it); falls back to `recompute_trust` when null. Excludes restriction reasons / eligibility / PII so it is safe to grant to every signed-in user. `GRANT EXECUTE ... TO authenticated`. The existing privileged `get_trust` is unchanged (self / admin / related-party detail view).
+- Drop the server-side 5-minute staleness branch in `get_trust` so it always reads the live `trust_snapshot`; triggers keep it current, and we want zero lag for the rare full-detail read too.
+- Confirm `public.profiles` is already in the `supabase_realtime` publication with `REPLICA IDENTITY FULL` (set by the recent admin-sync migration); no-op otherwise.
 
-In practice the next request does not surface because of two concrete defects:
+### Client — baseline must remain 5.0★ / 100%, never a dash
 
-1. **`pendingIncomingId` uses DESC sort, `useDispatch` uses ASC.**
-   - `dispatch.ts:608` sorts `broadcastingRequests` newest-first and picks `[0]`, while `useDispatch` (`dispatch.ts:244`) picks the oldest. After declining the visible card, the "what comes next" computation can disagree about which request is the head, and a stale declined entry under one ordering masks B under the other (especially when A and B arrive within the same realtime tick and one is keyed by `rev=1` vs the other by `rev=2`).
-   - Fix: make `pendingIncomingId` use the same FIFO ASC order as `broadcastingRequests`/`useDispatch`. One ordering, everywhere.
+The product rule is explicit: every doctor and every requester starts with a real, displayable baseline of **5.0★ and 100% reliability**, and that baseline updates the instant the first real rating / shift outcome lands. The user should never see an empty state, a dash, "—", a spinner, or "no rating yet" anywhere a pill renders. The fixes preserve this:
 
-2. **`declineIncoming` reconciles the open list but does not re-emit the network snapshot until the RPC round-trip completes.** During that ~150–800 ms window, `useDispatch` re-derives off the unchanged `net` state — `incoming` is recomputed (good) but only against the rows already present. If B's invalidate broadcast arrived **before** the doctor was on Home (channel reconnect race, app foregrounded between A and B), B is not yet in `cachedSnapshot`, and the in-flight `reconcileNow()` is the only thing that will add it. Until then, `incoming` is `null` and the sheet collapses — which the user perceives as "queue did not advance".
-   - Fix: in `declineIncoming`, after `markDeclined(...)`, also call `bustOpenListCache()` and **await** `reconcileNow()` before clearing the incoming sheet. The current code fires-and-forgets, so the AnimatePresence exit animation runs first, then B arrives a moment later but the user has already seen empty state and reached for the cancel-rebroadcast workaround.
-   - Additional safety: when `reconcileNow()` returns, if there is now another eligible broadcasting request, do not re-fire the offer.new toast (already deduped by `processedEvents`) — just let `useDispatch` render the next sheet.
+1. **Plumb the real user UUID through coverage payloads.** `Coverage`, `HistoryItem`, and the incoming/queued dispatch shapes get a `requesterUserId: string | null` field (and `doctorUserId` where applicable), hydrated from `coverage_requests.requester_id` / `accepted_by` in `coverage-remote.ts` and `dispatch.ts`.
+2. **New helper `userEntityId(userId) → "u:<uuid>"`** added to `trust.ts`, and `userIdFromEntity` updated to accept `doc:`, `req:`, and `u:` prefixes. Every hospital pill switches to `userEntityId(item.requesterUserId)`.
+3. **Update every call site** in `CoverHome.tsx`, `CoverDispatchPortal.tsx`, `CoverageScreen.tsx`, `RequesterHome.tsx` to pass the user UUID — never the hospital slug — for both `RatingPill` and `ReliabilityPill`. Self pills in `CoverHome.tsx` use `userEntityId(currentUserId)` from auth, not `getSessionId()`.
+4. **Switch the pill reads to `get_trust_summary`** so any signed-in viewer can read any user's pill values across the broadcast/dispatch surfaces. Keep `get_trust` (full snapshot) for the user's own profile, admin, and trust detail overlays.
+5. **Keep `DEFAULT_SNAPSHOT` as the rendered baseline.** `RatingPill` / `ReliabilityPill` continue to render the default 5.0★ / 100% immediately and synchronously — both (a) for the first ~100ms while the SWR cache resolves, and (b) for any user whose `sample_size` is 0 (no real ratings / no terminal shifts yet). The pills never render a dash, "—", "N/A", a skeleton, or a hidden state. Once `recompute_trust` returns a non-default value (rolling-20 with at least one real datapoint), the pill swaps to that value on the same render.
+   - Edge case: if a fetch genuinely fails (network/RLS error), still show 5.0★ / 100% rather than an error state — failing closed to the baseline matches the product rule and is indistinguishable from a brand-new user.
+6. **Realtime fan-in.** Add one shared `profiles` `postgres_changes` subscription in `trust.ts`. On every UPDATE whose `new.id` is in the active cache, drop the cache entry and call `loadTrust(id)`. Tear down with the last listener. The instant any rating insert or shift-terminal trigger fires server-side, every open pill for that user updates without a refresh.
+7. **Drop the 30s client TTL** in favour of "load once + invalidate on realtime / explicit dispatch event". The cache becomes an idempotent read-through, not a staleness window.
 
-3. **`declined` ledger is per-session and grows unbounded.** Not the immediate cause, but combined with #1 it creates an edge where a stale `id:rev` entry from a previous broadcast lingers, and the FIFO head ends up matching that stale key. Add a simple prune: drop declined entries whose request id is no longer in `state.requests`. Keeps the filter correct after reconcile.
+### Verification
 
-**Net behaviour after the fix**
-- Decline A → `markDeclined(A)` → `bustOpenListCache()` → `await reconcileNow()` → snapshot now contains A (still searching, ignored) and B → `useDispatch` derives `incoming = B` → DismissSheet swaps via the new `incoming.id` key.
-- No requester ever needs to cancel and rebroadcast.
-
-## Files touched
-
-- `supabase/migrations/<new>.sql` — replace `doctor_presence` SELECT policy; tighten `list_online_approved_doctors`.
-- `src/components/GoogleMapBackground.tsx` (and `MapBackground.tsx` if shared) — add `markerScale` prop.
-- `src/features/request/RequesterHome.tsx` — pass `markerScale={0.78}`.
-- `src/features/cover/dispatch.ts` — FIFO sort in `pendingIncomingId`; `declineIncoming` awaits `bustOpenListCache + reconcileNow`; prune stale `declined` entries on reconcile.
-- `.lovable/memory/security-memory` — note presence visibility alignment.
+- DB: insert a rating against a real shift; `profiles.trust_snapshot.rating.score` shifts from 5.0 toward `(5*19 + new)/20`; `get_trust_summary` returns the new value.
+- UI baseline: a fresh test account renders 5.0★ / 100% on every surface, with no dash and no flicker.
+- UI live update: with two browser windows (doctor + requester), submit a rating from one — the pill in the other window updates without any refresh. Cancel an accepted shift; reliability drops by `100/20 = 5pp` instantly on both sides.
+- Code scan: zero remaining `hospitalEntityId(...)` references inside `<RatingPill>` / `<ReliabilityPill>` props; zero "—" / "N/A" / skeleton fallbacks inside the pill components.
 
 ## Out of scope
 
-- Broadcast model (intentional, per memory).
-- Payment, RLS on `coverage_requests`, Monnify flow.
-- Doctor Home avatar sizing.
-
-## Verification
-
-- Two preview tabs (requester + doctor): toggling doctor online/offline updates the requester map within <1 s with no active request on the requester side.
-- Two requesters create A then B within 2 s; doctor declines A → B's card appears immediately, no rebroadcast needed.
-- Requester avatars on Home are visibly smaller than Doctor Home avatars; spacing remains clean.
-- `tsgo` passes; Supabase linter shows no new findings.
+- The scoring formula itself — already matches the spec (rolling-20, 20-slot synthetic baseline, completed vs cancelled-after-acceptance attribution, requester-only cancellations attributed to requester).
+- Admin trust dashboard — already reads the full snapshot and is unaffected.
+- Help-centre copy — already up to date.
