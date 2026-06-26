@@ -276,13 +276,13 @@ function OnboardingScreen() {
                 <Field
                   label="MDCN number"
                   type="text"
-                  placeholder="MDCN/R/12345"
+                  placeholder=""
                   value={doctor.mdcn ?? ""}
                   onChange={(v) => setDoctor((p) => ({ ...p, mdcn: v }))}
                 />
                 {mdcnError && (
                   <p className="mt-1.5 text-[12.5px] text-destructive">
-                    Please enter the correct format
+                    Please enter the correct format (e.g. MDCN/X/YYYYYY)
                   </p>
                 )}
               </div>
