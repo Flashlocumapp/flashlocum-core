@@ -111,6 +111,7 @@ export function GoogleMapBackground({
   showSelf = true,
   selfMarkerKind = "requester",
   active = true,
+  markerScale = 1,
 }: {
   markers?: Marker[];
   center?: Coords | null;
@@ -118,7 +119,11 @@ export function GoogleMapBackground({
   showSelf?: boolean;
   selfMarkerKind?: "requester" | "doctor";
   active?: boolean;
+  /** Multiplier for doctor avatar marker size. Requester Home uses ~0.78
+   *  so the map reads as a cleaner roster; Doctor Home stays at 1. */
+  markerScale?: number;
 } = {}) {
+
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerObjs = useRef<Map<string, google.maps.Marker>>(new Map());
