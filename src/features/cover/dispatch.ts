@@ -2,7 +2,7 @@
 // Public API kept stable for CoverHome, CoverDispatchPortal, and coverage tab.
 
 import { useEffect, useState } from "react";
-import { hasLiveSnapshot, onLiveSnapshotChange, reconcileNow } from "@/lib/coverage-remote";
+import { bustOpenListCache, hasLiveSnapshot, onLiveSnapshotChange, reconcileNow } from "@/lib/coverage-remote";
 import {
   acceptRequest,
   type AcceptBlockReason,
