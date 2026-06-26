@@ -729,6 +729,10 @@ function handlePayload(payload: {
   old?: unknown;
 }) {
   markRealtimeActivity();
+  // postgres_changes signals underlying truth has moved — bust so any
+  // concurrent or follow-up open-list refetch is fresh.
+  bustOpenListCache();
+
   const row = (payload.new ?? payload.old) as Row | undefined;
   if (!row?.id) return;
 
