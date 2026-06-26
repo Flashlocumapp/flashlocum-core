@@ -428,6 +428,7 @@ export function computeWorkedPricing(
       amount,
       billableMinutes: worked,
       explanation: `48-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: friendlyCoverageLabel("straight48", 2880, 1, environment),
     };
   }
 
