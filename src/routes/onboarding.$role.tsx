@@ -219,6 +219,9 @@ function OnboardingScreen() {
                 value={requester.phone ?? ""}
                 onChange={(v) => setRequester((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
+              {requesterPhoneError && (
+                <p className="-mt-1.5 text-[12.5px] text-destructive">{requesterPhoneError}</p>
+              )}
               <SelectField
                 label="Gender"
                 value={requester.gender ?? ""}
@@ -237,6 +240,9 @@ function OnboardingScreen() {
                 value={doctor.phone ?? ""}
                 onChange={(v) => setDoctor((p) => ({ ...p, phone: sanitizePhone(v) }))}
               />
+              {doctorPhoneError && (
+                <p className="-mt-1.5 text-[12.5px] text-destructive">{doctorPhoneError}</p>
+              )}
               <SelectField
                 label="Gender"
                 value={doctor.gender ?? ""}
