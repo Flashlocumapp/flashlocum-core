@@ -386,15 +386,18 @@ function stopReconcileTimer() {
 // capped backoff (1s → 30s).
 type WatchdogKey = "coverage" | "invalidations" | "presence";
 const backoffMs: Record<WatchdogKey, number> = {
-  coverage: 1000,
-  invalidations: 1000,
-  presence: 1000,
+  coverage: 500,
+  invalidations: 500,
+  presence: 500,
 };
 const backoffTimers: Partial<Record<WatchdogKey, ReturnType<typeof setTimeout>>> = {};
-const MAX_BACKOFF_MS = 30_000;
+// Cap: 5s. With ±30% jitter, 700 doctors reconnecting simultaneously after a
+// Realtime restart spread their retries across a ~3.5–6.5s window instead of
+// stampeding on the same tick.
+const MAX_BACKOFF_MS = 5_000;
 
 function resetBackoff(k: WatchdogKey) {
-  backoffMs[k] = 1000;
+  backoffMs[k] = 500;
   const t = backoffTimers[k];
   if (t) {
     clearTimeout(t);
@@ -404,8 +407,11 @@ function resetBackoff(k: WatchdogKey) {
 
 function scheduleReconnect(k: WatchdogKey, run: () => void) {
   if (backoffTimers[k]) return;
-  const delay = backoffMs[k];
-  backoffMs[k] = Math.min(MAX_BACKOFF_MS, delay * 2);
+  const base = backoffMs[k];
+  // ±30% jitter prevents reconnect-storm alignment after a Realtime restart.
+  const jitter = (Math.random() - 0.5) * 0.6;
+  const delay = Math.max(250, Math.round(base * (1 + jitter)));
+  backoffMs[k] = Math.min(MAX_BACKOFF_MS, base * 2);
   setChannelHealth(k, "reconnecting");
   backoffTimers[k] = setTimeout(() => {
     backoffTimers[k] = undefined;
@@ -416,6 +422,7 @@ function scheduleReconnect(k: WatchdogKey, run: () => void) {
     }
   }, delay);
 }
+
 
 
 
