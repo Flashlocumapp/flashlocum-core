@@ -60,7 +60,6 @@ export type ShiftRatingState = {
   requester_rating: ShiftRatingSide;
 };
 
-const TTL_MS = 30_000;
 const trustCache = new Map<string, { snap: TrustSnapshot | null; ts: number }>();
 const trustInflight = new Map<string, Promise<TrustSnapshot | null>>();
 const trustListeners = new Map<string, Set<() => void>>();
@@ -68,6 +67,8 @@ const trustListeners = new Map<string, Set<() => void>>();
 const shiftCache = new Map<string, { state: ShiftRatingState | null; ts: number }>();
 const shiftInflight = new Map<string, Promise<ShiftRatingState | null>>();
 const shiftListeners = new Map<string, Set<() => void>>();
+
+const SHIFT_TTL_MS = 30_000;
 
 function notify(map: Map<string, Set<() => void>>, key: string) {
   map.get(key)?.forEach((l) => l());
@@ -84,14 +85,44 @@ const DEFAULT_SNAPSHOT = (userId: string): TrustSnapshot => ({
   restriction: { restricted: false, restricted_at: null, restricted_by: null, reason: null, source: null },
 });
 
+// Shape the lightweight get_trust_summary payload into a full TrustSnapshot
+// using safe defaults for the fields the pills don't read. Eligibility and
+// restriction details are owned by the privileged `get_trust` call and are
+// intentionally absent from the cross-user summary.
+function snapshotFromSummary(userId: string, summary: unknown): TrustSnapshot {
+  const base = DEFAULT_SNAPSHOT(userId);
+  if (!summary || typeof summary !== "object") return base;
+  const s = summary as Record<string, unknown>;
+  const role = s.role === "requester" ? "requester" : "doctor";
+  const r = (s.rating ?? {}) as Record<string, unknown>;
+  const rel = (s.reliability ?? {}) as Record<string, unknown>;
+  return {
+    ...base,
+    user_id: typeof s.user_id === "string" ? s.user_id : userId,
+    role,
+    rating: {
+      ...base.rating,
+      score: Number(r.score ?? base.rating.score),
+      block_index: Number(r.block_index ?? base.rating.block_index),
+      block_size: Number(r.block_size ?? base.rating.block_size),
+    },
+    reliability: {
+      ...base.reliability,
+      score: Number(rel.score ?? base.reliability.score),
+      block_index: Number(rel.block_index ?? base.reliability.block_index),
+      block_size: Number(rel.block_size ?? base.reliability.block_size),
+    },
+  };
+}
+
 export async function loadTrust(userId: string): Promise<TrustSnapshot | null> {
   if (!userId) return null;
   const existing = trustInflight.get(userId);
   if (existing) return existing;
   const p = (async () => {
-    const { data, error } = await supabase.rpc("get_trust", { _user_id: userId });
+    const { data, error } = await supabase.rpc("get_trust_summary", { _user_id: userId });
     if (error || !data) return null;
-    return data as TrustSnapshot;
+    return snapshotFromSummary(userId, data);
   })().then((snap) => {
     trustCache.set(userId, { snap, ts: Date.now() });
     trustInflight.delete(userId);
@@ -119,8 +150,9 @@ export function useTrust(userId: string | null | undefined): TrustSnapshot {
     }
     const l = () => force((x) => x + 1);
     set.add(l);
-    const c = trustCache.get(userId);
-    if (!c || Date.now() - c.ts > TTL_MS) {
+    // Load once if we've never resolved this user; subsequent invalidations
+    // come via realtime (profiles UPDATE) or explicit dispatch events.
+    if (!trustCache.has(userId)) {
       void loadTrust(userId);
     }
     return () => {
@@ -160,7 +192,7 @@ export function useShiftRatingState(requestId: string | null | undefined): Shift
     const l = () => force((x) => x + 1);
     set.add(l);
     const c = shiftCache.get(requestId);
-    if (!c || Date.now() - c.ts > TTL_MS) {
+    if (!c || Date.now() - c.ts > SHIFT_TTL_MS) {
       void loadShiftRatingState(requestId);
     }
     return () => {
@@ -227,18 +259,53 @@ function bootstrap() {
       }
     }
   });
+
+  // Realtime fan-in: any UPDATE on a watched profile (rating insert →
+  // recompute_trust → trust_snapshot write, or shift terminal → same) drops
+  // the cached snapshot and reloads. Pills then re-render with the live
+  // rolling-20 value without any manual refresh.
+  try {
+    const channel = supabase
+      .channel("trust:profiles")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          const id = (payload.new as { id?: string } | null)?.id;
+          if (!id) return;
+          if (!trustCache.has(id) && !trustInflight.has(id)) return;
+          trustCache.delete(id);
+          void loadTrust(id);
+        },
+      )
+      .subscribe();
+    if (typeof window !== "undefined") {
+      window.addEventListener("beforeunload", () => {
+        void supabase.removeChannel(channel);
+      });
+    }
+  } catch (err) {
+    console.warn("[trust] realtime subscribe failed", err);
+  }
 }
 bootstrap();
 
 // ---------- Entity ID adapters (legacy → user_id) ----------
-// Existing call sites pass strings like "doc:<uuid>" or "req:<uuid>".
-// We parse them so the surrounding code can keep working unchanged.
+// Existing call sites pass strings like "doc:<uuid>", "req:<uuid>" or
+// "u:<uuid>". We parse them so the surrounding code can keep working
+// unchanged. Legacy "hosp:<slug>" ids are rejected (they aren't user ids).
 export function userIdFromEntity(entityId: string | null | undefined): string | null {
   if (!entityId) return null;
   const idx = entityId.indexOf(":");
   if (idx < 0) return null;
   const tail = entityId.slice(idx + 1);
-  // Reject legacy hosp:<slug> — those are not user ids.
   if (!/^[0-9a-f-]{36}$/i.test(tail)) return null;
   return tail;
+}
+
+/** Build a user-scoped entity id from a raw user UUID. Prefer this over the
+ *  role-prefixed `doctorEntityId` / `requesterEntityId` helpers in new code. */
+export function userEntityId(userId: string | null | undefined): string | null {
+  if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) return null;
+  return "u:" + userId;
 }
