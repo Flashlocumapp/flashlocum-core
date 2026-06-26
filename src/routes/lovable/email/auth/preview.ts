@@ -41,7 +41,8 @@ const SAMPLE_DATA: Record<string, object> = {
   },
   recovery: {
     siteName: SITE_NAME,
-    confirmationUrl: SAMPLE_PROJECT_URL,
+    recipient: SAMPLE_EMAIL,
+    token: "123456",
   },
   invite: {
     siteName: SITE_NAME,
