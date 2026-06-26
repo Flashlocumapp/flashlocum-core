@@ -276,24 +276,9 @@ function AuthScreen() {
     }
   };
 
-  const handleGoogle = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-      if (result.error) throw result.error;
-      if (result.redirected) return;
-      const auth = await ensureAuthReady();
-      adoptVerifiedSession(auth.session, "SIGNED_IN");
-      await proceed();
-    } catch (err) {
-      setError((err as Error).message || "Google sign-in failed. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // Google sign-in has been removed. FlashLocum uses email/password only.
+
+  const [newPassword, setNewPassword] = useState("");
 
   const handleResend = async () => {
     if (!email) {
