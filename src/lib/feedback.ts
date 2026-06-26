@@ -90,6 +90,22 @@ const SOURCE_RANK: Record<EventSource, number> = { local: 3, realtime: 2, push: 
 const ledger = new Map<string, LedgerEntry>(); // key: `${kind}:${entityId}:${version}`
 const versionCeiling = new Map<string, number>(); // key: `${kind}:${entityId}`
 const lastUpdateEmittedAt = new Map<string, number>(); // key: `shift.updated:${entityId}`
+// Once a terminal lifecycle event has been emitted for an entity we must
+// never emit it again, even if the row's version keeps bumping (e.g. surcharge
+// accrual, settlement bookkeeping). Keyed by `${kind}:${entityId}`.
+const terminalEmitted = new Set<string>();
+// Tracks the most recent emitted lifecycle moment per entity so a follow-up
+// `shift.updated` triggered by the same backend transition (e.g. a resume that
+// also bumps the row's "updated" payload) is suppressed.
+const lastLifecycleAt = new Map<string, number>(); // key: entityId
+const LIFECYCLE_SUPPRESS_WINDOW_MS = 8_000;
+const LIFECYCLE_KINDS: ReadonlySet<EventKind> = new Set([
+  "shift.started",
+  "shift.paused",
+  "shift.resumed",
+  "shift.ended",
+  "shift.cancelled",
+]);
 const hydrationStartedAt = typeof window !== "undefined" ? Date.now() : 0;
 
 /* ---------- Multi-tab broadcast (G6) ---------- */
