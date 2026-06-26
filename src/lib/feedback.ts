@@ -416,6 +416,14 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
   // Raise the ceiling.
   if (ev.version > ceiling) versionCeiling.set(ckey, ev.version);
 
+  // Record permanent terminal-emit lock + lifecycle suppression window.
+  if (TERMINAL_KINDS.has(ev.kind)) {
+    terminalEmitted.add(ckey);
+  }
+  if (LIFECYCLE_KINDS.has(ev.kind)) {
+    lastLifecycleAt.set(ev.entityId, Date.now());
+  }
+
   // Record decision.
   const entry: LedgerEntry = { decision: "emitted", firstSource: ev.source, firstAt: Date.now() };
   ledger.set(lkey, entry);
