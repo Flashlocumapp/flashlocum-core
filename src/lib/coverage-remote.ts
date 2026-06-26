@@ -438,6 +438,55 @@ const SNAPSHOT_LIMIT = 500;
 // filter (180s TTL) so a stale row cannot resurrect indefinitely.
 let lastPoolRows: Row[] = [];
 
+// -- Open-coverage list read-coalescer (1.5s) -----------------------------
+//
+// Coalesces simultaneous duplicate fetches of `list_open_coverage_requests`
+// into a single round trip. CONTRACT (do not weaken):
+//   - This cache ONLY guards the open-pool RPC. Own-row reads, presence,
+//     postgres_changes, payment updates, and shift lifecycle use separate
+//     paths and are never delayed.
+//   - Every Realtime listener that ingests an open-list change MUST call
+//     `bustOpenListCache()` BEFORE triggering its refetch. The next fetch
+//     then bypasses the cache and reads fresh DB truth.
+//   - The 1.5s window therefore only collapses *simultaneous duplicates*
+//     (two components mounting at once, tab-focus + reconcile timer firing
+//     on the same instant). Those produce identical results; collapsing
+//     them is invisible to the user.
+const OPEN_LIST_TTL_MS = 1500;
+type PoolFetchResult = { data: Row[] | null; error: { message: string } | null };
+let openListInFlight: Promise<PoolFetchResult> | null = null;
+let openListCachedAt = 0;
+let openListCached: PoolFetchResult | null = null;
+
+export function bustOpenListCache(): void {
+  openListInFlight = null;
+  openListCached = null;
+  openListCachedAt = 0;
+}
+
+function fetchOpenListCoalesced(): Promise<PoolFetchResult> {
+  const now = Date.now();
+  if (openListInFlight) return openListInFlight;
+  if (openListCached && now - openListCachedAt < OPEN_LIST_TTL_MS) {
+    return Promise.resolve(openListCached);
+  }
+  openListInFlight = (async () => {
+    const res = await supabase.rpc("list_open_coverage_requests");
+    const out: PoolFetchResult = {
+      data: (res.data as Row[] | null) ?? null,
+      error: res.error ? { message: res.error.message } : null,
+    };
+    openListCached = out;
+    openListCachedAt = Date.now();
+    return out;
+  })().finally(() => {
+    openListInFlight = null;
+  });
+  return openListInFlight;
+}
+
+
+
 async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   // Doctors can only directly read coverage_requests rows they accepted
   // (`accepted_by = auth.uid()`); the SELECT policy intentionally hides
