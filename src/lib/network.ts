@@ -792,16 +792,17 @@ export function startHeartbeat() {
   // scale). Online/offline state changes still propagate instantly through
   // the explicit heartbeat() call on toggle — only the periodic refresh
   // cadence is jittered.
-  let t: ReturnType<typeof window.setTimeout> | null = null;
+  let t: ReturnType<typeof setTimeout> | null = null;
   const scheduleNext = () => {
     const jitter = (Math.random() - 0.5) * 0.4; // ±20%
     const delay = Math.max(5000, Math.round(HEARTBEAT_MS * (1 + jitter)));
-    t = window.setTimeout(() => {
+    t = setTimeout(() => {
       heartbeat();
       scheduleNext();
     }, delay);
   };
   scheduleNext();
+
   const visibility = () => {
     if (document.visibilityState === "visible") heartbeat();
   };
