@@ -18,7 +18,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "flashlocum-core"
+const SITE_NAME = "FlashLocum"
 const ROOT_DOMAIN = "app.flashlocum.com"
 
 // Sample data for preview mode ONLY (not used in actual email sending).
@@ -41,7 +41,8 @@ const SAMPLE_DATA: Record<string, object> = {
   },
   recovery: {
     siteName: SITE_NAME,
-    confirmationUrl: SAMPLE_PROJECT_URL,
+    recipient: SAMPLE_EMAIL,
+    token: "123456",
   },
   invite: {
     siteName: SITE_NAME,

@@ -90,6 +90,22 @@ const SOURCE_RANK: Record<EventSource, number> = { local: 3, realtime: 2, push: 
 const ledger = new Map<string, LedgerEntry>(); // key: `${kind}:${entityId}:${version}`
 const versionCeiling = new Map<string, number>(); // key: `${kind}:${entityId}`
 const lastUpdateEmittedAt = new Map<string, number>(); // key: `shift.updated:${entityId}`
+// Once a terminal lifecycle event has been emitted for an entity we must
+// never emit it again, even if the row's version keeps bumping (e.g. surcharge
+// accrual, settlement bookkeeping). Keyed by `${kind}:${entityId}`.
+const terminalEmitted = new Set<string>();
+// Tracks the most recent emitted lifecycle moment per entity so a follow-up
+// `shift.updated` triggered by the same backend transition (e.g. a resume that
+// also bumps the row's "updated" payload) is suppressed.
+const lastLifecycleAt = new Map<string, number>(); // key: entityId
+const LIFECYCLE_SUPPRESS_WINDOW_MS = 8_000;
+const LIFECYCLE_KINDS: ReadonlySet<EventKind> = new Set([
+  "shift.started",
+  "shift.paused",
+  "shift.resumed",
+  "shift.ended",
+  "shift.cancelled",
+]);
 const hydrationStartedAt = typeof window !== "undefined" ? Date.now() : 0;
 
 /* ---------- Multi-tab broadcast (G6) ---------- */
@@ -221,10 +237,12 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
 
   switch (ev.kind) {
     case "offer.new":
-      // Card is the signal; no toast. Medium haptic for the doctor only —
-      // this is the ONLY event in the system that emits a haptic.
+      // Card is the signal; no toast under any circumstance. Medium haptic for
+      // the doctor only — this is the ONLY event in the system that emits a
+      // haptic. Title overrides are intentionally ignored so callers can't
+      // accidentally bring the toast back.
       return {
-        toast: tOverride ? toast("presence", tOverride) : undefined,
+        toast: undefined,
         haptic: !skipHaptic && isDoctor ? "medium" : undefined,
       };
     case "offer.accepted":
@@ -337,6 +355,13 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
   const ceiling = versionCeiling.get(ckey) ?? 0;
   if (ev.version < ceiling) return "stale";
 
+  // Permanent guard for terminal events. Once a shift has ended/cancelled,
+  // never re-toast that fact even if the row's `updated_at` (version) keeps
+  // bumping post-completion (e.g. surcharge accrual, settlement bookkeeping).
+  if (TERMINAL_KINDS.has(ev.kind) && terminalEmitted.has(ckey)) {
+    return "suppressed";
+  }
+
   // Terminal kinds raise the ceiling for sibling lifecycle kinds.
   if (TERMINAL_KINDS.has(ev.kind)) {
     for (const sib of ["shift.paused", "shift.resumed", "shift.updated", "shift.started"] as EventKind[]) {
@@ -364,10 +389,17 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
     }
   }
 
-  // G8 — throttle shift.updated.
+  // G8 — throttle shift.updated AND suppress when it piggybacks on a lifecycle
+  // transition the user already saw (e.g. the row bump that follows a resume).
   if (ev.kind === "shift.updated") {
     const tkey = `shift.updated:${ev.entityId}`;
     const last = lastUpdateEmittedAt.get(tkey) ?? 0;
+    const sinceLifecycle = Date.now() - (lastLifecycleAt.get(ev.entityId) ?? 0);
+    if (sinceLifecycle < LIFECYCLE_SUPPRESS_WINDOW_MS) {
+      ledger.set(lkey, { decision: "suppressed", firstSource: ev.source, firstAt: Date.now() });
+      scheduleLedgerSweep();
+      return "suppressed";
+    }
     if (Date.now() - last < UPDATE_THROTTLE_MS) {
       ledger.set(lkey, { decision: "suppressed", firstSource: ev.source, firstAt: Date.now() });
       scheduleLedgerSweep();
@@ -385,6 +417,14 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
 
   // Raise the ceiling.
   if (ev.version > ceiling) versionCeiling.set(ckey, ev.version);
+
+  // Record permanent terminal-emit lock + lifecycle suppression window.
+  if (TERMINAL_KINDS.has(ev.kind)) {
+    terminalEmitted.add(ckey);
+  }
+  if (LIFECYCLE_KINDS.has(ev.kind)) {
+    lastLifecycleAt.set(ev.entityId, Date.now());
+  }
 
   // Record decision.
   const entry: LedgerEntry = { decision: "emitted", firstSource: ev.source, firstAt: Date.now() };

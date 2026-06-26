@@ -1117,7 +1117,7 @@ function SettlementSheet({
   pricing,
   onConfirm,
 }: {
-  pricing: { amount: number; explanation: string };
+  pricing: { amount: number; displayLabel: string };
   onConfirm: () => void;
 }) {
   return (
@@ -1143,7 +1143,7 @@ function SettlementSheet({
         </div>
 
         <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-          {pricing.explanation}
+          {pricing.displayLabel}
         </p>
 
         <button

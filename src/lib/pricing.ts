@@ -174,7 +174,29 @@ export type PricingResult = {
   amount: number;
   billableMinutes: number;
   explanation: string;
+  /**
+   * User-friendly coverage label, e.g. "9-hour Single-Day Coverage" or
+   * "24-hour Straight Coverage (Busy Environment)". Free of any pricing
+   * arithmetic — safe to show in marketing/checkout surfaces.
+   */
+  displayLabel: string;
 };
+
+function friendlyCoverageLabel(
+  coverage: CoverageKind,
+  totalMin: number,
+  days: number,
+  environment: Environment,
+): string {
+  const hrs = Math.max(1, Math.round(totalMin / 60));
+  const busy =
+    environment === "busy" && coverage !== "home" ? " (Busy Environment)" : "";
+  if (coverage === "home") return `${hrs}-hour Home Care Coverage`;
+  if (coverage === "straight24") return `24-hour Straight Coverage${busy}`;
+  if (coverage === "straight48") return `48-hour Straight Coverage${busy}`;
+  const span = days > 1 ? "Multi-Day" : "Single-Day";
+  return `${hrs}-hour ${span} Coverage${busy}`;
+}
 
 function tierFor(perDayHr: number, table: PricingTable): { day: number; night: number; label: "<4h" | "4-6h" | ">6h" } {
   if (perDayHr > 6) return { ...table.rates[">6h"], label: ">6h" };
@@ -259,12 +281,15 @@ export function computeCoveragePricing(
   const busyMult = busyApplies ? t.modifiers.busy_mult : 1.0;
   const homeRate = t.flats.home_hour;
 
+  const label = friendlyCoverageLabel(coverage, totalMin, d, environment);
+
   if (coverage === "home") {
     const amount = Math.round((totalMin / 60) * homeRate);
     return {
       amount,
       billableMinutes: totalMin,
       explanation: `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr.`,
+      displayLabel: label,
     };
   }
   if (coverage === "straight24") {
@@ -274,6 +299,7 @@ export function computeCoveragePricing(
       explanation:
         `24-hour straight · flat ₦${t.flats.straight_24h.toLocaleString("en-NG")} (22h–25h window).` +
         busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: label,
     };
   }
   if (coverage === "straight48") {
@@ -283,6 +309,7 @@ export function computeCoveragePricing(
       explanation:
         `48-hour straight · flat ₦${t.flats.straight_48h.toLocaleString("en-NG")} (46h–49h window).` +
         busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: label,
     };
   }
 
@@ -301,6 +328,7 @@ export function computeCoveragePricing(
     amount,
     billableMinutes: totalMin,
     explanation: (parts.join(" + ") || "Standard coverage rate.") + perDayLabel + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    displayLabel: label,
   };
 }
 
@@ -376,6 +404,7 @@ export function computeWorkedPricing(
       amount,
       billableMinutes: worked,
       explanation: `24-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: friendlyCoverageLabel("straight24", 1440, 1, environment),
     };
   }
 
@@ -399,6 +428,7 @@ export function computeWorkedPricing(
       amount,
       billableMinutes: worked,
       explanation: `48-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: friendlyCoverageLabel("straight48", 2880, 1, environment),
     };
   }
 
@@ -431,6 +461,7 @@ export function computeWorkedPricing(
         `Home Care · ₦${homeRate.toLocaleString("en-NG")}/hr` +
         (d > 1 ? ` · ${d} days (per-day)` : "") +
         busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      displayLabel: friendlyCoverageLabel("home", bookedPerDay * d, d, environment),
     };
   }
 
@@ -493,5 +524,6 @@ export function computeWorkedPricing(
       (parts.join(" + ") || "Standard coverage rate.") +
       (d > 1 ? ` · ${d} days (per-day)` : "") +
       busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    displayLabel: friendlyCoverageLabel("standard", bookedPerDay * d, d, environment),
   };
 }
