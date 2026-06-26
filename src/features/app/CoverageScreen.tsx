@@ -19,13 +19,13 @@ import { ReliabilityPill } from "@/components/ReliabilityPill";
 import {
   cancelUpcoming,
   doctorEntityId,
-  hospitalEntityId,
   nairaK,
   recordHistoryRating,
   useDispatch,
   type Coverage as CoverItem,
   type HistoryItem,
 } from "@/features/cover/dispatch";
+import { userEntityId } from "@/lib/trust";
 import { recordRating } from "@/lib/ratings";
 import { submitShiftRating } from "@/lib/trust";
 import { computeCoveragePricing, coverageKindFromLabel, bookedMinutesFromWindow, effectiveCoverageKind } from "@/lib/pricing";
@@ -1772,7 +1772,7 @@ function DoctorCoverageDetail({
               <button
                 disabled={!rating}
                 onClick={() => {
-                  void recordRating(hospitalEntityId(item.hospital), rating, item.id, feedback);
+                  void recordRating("", rating, item.id, feedback);
                   recordHistoryRating(item.id, rating);
                   markRated(item.id);
                   onDismiss();
