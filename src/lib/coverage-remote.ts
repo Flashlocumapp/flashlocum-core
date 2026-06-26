@@ -617,7 +617,7 @@ async function fetchAndIngestRow(id: string): Promise<void> {
   if (!row) {
     // Row may belong to the open searching pool (RLS hides it from a
     // direct select for non-accepting doctors). Look it up via the RPC.
-    const pool = await supabase.rpc("list_open_coverage_requests");
+    const pool = await fetchOpenListCoalesced();
     if (pool.error) {
       poolOk = false;
     } else if (Array.isArray(pool.data)) {
