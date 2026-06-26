@@ -524,5 +524,6 @@ export function computeWorkedPricing(
       (parts.join(" + ") || "Standard coverage rate.") +
       (d > 1 ? ` · ${d} days (per-day)` : "") +
       busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    displayLabel: friendlyCoverageLabel("standard", bookedPerDay * d, d, environment),
   };
 }
