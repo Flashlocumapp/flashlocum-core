@@ -259,11 +259,11 @@ export const adminListShifts = createServerFn({ method: "POST" })
     if (shiftIds.length) {
       const { data: surchargeRows } = await supabaseAdmin
         .from("payment_surcharge_log")
-        .select("request_id, amount")
+        .select("request_id, block_amount")
         .in("request_id", shiftIds);
       for (const s of surchargeRows ?? []) {
         const id = s.request_id as string;
-        surchargeByShift.set(id, (surchargeByShift.get(id) ?? 0) + Number(s.amount ?? 0));
+        surchargeByShift.set(id, (surchargeByShift.get(id) ?? 0) + Number(s.block_amount ?? 0));
       }
     }
 
