@@ -600,6 +600,9 @@ function pendingIncomingId(): string | null {
   const s = readState();
   const sid = getSessionId();
   const me = s.doctors?.[sid];
+  // FIFO (oldest first) so this matches `broadcastingRequests` and the
+  // `useDispatch` derivation. A single ordering across the dispatch
+  // pipeline guarantees decline → next-eligible advances deterministically.
   const first = Object.values(s.requests ?? {})
     .filter(
       (r) =>
@@ -607,9 +610,10 @@ function pendingIncomingId(): string | null {
         r.requesterSessionId !== sid &&
         !isDeclined(me, r.id, r.rev),
     )
-    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt))[0];
+    .sort((a, b) => (a.broadcastStartedAt ?? a.createdAt) - (b.broadcastStartedAt ?? b.createdAt))[0];
   return first?.id ?? null;
 }
+
 
 
 
