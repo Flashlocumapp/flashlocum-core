@@ -385,7 +385,7 @@ function HomeScreen({ active }: { active: boolean }) {
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground active={active} markers={markers} center={mapCenter} placeMarkers={placeMarkers} />
+      <GoogleMapBackground active={active} markers={markers} markerScale={0.6} center={mapCenter} placeMarkers={placeMarkers} />
 
       {/* Top floating trust card — calm rating + reliability for the requester */}
       {stage === "collapsed" && (

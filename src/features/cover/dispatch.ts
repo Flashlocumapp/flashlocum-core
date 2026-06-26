@@ -2,7 +2,7 @@
 // Public API kept stable for CoverHome, CoverDispatchPortal, and coverage tab.
 
 import { useEffect, useState } from "react";
-import { hasLiveSnapshot, onLiveSnapshotChange, reconcileNow } from "@/lib/coverage-remote";
+import { bustOpenListCache, hasLiveSnapshot, onLiveSnapshotChange, reconcileNow } from "@/lib/coverage-remote";
 import {
   acceptRequest,
   type AcceptBlockReason,
@@ -534,13 +534,15 @@ export function declineIncoming() {
   if (!id) return;
   const r = currentRequest(id);
   markDeclined(id, r?.rev);
-  // Force an authoritative re-fetch so any other eligible requests that
-  // were already in the open pool (but were obscured behind this one in
-  // the dispatch queue) surface immediately. Without this, a second
-  // back-to-back request could remain invisible until the next reconcile
-  // tick or a fresh broadcast.
+  // Force an authoritative re-read so any sibling request already in the
+  // open pool (e.g. a second requester broadcast that arrived during a
+  // channel flap) surfaces as the next incoming card without requiring
+  // anyone to cancel and rebroadcast. Bust the 1.5s coalesce cache first
+  // so the RPC returns fresh DB truth, not a stale window.
+  bustOpenListCache();
   void reconcileNow();
 }
+
 
 
 export function dismissAccepted() {
@@ -598,6 +600,9 @@ function pendingIncomingId(): string | null {
   const s = readState();
   const sid = getSessionId();
   const me = s.doctors?.[sid];
+  // FIFO (oldest first) so this matches `broadcastingRequests` and the
+  // `useDispatch` derivation. A single ordering across the dispatch
+  // pipeline guarantees decline → next-eligible advances deterministically.
   const first = Object.values(s.requests ?? {})
     .filter(
       (r) =>
@@ -605,9 +610,10 @@ function pendingIncomingId(): string | null {
         r.requesterSessionId !== sid &&
         !isDeclined(me, r.id, r.rev),
     )
-    .sort((a, b) => (b.broadcastStartedAt ?? b.createdAt) - (a.broadcastStartedAt ?? a.createdAt))[0];
+    .sort((a, b) => (a.broadcastStartedAt ?? a.createdAt) - (b.broadcastStartedAt ?? b.createdAt))[0];
   return first?.id ?? null;
 }
+
 
 
 

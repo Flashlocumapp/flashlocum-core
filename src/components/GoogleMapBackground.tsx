@@ -63,7 +63,8 @@ const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
 
 // Stethoscope marker — used ONLY for online doctors available nearby.
 // Subtle pulse via SMIL keeps the marker feeling alive without being flashy.
-function doctorIcon(): google.maps.Icon {
+function doctorIcon(scale = 1): google.maps.Icon {
+  const size = Math.max(20, Math.round(56 * scale));
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
   <circle cx="28" cy="28" r="22" fill="#3a8a5e" fill-opacity="0.18">
@@ -79,10 +80,11 @@ function doctorIcon(): google.maps.Icon {
 </svg>`.trim();
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(56, 56),
-    anchor: new google.maps.Point(28, 28),
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
   };
 }
+
 
 // Requester "you are here" dot — calm pulsing blue marker.
 function requesterDotIcon(): google.maps.Icon {
@@ -109,6 +111,7 @@ export function GoogleMapBackground({
   showSelf = true,
   selfMarkerKind = "requester",
   active = true,
+  markerScale = 1,
 }: {
   markers?: Marker[];
   center?: Coords | null;
@@ -116,7 +119,11 @@ export function GoogleMapBackground({
   showSelf?: boolean;
   selfMarkerKind?: "requester" | "doctor";
   active?: boolean;
+  /** Multiplier for doctor avatar marker size. Requester Home uses ~0.78
+   *  so the map reads as a cleaner roster; Doctor Home stays at 1. */
+  markerScale?: number;
 } = {}) {
+
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerObjs = useRef<Map<string, google.maps.Marker>>(new Map());
@@ -237,19 +244,21 @@ export function GoogleMapBackground({
       const existing = pool.get(m.key);
       if (existing) {
         existing.setPosition(pos);
+        existing.setIcon(doctorIcon(markerScale));
       } else {
         pool.set(
           m.key,
           new google.maps.Marker({
             position: pos,
             map: mapRef.current!,
-            icon: doctorIcon(),
+            icon: doctorIcon(markerScale),
             optimized: false, // SMIL pulse requires non-optimized rendering
             zIndex: 40,
           }),
         );
       }
     });
+
     // Remove markers that are no longer in the input (or lost their GPS fix).
     for (const [key, marker] of pool) {
       if (!seen.has(key)) {
