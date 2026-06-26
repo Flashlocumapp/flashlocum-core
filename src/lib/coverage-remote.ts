@@ -386,15 +386,18 @@ function stopReconcileTimer() {
 // capped backoff (1s → 30s).
 type WatchdogKey = "coverage" | "invalidations" | "presence";
 const backoffMs: Record<WatchdogKey, number> = {
-  coverage: 1000,
-  invalidations: 1000,
-  presence: 1000,
+  coverage: 500,
+  invalidations: 500,
+  presence: 500,
 };
 const backoffTimers: Partial<Record<WatchdogKey, ReturnType<typeof setTimeout>>> = {};
-const MAX_BACKOFF_MS = 30_000;
+// Cap: 5s. With ±30% jitter, 700 doctors reconnecting simultaneously after a
+// Realtime restart spread their retries across a ~3.5–6.5s window instead of
+// stampeding on the same tick.
+const MAX_BACKOFF_MS = 5_000;
 
 function resetBackoff(k: WatchdogKey) {
-  backoffMs[k] = 1000;
+  backoffMs[k] = 500;
   const t = backoffTimers[k];
   if (t) {
     clearTimeout(t);
@@ -404,8 +407,11 @@ function resetBackoff(k: WatchdogKey) {
 
 function scheduleReconnect(k: WatchdogKey, run: () => void) {
   if (backoffTimers[k]) return;
-  const delay = backoffMs[k];
-  backoffMs[k] = Math.min(MAX_BACKOFF_MS, delay * 2);
+  const base = backoffMs[k];
+  // ±30% jitter prevents reconnect-storm alignment after a Realtime restart.
+  const jitter = (Math.random() - 0.5) * 0.6;
+  const delay = Math.max(250, Math.round(base * (1 + jitter)));
+  backoffMs[k] = Math.min(MAX_BACKOFF_MS, base * 2);
   setChannelHealth(k, "reconnecting");
   backoffTimers[k] = setTimeout(() => {
     backoffTimers[k] = undefined;
@@ -416,6 +422,7 @@ function scheduleReconnect(k: WatchdogKey, run: () => void) {
     }
   }, delay);
 }
+
 
 
 
@@ -430,6 +437,55 @@ const SNAPSHOT_LIMIT = 500;
 // here are still subject to the doctor-side `broadcastingRequests` freshness
 // filter (180s TTL) so a stale row cannot resurrect indefinitely.
 let lastPoolRows: Row[] = [];
+
+// -- Open-coverage list read-coalescer (1.5s) -----------------------------
+//
+// Coalesces simultaneous duplicate fetches of `list_open_coverage_requests`
+// into a single round trip. CONTRACT (do not weaken):
+//   - This cache ONLY guards the open-pool RPC. Own-row reads, presence,
+//     postgres_changes, payment updates, and shift lifecycle use separate
+//     paths and are never delayed.
+//   - Every Realtime listener that ingests an open-list change MUST call
+//     `bustOpenListCache()` BEFORE triggering its refetch. The next fetch
+//     then bypasses the cache and reads fresh DB truth.
+//   - The 1.5s window therefore only collapses *simultaneous duplicates*
+//     (two components mounting at once, tab-focus + reconcile timer firing
+//     on the same instant). Those produce identical results; collapsing
+//     them is invisible to the user.
+const OPEN_LIST_TTL_MS = 1500;
+type PoolFetchResult = { data: Row[] | null; error: { message: string } | null };
+let openListInFlight: Promise<PoolFetchResult> | null = null;
+let openListCachedAt = 0;
+let openListCached: PoolFetchResult | null = null;
+
+export function bustOpenListCache(): void {
+  openListInFlight = null;
+  openListCached = null;
+  openListCachedAt = 0;
+}
+
+function fetchOpenListCoalesced(): Promise<PoolFetchResult> {
+  const now = Date.now();
+  if (openListInFlight) return openListInFlight;
+  if (openListCached && now - openListCachedAt < OPEN_LIST_TTL_MS) {
+    return Promise.resolve(openListCached);
+  }
+  openListInFlight = (async () => {
+    const res = await supabase.rpc("list_open_coverage_requests");
+    const out: PoolFetchResult = {
+      data: (res.data as Row[] | null) ?? null,
+      error: res.error ? { message: res.error.message } : null,
+    };
+    openListCached = out;
+    openListCachedAt = Date.now();
+    return out;
+  })().finally(() => {
+    openListInFlight = null;
+  });
+  return openListInFlight;
+}
+
+
 
 async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   // Doctors can only directly read coverage_requests rows they accepted
@@ -446,7 +502,7 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
       .or(ownFilter)
       .order("created_at", { ascending: true })
       .limit(SNAPSHOT_LIMIT),
-    supabase.rpc("list_open_coverage_requests"),
+    fetchOpenListCoalesced(),
   ]);
   if (ownRes.error) {
     console.warn("[coverage-remote] fetch error:", ownRes.error.message);
@@ -548,10 +604,16 @@ function scheduleRefresh() {
  * without waiting on a full snapshot refresh.
  */
 async function fetchAndIngestRow(id: string): Promise<void> {
+  // CONTRACT (see fetchOpenListCoalesced): bust the open-list cache before
+  // any event-driven re-read so Realtime invalidations never serve stale
+  // pool data. The 1.5s coalesce window is for *simultaneous duplicates*
+  // only — never for propagating database truth.
+  bustOpenListCache();
   // First try a direct read — works for own/accepted rows under RLS.
   let row: Row | null = null;
   let directOk = true;
   let poolOk = true;
+
   const direct = await supabase.from(TABLE).select("*").eq("id", id).maybeSingle();
   if (direct.error) {
     directOk = false;
@@ -561,7 +623,7 @@ async function fetchAndIngestRow(id: string): Promise<void> {
   if (!row) {
     // Row may belong to the open searching pool (RLS hides it from a
     // direct select for non-accepting doctors). Look it up via the RPC.
-    const pool = await supabase.rpc("list_open_coverage_requests");
+    const pool = await fetchOpenListCoalesced();
     if (pool.error) {
       poolOk = false;
     } else if (Array.isArray(pool.data)) {
@@ -667,6 +729,10 @@ function handlePayload(payload: {
   old?: unknown;
 }) {
   markRealtimeActivity();
+  // postgres_changes signals underlying truth has moved — bust so any
+  // concurrent or follow-up open-list refetch is fresh.
+  bustOpenListCache();
+
   const row = (payload.new ?? payload.old) as Row | undefined;
   if (!row?.id) return;
 
@@ -849,6 +915,10 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   if (!invalidationChannel) {
     const onInvalidate = (msg: { payload?: { id?: string } }) => {
       markRealtimeActivity();
+      // Bust the open-list cache BEFORE any refetch — Realtime events must
+      // always read fresh DB truth, never a 1.5s-stale snapshot.
+      bustOpenListCache();
+
       const id = msg?.payload?.id;
       // Single-row re-read when the trigger gave us an id — this is the
       // queue advancement path (accept / cancel / edit-pause / expire /

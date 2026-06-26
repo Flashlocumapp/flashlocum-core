@@ -787,7 +787,22 @@ async function beaconOffline() {
 
 export function startHeartbeat() {
   if (typeof window === "undefined") return () => {};
-  const t = window.setInterval(() => heartbeat(), HEARTBEAT_MS);
+  // Self-scheduling timer with ±20% jitter so N online doctors don't all
+  // POST their heartbeat on the same wall-clock tick (thundering herd at
+  // scale). Online/offline state changes still propagate instantly through
+  // the explicit heartbeat() call on toggle — only the periodic refresh
+  // cadence is jittered.
+  let t: ReturnType<typeof setTimeout> | null = null;
+  const scheduleNext = () => {
+    const jitter = (Math.random() - 0.5) * 0.4; // ±20%
+    const delay = Math.max(5000, Math.round(HEARTBEAT_MS * (1 + jitter)));
+    t = setTimeout(() => {
+      heartbeat();
+      scheduleNext();
+    }, delay);
+  };
+  scheduleNext();
+
   const visibility = () => {
     if (document.visibilityState === "visible") heartbeat();
   };
@@ -799,12 +814,13 @@ export function startHeartbeat() {
   window.addEventListener("beforeunload", onPageHide);
   window.addEventListener("pagehide", onPageHide);
   return () => {
-    window.clearInterval(t);
+    if (t) clearTimeout(t);
     document.removeEventListener("visibilitychange", visibility);
     window.removeEventListener("beforeunload", onPageHide);
     window.removeEventListener("pagehide", onPageHide);
   };
 }
+
 
 /* ---------------- requests (backend-backed) ----------------
  *

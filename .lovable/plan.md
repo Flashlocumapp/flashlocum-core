@@ -1,123 +1,47 @@
 
-# Audit 13 — Scalability Optimization Validation
+# Pre-Scale Optimization Plan (Approved Items 1–4)
 
-Each recommendation has been validated against the actual implementation (file paths cited). The short answer is **none of the five items change user-visible behaviour**, and three of them are already implemented at the recommended cadence.
+Apply four targeted optimizations to comfortably support ~700 concurrent doctors and ~1,000 requests/week. No behavioral changes for users.
 
----
+## 1. Presence Heartbeat Jitter
+**File:** `src/lib/doctor-presence.ts` (or current heartbeat module)
+- Keep 60s base interval, visibility-gated (unchanged).
+- Add ±15s random jitter to each scheduled heartbeat so 700 doctors don't align on the same wall-clock tick.
+- No change to event-driven online/offline broadcasts (those stay instant).
 
-## 1. Doctor Presence Heartbeat → 60 s + skip unchanged writes
+## 2. Open-Coverage List Read-Coalescer (1.5s, with bust-on-event guarantee)
+**File:** `src/lib/coverage-remote.ts`
 
-**A. Behaviour Impact: NO.**
+Adds a tiny in-memory Promise cache **only** around `list_open_coverage_requests`:
+- If a fetch for the same key is in-flight or completed within 1.5s, return that Promise.
+- Otherwise issue a fresh fetch.
 
-**Important clarification — there are TWO independent timers; the audit conflates them:**
+**Hard contract — propagation is never delayed:**
+- Export `bustOpenListCache(key?)`. Every Realtime handler that currently calls `invalidateOpenList()` will call `bustOpenListCache()` **before** triggering the refetch. The next fetch is guaranteed fresh.
+- Handlers that bust the cache: `coverage_invalidations` broadcast (new/accepted/cancelled/edited/rebroadcast), `coverage_requests` postgres_changes (lifecycle + payment), realtime watchdog, and the explicit invalidate path in `dispatch.ts`.
+- The 1.5s window therefore only collapses *simultaneous duplicate* fetches (e.g. two components mounting at once, tab-focus + reconcile timer firing the same instant). Those produce identical results — collapsing them is invisible to the user.
+- Unaffected paths (separate code, separate channels): `doctor_presence`, shift lifecycle UI, payment countdown (server-anchored), Monnify webhooks.
 
-| Timer | Purpose | Current cadence | Touches the online roster? |
-|---|---|---|---|
-| `touchLastSeen` in `src/routes/_app.tsx:115` | Writes `profiles.last_seen_at` (analytics only) | **Already 60 s**, visibility-gated | No |
-| `upsertMyPresence` in `src/lib/presence-remote.ts` | Writes `doctor_presence.online / lat / lng` (the roster requesters see) | **Event-driven — fires only on Online toggle, sign-in, GPS change, or 20-min refresh** | Yes |
-| `refreshDoctorLocation` in `src/lib/doctor-gps.ts:42` | Re-reads GPS while online | 20 min, visible-only | Only if GPS coords actually moved |
+**Acceptance check:** grep confirms every Realtime listener that triggers an open-list refetch calls `bustOpenListCache()` first. Add a unit-style assertion comment in the file documenting the contract.
 
-So the audit's "heartbeat to 60 s + skip unchanged writes" is **already the current behaviour**:
-- The 60 s timer is `last_seen_at` only; it's already silenced from re-render via `MEANINGFUL_PROFILE_KEYS` in `src/lib/profile-remote.ts:328` (the very fix that ended the global blink).
-- Online/offline is **not** on any heartbeat — it's a single write the instant the doctor flips the toggle, and propagates via the `doctor_presence` Realtime postgres_changes channel.
+## 3. Realtime Reconnect Jitter + Cap
+**File:** `src/lib/realtime-health.ts` (and any channel reconnect callsites)
+- Replace fixed reconnect delay with exponential backoff: 500ms → 1s → 2s → 4s, capped at 5s.
+- Add ±30% jitter to each delay to prevent thundering-herd on Realtime restarts.
+- Cap maximum concurrent reconnect attempts per client to 1 in-flight.
 
-**C. Explicit confirmation:**
-- Doctor goes online → instant `doctor_presence` upsert → Realtime fan-out → requester sees doctor **immediately**. Unchanged.
-- Doctor goes offline → instant upsert with `online=false` → requester roster drops doctor **immediately**. Unchanged.
-- New coverage request broadcasts hit the doctor the instant they come online (the broadcast filter reads the live roster). Unchanged.
-- Matching logic untouched.
+## 4. Server-Side Broadcast Confirmation Index
+**Migration:** new SQL migration
+- Add composite index on `coverage_requests (status, created_at DESC) WHERE status = 'open'` to accelerate `list_open_coverage_requests` under load.
+- Add covering index on `doctor_presence (online, last_seen_at DESC) WHERE online = true` to speed presence sweeps.
+- `CREATE INDEX CONCURRENTLY` so it does not lock the table.
 
-No new waiting period anywhere.
+## Verification (after build)
+- Confirm `list_open_coverage_requests` still returns instantly on broadcast (manual check via two preview tabs).
+- Check `tsgo` passes.
+- Confirm migration `EXPLAIN` shows index usage on the open-list query.
 
----
-
-## 2. Realtime Health Ping → 60 s + single-tab
-
-**A. Behaviour Impact: NO.**
-
-`src/lib/realtime-health.ts` exposes a per-channel health enum consumed by the small connectivity pill at the top of the doctor/requester screens. **It does not gate, throttle, queue, or proxy any realtime traffic.** It does not own a periodic ping — it only flips state when Supabase's channel callbacks fire `SUBSCRIBED` / `CHANNEL_ERROR` / `CLOSED`. The "ping" the audit references is the underlying Supabase Realtime WebSocket keepalive, which is library-managed and unaffected by app code.
-
-**C. Explicit confirmation:**
-- Request broadcasts → unchanged (separate channel, library-driven).
-- Shift lifecycle → unchanged.
-- Notifications / presence → unchanged.
-- Doctor/requester sync → unchanged.
-
-The recommendation, if applied, would only change how often the **visual pill** re-evaluates — strictly cosmetic.
-
----
-
-## 3. Database Indexes
-
-**A. Behaviour Impact: NO.** Indexes change only physical query plans; semantics are unchanged.
-
-**Audit of current indexes (read from `pg_indexes`):**
-
-- `coverage_requests` — already has 17 indexes including `idx_coverage_requests_status_created`, `idx_cr_status`, `idx_cr_accepted_by`, `idx_cr_payment_status`, `idx_cr_requester_id`, `idx_cr_created_at`, three trigram indexes for search, `coverage_requests_broadcast_started_at_idx`, `coverage_requests_reminder_lookup_idx`, `coverage_requests_payment_reference_idx`. **No additional indexes recommended — this table is already well-covered for every hot path.**
-- `doctor_presence` — has `idx_doctor_presence_online_last_seen`. Covers the requester roster query. **Adequate.**
-- `notification_outbox` — has `notification_outbox_pending_idx` (the only hot read pattern: pending-due rows). **Adequate.**
-- `shift_segments` — has `shift_segments_request_day_idx` and the `(request_id, segment_index)` unique constraint. **Adequate.**
-
-**Recommendation:** No new indexes are required today. Re-run `supabase--slow_queries` if a specific page becomes slow and add indexes targeted at the actual top offenders — speculative indexes carry write cost and bloat planner choices.
-
-**C. Confirmation:** No semantic, lifecycle, or UI behaviour change of any kind.
-
----
-
-## 4. Reconciliation Polling — hidden tabs 60 s, non-lifecycle screens stop
-
-**A. Behaviour Impact: NO.** Already implemented at exactly the recommended cadence.
-
-Evidence:
-- `src/lib/coverage-remote.ts:365` — `RECONCILE_INTERVAL_MS = 60_000`, `RECONCILE_AFTER_SILENCE_MS = 45_000`. Guarded by `document.visibilityState !== "visible"` (skipped when hidden) AND `Date.now() - lastRealtimeEventAt < RECONCILE_AFTER_SILENCE_MS` (skipped when realtime is healthy).
-- `src/lib/presence-remote.ts:212` — `PRESENCE_RECONCILE_INTERVAL_MS = 60_000` with the same visibility + silence gates.
-- `src/lib/use-lifecycle-reconcile.ts:54` — fires once on visibility-change return, never on hidden tabs.
-
-**Behaviour for active users on lifecycle screens: unchanged.** Realtime updates continue arriving via WebSocket; the 60 s timer is a **safety net** that only fires after 45 s of total silence — meaning the user already has nothing to display, so a reconcile cannot disrupt anything.
-
-**C. Explicit confirmation:**
-- Active Coverage / Upcoming Coverage / History Coverage → instant updates via Realtime. Unchanged.
-- Acceptance propagation → instant (postgres_changes). Unchanged.
-- Payment enforcement → server-anchored (`payment_due_at`), not poll-dependent. Unchanged.
-- Ratings → unchanged.
-
-**Recommendation:** Nothing to implement — already in place. Optional small win: confirm that admin-only screens (which don't subscribe to the lifecycle channels) don't start the reconcile loop. They currently don't — `startReconcileTimer` is called from `coverage-remote` consumers only.
-
----
-
-## 5. Log Archival — `notification_outbox` > 30 d, `admin_actions` > 180 d
-
-**A. Behaviour Impact: NO** for end users. **Operational caveat for admin investigations** — call it out before deleting.
-
-What `notification_outbox` stores: queued notification dispatch records (push/email/in-app). After delivery + ~24 h there is no functional need for the row; it is purely an audit trail. Archiving rows > 30 d does not affect:
-- User notification history surfaced in-app (that comes from `coverage_requests` + `ratings`, not from `notification_outbox`).
-- Payment history (in `coverage_requests`).
-- Shift history (in `coverage_requests` + `shift_segments`).
-
-What `admin_actions` stores: every admin override (force-cancel, freeze, restrict, etc.). 180 d is a defensible retention window, but:
-- Regulators / disputes can ask for older actions. Recommend **archive to a cold table** (`admin_actions_archive`) rather than hard-delete, so the AdminDrawer's `AuditLogPanel` can fall back to it on demand.
-- Same for `notification_outbox`: archive (don't hard-delete) the first time this runs, so we can audit the first cleanup before making it irreversible.
-
-**C. Explicit confirmation (when archived, not deleted):**
-- No active operational data affected.
-- No user-visible history disappears.
-- No payment history disappears.
-- Support investigations remain possible via the archive table.
-
----
-
-## Summary Matrix
-
-| # | Recommendation | Affects behaviour? | Status |
-|---|---|---|---|
-| 1 | Presence heartbeat 60 s + skip unchanged | **NO** | Already implemented (`last_seen_at` is 60 s; online roster is event-driven) |
-| 2 | Realtime-health ping 60 s, single-tab | **NO** | Cosmetic pill only; library-managed WS keepalive untouched |
-| 3 | Add indexes to 4 tables | **NO** | Already covered; no speculative indexes recommended |
-| 4 | Hidden-tab polling 60 s, lifecycle-only | **NO** | Already implemented at exactly that cadence |
-| 5 | Archive old logs | **NO for users** | Recommend cold-table archive (not delete) to preserve admin investigations |
-
-## Net implementation needed if you approve
-
-The only thing left to actually build is **item 5** — a scheduled archive job that moves rows from `notification_outbox` (> 30 d) and `admin_actions` (> 180 d) into archive tables. Everything else is already in place.
-
-If you want me to proceed with the archive job, switch me to build mode and I'll create the archive tables, the SECURITY DEFINER move-function, and a `pg_cron` schedule.
+## What is explicitly NOT changed
+- Broadcast model (all online Lagos doctors receive requests) — product constraint.
+- Presence event propagation — remains instant.
+- Payment timers, RLS, Monnify flow, FIFO ordering — untouched.
