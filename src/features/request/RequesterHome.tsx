@@ -1193,10 +1193,28 @@ function DispatchOverlay({
   // misread as a new doctor acceptance.
   const ownedIdRef = useRef<string | null>(null);
   const net = useNetwork();
+  // Local helper used by BOTH the useNetwork()-based effect and the
+  // single-row reconcile callback. Server `accepted_by` is the canonical
+  // signal that searching is over — once present on the request this
+  // session owns, we move the overlay forward regardless of which
+  // post-accept status the payload carries.
+  const advanceFromRow = (row: { id: string; acceptedBy?: string | null; status?: string } | null | undefined) => {
+    if (!row) return;
+    if (row.id !== ownedIdRef.current) return;
+    if (row.status === "cancelled" || row.status === "expired") return;
+    if (!row.acceptedBy) return;
+    setStage("accepted");
+  };
   // Watchful reconcile while we're staring at this in-flight request.
   // Realtime is primary; this catches missed accept / cancel / start events
-  // when the channel was down or reconnecting at the exact moment.
-  useLifecycleReconcile(requestId, { enabled: !!requestId });
+  // when the channel was down or reconnecting at the exact moment. The
+  // onRow callback lets us advance the overlay directly from the
+  // authoritative row even if useNetwork() fan-out lags.
+  useLifecycleReconcile(requestId, {
+    enabled: !!requestId,
+    onRow: (row) => advanceFromRow(row),
+  });
+
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedSid = acceptedRequest?.acceptedBy;
   const doctorIdentity = useDoctorIdentity(acceptedSid ?? null);
