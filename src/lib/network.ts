@@ -312,10 +312,56 @@ let remoteUnsubscribe: (() => void) | null = null;
 let presenceUnsubscribe: (() => void) | null = null;
 
 
+const REQUESTS_LS_KEY = "fl:requests-snapshot:v1";
+const REQUESTS_LS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const REQUESTS_LS_MAX = 80;
+
+function readRequestsSnapshot(): Record<string, NetRequest> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(REQUESTS_LS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as {
+      v?: number;
+      ts?: number;
+      requests?: Record<string, NetRequest>;
+    };
+    if (!parsed || parsed.v !== SCHEMA_VERSION) return {};
+    if (typeof parsed.ts === "number" && Date.now() - parsed.ts > REQUESTS_LS_TTL_MS) return {};
+    return parsed.requests ?? {};
+  } catch {
+    return {};
+  }
+}
+
+let persistRequestsScheduled = false;
+function scheduleRequestsPersist() {
+  if (persistRequestsScheduled || typeof window === "undefined") return;
+  persistRequestsScheduled = true;
+  setTimeout(() => {
+    persistRequestsScheduled = false;
+    try {
+      // Cap at most-recently-updated REQUESTS_LS_MAX rows to bound storage.
+      const entries = Object.entries(state.requests ?? {});
+      entries.sort((a, b) => (b[1]?.updatedAt ?? 0) - (a[1]?.updatedAt ?? 0));
+      const trimmed: Record<string, NetRequest> = {};
+      for (const [id, row] of entries.slice(0, REQUESTS_LS_MAX)) trimmed[id] = row;
+      window.localStorage.setItem(
+        REQUESTS_LS_KEY,
+        JSON.stringify({ v: SCHEMA_VERSION, ts: Date.now(), requests: trimmed }),
+      );
+    } catch {
+      /* quota / privacy mode — ignore */
+    }
+  }, 400);
+}
+
 function load(): NetState {
   // Doctor presence is sourced from Supabase Realtime (doctor_presence
-  // table) — we no longer rehydrate it from localStorage so the backend is
-  // the single source of truth. Requests are likewise remote-backed.
+  // table); requests are remote-backed. We keep a small localStorage
+  // snapshot of requests so cold starts paint the last-seen rows
+  // immediately instead of flashing an empty/skeleton state; realtime
+  // snapshots overwrite per-row within a few hundred ms of connecting.
   if (typeof window === "undefined") return emptyState();
   try {
     window.localStorage.removeItem(LEGACY_STORAGE);
@@ -323,10 +369,13 @@ function load(): NetState {
   } catch {
     /* noop */
   }
+  const persistedRequests = readRequestsSnapshot();
   return {
     schemaVersion: SCHEMA_VERSION,
     doctors: state.doctors ?? {},
-    requests: state.requests ?? {},
+    requests: Object.keys(state.requests ?? {}).length > 0
+      ? state.requests
+      : persistedRequests,
     lastEvent: state.lastEvent,
   };
 }
@@ -345,7 +394,9 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
   if (typeof window === "undefined") return;
   listeners.forEach((l) => l(state));
   channel?.postMessage({ type: "state", state: stamped });
+  scheduleRequestsPersist();
 }
+
 
 
 
