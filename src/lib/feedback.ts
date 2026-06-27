@@ -426,6 +426,8 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
     pushToast({ tone: p.toast.tone, title: p.toast.title, body: p.toast.body, ttl: p.toast.ttl, key: lkey });
   }
   if (p?.haptic) emitHaptic(p.haptic);
+  if (p?.sound === "alert") playAlert();
+  else if (p?.sound === "confirm") playConfirm();
 
   // Raise the ceiling.
   if (ev.version > ceiling) versionCeiling.set(ckey, ev.version);

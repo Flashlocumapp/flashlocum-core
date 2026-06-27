@@ -36,7 +36,9 @@ export type PushPayload = {
 };
 
 const HIGH_PRIORITY_KINDS = new Set<string>(["offer.new", "shift.cancelled"]);
-const BRANDED_CHIME_KINDS = new Set<string>(["offer.new", "shift.cancelled"]);
+// Branded chime is reserved for shift.cancelled. `offer.new` uses the device
+// default notification sound + default vibration per the notification contract.
+const BRANDED_CHIME_KINDS = new Set<string>(["shift.cancelled"]);
 
 let cachedToken: { token: string; exp: number } | null = null;
 let cachedSA: ServiceAccount | null = null;
