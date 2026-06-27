@@ -191,7 +191,7 @@ function AppShell() {
       >
         {/* Persistent Home layer. The map lives here and is never torn down. */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/home")}
+          mounted
           visible={activeTab === "/home"}
           scroll={false}
         >
@@ -200,7 +200,7 @@ function AppShell() {
 
         {/* Persistent Coverage layer. */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/coverage")}
+          mounted
           visible={activeTab === "/coverage"}
           scroll
         >
@@ -211,7 +211,7 @@ function AppShell() {
             self-guards via role checks; mounting it for requesters is
             harmless because the route is gated above). */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/earnings")}
+          mounted
           visible={activeTab === "/earnings"}
           scroll
         >
@@ -220,12 +220,13 @@ function AppShell() {
 
         {/* Persistent Account layer. */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/account")}
+          mounted
           visible={activeTab === "/account"}
           scroll
         >
           <AccountScreen />
         </PersistentLayer>
+
 
         {/* Non-persistent routes render here on top. They remount as normal
             and the persistent layers below are hidden via display:none. */}
