@@ -618,7 +618,7 @@ function scheduleRefresh() {
  * route through here, so every doctor's `.find()` advances within ~1s
  * without waiting on a full snapshot refresh.
  */
-async function fetchAndIngestRow(id: string): Promise<void> {
+async function fetchAndIngestRow(id: string): Promise<NetRequest | null> {
   // CONTRACT (see fetchOpenListCoalesced): bust the open-list cache before
   // any event-driven re-read so Realtime invalidations never serve stale
   // pool data. The 1.5s coalesce window is for *simultaneous duplicates*
@@ -662,6 +662,7 @@ async function fetchAndIngestRow(id: string): Promise<void> {
       fn({ type: idx === -1 ? "INSERT" : "UPDATE", row: net, old: null } as RemoteEvent),
     );
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    return net;
   } else {
     // Row not returned by either read path. We DROP it from the cache only
     // when:
@@ -671,16 +672,18 @@ async function fetchAndIngestRow(id: string): Promise<void> {
     // evicted by a transient RLS hiccup, a stray DELETE invalidation, or a
     // network blip — that was the root cause of History Coverage briefly
     // emptying and then re-populating on the next snapshot refresh.
-    if (!directOk || !poolOk) return;
+    if (!directOk || !poolOk) return null;
     const existing = cachedSnapshot.find((r) => r.id === id);
-    if (!existing) return;
-    if (existing.status === "completed" || existing.status === "cancelled") return;
+    if (!existing) return null;
+    if (existing.status === "completed" || existing.status === "cancelled") return null;
     cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
     writePersistedSnapshot(cachedSnapshot);
     eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    return null;
   }
 }
+
 
 /**
  * Broadcast a coverage_requests change to every subscribed client.
