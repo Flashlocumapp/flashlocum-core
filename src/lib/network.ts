@@ -417,7 +417,6 @@ function maybeEmitRequesterAccepted(
   if (prev?.acceptedBy != null) return; // already accepted earlier
   const uid = getCurrentUserIdSync();
   if (!uid || next.requesterSessionId !== uid) return;
-  const cachedDoctor = state.doctors?.[next.acceptedBy];
   ingest(
     fromRealtime({
       kind: "offer.accepted",
@@ -425,7 +424,6 @@ function maybeEmitRequesterAccepted(
       audience: "requester",
       updatedAt: next.updatedAt || Date.now(),
       ctx: {
-        doctorName: cachedDoctor?.name,
         hospitalName: next.hospital || undefined,
       },
     }),
