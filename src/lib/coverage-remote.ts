@@ -728,10 +728,11 @@ export function reconcileNow(): Promise<void> {
   return refreshSnapshot();
 }
 
-export function reconcileRequest(id: string): Promise<void> {
-  if (!id) return Promise.resolve();
+export function reconcileRequest(id: string): Promise<NetRequest | null> {
+  if (!id) return Promise.resolve(null);
   return fetchAndIngestRow(id);
 }
+
 
 /**
  * Handle a single postgres_changes payload. Shared between the per-user
