@@ -401,11 +401,43 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
 
 
 
+
+/**
+ * Requester-side acceptance cue: emit canonical `offer.accepted` when the
+ * owned coverage_requests row transitions from no-doctor to accepted. This
+ * is what plays `confirm.wav` + the actor-named toast on the requester in
+ * the browser (the native shell already gets it from the foreground push).
+ * The feedback engine's 6 s dedup window collapses it with the push echo.
+ */
+function maybeEmitRequesterAccepted(
+  prev: NetRequest | undefined,
+  next: NetRequest,
+) {
+  if (next.acceptedBy == null) return;
+  if (prev?.acceptedBy != null) return; // already accepted earlier
+  const uid = getCurrentUserIdSync();
+  if (!uid || next.requesterSessionId !== uid) return;
+  const cachedDoctor = state.doctors?.[next.acceptedBy];
+  ingest(
+    fromRealtime({
+      kind: "offer.accepted",
+      entityId: next.id,
+      audience: "requester",
+      updatedAt: next.updatedAt || Date.now(),
+      ctx: {
+        doctorName: cachedDoctor?.name,
+        hospitalName: next.hospital || undefined,
+      },
+    }),
+  );
+}
+
 function applyRemoteEvent(ev: RemoteEvent) {
   const requests = { ...state.requests };
   let netEvent: Omit<NetEvent, "at"> | undefined;
   if (ev.type === "INSERT") {
     requests[ev.row.id] = ev.row;
+    maybeEmitRequesterAccepted(undefined, ev.row);
     if (ev.row.status === "broadcasting") {
       netEvent = {
         actor: "requester",
