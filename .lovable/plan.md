@@ -1,72 +1,48 @@
-# Why the Coverage tab flashes "Reconnecting…" after payment
+## Why the "loading flash" happens
 
-The pill at the top of Coverage is `Reconnecting…` (rendered by `ReconnectingPill` in `src/features/app/CoverageScreen.tsx`). It is driven by `isCoverageReconnecting(health)` over the `coverage` and `invalidations` channels. It should only appear during a real disconnect — but a self-inflicted teardown after payment is flipping `invalidations` to `reconnecting` for several seconds.
+Three independent causes, all visible as the ~1–2 s shimmer/empty state you described:
 
-## Root cause — duplicate `coverage_invalidations` channel from the settlement sheet
+1. **Persistent tabs mount lazily.** `src/routes/_app.tsx` only mounts a tab layer the *first* time you visit it (`visitedRef.current.has(...)`). The first visit to Coverage, Earnings, or Account after a reload mounts that screen cold, runs its first realtime/profile subscription, and renders skeletons until the first snapshot arrives. After that the layer stays mounted and switching is instant — which matches "happens sometimes".
 
-`src/features/request/ShiftSettlement.tsx` lines 768-773 (and its cleanup on 802) opens a **second** Supabase channel with the same topic name as the global one owned by `coverage-remote.ts`:
+2. **Coverage's first-paint guard always shows a 220 ms skeleton when the in-memory store is empty.** `useFirstPaintSettled(items.length > 0)` in `src/features/app/CoverageScreen.tsx` flashes `ListSkeleton` until either rows arrive or 220 ms passes. Because `src/lib/network.ts` `load()` actively *clears* `localStorage` and starts with `requests: {}`, every cold start hits the 220 ms branch even when there is nothing to show.
 
-```ts
-const invalidate = supabase
-  .channel("coverage_invalidations", { config: { broadcast: { self: false } } })
-  .on("broadcast", { event: "invalidate" }, () => { void checkOnce(); })
-  .subscribe();
-…
-return () => {
-  …
-  void supabase.removeChannel(invalidate);   // ← clobbers the global topic
-};
-```
+3. **Doctor avatars re-sign on every cold start.** `src/lib/doctor-identity.ts` persists the name/MDCN/storage path but explicitly strips the signed URL before writing to `localStorage`. On reload it shows initials, calls `supabase.storage.createSignedUrl`, then swaps the photo in 300–1500 ms. `src/lib/selfie-url.ts` already persists the signed URL with its `exp` claim and does stale-while-revalidate — doctor-identity just isn't using it.
 
-What happens on the "I paid" flow:
-1. Settlement sheet opens → two channel objects exist for topic `coverage_invalidations` (the global one in `coverage-remote.ts` + this local one in the sheet).
-2. Webhook fires `payment_status = paid` → broadcast lands → `confirmPaymentNow()` runs → sheet auto-closes and the effect cleanup runs (deps `[open, requestId, phase, …]` also change as phase flips).
-3. `supabase.removeChannel(invalidate)` unsubscribes the shared topic on the socket. The global subscriber's `subscribe()` callback then receives `CLOSED`, which calls `scheduleReconnect("invalidations", …)` and `setChannelHealth("invalidations", "reconnecting")` (`coverage-remote.ts` ~line 957).
-4. `ReconnectingPill` debounces for 800 ms, then shows. The watchdog reopens the channel with backoff (500 ms → 1 s → 2 s …, plus ±30% jitter) and only clears `reconnecting` after `SUBSCRIBED` arrives — usually 1-3 s of visible "Reconnecting…".
+The Account tab avatar is already instant because it uses `useSelfieUrl`; the same fix needs to reach every coverage card, history sheet, detail sheet, and RequesterHome assigned-doctor card.
 
-Also, the sibling `settlement:${requestId}` postgres_changes channel on line 752 is dead in production: the comment on line 764 says `coverage_requests` is intentionally excluded from `supabase_realtime`, so that subscription never fires. It does not cause the pill (no health callback), but it is wasted work.
+## Fix plan (presentation layer only — no business logic changes)
 
-Same pattern exists in any other place that opens its own `coverage_invalidations` channel — confirming this is the only one.
+### 1. Eager-mount all persistent tab layers
+`src/routes/_app.tsx`
+- Replace the lazy `visitedRef` gate with eager mount of all four `PERSISTENT_TAB_PATHS` on first AppShell mount. Visibility still toggles via `display`, so the first tap on Coverage / Earnings / Account is instant — their realtime subscriptions and signed-URL warmups run in the background while Home is on screen.
+- Keep `HomeRouter active={...}` and `EarningsScreen active={...}` so off-screen tabs can still pause expensive work (map ticks, etc.).
 
-## Why it looks like "after payment"
+### 2. Persist + rehydrate the coverage requests snapshot
+`src/lib/network.ts`
+- Stop deleting the requests cache in `load()`. Persist `state.requests` to `localStorage` (debounced, capped at ~80 rows, schema-versioned, same pattern as `selfie-url.ts`).
+- On `init()`, hydrate `state.requests` from `localStorage` BEFORE the realtime subscription connects, so the very first render of Coverage already has the user's last-seen rows.
+- Realtime snapshots continue to overwrite per-row, so stale rows self-heal within the existing reconcile path.
 
-The cleanup that tears down the duplicate channel runs precisely when the sheet closes on `paid`. Pre-payment the sheet is mounted, so the duplicate stays joined and the global topic is fine; the moment payment succeeds, the global topic gets dropped and the pill appears.
+`src/features/app/CoverageScreen.tsx`
+- Drop the 220 ms shimmer in favor of: render rows immediately when the hydrated cache has any; otherwise render the empty state directly. The "first paint" timer becomes redundant once #2 lands and removes the cold-start window.
 
-## Remediation (minimal, no business logic change)
+### 3. Make doctor avatars survive reload
+`src/lib/doctor-identity.ts`
+- Route selfie resolution through the existing `selfie-url.ts` cache (`signSelfie(path)` / its persisted entries) instead of a parallel `resolveSelfie` + bespoke persistence that throws away the signed URL.
+- On `readIdentityCache()`, if `selfie-url.ts` has a still-valid signed URL for the persisted `selfiePath`, hydrate `selfieUrl` from it synchronously so the very first paint of every coverage card, detail sheet, and history row already shows the photo.
+- Background re-sign only when the cached URL is missing or within the existing 5-min refresh window.
 
-### 1. Stop opening a second `coverage_invalidations` channel from `ShiftSettlement`
+### 4. Smooth the leftover micro-flashes
+- `src/features/app/CoverageScreen.tsx` `RequesterDetailSheet` / `RequestCard`: render the avatar `<span>` with the initials as the background label so the photo fades in over them (no empty grey box even on the rare uncached doctor).
+- `src/features/request/RequesterHome.tsx` accepted-doctor card: same StableImage fade behavior.
 
-Replace the per-sheet `supabase.channel("coverage_invalidations")` with a tiny subscriber that hangs off the **existing** global channel in `coverage-remote.ts`. Two equivalent options — pick (a) for the smallest blast radius:
-
-a. **Add a local pub/sub in `coverage-remote.ts`** (no new realtime channels): export `subscribeInvalidationPing(cb): () => void`. The existing `onInvalidate` handler in `coverage-remote.ts` (~line 916) already runs on every broadcast — have it also notify these listeners. The settlement sheet replaces its `.channel("coverage_invalidations")…subscribe()` with `subscribeInvalidationPing(() => void checkOnce())`. Cleanup just removes the listener — never touches the shared topic.
-
-b. **Use a sheet-scoped topic name** like `settlement_pings:${requestId}` so removal cannot affect the global topic. This works but adds one more Realtime channel per active settlement — option (a) avoids that.
-
-### 2. Delete the dead `settlement:${requestId}` postgres_changes channel
-
-Remove the subscription block on lines 752-762 + 801 (`removeChannel(channel)`). `coverage_requests` is not in `supabase_realtime`; this never delivers and just adds JOIN/LEAVE churn that aggravates the reconnect-pill window during payment.
-
-### 3. (Defensive) Make `ReconnectingPill` insensitive to a single sub-second flap
-
-Already debounced 800 ms. Raise to 1500 ms AND require the unhealthy state to still be present when the timer fires. This is a belt-and-braces measure; the real fix is (1). The pill will still appear for genuine multi-second outages — only the self-inflicted flash is silenced.
-
-## Files touched
-
-- `src/lib/coverage-remote.ts` — add `subscribeInvalidationPing` + fan-out from existing `onInvalidate`. No new channels, no schema or RLS changes.
-- `src/features/request/ShiftSettlement.tsx` — swap the duplicate `supabase.channel("coverage_invalidations")` for `subscribeInvalidationPing`; delete the dead `settlement:${requestId}` block; tighten cleanup.
-- `src/features/app/CoverageScreen.tsx` — bump `ReconnectingPill` debounce 800 → 1500 ms and re-check health at fire time.
+## Out of scope (intentionally)
+- No changes to billing, dispatch, RLS, or any server function.
+- No changes to the realtime topology — only the local persistence layer in front of it.
+- No new dependencies.
 
 ## Verification
-
-1. **Repro pre-fix:** open a shift → End Shift → pay via Monnify sandbox → confirm pill appears for ~1-3 s right as the sheet closes.
-2. **Post-fix happy path:** same flow, pill never appears; sheet still auto-confirms on `paid`.
-3. **Network kill test:** DevTools → offline for 5 s. Pill must still appear (genuine disconnect) and clear on reconnect.
-4. **Channel audit:** in DevTools → Network → WS, after payment confirms there is still exactly one JOIN for `coverage_invalidations` (the global one) and no LEAVE during the close.
-5. **Build:** `bun run build` clean.
-
-## What we are NOT changing
-
-- No DB / RLS / RPC changes.
-- No new realtime channels.
-- No change to payment verification cadence, `verifySettlementPayment`, webhook handling, or `coverage_invalidations` broadcast contents.
-- No change to the watchdog / reconnect backoff in `coverage-remote.ts`.
+- Hard refresh on `/coverage` with existing rows → list renders immediately, no skeleton, no empty-state flash.
+- Hard refresh on `/home` then tap Coverage / Earnings / Account in sequence → each tab paints filled in under one frame.
+- Reload while an accepted shift is showing → assigned doctor's photo is visible on first paint instead of initials → photo.
+- Realtime row changes still reflect within their existing latency (sanity-check by toggling a request status from another tab).
