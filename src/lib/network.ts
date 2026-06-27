@@ -445,6 +445,7 @@ function applyRemoteEvent(ev: RemoteEvent) {
       };
     }
   } else if (ev.type === "UPDATE") {
+    maybeEmitRequesterAccepted(ev.old ?? state.requests[ev.row.id], ev.row);
     requests[ev.row.id] = ev.row;
     const oldStatus = ev.old?.status;
     const newStatus = ev.row.status;
