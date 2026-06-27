@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { BottomTabs, TAB_BAR_HEIGHT } from "@/components/BottomTabs";
 import { AnimatePresence, motion } from "framer-motion";
 import { sheetEnter } from "@/lib/motion";
@@ -154,23 +154,18 @@ function AppShell() {
       : null;
   }, [pathname]);
 
-  // Track which persistent tabs have ever been visited so we mount them
-  // lazily (first paint is fast; memory only grows as the user explores).
-  const visitedRef = useRef<Set<PersistentTabPath>>(new Set());
-  const [, force] = useState(0);
-  useEffect(() => {
-    if (activeTab && !visitedRef.current.has(activeTab)) {
-      visitedRef.current.add(activeTab);
-      force((n) => n + 1);
-    }
-  }, [activeTab]);
-
+  // Eager-mount every persistent tab on first AppShell mount. Off-screen
+  // tabs are hidden via `display:none`, but their realtime subscriptions
+  // and signed-URL warmups run in the background while Home is on screen,
+  // so the first tap on Coverage / Earnings / Account is instant (no
+  // cold-start skeleton or empty-state flash).
   useEffect(() => acquireHeartbeat(), []);
   useEffect(() => mountPreshiftReminderScheduler(), []);
 
   // Non-persistent routes (e.g. /help, /support, /admin children if rendered
   // here) display the Outlet on top of all hidden persistent layers.
   const showOutlet = activeTab === null;
+
 
   return (
     <div
@@ -196,7 +191,7 @@ function AppShell() {
       >
         {/* Persistent Home layer. The map lives here and is never torn down. */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/home")}
+          mounted
           visible={activeTab === "/home"}
           scroll={false}
         >
@@ -205,7 +200,7 @@ function AppShell() {
 
         {/* Persistent Coverage layer. */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/coverage")}
+          mounted
           visible={activeTab === "/coverage"}
           scroll
         >
@@ -216,7 +211,7 @@ function AppShell() {
             self-guards via role checks; mounting it for requesters is
             harmless because the route is gated above). */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/earnings")}
+          mounted
           visible={activeTab === "/earnings"}
           scroll
         >
@@ -225,12 +220,13 @@ function AppShell() {
 
         {/* Persistent Account layer. */}
         <PersistentLayer
-          mounted={visitedRef.current.has("/account")}
+          mounted
           visible={activeTab === "/account"}
           scroll
         >
           <AccountScreen />
         </PersistentLayer>
+
 
         {/* Non-persistent routes render here on top. They remount as normal
             and the persistent layers below are hidden via display:none. */}

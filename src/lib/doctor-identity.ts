@@ -4,8 +4,9 @@
 // derives display values from it — no fake initials, no synthesized MDCN.
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSelfieUrl } from "@/lib/selfie-url";
 import { fetchDoctorProfile, type ProfileRow } from "@/lib/profile-remote";
+
 
 export type DoctorIdentity = {
   id: string | null;
@@ -34,10 +35,16 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
       // Backfill selfiePath for entries persisted before the signed-URL split.
       const path = row.selfiePath ?? row.selfieUrl ?? null;
       const isAbsolute = !!path && /^(https?:|data:|blob:)/i.test(path);
+      // Synchronously hydrate selfieUrl from the shared selfie-url cache so
+      // the very first paint of every coverage card / detail sheet / history
+      // row already has the photo — no flash from initials → image. If the
+      // shared cache is cold, getSelfieUrl kicks off signing in the background
+      // and resolveSelfie() will patch the entry when ready.
+      const cachedSigned = path && !isAbsolute ? getSelfieUrl(path) : null;
       out.set(row.id, {
         ...row,
         selfiePath: path,
-        selfieUrl: isAbsolute ? path : null,
+        selfieUrl: isAbsolute ? path : cachedSigned,
       });
     }
   } catch {
@@ -45,6 +52,7 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
   }
   return out;
 }
+
 
 function writeIdentityCache() {
   if (typeof window === "undefined") return;
@@ -145,20 +153,26 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
-// Sign storage paths via Supabase Storage so requester clients (and the
-// doctor on their own device) can render the avatar. The bucket is private;
-// RLS on storage.objects gates which selfies a caller can sign.
+// Sign storage paths via the shared selfie-url cache so the URL is signed
+// once per session, persisted to localStorage with its `exp` claim, and
+// reused across Account, Coverage cards, History, RequesterHome, and
+// detail sheets. Background polls (max ~6 over ~3 s) cover the gap
+// between `getSelfieUrl()` kicking off signing and the URL becoming
+// available — the shared cache notifies its own subscribers but here we
+// only need to refresh the doctor-identity cache once.
 const signedSelfieInflight = new Map<string, Promise<void>>();
 async function resolveSelfie(sessionId: string, path: string) {
   if (signedSelfieInflight.has(sessionId)) return signedSelfieInflight.get(sessionId);
   const p = (async () => {
-    const { data, error } = await supabase.storage
-      .from("doctors")
-      .createSignedUrl(path, 60 * 60);
-    if (error || !data?.signedUrl) return;
+    let signed = getSelfieUrl(path);
+    for (let i = 0; !signed && i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      signed = getSelfieUrl(path);
+    }
+    if (!signed) return;
     const cur = cache.get(sessionId);
     if (!cur) return;
-    cache.set(sessionId, { ...cur, selfieUrl: data.signedUrl });
+    cache.set(sessionId, { ...cur, selfieUrl: signed });
     notify();
   })().finally(() => {
     signedSelfieInflight.delete(sessionId);
@@ -170,11 +184,19 @@ async function resolveSelfie(sessionId: string, path: string) {
 function maybeResolveSelfie(sessionId: string) {
   const cur = cache.get(sessionId);
   if (!cur || !cur.loaded) return;
-  if (cur.selfieUrl) return;
   if (!cur.selfiePath) return;
   if (/^(https?:|data:|blob:)/i.test(cur.selfiePath)) return;
+  // Try synchronous cache hit first (no flash on warm starts).
+  const fast = getSelfieUrl(cur.selfiePath);
+  if (fast && cur.selfieUrl !== fast) {
+    cache.set(sessionId, { ...cur, selfieUrl: fast });
+    notify();
+    return;
+  }
+  if (cur.selfieUrl) return;
   void resolveSelfie(sessionId, cur.selfiePath);
 }
+
 
 function loadInto(sessionId: string) {
   // If a stale cache entry exists with a path but no signed URL, kick off
