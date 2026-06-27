@@ -748,29 +748,17 @@ export function ShiftSettlement({
       }, wait);
     };
 
-    // Realtime: fires the instant the webhook updates payment_status.
-    const channel = supabase
-      .channel(`settlement:${requestId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "coverage_requests", filter: `id=eq.${requestId}` },
-        (payload) => {
-          const row = payload.new as { payment_status?: string } | null;
-          if (row?.payment_status === "paid") markPaid();
-        },
-      )
-      .subscribe();
-
-    // Fallback: coverage_requests is excluded from supabase_realtime, so the
-    // postgres_changes binding above never fires in production. The webhook
-    // broadcasts on the `coverage_invalidations` channel — subscribe to the
-    // SAME channel name so we receive the signal and recheck instantly.
-    const invalidate = supabase
-      .channel("coverage_invalidations", { config: { broadcast: { self: false } } })
-      .on("broadcast", { event: "invalidate" }, () => {
-        void checkOnce();
-      })
-      .subscribe();
+    // Receive the webhook-driven `coverage_invalidations` ping via the
+    // shared global channel owned by coverage-remote. We DO NOT open a
+    // duplicate `supabase.channel("coverage_invalidations")` here —
+    // doing so previously clobbered the shared topic on cleanup and
+    // surfaced as a "Reconnecting…" pill at the top of Coverage right
+    // after payment. The dead `settlement:${requestId}` postgres_changes
+    // channel was also removed (coverage_requests is intentionally not
+    // in supabase_realtime, so it never fired anyway).
+    const offPing = subscribeInvalidationPing(() => {
+      void checkOnce();
+    });
 
     // Kick off one immediate check, then enter adaptive backoff.
     void (async () => {
@@ -798,8 +786,7 @@ export function ShiftSettlement({
       cancelled = true;
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
-      void supabase.removeChannel(channel);
-      void supabase.removeChannel(invalidate);
+      offPing();
     };
   }, [open, requestId, phase, verifyPay, confirmPaymentNow]);
 
