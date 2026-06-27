@@ -154,23 +154,18 @@ function AppShell() {
       : null;
   }, [pathname]);
 
-  // Track which persistent tabs have ever been visited so we mount them
-  // lazily (first paint is fast; memory only grows as the user explores).
-  const visitedRef = useRef<Set<PersistentTabPath>>(new Set());
-  const [, force] = useState(0);
-  useEffect(() => {
-    if (activeTab && !visitedRef.current.has(activeTab)) {
-      visitedRef.current.add(activeTab);
-      force((n) => n + 1);
-    }
-  }, [activeTab]);
-
+  // Eager-mount every persistent tab on first AppShell mount. Off-screen
+  // tabs are hidden via `display:none`, but their realtime subscriptions
+  // and signed-URL warmups run in the background while Home is on screen,
+  // so the first tap on Coverage / Earnings / Account is instant (no
+  // cold-start skeleton or empty-state flash).
   useEffect(() => acquireHeartbeat(), []);
   useEffect(() => mountPreshiftReminderScheduler(), []);
 
   // Non-persistent routes (e.g. /help, /support, /admin children if rendered
   // here) display the Outlet on top of all hidden persistent layers.
   const showOutlet = activeTab === null;
+
 
   return (
     <div
