@@ -20,10 +20,15 @@
 //   G8 — `shift.updated` throttled to 1 emission / 10 s per entityId.
 //   G9 — Honour prefers-reduced-motion (haptics off; toast still fires).
 //
-// In-app sound is intentionally absent. Push is the only sound surface.
+// In-app sound is scoped to exactly two events: `offer.new` (doctor,
+// soft alert chime) and `offer.accepted` (both audiences, softer confirm
+// tone). Sound is routed through `ingest()` so the G3/G4/G7 dedup gates
+// guarantee exactly one playback per (kind, entityId, version) across
+// local + realtime + push arrivals, including multi-tab broadcast.
 
 import { pushToast, type ToastTone } from "@/lib/notifications";
 import { hapticsEnabled } from "@/lib/feedback-prefs";
+import { playAlert, playConfirm } from "@/lib/sound";
 
 /* ---------- Types ---------- */
 
@@ -221,6 +226,8 @@ export function emitHaptic(intensity: HapticIntensity) {
 type RenderPlan = {
   toast?: { tone: ToastTone; title: string; body?: string; ttl?: number };
   haptic?: HapticIntensity;
+  /** Foreground-only audio cue. Dedup is inherited from ingest(). */
+  sound?: "alert" | "confirm";
 };
 
 function plan(ev: CanonicalEvent): RenderPlan | null {
@@ -237,20 +244,25 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
 
   switch (ev.kind) {
     case "offer.new":
-      // Card is the signal; no toast under any circumstance. Medium haptic for
-      // the doctor only — this is the ONLY event in the system that emits a
-      // haptic. Title overrides are intentionally ignored so callers can't
-      // accidentally bring the toast back.
+      // Card is the signal; no toast under any circumstance. Medium haptic +
+      // soft alert chime for the doctor only — this is the ONLY event in the
+      // system that emits a haptic. Title overrides are intentionally ignored
+      // so callers can't accidentally bring the toast back.
       return {
         toast: undefined,
         haptic: !skipHaptic && isDoctor ? "medium" : undefined,
+        sound: !skipHaptic && isDoctor ? "alert" : undefined,
       };
     case "offer.accepted":
-      // Doctor: sheet opens, no toast/haptic (self-initiated claim).
-      // Requester: actor-named confirmation toast.
-      if (isDoctor) return { toast: undefined, haptic: undefined };
+      // Doctor: sheet opens + soft confirm tone. No toast, no haptic.
+      // Requester: actor-named confirmation toast + soft confirm tone.
+      // Both sides are server-confirmed: callers only ingest this kind
+      // from the realtime echo / foreground push that carries the
+      // accepted_by row flip, never from a local optimistic emit.
+      if (isDoctor) return { toast: undefined, haptic: undefined, sound: "confirm" };
       return {
         toast: toast("presence", tOverride ?? `${doctor} accepted your request.`),
+        sound: "confirm",
       };
     case "shift.started":
       // Self-initiated for requester; no toast.
@@ -414,6 +426,8 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
     pushToast({ tone: p.toast.tone, title: p.toast.title, body: p.toast.body, ttl: p.toast.ttl, key: lkey });
   }
   if (p?.haptic) emitHaptic(p.haptic);
+  if (p?.sound === "alert") playAlert();
+  else if (p?.sound === "confirm") playConfirm();
 
   // Raise the ceiling.
   if (ev.version > ceiling) versionCeiling.set(ckey, ev.version);
