@@ -35,10 +35,16 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
       // Backfill selfiePath for entries persisted before the signed-URL split.
       const path = row.selfiePath ?? row.selfieUrl ?? null;
       const isAbsolute = !!path && /^(https?:|data:|blob:)/i.test(path);
+      // Synchronously hydrate selfieUrl from the shared selfie-url cache so
+      // the very first paint of every coverage card / detail sheet / history
+      // row already has the photo — no flash from initials → image. If the
+      // shared cache is cold, getSelfieUrl kicks off signing in the background
+      // and resolveSelfie() will patch the entry when ready.
+      const cachedSigned = path && !isAbsolute ? getSelfieUrl(path) : null;
       out.set(row.id, {
         ...row,
         selfiePath: path,
-        selfieUrl: isAbsolute ? path : null,
+        selfieUrl: isAbsolute ? path : cachedSigned,
       });
     }
   } catch {
@@ -46,6 +52,7 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
   }
   return out;
 }
+
 
 function writeIdentityCache() {
   if (typeof window === "undefined") return;
