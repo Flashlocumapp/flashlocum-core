@@ -1317,10 +1317,14 @@ function DispatchOverlay({
   // to the configure stage — this guarantees the doctor's feed drops the card
   // before DispatchOverlay unmounts (the original Edit race).
   useEffect(() => {
+    // If a doctor has already accepted (race: doctor accepted at the moment
+    // the requester tapped Edit), do NOT push the overlay into `configure`.
+    // The acceptance transition below owns advancing to the accepted stage.
+    if (_curAcceptedBy) return;
     if (editOpen && stage === "dispatch" && _curStatus && _curStatus !== "broadcasting") {
       setStage("configure");
     }
-  }, [editOpen, stage, _curStatus, setStage]);
+  }, [editOpen, stage, _curStatus, _curAcceptedBy, setStage]);
 
 
   // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
@@ -1378,14 +1382,25 @@ function DispatchOverlay({
     if (!requestId || requestId !== ownedIdRef.current) return;
     const r = net.requests[requestId];
     if (!r) return;
+    // Advance past "Searching" the moment a doctor is on the row, regardless
+    // of which post-accept status the realtime payload happens to carry
+    // (accepted / active / paused / awaiting_payment / completed). Earlier
+    // we strictly matched `status === "accepted"`, which left the overlay
+    // stuck on "Searching" whenever the doctor accepted and immediately
+    // started/paused the shift before the requester's listener ran.
     if (
       stage === "dispatch" &&
-      r.status === "accepted" &&
-      !!r.acceptedBy
+      !!r.acceptedBy &&
+      r.status !== "broadcasting" &&
+      r.status !== "paused" &&
+      r.status !== "cancelled" &&
+      r.status !== "expired"
     ) {
       setStage("accepted");
     }
-    if (stage === "accepted" && r.status === "cancelled") {
+    // Cancellation can land before OR after we transitioned to "accepted".
+    // Clear the overlay either way so the requester is never stranded.
+    if ((stage === "dispatch" || stage === "accepted") && r.status === "cancelled") {
       setStage("collapsed");
       setRequestId(null);
       ownedIdRef.current = null;
