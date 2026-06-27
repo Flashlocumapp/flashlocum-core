@@ -5,7 +5,6 @@
 // matching settlement as remitted via `mark_settlement_remitted`.
 
 import { createFileRoute } from "@tanstack/react-router";
-import { createHmac, timingSafeEqual } from "node:crypto";
 
 type DisbursementEvent = {
   eventType?: string;
@@ -22,7 +21,24 @@ type DisbursementEvent = {
 const SIG_HEX_LEN = 128;
 const HEX_RE = /^[0-9a-fA-F]+$/;
 
-function verifyMonnifySignature(signature: string | null, rawBody: string): boolean {
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i += 1) {
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
+}
+
+async function verifyMonnifySignature(signature: string | null, rawBody: string): Promise<boolean> {
   if (!signature) return false;
   const sig = signature.trim().toLowerCase();
   if (sig.length !== SIG_HEX_LEN || !HEX_RE.test(sig)) return false;
@@ -35,11 +51,16 @@ function verifyMonnifySignature(signature: string | null, rawBody: string): bool
 
   // HMAC the RAW request body — re-serializing parsed JSON would change
   // byte order / whitespace and break verification.
-  const expected = createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
-  const a = Buffer.from(sig, "hex");
-  const b = Buffer.from(expected, "hex");
-  if (a.length !== b.length || a.length === 0) return false;
-  return timingSafeEqual(a, b);
+  const encoder = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-512" },
+    false,
+    ["sign"],
+  );
+  const expected = new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)));
+  return constantTimeEqual(hexToBytes(sig), expected);
 }
 
 export const Route = createFileRoute("/api/public/monnify-disbursement-webhook")({
@@ -48,7 +69,7 @@ export const Route = createFileRoute("/api/public/monnify-disbursement-webhook")
       POST: async ({ request }) => {
         const raw = await request.text();
         const sig = request.headers.get("monnify-signature");
-        if (!verifyMonnifySignature(sig, raw)) {
+        if (!(await verifyMonnifySignature(sig, raw))) {
           return new Response("Invalid signature", { status: 401 });
         }
 

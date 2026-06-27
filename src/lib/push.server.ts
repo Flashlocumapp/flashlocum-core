@@ -3,8 +3,6 @@
 // JSON). When the secret is missing this no-ops with a console warning so the
 // app keeps working in environments without push credentials configured.
 
-import { createSign } from "crypto";
-
 type ServiceAccount = {
   client_email: string;
   private_key: string;
@@ -42,6 +40,7 @@ const BRANDED_CHIME_KINDS = new Set<string>(["offer.new", "shift.cancelled"]);
 
 let cachedToken: { token: string; exp: number } | null = null;
 let cachedSA: ServiceAccount | null = null;
+let cachedSigningKey: { privateKey: string; key: CryptoKey } | null = null;
 
 function loadServiceAccount(): ServiceAccount | null {
   if (cachedSA) return cachedSA;
@@ -58,17 +57,51 @@ function loadServiceAccount(): ServiceAccount | null {
   }
 }
 
-function base64url(input: Buffer | string): string {
-  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  return buf.toString("base64").replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+function bytesToBase64Url(input: Uint8Array | ArrayBuffer | string): string {
+  const bytes =
+    typeof input === "string"
+      ? new TextEncoder().encode(input)
+      : input instanceof Uint8Array
+        ? input
+        : new Uint8Array(input);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary).replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function base64ToBytes(input: string): Uint8Array {
+  const binary = atob(input);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function getSigningKey(privateKey: string): Promise<CryptoKey> {
+  if (cachedSigningKey?.privateKey === privateKey) return cachedSigningKey.key;
+  const pkcs8 = base64ToBytes(
+    privateKey.replace(/-----BEGIN PRIVATE KEY-----/g, "").replace(/-----END PRIVATE KEY-----/g, "").replace(/\s+/g, ""),
+  );
+  const key = await globalThis.crypto.subtle.importKey(
+    "pkcs8",
+    pkcs8,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  cachedSigningKey = { privateKey, key };
+  return key;
 }
 
 async function getAccessToken(sa: ServiceAccount): Promise<string | null> {
   const now = Math.floor(Date.now() / 1000);
   if (cachedToken && cachedToken.exp - 60 > now) return cachedToken.token;
 
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64url(
+  const header = bytesToBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claims = bytesToBase64Url(
     JSON.stringify({
       iss: sa.client_email,
       scope: "https://www.googleapis.com/auth/firebase.messaging",
@@ -77,9 +110,13 @@ async function getAccessToken(sa: ServiceAccount): Promise<string | null> {
       exp: now + 3600,
     }),
   );
-  const signer = createSign("RSA-SHA256");
-  signer.update(`${header}.${claims}`);
-  const signature = base64url(signer.sign(sa.private_key));
+  const signingKey = await getSigningKey(sa.private_key);
+  const signatureBytes = await globalThis.crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    signingKey,
+    new TextEncoder().encode(`${header}.${claims}`),
+  );
+  const signature = bytesToBase64Url(signatureBytes);
   const jwt = `${header}.${claims}.${signature}`;
 
   const res = await fetch(sa.token_uri ?? "https://oauth2.googleapis.com/token", {
