@@ -205,22 +205,15 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
-/** True once the first realtime/cache snapshot has had a chance to arrive
- *  (either data is non-empty, OR ~220ms has elapsed). Used to render a
- *  shimmer placeholder during the brief cold-start window instead of
- *  flashing the empty state. */
-function useFirstPaintSettled(hasData: boolean): boolean {
-  const [settled, setSettled] = useState<boolean>(() => hasData);
-  useEffect(() => {
-    if (hasData) {
-      setSettled(true);
-      return;
-    }
-    const id = window.setTimeout(() => setSettled(true), 220);
-    return () => window.clearTimeout(id);
-  }, [hasData]);
-  return settled;
+/** Cold-start skeleton is no longer needed: `src/lib/network.ts` rehydrates
+ *  the requests snapshot from localStorage before first render, and the
+ *  AppShell eager-mounts every persistent tab so realtime has already
+ *  filled the store by the time the user taps Coverage. Returning `true`
+ *  unconditionally removes the residual empty-state flash. */
+function useFirstPaintSettled(_hasData: boolean): boolean {
+  return true;
 }
+
 
 function ListSkeleton() {
   return (
