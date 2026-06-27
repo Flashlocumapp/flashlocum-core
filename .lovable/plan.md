@@ -1,127 +1,87 @@
-## Audit findings (recap)
+## Request acceptance stuck on requester “Searching” — investigation findings
 
-The canonical-event engine in `src/lib/feedback.ts` already collapses local + realtime + push arrivals for the same `(kind, entityId, version)` into one visible outcome (G2/G3/G4/G6/G7). What it doesn't currently emit is **sound** — the file explicitly declares "In-app sound is intentionally absent." That decision is being reversed for two events only:
+The attached video and the captured network traffic show the real failure:
 
-- `offer.new` (doctor side) — soft chime + medium haptic, no toast, card is the signal.
-- `offer.accepted` — soft confirmation tone for both the doctor (after the server confirms their claim won) and the requester (when their request flips to accepted). No haptic.
+- The doctor **does successfully accept** the request.
+- Supabase confirms the row is already server-side accepted:
+  - `id = e1651cda-f211-4679-85af-bf3c812e0513`
+  - `status = accepted`
+  - `accepted_by = 19ab6402-3042-4e2c-b945-bebcd0b04fbc`
+  - `requester_id = 391c0ef6-da8e-4da2-beaa-e1820c9a9efa`
+- The requester UI remains on the “Searching / Connecting to available doctors nearby” overlay even though the backend truth is accepted.
 
-Push for `offer.new` will switch from the branded chime to the device-default sound + default vibration so background behaviour matches the OS conventions the user expects.
+So this is **not** a claim RPC problem and not a doctor accept-button problem. The acceptance state exists in the database; the requester overlay is failing to consume that accepted row reliably.
 
-## Plan
+## Root causes found
 
-### 1. Sound assets
+### 1. The requester overlay depends on `useNetwork()` state only
 
-Two short, soft, professional WAVs committed under `src/assets/sounds/`:
+`DispatchOverlay` currently advances from `dispatch` to `accepted` only when this condition sees the accepted row inside `net.requests[requestId]`:
 
-- `alert.wav` — 2-note soft chime, ~600 ms, Slack/Teams-grade, never alarm-like.
-- `confirm.wav` — single softer/shorter tone, ~250–300 ms, low-key acknowledgement.
-
-Generated deterministically with a tiny `numpy` script in the sandbox (sine partials, gentle ADSR envelope, –18 dBFS peak), then committed. No external CDN dependency. They ship inside the Capacitor bundle automatically because they're imported via Vite (`?url`) and end up in `dist/assets/`.
-
-Files stay under ~30 KB each, so they're well below the asset-CDN externalisation threshold.
-
-### 2. `src/lib/sound.ts` — single playback layer (web + Capacitor)
-
-A thin, isolated module exporting `playAlert()` and `playConfirm()`. Both:
-
-- Resolve their URL via `import alertUrl from "@/assets/sounds/alert.wav?url"` so the bundler hashes and ships them in both web and native builds.
-- Use **`HTMLAudioElement`** as the universal backend. It works inside the Capacitor WebView on iOS and Android without any extra plugin — Capacitor wraps a standard WebView and `<audio>` works the same as in mobile Safari/Chrome. No `@capacitor-community/native-audio` dependency.
-- Maintain one cached `HTMLAudioElement` per asset; on each call reset `currentTime = 0` and call `.play()` so rapid retriggers don't stack two voices.
-- Catch the autoplay-rejection promise silently. In practice the user has already interacted with the app to reach a foreground state, so the gesture requirement is satisfied; this is just defensive.
-- No-op cleanly when `typeof window === "undefined"` (SSR) and when `document.visibilityState !== "visible"` (defence-in-depth: foreground-only).
-- **No user-facing toggle.** Sound is always on for these two events; the existing reduced-motion / haptics prefs are unaffected.
-
-Capacitor-specific notes baked into comments:
-- WebView audio requires the route to be foregrounded — handled by the visibility guard.
-- iOS silent switch: a standard `<audio>` element respects the ringer/silent switch, which is the correct behaviour for notification sounds.
-- No background playback, no `AVAudioSession` config needed.
-
-### 3. Engine integration in `src/lib/feedback.ts`
-
-Two narrow edits, fully inside `ingest()` so dedup automatically governs sound:
-
-a. Extend `RenderPlan`:
 ```ts
-type RenderPlan = {
-  toast?: { tone: ToastTone; title: string; body?: string; ttl?: number };
-  haptic?: HapticIntensity;
-  sound?: "alert" | "confirm"; // NEW
-};
+const r = net.requests[requestId];
+if (stage === "dispatch" && !!r.acceptedBy && ...) {
+  setStage("accepted");
+}
 ```
 
-b. Update the planner:
-- `offer.new`: add `sound: !skipHaptic && isDoctor ? "alert" : undefined`. (Tied to the same doctor-only / not-suppressed conditions as the haptic so the contract stays "card + chime + buzz, all once" for an in-app doctor.)
-- `offer.accepted`:
-  - doctor → `{ sound: "confirm" }` (no toast, no haptic).
-  - requester → keep existing actor-named toast, **add** `sound: "confirm"`.
+The watchdog `useLifecycleReconcile(requestId)` is mounted, but it only calls `reconcileRequest(id)` for its side effect. If React state fan-out is missed, stale, blocked by an equal snapshot hash, or the overlay ownership ref no longer matches, the hook has no direct way to force the overlay stage forward.
 
-c. In `ingest()`, after `emitHaptic`:
-```ts
-if (p?.sound === "alert") playAlert();
-else if (p?.sound === "confirm") playConfirm();
-```
+This matches the video: repeated network reads are returning `accepted`, yet the overlay stays in the searching render branch.
 
-Because this lives **after** the G3 staleness check, the G4 6 s ledger lookup, the G7 hydration window, and the terminal-emit / lifecycle-suppression gates, sound inherits **exactly one fire per (kind, entityId, version)** across local + realtime + push + multi-tab. The BroadcastChannel echo at the end of `ingest()` already mirrors the decision to peer tabs so two tabs of the same user produce one sound, not two.
+### 2. `fetchAndIngestRow()` throws away the direct row result
 
-### 4. Server-confirmed acceptance — only play after the server says we won
+`coverage-remote.ts` can fetch the exact accepted row by id, but `reconcileRequest(id)` currently returns `Promise<void>`. That means a lifecycle screen cannot make a local UI decision from the authoritative row it just fetched.
 
-This is the most important behavioural requirement, and the existing code is already shaped to support it; we just need to be careful not to add a local optimistic emit.
+For this bug, that is the missing safety net: the requester overlay needs to say, “I just read my row and it has `accepted_by`; move to accepted now,” even if the broader network subscription path failed to repaint.
 
-Current flow (`src/features/cover/dispatch.ts`):
-1. Doctor taps Accept → `claimAndNotifyFn` server fn runs → returns `{ won: true | false }`.
-2. The `dispatch.ts` watcher subscribes to the network/realtime stream and **only** calls `ingest({ kind: "offer.accepted", source: "realtime", ... })` once `ev.action === "accept" && r.acceptedBy === sid` lands from the row.
-3. There is no `fromLocal("offer.accepted", …)` anywhere — the doctor side never emits acceptance locally.
+### 3. The acceptance transition is still over-gated
 
-The plan:
-- **Do not add any `fromLocal("offer.accepted")` call.** The sound is bound to the engine's `offer.accepted` planner branch, which only fires when the realtime echo (or the foreground push) arrives carrying `r.acceptedBy === sid`. If a peer wins, the row's `acceptedBy` is someone else and `ingest()` for this doctor never runs the `offer.accepted` branch → no sound. ✓
-- For the requester, `offer.accepted` is already triggered exclusively from the realtime row transition (driven by the same `accepted_by` flip on the server row). Adding `sound: "confirm"` to the requester branch is therefore also server-confirmed by construction.
-- I'll grep the codebase during implementation to confirm zero `offer.accepted` emissions with `source: "local"`. If any are found they get removed.
+The current overlay transition excludes some status combinations and requires `requestId === ownedIdRef.current`. That is sensible for avoiding stale requests, but in the failure class shown in the video it can also keep a valid accepted row from advancing. The permanent fix should key primarily on server truth for the active request id: **if the current request has `accepted_by`, searching must end**.
 
-### 5. Push payload sound classification (`src/lib/push.server.ts`)
+## Exact remediation plan
 
-- Remove `offer.new` from `BRANDED_CHIME_KINDS` so backgrounded doctors get the **device-default** notification sound and the OS's default vibration pattern.
-- Keep `HIGH_PRIORITY_KINDS = { offer.new, shift.cancelled }`. Priority and sound are orthogonal in FCM — we still want low-latency delivery for incoming offers; we just don't want a custom chime.
-- `offer.accepted` is not in either set today — it continues to ship with the device default sound. ✓
-- `shift.cancelled` keeps the branded chime (out of scope).
+### A. Make single-row reconcile return authoritative data
 
-### 6. Dedup guarantees — explicit cross-channel matrix
+Edit `src/lib/coverage-remote.ts`:
 
-After the changes, each event guarantees exactly one sound, one notification surface, and one vibration (where applicable) per `(kind, entityId, version)`:
+1. Change `fetchAndIngestRow(id)` from `Promise<void>` to `Promise<NetRequest | null>`.
+2. When the row is found and ingested, return the mapped `NetRequest`.
+3. When the row is absent or removed, return `null`.
+4. Change `reconcileRequest(id)` to return `Promise<NetRequest | null>`.
+5. Expand `hashCoverageSnapshot()` to include `acceptedBy`, so any accepted-by handoff triggers subscriber fan-out even if a future trigger regression leaves `updated_at` unchanged.
 
-```text
-                       │ in-app sound │ toast │ haptic │ OS notification
-─ Doctor, new request ─────────────────────────────────────────────────
-foreground (any combo  │
-  local / RT / push)   │   alert ×1  │   —   │ buzz×1 │  suppressed*
-background             │      —      │   —   │   —    │  default sound + vibe
-─ Doctor, acceptance (server-confirmed only) ──────────────────────────
-foreground             │   confirm×1 │   —   │   —    │  suppressed*
-background             │      —      │   —   │   —    │ (no push sent today)
-─ Requester, acceptance ───────────────────────────────────────────────
-foreground             │   confirm×1 │  ×1   │   —    │  suppressed*
-background             │      —      │   —   │   —    │  default sound
-```
+### B. Let lifecycle screens react directly to the authoritative row
 
-\* iOS suppresses the system banner in foreground by default; on Android the system may briefly show one, but the engine already owns the single in-app outcome and the push's `pushNotificationReceived` listener funnels the payload into `ingest()` under the same ledger key — no double sound, no double toast.
+Edit `src/lib/use-lifecycle-reconcile.ts`:
 
-### 7. Verification (after implementation)
+1. Add an optional `onRow(row: NetRequest | null)` callback.
+2. Invoke it after every `reconcileRequest(id)` result.
+3. Keep the current immediate run, interval run, visibility/focus/online runs, and all existing callers working without changes.
 
-1. `tsgo` clean.
-2. `rg "offer\.accepted"` to confirm zero `source: "local"` emissions for accept.
-3. `rg "new Audio\(|\.play\("` to confirm the only `.play()` call sites are inside `src/lib/sound.ts`.
-4. Trace `dispatch.ts` and `RequesterHome.tsx` once more to verify the realtime branches are the sole acceptance entry points.
-5. Read `src/lib/push-registration.ts` to re-confirm foreground push still routes through `ingest()`.
-6. Update `.lovable/memory/constraints/notification-contract.md` to note that in-app sound is now part of the contract (alert for `offer.new`, confirm for `offer.accepted`, no other events; no user toggle) and that the acceptance sound is server-confirmation gated.
+### C. Fix requester overlay once and for all
 
-### Out of scope (untouched)
+Edit `src/features/request/RequesterHome.tsx`:
 
-Lifecycle (start/pause/resume/end), payment, cancellation, ratings, reminders, verification, RLS, realtime channels, push outbox/drain, `shift.cancelled` branded chime, toast copy, settings UI.
+1. In `DispatchOverlay`, add a local `advanceFromRow(row)` helper.
+2. If `row.id === requestId` and `row.acceptedBy` exists and row is not cancelled/expired, immediately call `setStage("accepted")`.
+3. Use that helper from:
+   - the existing `useNetwork()`-based effect, and
+   - the new `useLifecycleReconcile(..., { onRow })` callback.
+4. Remove the status exclusions that block acceptance when `acceptedBy` exists. Server `accepted_by` is the canonical signal that searching is over.
+5. Keep cancellation/expiry collapse behavior so cancelled/expired rows do not show as accepted.
 
-## Files touched
+### D. Verification
 
-- `src/assets/sounds/alert.wav` — new (generated locally, <30 KB)
-- `src/assets/sounds/confirm.wav` — new (generated locally, <30 KB)
-- `src/lib/sound.ts` — new
-- `src/lib/feedback.ts` — planner `sound` field + `ingest()` playback hook + updated header comment
-- `src/lib/push.server.ts` — drop `offer.new` from `BRANDED_CHIME_KINDS`
-- `.lovable/memory/constraints/notification-contract.md` — note the in-app sound rule and server-confirmation gate
+After implementation, verify:
+
+1. Requester creates request → doctor accepts → requester overlay moves from Searching to Doctor accepted without refresh.
+2. If realtime misses the event, the single-row watchdog read advances the requester within its 4s cadence.
+3. Accepted rows still show the accepted doctor card using the same `net.requests[requestId]` data once network state catches up.
+4. Cancelled/expired requests still collapse and do not show the accepted card.
+
+## Files to edit
+
+- `src/lib/coverage-remote.ts`
+- `src/lib/use-lifecycle-reconcile.ts`
+- `src/features/request/RequesterHome.tsx`
