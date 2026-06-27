@@ -929,6 +929,18 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       } else {
         scheduleRefresh();
       }
+      // Fan out to local subscribers (e.g. the settlement sheet) so callers
+      // never need to open a second `coverage_invalidations` channel of
+      // their own. Opening a duplicate topic and later removing it was
+      // tearing down the shared subscription on the socket, which surfaced
+      // as a phantom "Reconnecting…" pill right after payment.
+      invalidationPingListeners.forEach((fn) => {
+        try {
+          fn(id ?? null);
+        } catch {
+          /* noop — listener errors must not break the channel */
+        }
+      });
     };
     // Self-healing subscribe — the reconnect path used to only handle
     // SUBSCRIBED, so a second flap (e.g. burst of invalidations during
