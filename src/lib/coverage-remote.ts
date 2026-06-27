@@ -423,7 +423,19 @@ function scheduleReconnect(k: WatchdogKey, run: () => void) {
   }, delay);
 }
 
-
+// Local fan-out for `coverage_invalidations` broadcasts. Lets feature code
+// (e.g. ShiftSettlement) react to invalidation pings WITHOUT opening a
+// duplicate Realtime channel with the same topic name — duplicates were
+// tearing down the shared subscription on cleanup and surfacing as a
+// phantom "Reconnecting…" pill after payment.
+type InvalidationPingListener = (id: string | null) => void;
+const invalidationPingListeners = new Set<InvalidationPingListener>();
+export function subscribeInvalidationPing(cb: InvalidationPingListener): () => void {
+  invalidationPingListeners.add(cb);
+  return () => {
+    invalidationPingListeners.delete(cb);
+  };
+}
 
 
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
@@ -929,6 +941,18 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       } else {
         scheduleRefresh();
       }
+      // Fan out to local subscribers (e.g. the settlement sheet) so callers
+      // never need to open a second `coverage_invalidations` channel of
+      // their own. Opening a duplicate topic and later removing it was
+      // tearing down the shared subscription on the socket, which surfaced
+      // as a phantom "Reconnecting…" pill right after payment.
+      invalidationPingListeners.forEach((fn) => {
+        try {
+          fn(id ?? null);
+        } catch {
+          /* noop — listener errors must not break the channel */
+        }
+      });
     };
     // Self-healing subscribe — the reconnect path used to only handle
     // SUBSCRIBED, so a second flap (e.g. burst of invalidations during

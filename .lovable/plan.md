@@ -1,102 +1,72 @@
-# Why the requester sometimes stays on "Searching" after a doctor accepts
+# Why the Coverage tab flashes "Reconnecting…" after payment
 
-## Reproduction profile
+The pill at the top of Coverage is `Reconnecting…` (rendered by `ReconnectingPill` in `src/features/app/CoverageScreen.tsx`). It is driven by `isCoverageReconnecting(health)` over the `coverage` and `invalidations` channels. It should only appear during a real disconnect — but a self-inflicted teardown after payment is flipping `invalidations` to `reconnecting` for several seconds.
 
-Reported as intermittent and per-request rather than universal. That matches a **timing window**, not a broken happy path — every step in the happy path is wired correctly today. Two independent windows reliably reproduce the symptom; both end with the row already past `accepted` server-side while the requester's `DispatchOverlay` is still in the `"dispatch"` stage (which renders the "Searching" UI).
+## Root cause — duplicate `coverage_invalidations` channel from the settlement sheet
 
-## Root cause A — Acceptance trigger only matches `status === "accepted"`
-
-`src/features/request/RequesterHome.tsx` lines 1377-1393 advance the overlay only on a strict match:
+`src/features/request/ShiftSettlement.tsx` lines 768-773 (and its cleanup on 802) opens a **second** Supabase channel with the same topic name as the global one owned by `coverage-remote.ts`:
 
 ```ts
-if (stage === "dispatch" && r.status === "accepted" && !!r.acceptedBy) {
-  setStage("accepted");
-}
+const invalidate = supabase
+  .channel("coverage_invalidations", { config: { broadcast: { self: false } } })
+  .on("broadcast", { event: "invalidate" }, () => { void checkOnce(); })
+  .subscribe();
+…
+return () => {
+  …
+  void supabase.removeChannel(invalidate);   // ← clobbers the global topic
+};
 ```
 
-After the doctor taps Accept, the server flow on the doctor side often progresses the row almost immediately:
+What happens on the "I paid" flow:
+1. Settlement sheet opens → two channel objects exist for topic `coverage_invalidations` (the global one in `coverage-remote.ts` + this local one in the sheet).
+2. Webhook fires `payment_status = paid` → broadcast lands → `confirmPaymentNow()` runs → sheet auto-closes and the effect cleanup runs (deps `[open, requestId, phase, …]` also change as phase flips).
+3. `supabase.removeChannel(invalidate)` unsubscribes the shared topic on the socket. The global subscriber's `subscribe()` callback then receives `CLOSED`, which calls `scheduleReconnect("invalidations", …)` and `setChannelHealth("invalidations", "reconnecting")` (`coverage-remote.ts` ~line 957).
+4. `ReconnectingPill` debounces for 800 ms, then shows. The watchdog reopens the channel with backoff (500 ms → 1 s → 2 s …, plus ±30% jitter) and only clears `reconnecting` after `SUBSCRIBED` arrives — usually 1-3 s of visible "Reconnecting…".
 
-- `claim_coverage_request` → `status = 'accepted'`
-- doctor taps Start Shift → `start_shift` → `status = 'active'`
-- or the doctor pauses → `status = 'paused'`
+Also, the sibling `settlement:${requestId}` postgres_changes channel on line 752 is dead in production: the comment on line 764 says `coverage_requests` is intentionally excluded from `supabase_realtime`, so that subscription never fires. It does not cause the pill (no health callback), but it is wasted work.
 
-If the requester's realtime channel delivers only the **latest** `UPDATE` (postgres_changes is row-level, not transition-level), `r.status` arrives as `active`/`paused`. The effect short-circuits. `r.acceptedBy` is populated, the 180 s expire timer correctly stops (it gates on `broadcasting`/`paused` only), so the overlay sits in "dispatch" forever showing "Searching". Same gap exists for the `cancelled` branch — only handled while `stage === "accepted"`, so a pre-overlay-advance cancel cannot clear the dispatch view either.
+Same pattern exists in any other place that opens its own `coverage_invalidations` channel — confirming this is the only one.
 
-## Root cause B — Edit-gate side-effect can push stage to `configure` mid-accept
+## Why it looks like "after payment"
 
-Lines 1319-1323:
+The cleanup that tears down the duplicate channel runs precisely when the sheet closes on `paid`. Pre-payment the sheet is mounted, so the duplicate stays joined and the global topic is fine; the moment payment succeeds, the global topic gets dropped and the pill appears.
 
-```ts
-if (editOpen && stage === "dispatch" && _curStatus && _curStatus !== "broadcasting") {
-  setStage("configure");
-}
-```
+## Remediation (minimal, no business logic change)
 
-If the requester taps Edit at the exact moment the doctor accepts:
-1. `openEdit()` fires `pauseRequest` (optimistic local `status = "paused"`).
-2. Realtime echo for the acceptance lands and overwrites the row with `status = "accepted"`, `acceptedBy = <doc>`.
-3. `_curStatus !== "broadcasting"` is true → `setStage("configure")`.
-4. The user closes the edit sheet; nothing transitions them to `accepted` because the trigger in (A) only fires from `stage === "dispatch"`.
+### 1. Stop opening a second `coverage_invalidations` channel from `ShiftSettlement`
 
-Outcome: the next time they open the overlay it's "Searching" again (DispatchOverlay re-mounts on `stage === "dispatch"`), but the underlying row is already accepted.
+Replace the per-sheet `supabase.channel("coverage_invalidations")` with a tiny subscriber that hangs off the **existing** global channel in `coverage-remote.ts`. Two equivalent options — pick (a) for the smallest blast radius:
 
-## Root cause C — No watchdog reconcile while in dispatch
+a. **Add a local pub/sub in `coverage-remote.ts`** (no new realtime channels): export `subscribeInvalidationPing(cb): () => void`. The existing `onInvalidate` handler in `coverage-remote.ts` (~line 916) already runs on every broadcast — have it also notify these listeners. The settlement sheet replaces its `.channel("coverage_invalidations")…subscribe()` with `subscribeInvalidationPing(() => void checkOnce())`. Cleanup just removes the listener — never touches the shared topic.
 
-`useLifecycleReconcile` is mounted on `CoverageScreen` / `ShiftSettlement` for in-flight shifts. `DispatchOverlay` does NOT mount it. If realtime drops the single `accepted` UPDATE (mobile reconnect, channel grace, `recentEventIds` 1.5 s coalescer eating a duplicate before the listener wires up), there is no 4 s poll to recover. The `coverage_invalidations` broadcast helps but is not received if the channel is mid-reconnect at the moment the doctor accepts.
+b. **Use a sheet-scoped topic name** like `settlement_pings:${requestId}` so removal cannot affect the global topic. This works but adds one more Realtime channel per active settlement — option (a) avoids that.
 
-## Why it looks random
+### 2. Delete the dead `settlement:${requestId}` postgres_changes channel
 
-A, B, and C each require a sub-second alignment:
-- A: doctor's Start tap inside the realtime fan-out latency
-- B: requester's Edit tap inside the acceptance fan-out
-- C: a missed event on the only delivery channel
+Remove the subscription block on lines 752-762 + 801 (`removeChannel(channel)`). `coverage_requests` is not in `supabase_realtime`; this never delivers and just adds JOIN/LEAVE churn that aggravates the reconnect-pill window during payment.
 
-Most requests miss all three. The ones that hit any one of them get stuck.
+### 3. (Defensive) Make `ReconnectingPill` insensitive to a single sub-second flap
 
-## Remediation
-
-Minimal, surgical, frontend-only. No DB changes, no business-logic changes.
-
-### 1. Broaden the acceptance/terminal trigger (Root cause A)
-
-`src/features/request/RequesterHome.tsx` — the effect at ~1377:
-
-- Advance to `"accepted"` whenever the overlay is on `dispatch` AND `r.acceptedBy` is set AND `r.status` is anything other than `broadcasting`/`paused`. Covers `accepted`, `active`, `paused-post-accept`, `awaiting_payment`, `completed`.
-- Handle `r.status === "cancelled"` while in `stage === "dispatch"` too (clear `requestId`, return to `collapsed`, optional toast). Today only `"accepted"` stage handles it.
-
-### 2. Skip the edit-gate stage push while a doctor has accepted (Root cause B)
-
-Same file, the `editOpen` effect at ~1319: add `&& !_curAcceptedBy` to the guard. Once a doctor is on the row, the edit flow is no longer the pre-acceptance "configure" flow — the row should move through (1) into the accepted view, not into configure.
-
-### 3. Mount the watchful reconcile in DispatchOverlay (Root cause C)
-
-In `DispatchOverlay` (~line 1164), add:
-
-```ts
-useLifecycleReconcile(requestId, { enabled: stage === "dispatch" });
-```
-
-This re-reads the single row every 4 s plus on focus/visibility/online while waiting for acceptance. With realtime healthy it is a no-op; when realtime misses, it closes the gap within one tick.
-
-### 4. Defensive symmetry on the doctor side (no behavioural change expected)
-
-While we're here, double-check `dispatch.ts` already advances the doctor view on any `status !== "searching"` for the row they accepted — it does (uses `acceptedBy === sid` + status set including `accepted/active/paused/awaiting_payment`). No change needed.
+Already debounced 800 ms. Raise to 1500 ms AND require the unhealthy state to still be present when the timer fires. This is a belt-and-braces measure; the real fix is (1). The pill will still appear for genuine multi-second outages — only the self-inflicted flash is silenced.
 
 ## Files touched
 
-- `src/features/request/RequesterHome.tsx` — two effect edits (root causes A + B), one hook mount (root cause C).
+- `src/lib/coverage-remote.ts` — add `subscribeInvalidationPing` + fan-out from existing `onInvalidate`. No new channels, no schema or RLS changes.
+- `src/features/request/ShiftSettlement.tsx` — swap the duplicate `supabase.channel("coverage_invalidations")` for `subscribeInvalidationPing`; delete the dead `settlement:${requestId}` block; tighten cleanup.
+- `src/features/app/CoverageScreen.tsx` — bump `ReconnectingPill` debounce 800 → 1500 ms and re-check health at fire time.
 
-## Verification plan
+## Verification
 
-1. **Happy path:** request → accept → confirm overlay flips to "Accepted" within < 500 ms.
-2. **Race A:** request → accept → start (fast). Confirm overlay flips to Accepted, not stuck on Searching.
-3. **Race B:** request → open Edit at the moment of accept. Confirm overlay reaches the accepted card (not stuck in configure or searching).
-4. **Race C:** request → DevTools throttle Realtime channel (disable network 3 s right after publish). Accept from a second device. Confirm watchdog reconcile recovers within 4 s.
-5. **Build + console:** clean `bun run build`; no new realtime channels created; no extra DB writes (watchdog uses existing coalesced single-row read).
+1. **Repro pre-fix:** open a shift → End Shift → pay via Monnify sandbox → confirm pill appears for ~1-3 s right as the sheet closes.
+2. **Post-fix happy path:** same flow, pill never appears; sheet still auto-confirms on `paid`.
+3. **Network kill test:** DevTools → offline for 5 s. Pill must still appear (genuine disconnect) and clear on reconnect.
+4. **Channel audit:** in DevTools → Network → WS, after payment confirms there is still exactly one JOIN for `coverage_invalidations` (the global one) and no LEAVE during the close.
+5. **Build:** `bun run build` clean.
 
 ## What we are NOT changing
 
-- No DB schema / RLS / RPC changes.
-- No new realtime channels or subscriptions.
-- No changes to the Edit/Cancel server flows or to `claim_coverage_request`.
-- No change to the 180 s pre-acceptance expiry behaviour.
+- No DB / RLS / RPC changes.
+- No new realtime channels.
+- No change to payment verification cadence, `verifySettlementPayment`, webhook handling, or `coverage_invalidations` broadcast contents.
+- No change to the watchdog / reconnect backoff in `coverage-remote.ts`.

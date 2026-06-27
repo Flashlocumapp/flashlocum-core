@@ -268,18 +268,23 @@ function ReconnectingPill() {
   const [show, setShow] = useState(false);
   useEffect(() => {
     // Debounce: only show the pill if a channel has been unhealthy for
-    // >= 800ms. Supabase realtime briefly reports "reconnecting" during
-    // the cold-start handshake; the debounce eliminates that sub-second
-    // flash without hiding real connectivity issues.
+    // >= 1500ms AND is still unhealthy when the timer fires. Supabase
+    // realtime briefly reports "reconnecting" during the cold-start
+    // handshake and during legitimate teardowns (e.g. effect cleanups
+    // after payment). The debounce eliminates those sub-second flashes
+    // without hiding real connectivity issues.
     let pendingTimer: number | null = null;
+    let latestBad = false;
     const unsub = subscribeRealtimeHealth((h) => {
       const bad = isCoverageReconnecting(h);
+      latestBad = bad;
       if (bad) {
         if (pendingTimer == null) {
           pendingTimer = window.setTimeout(() => {
-            setShow(true);
             pendingTimer = null;
-          }, 800);
+            // Re-check at fire time — the channel may have already healed.
+            if (latestBad) setShow(true);
+          }, 1500);
         }
       } else {
         if (pendingTimer != null) {
