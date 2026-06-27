@@ -554,6 +554,10 @@ function init() {
       let netEvent: Omit<NetEvent, "at"> | undefined;
       for (const r of rows) {
         const old = prev[r.id];
+        // Requester-side acceptance cue — fires whether discovered via
+        // realtime UPDATE or this snapshot reconcile. G3/G4 dedup in the
+        // feedback engine guarantees a single playback.
+        maybeEmitRequesterAccepted(old, r);
         if (!old) {
           // Suppress synthesized publish events on the initial snapshot —
           // they represent pre-existing rows the doctor is just now
