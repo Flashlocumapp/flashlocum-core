@@ -423,7 +423,19 @@ function scheduleReconnect(k: WatchdogKey, run: () => void) {
   }, delay);
 }
 
-
+// Local fan-out for `coverage_invalidations` broadcasts. Lets feature code
+// (e.g. ShiftSettlement) react to invalidation pings WITHOUT opening a
+// duplicate Realtime channel with the same topic name — duplicates were
+// tearing down the shared subscription on cleanup and surfacing as a
+// phantom "Reconnecting…" pill after payment.
+type InvalidationPingListener = (id: string | null) => void;
+const invalidationPingListeners = new Set<InvalidationPingListener>();
+export function subscribeInvalidationPing(cb: InvalidationPingListener): () => void {
+  invalidationPingListeners.add(cb);
+  return () => {
+    invalidationPingListeners.delete(cb);
+  };
+}
 
 
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
