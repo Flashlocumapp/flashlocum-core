@@ -1406,16 +1406,15 @@ function DispatchOverlay({
     // we strictly matched `status === "accepted"`, which left the overlay
     // stuck on "Searching" whenever the doctor accepted and immediately
     // started/paused the shift before the requester's listener ran.
-    if (
-      stage === "dispatch" &&
-      !!r.acceptedBy &&
-      r.status !== "broadcasting" &&
-      r.status !== "paused" &&
-      r.status !== "cancelled" &&
-      r.status !== "expired"
-    ) {
+    // Server `accepted_by` is the canonical "searching is over" signal.
+    // Once it's present on this owned request, advance — regardless of the
+    // exact post-accept status the payload carries (accepted / active /
+    // paused / awaiting_payment / completed). Only cancelled/expired keep
+    // the overlay out of the accepted view (handled below).
+    if (stage === "dispatch" && !!r.acceptedBy && r.status !== "cancelled" && r.status !== "expired") {
       setStage("accepted");
     }
+
     // Cancellation can land before OR after we transitioned to "accepted".
     // Clear the overlay either way so the requester is never stranded.
     if ((stage === "dispatch" || stage === "accepted") && r.status === "cancelled") {
