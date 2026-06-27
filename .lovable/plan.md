@@ -1,87 +1,23 @@
-## Request acceptance stuck on requester “Searching” — investigation findings
+## Goal
+Replace the in-app alert/confirm sound assets with the two uploaded WAVs, trim leading/trailing silence, and keep the existing playback wiring untouched so future swaps are a one-file drop-in.
 
-The attached video and the captured network traffic show the real failure:
+## Current state (verified)
+- `src/lib/sound.ts` already imports `@/assets/sounds/alert.wav` and `@/assets/sounds/confirm.wav` via `?url`, preloads them, and exposes `playAlert()` / `playConfirm()`.
+- `src/lib/feedback.ts` already calls `playAlert()` only for new incoming requests and `playConfirm()` only on server-confirmed acceptance (with G3/G4/G7 dedup).
+- Assets are bundled by Vite (offline-capable, low-latency once preloaded).
 
-- The doctor **does successfully accept** the request.
-- Supabase confirms the row is already server-side accepted:
-  - `id = e1651cda-f211-4679-85af-bf3c812e0513`
-  - `status = accepted`
-  - `accepted_by = 19ab6402-3042-4e2c-b945-bebcd0b04fbc`
-  - `requester_id = 391c0ef6-da8e-4da2-beaa-e1820c9a9efa`
-- The requester UI remains on the “Searching / Connecting to available doctors nearby” overlay even though the backend truth is accepted.
+So no application logic needs to change. Only the two binary files are swapped.
 
-So this is **not** a claim RPC problem and not a doctor accept-button problem. The acceptance state exists in the database; the requester overlay is failing to consume that accepted row reliably.
+## Steps
+1. Copy `user-uploads://Alert.wav` and `Confirm.wav` to `/tmp/`.
+2. Use `ffmpeg`'s `silenceremove` filter on each to strip only leading and trailing silence (threshold ~-50dB), preserving the original sample rate, bit depth, channels, and PCM codec — no normalization, no re-encoding to a lossy format, no remixing.
+3. Overwrite `src/assets/sounds/alert.wav` and `src/assets/sounds/confirm.wav` with the trimmed outputs.
+4. Verify with `ffprobe` that format/sample rate/bit depth match the originals (minus the silence) and that durations are sane.
+5. Leave `src/lib/sound.ts`, `src/lib/feedback.ts`, and all call sites unchanged.
 
-## Root causes found
+## Why this satisfies "easy future swap"
+The playback layer already references two fixed file paths. Swapping sounds later = drop two WAVs at the same paths; no code edits, no rebuild config, no logic touched.
 
-### 1. The requester overlay depends on `useNetwork()` state only
-
-`DispatchOverlay` currently advances from `dispatch` to `accepted` only when this condition sees the accepted row inside `net.requests[requestId]`:
-
-```ts
-const r = net.requests[requestId];
-if (stage === "dispatch" && !!r.acceptedBy && ...) {
-  setStage("accepted");
-}
-```
-
-The watchdog `useLifecycleReconcile(requestId)` is mounted, but it only calls `reconcileRequest(id)` for its side effect. If React state fan-out is missed, stale, blocked by an equal snapshot hash, or the overlay ownership ref no longer matches, the hook has no direct way to force the overlay stage forward.
-
-This matches the video: repeated network reads are returning `accepted`, yet the overlay stays in the searching render branch.
-
-### 2. `fetchAndIngestRow()` throws away the direct row result
-
-`coverage-remote.ts` can fetch the exact accepted row by id, but `reconcileRequest(id)` currently returns `Promise<void>`. That means a lifecycle screen cannot make a local UI decision from the authoritative row it just fetched.
-
-For this bug, that is the missing safety net: the requester overlay needs to say, “I just read my row and it has `accepted_by`; move to accepted now,” even if the broader network subscription path failed to repaint.
-
-### 3. The acceptance transition is still over-gated
-
-The current overlay transition excludes some status combinations and requires `requestId === ownedIdRef.current`. That is sensible for avoiding stale requests, but in the failure class shown in the video it can also keep a valid accepted row from advancing. The permanent fix should key primarily on server truth for the active request id: **if the current request has `accepted_by`, searching must end**.
-
-## Exact remediation plan
-
-### A. Make single-row reconcile return authoritative data
-
-Edit `src/lib/coverage-remote.ts`:
-
-1. Change `fetchAndIngestRow(id)` from `Promise<void>` to `Promise<NetRequest | null>`.
-2. When the row is found and ingested, return the mapped `NetRequest`.
-3. When the row is absent or removed, return `null`.
-4. Change `reconcileRequest(id)` to return `Promise<NetRequest | null>`.
-5. Expand `hashCoverageSnapshot()` to include `acceptedBy`, so any accepted-by handoff triggers subscriber fan-out even if a future trigger regression leaves `updated_at` unchanged.
-
-### B. Let lifecycle screens react directly to the authoritative row
-
-Edit `src/lib/use-lifecycle-reconcile.ts`:
-
-1. Add an optional `onRow(row: NetRequest | null)` callback.
-2. Invoke it after every `reconcileRequest(id)` result.
-3. Keep the current immediate run, interval run, visibility/focus/online runs, and all existing callers working without changes.
-
-### C. Fix requester overlay once and for all
-
-Edit `src/features/request/RequesterHome.tsx`:
-
-1. In `DispatchOverlay`, add a local `advanceFromRow(row)` helper.
-2. If `row.id === requestId` and `row.acceptedBy` exists and row is not cancelled/expired, immediately call `setStage("accepted")`.
-3. Use that helper from:
-   - the existing `useNetwork()`-based effect, and
-   - the new `useLifecycleReconcile(..., { onRow })` callback.
-4. Remove the status exclusions that block acceptance when `acceptedBy` exists. Server `accepted_by` is the canonical signal that searching is over.
-5. Keep cancellation/expiry collapse behavior so cancelled/expired rows do not show as accepted.
-
-### D. Verification
-
-After implementation, verify:
-
-1. Requester creates request → doctor accepts → requester overlay moves from Searching to Doctor accepted without refresh.
-2. If realtime misses the event, the single-row watchdog read advances the requester within its 4s cadence.
-3. Accepted rows still show the accepted doctor card using the same `net.requests[requestId]` data once network state catches up.
-4. Cancelled/expired requests still collapse and do not show the accepted card.
-
-## Files to edit
-
-- `src/lib/coverage-remote.ts`
-- `src/lib/use-lifecycle-reconcile.ts`
-- `src/features/request/RequesterHome.tsx`
+## Out of scope
+- No changes to dedup, gating, push-sound config, haptics, or settings UI.
+- No new "soundEnabled" preference.
