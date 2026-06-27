@@ -341,10 +341,13 @@ function hashCoverageSnapshot(rows: NetRequest[]): string {
   for (const r of rows) {
     // Include rev + broadcastStartedAt so rev-only bumps (Save during Edit,
     // material-field updates while paused) still propagate to subscribers.
-    h += `${r.id}:${r.updatedAt ?? ""}:${r.status ?? ""}:${r.rev ?? ""}:${r.broadcastStartedAt ?? ""}|`;
+    // Include acceptedBy so accepted-by handoffs fan out to subscribers even
+    // if a future trigger regression leaves `updated_at` unchanged.
+    h += `${r.id}:${r.updatedAt ?? ""}:${r.status ?? ""}:${r.rev ?? ""}:${r.broadcastStartedAt ?? ""}:${r.acceptedBy ?? ""}|`;
   }
   return h;
 }
+
 
 // --- Stage 0 safety net: reconciliation timer + channel watchdog ---------
 //
@@ -615,7 +618,7 @@ function scheduleRefresh() {
  * route through here, so every doctor's `.find()` advances within ~1s
  * without waiting on a full snapshot refresh.
  */
-async function fetchAndIngestRow(id: string): Promise<void> {
+async function fetchAndIngestRow(id: string): Promise<NetRequest | null> {
   // CONTRACT (see fetchOpenListCoalesced): bust the open-list cache before
   // any event-driven re-read so Realtime invalidations never serve stale
   // pool data. The 1.5s coalesce window is for *simultaneous duplicates*
@@ -659,6 +662,7 @@ async function fetchAndIngestRow(id: string): Promise<void> {
       fn({ type: idx === -1 ? "INSERT" : "UPDATE", row: net, old: null } as RemoteEvent),
     );
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    return net;
   } else {
     // Row not returned by either read path. We DROP it from the cache only
     // when:
@@ -668,16 +672,18 @@ async function fetchAndIngestRow(id: string): Promise<void> {
     // evicted by a transient RLS hiccup, a stray DELETE invalidation, or a
     // network blip — that was the root cause of History Coverage briefly
     // emptying and then re-populating on the next snapshot refresh.
-    if (!directOk || !poolOk) return;
+    if (!directOk || !poolOk) return null;
     const existing = cachedSnapshot.find((r) => r.id === id);
-    if (!existing) return;
-    if (existing.status === "completed" || existing.status === "cancelled") return;
+    if (!existing) return null;
+    if (existing.status === "completed" || existing.status === "cancelled") return null;
     cachedSnapshot = cachedSnapshot.filter((r) => r.id !== id);
     writePersistedSnapshot(cachedSnapshot);
     eventListeners.forEach((fn) => fn({ type: "DELETE", id }));
     snapshotListeners.forEach((fn) => fn(cachedSnapshot));
+    return null;
   }
 }
+
 
 /**
  * Broadcast a coverage_requests change to every subscribed client.
@@ -722,10 +728,11 @@ export function reconcileNow(): Promise<void> {
   return refreshSnapshot();
 }
 
-export function reconcileRequest(id: string): Promise<void> {
-  if (!id) return Promise.resolve();
+export function reconcileRequest(id: string): Promise<NetRequest | null> {
+  if (!id) return Promise.resolve(null);
   return fetchAndIngestRow(id);
 }
+
 
 /**
  * Handle a single postgres_changes payload. Shared between the per-user

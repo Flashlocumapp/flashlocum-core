@@ -1193,10 +1193,28 @@ function DispatchOverlay({
   // misread as a new doctor acceptance.
   const ownedIdRef = useRef<string | null>(null);
   const net = useNetwork();
+  // Local helper used by BOTH the useNetwork()-based effect and the
+  // single-row reconcile callback. Server `accepted_by` is the canonical
+  // signal that searching is over — once present on the request this
+  // session owns, we move the overlay forward regardless of which
+  // post-accept status the payload carries.
+  const advanceFromRow = (row: { id: string; acceptedBy?: string | null; status?: string } | null | undefined) => {
+    if (!row) return;
+    if (row.id !== ownedIdRef.current) return;
+    if (row.status === "cancelled" || row.status === "expired") return;
+    if (!row.acceptedBy) return;
+    setStage("accepted");
+  };
   // Watchful reconcile while we're staring at this in-flight request.
   // Realtime is primary; this catches missed accept / cancel / start events
-  // when the channel was down or reconnecting at the exact moment.
-  useLifecycleReconcile(requestId, { enabled: !!requestId });
+  // when the channel was down or reconnecting at the exact moment. The
+  // onRow callback lets us advance the overlay directly from the
+  // authoritative row even if useNetwork() fan-out lags.
+  useLifecycleReconcile(requestId, {
+    enabled: !!requestId,
+    onRow: (row) => advanceFromRow(row),
+  });
+
   const acceptedRequest = requestId ? net.requests[requestId] : undefined;
   const acceptedSid = acceptedRequest?.acceptedBy;
   const doctorIdentity = useDoctorIdentity(acceptedSid ?? null);
@@ -1388,16 +1406,15 @@ function DispatchOverlay({
     // we strictly matched `status === "accepted"`, which left the overlay
     // stuck on "Searching" whenever the doctor accepted and immediately
     // started/paused the shift before the requester's listener ran.
-    if (
-      stage === "dispatch" &&
-      !!r.acceptedBy &&
-      r.status !== "broadcasting" &&
-      r.status !== "paused" &&
-      r.status !== "cancelled" &&
-      r.status !== "expired"
-    ) {
+    // Server `accepted_by` is the canonical "searching is over" signal.
+    // Once it's present on this owned request, advance — regardless of the
+    // exact post-accept status the payload carries (accepted / active /
+    // paused / awaiting_payment / completed). Only cancelled/expired keep
+    // the overlay out of the accepted view (handled below).
+    if (stage === "dispatch" && !!r.acceptedBy && r.status !== "cancelled" && r.status !== "expired") {
       setStage("accepted");
     }
+
     // Cancellation can land before OR after we transitioned to "accepted".
     // Clear the overlay either way so the requester is never stranded.
     if ((stage === "dispatch" || stage === "accepted") && r.status === "cancelled") {
