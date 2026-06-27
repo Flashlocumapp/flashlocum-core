@@ -341,10 +341,13 @@ function hashCoverageSnapshot(rows: NetRequest[]): string {
   for (const r of rows) {
     // Include rev + broadcastStartedAt so rev-only bumps (Save during Edit,
     // material-field updates while paused) still propagate to subscribers.
-    h += `${r.id}:${r.updatedAt ?? ""}:${r.status ?? ""}:${r.rev ?? ""}:${r.broadcastStartedAt ?? ""}|`;
+    // Include acceptedBy so accepted-by handoffs fan out to subscribers even
+    // if a future trigger regression leaves `updated_at` unchanged.
+    h += `${r.id}:${r.updatedAt ?? ""}:${r.status ?? ""}:${r.rev ?? ""}:${r.broadcastStartedAt ?? ""}:${r.acceptedBy ?? ""}|`;
   }
   return h;
 }
+
 
 // --- Stage 0 safety net: reconciliation timer + channel watchdog ---------
 //
