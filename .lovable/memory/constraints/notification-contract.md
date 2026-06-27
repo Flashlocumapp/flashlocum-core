@@ -13,6 +13,14 @@ Always route through `src/lib/feedback.ts` `ingest()`. The engine:
   so the global `pushToast` 4 s dedup ledger also catches any stray
   direct calls with the same key.
 - Owns haptic policy. Only `offer.new` emits a haptic.
+- Owns in-app sound policy. Exactly two events play a sound, foreground-only,
+  via `src/lib/sound.ts`: `offer.new` → soft `alert` chime (doctor),
+  `offer.accepted` → softer `confirm` tone (both audiences). No user toggle.
+  The acceptance sound is server-confirmation gated: callers MUST NOT emit
+  `offer.accepted` with `source: "local"` — it fires only from the realtime
+  row echo / foreground push that carries the `accepted_by` row flip.
+  Push payload `BRANDED_CHIME_KINDS` is reserved for `shift.cancelled`;
+  `offer.new` background push uses the device-default sound + vibration.
 
 Direct `pushToast` calls for contract events are forbidden. Add them via
 `ingest()` so dedup and haptics stay correct.
