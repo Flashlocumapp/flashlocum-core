@@ -71,18 +71,18 @@ function bytesToBase64Url(input: Uint8Array | ArrayBuffer | string): string {
   return btoa(binary).replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-function base64ToBytes(input: string): Uint8Array {
+function base64ToArrayBuffer(input: string): ArrayBuffer {
   const binary = atob(input);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return bytes;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 async function getSigningKey(privateKey: string): Promise<CryptoKey> {
   if (cachedSigningKey?.privateKey === privateKey) return cachedSigningKey.key;
-  const pkcs8 = base64ToBytes(
+  const pkcs8 = base64ToArrayBuffer(
     privateKey.replace(/-----BEGIN PRIVATE KEY-----/g, "").replace(/-----END PRIVATE KEY-----/g, "").replace(/\s+/g, ""),
   );
   const key = await globalThis.crypto.subtle.importKey(
