@@ -557,7 +557,7 @@ function init() {
         // Requester-side acceptance cue — fires whether discovered via
         // realtime UPDATE or this snapshot reconcile. G3/G4 dedup in the
         // feedback engine guarantees a single playback.
-        maybeEmitRequesterAccepted(old, r);
+        if (!isFirst) maybeEmitRequesterAccepted(old, r);
         if (!old) {
           // Suppress synthesized publish events on the initial snapshot —
           // they represent pre-existing rows the doctor is just now
