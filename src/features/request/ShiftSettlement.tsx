@@ -16,6 +16,7 @@ import {
 import { beginSettlementCheckout, verifySettlementPayment } from "@/lib/settlement.functions";
 import { getRequestBillingState, endShift as endShiftFn } from "@/lib/shift.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { subscribeInvalidationPing } from "@/lib/coverage-remote";
 import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 
 
