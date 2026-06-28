@@ -140,7 +140,7 @@ export class ErrorBoundary extends Component<Props, State> {
           "*",
         );
       } catch {
-        // postMessage failed — silently ignore
+        // silently ignore postMessage errors
       }
     }
   }

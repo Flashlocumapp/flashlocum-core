@@ -64,8 +64,7 @@ const getLogServerUrl = (): string | null => {
     } else {
       // For native, try to get the Expo dev server URL
       // experienceUrl format: exp://xxx.ngrok.io/... or exp://192.168.1.1:8081/...
-      const experienceUrl = (Constants as unknown as Record<string, unknown>).experienceUrl as
-        string | undefined;
+      const experienceUrl = (Constants as unknown as Record<string, string>).experienceUrl;
       if (experienceUrl) {
         // Convert exp:// to https:// (for tunnels) or http:// (for local)
         let baseUrl =
@@ -131,11 +130,10 @@ const flushLogs = async () => {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
           if (typeof window !== "undefined" && window.console) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window.console as any).__proto__.log.call(
+            (Object.getPrototypeOf(window.console) as typeof console).log.call(
               console,
               "[Newly] Fetch error (will not repeat):",
-              (e as Error).message || e,
+              e.message || e,
             );
           }
         }
