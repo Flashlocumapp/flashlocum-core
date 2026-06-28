@@ -16,6 +16,21 @@
 //   VITE_CAPACITOR_MAPS_API_KEY, which scripts/check-native-map-key.mjs
 //   verifies is the same value present in the platform manifests. The
 //   browser key is NEVER used here as a fallback.
+//
+// Blank-map guard rails (see plan: native Google Map blank on Android):
+//   1. Only fields declared on @capacitor/google-maps v8 GoogleMapConfig
+//      are passed to GoogleMap.create. Web-only options (restriction,
+//      disableDefaultUI, gestureHandling, clickableIcons, backgroundColor)
+//      are intentionally omitted — they are silently ignored or trigger
+//      init errors on Android. Lagos clamping is enforced in JS via
+//      inLagos(...) before every setCamera and addMarker call.
+//   2. The host div, its wrapper, and the html/body/#root chain are made
+//      transparent while the native map is mounted, so the MapView the
+//      plugin draws behind the WebView is actually visible.
+//   3. GoogleMap.create is wrapped in begin/ok/failed logs with the full
+//      exception object; the fallback overlay surfaces the message on
+//      device so failures are never silent.
+//   4. Creation is deferred until the host has a non-zero bounding rect.
 
 import { useEffect, useRef, useState } from "react";
 import { GoogleMap } from "@capacitor/google-maps";
@@ -23,7 +38,6 @@ import type { Marker as PresenceMarker } from "@/components/MapBackground";
 import { getLastKnown, requestOnce, subscribe } from "@/lib/location";
 import {
   FALLBACK_CENTER,
-  LAGOS_BOUNDS_LITERAL,
   inLagos,
   type Coords,
 } from "./lagos-bounds";
@@ -35,6 +49,25 @@ export type PlaceMapMarker = Coords & { key: string; title?: string };
 const NATIVE_KEY = import.meta.env.VITE_CAPACITOR_MAPS_API_KEY as string | undefined;
 
 let MAP_ID_SEQ = 0;
+
+function waitForHostSize(el: HTMLDivElement, timeoutMs = 1500): Promise<DOMRect> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const tick = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        resolve(rect);
+        return;
+      }
+      if (Date.now() - start > timeoutMs) {
+        reject(new Error(`host element has zero size after ${timeoutMs}ms`));
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
 
 export function GoogleMapBackground({
   markers,
@@ -57,6 +90,9 @@ export function GoogleMapBackground({
   const mapRef = useRef<GoogleMap | null>(null);
   const mapReadyRef = useRef(false);
   const [failed, setFailed] = useState(!NATIVE_KEY);
+  const [lastError, setLastError] = useState<string | null>(
+    NATIVE_KEY ? null : "VITE_CAPACITOR_MAPS_API_KEY is missing at build time"
+  );
   const [mapReady, setMapReady] = useState(false);
 
   // Pool: marker key (presence row id) → native marker id returned by addMarker.
@@ -78,10 +114,24 @@ export function GoogleMapBackground({
     return unsub;
   }, []);
 
+  // Mark the html chain transparent while a native map is mounted so the
+  // MapView the plugin draws behind the WebView is visible.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    html.classList.add("capacitor-native-map");
+    return () => {
+      html.classList.remove("capacitor-native-map");
+    };
+  }, []);
+
   // Create the native map once. Destroy on unmount.
   useEffect(() => {
     let cancelled = false;
     if (!NATIVE_KEY) {
+      console.error("[capacitor-maps] create:skipped", {
+        reason: "VITE_CAPACITOR_MAPS_API_KEY missing — native key was not bundled",
+      });
       setFailed(true);
       return;
     }
@@ -92,33 +142,59 @@ export function GoogleMapBackground({
     const initial = inLagos(rawInitial) ? rawInitial : FALLBACK_CENTER;
 
     (async () => {
+      const host = hostRef.current;
+      if (!host) return;
+      let rect: DOMRect;
+      try {
+        rect = await waitForHostSize(host);
+      } catch (sizeErr) {
+        console.error("[capacitor-maps] create:skipped zero-size host", {
+          id,
+          message: (sizeErr as Error)?.message,
+        });
+        if (!cancelled) {
+          setFailed(true);
+          setLastError((sizeErr as Error)?.message ?? "zero-size host");
+        }
+        return;
+      }
+      if (cancelled) return;
+
+      console.info("[capacitor-maps] create:begin", {
+        id,
+        hasKey: !!NATIVE_KEY,
+        keyLen: NATIVE_KEY?.length,
+        center: initial,
+        hostRect: { width: rect.width, height: rect.height, x: rect.x, y: rect.y },
+        pluginVersion: "8.x",
+      });
+
       try {
         const map = await GoogleMap.create({
           id,
-          element: hostRef.current!,
+          element: host,
           apiKey: NATIVE_KEY,
+          // Recover cleanly if a previous instance with the same id lingers
+          // (HMR / strict-mode double-mount). Cheap on real devices.
+          forceCreate: true,
+          // Only fields declared on @capacitor/google-maps v8 GoogleMapConfig
+          // are honoured on Android/iOS. JS Maps API options like
+          // restriction / disableDefaultUI / gestureHandling / clickableIcons
+          // / backgroundColor are intentionally NOT passed here — they are
+          // web-only and have caused silent init failures on Android.
           config: {
             center: { lat: initial.lat, lng: initial.lng },
             zoom: 12,
             minZoom: 10,
             maxZoom: 18,
-            restriction: {
-              latLngBounds: {
-                south: LAGOS_BOUNDS_LITERAL.south,
-                west: LAGOS_BOUNDS_LITERAL.west,
-                north: LAGOS_BOUNDS_LITERAL.north,
-                east: LAGOS_BOUNDS_LITERAL.east,
-              },
-              strictBounds: true,
-            },
-            // Plugin accepts the same JSON style array as the JS Maps API.
             styles: LIGHT_STYLE,
-            disableDefaultUI: true,
-            gestureHandling: "greedy",
-            clickableIcons: false,
-            backgroundColor: "#aab2bd",
-          } as Parameters<typeof GoogleMap.create>[0]["config"],
+            devicePixelRatio:
+              typeof window !== "undefined" && window.devicePixelRatio
+                ? window.devicePixelRatio
+                : 1,
+          },
         });
+
         if (cancelled) {
           await map.destroy().catch(() => {});
           return;
@@ -126,9 +202,20 @@ export function GoogleMapBackground({
         mapRef.current = map;
         mapReadyRef.current = true;
         setMapReady(true);
+        console.info("[capacitor-maps] create:ok", { id });
       } catch (err) {
-        console.warn("[capacitor-maps] init failed", err);
-        if (!cancelled) setFailed(true);
+        const e = err as { message?: string; code?: string; stack?: string };
+        console.error("[capacitor-maps] create:failed", {
+          id,
+          message: e?.message ?? String(err),
+          code: e?.code,
+          stack: e?.stack,
+          raw: err,
+        });
+        if (!cancelled) {
+          setFailed(true);
+          setLastError(e?.message ?? String(err));
+        }
       }
     })();
 
@@ -142,13 +229,16 @@ export function GoogleMapBackground({
       selfMarkerId.current = null;
       selfMarkerKey.current = null;
       if (m) {
-        m.destroy().catch(() => {});
+        m.destroy().catch((err) => {
+          console.warn("[capacitor-maps] destroy:failed", err);
+        });
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Pan camera (never zoom) when center/userCenter/active changes.
+  // Pan camera (never zoom) when center/userCenter/active changes. Lagos
+  // clamp replaces the (web-only) `restriction` config option.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -160,7 +250,7 @@ export function GoogleMapBackground({
         coordinate: { lat: safe.lat, lng: safe.lng },
         animate: true,
       })
-      .catch(() => {});
+      .catch((err) => console.warn("[capacitor-maps] setCamera failed", err));
   }, [center, userCenter, active, mapReady]);
 
   // Self marker (requester dot or doctor stethoscope).
@@ -282,14 +372,48 @@ export function GoogleMapBackground({
       <div
         className="absolute inset-0"
         style={{ background: "var(--color-map)" }}
-        aria-hidden
-      />
+        aria-hidden={false}
+      >
+        {lastError ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 12,
+              right: 12,
+              bottom: 12,
+              padding: "8px 10px",
+              borderRadius: 8,
+              background: "rgba(0,0,0,0.72)",
+              color: "#fff",
+              fontSize: 11,
+              lineHeight: 1.35,
+              fontFamily: "monospace",
+              maxHeight: "40%",
+              overflow: "auto",
+              pointerEvents: "auto",
+              zIndex: 5,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>
+              Native map failed to initialise
+            </div>
+            <div>{lastError}</div>
+          </div>
+        ) : null}
+      </div>
     );
   }
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: "#aab2bd" }}>
-      <div ref={hostRef} className="absolute inset-0 h-full w-full" />
+    <div
+      className="absolute inset-0 overflow-hidden"
+      style={{ background: "transparent" }}
+    >
+      <div
+        ref={hostRef}
+        className="absolute inset-0 h-full w-full capacitor-google-map"
+        style={{ background: "transparent" }}
+      />
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
         style={{
