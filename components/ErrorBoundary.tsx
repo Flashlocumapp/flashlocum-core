@@ -140,7 +140,7 @@ export class ErrorBoundary extends Component<Props, State> {
           "*",
         );
       } catch {
-        // silently ignore postMessage errors
+        // ignore postMessage errors
       }
     }
   }
@@ -172,6 +172,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
       const firstSource = componentPath.length > 0 ? componentPath[0].source : null;
       const bundleInfo = extractBundleInfo(errorStack || componentStack);
+
+      const showTraceLabel = this.state.showTrace ? "\u2212" : "+";
 
       return (
         <View style={styles.root}>
@@ -238,7 +240,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <View style={styles.section}>
                 <Pressable onPress={this.toggleTrace} style={styles.traceToggle}>
                   <Text style={styles.sectionTitle}>Call Stack</Text>
-                  <Text style={styles.chevron}>{this.state.showTrace ? "−" : "+"}</Text>
+                  <Text style={styles.chevron}>{showTraceLabel}</Text>
                 </Pressable>
                 {this.state.showTrace && (
                   <ScrollView style={styles.traceScroll} nestedScrollEnabled>

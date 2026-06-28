@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FlashLocum",
-    "slug": "flashlocum",
+    "slug": "flashlocum-mobile-nzfrmj",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/newly.png",
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/images/newly.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app"
+      "package": "com.flashlocum.app"
     },
     "web": {
       "favicon": "./assets/images/newly.png",

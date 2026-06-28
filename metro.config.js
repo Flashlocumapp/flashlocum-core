@@ -270,7 +270,9 @@ config.server.enhanceMiddleware = (middleware) => {
   }, 5000);
 })();
 `;
-          originalWriteHead(200, { "Content-Type": "application/javascript; charset=UTF-8" });
+          originalWriteHead(200, {
+            "Content-Type": "application/javascript; charset=UTF-8",
+          });
           return originalEnd(errorScript, ...args);
         }
         return originalEnd(body, ...args);

@@ -86,7 +86,7 @@ const getLogServerUrl = (): string | null => {
         // Fallback: try to use manifest hostUri
         const hostUri =
           Constants.expoConfig?.hostUri ||
-          (Constants as unknown as Record<string, { hostUri?: string }>).manifest?.hostUri;
+          (Constants as unknown as Record<string, Record<string, string>>).manifest?.hostUri;
         if (hostUri) {
           const protocol = hostUri.includes("ngrok") || hostUri.includes(".io") ? "https" : "http";
           cachedLogServerUrl = `${protocol}://${hostUri.split("/")[0]}/natively-logs`;
@@ -124,17 +124,15 @@ const flushLogs = async () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(log),
-      }).catch((e) => {
+      }).catch((e: Error) => {
         // Log fetch errors only once to avoid spam
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
           if (typeof window !== "undefined" && window.console) {
-            (Object.getPrototypeOf(window.console) as typeof console).log.call(
-              console,
-              "[Newly] Fetch error (will not repeat):",
-              e.message || e,
-            );
+            (
+              window.console as unknown as Record<string, (...a: unknown[]) => void>
+            ).__proto__.log.call(console, "[Newly] Fetch error (will not repeat):", e.message || e);
           }
         }
       });
