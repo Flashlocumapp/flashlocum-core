@@ -3,7 +3,9 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "vite.config.ts",
-    "eslint.config.js"
+    "eslint.config.js",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ],
   "compilerOptions": {
     "target": "ES2022",
@@ -33,5 +35,6 @@
         "./src/*"
       ]
     }
-  }
+  },
+  "extends": "expo/tsconfig.base"
 }

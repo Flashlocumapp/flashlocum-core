@@ -24,7 +24,7 @@ SplashScreen.preventAutoHideAsync();
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const unstable_settings = {
-  initialRouteName: "(tabs)", // Ensure any route can link back to `/`
+  initialRouteName: "index",
 };
 
 export default function RootLayout() {
@@ -80,6 +80,10 @@ export default function RootLayout() {
           <WidgetProvider>
             <GestureHandlerRootView>
               <Stack>
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="role" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/[role]" options={{ headerShown: false }} />
+                <Stack.Screen name="onboarding/[role]" options={{ headerShown: false }} />
                 {/* Main app with tabs */}
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               </Stack>
