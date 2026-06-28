@@ -32,7 +32,8 @@ export const quoteShift = createServerFn({ method: "POST" })
       _coverage_kind: data.coverageKind,
     });
     if (error) throw new Error(error.message);
-    return q as { amount: number; breakdown: Record<string, unknown> };
+    type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
+    return q as { amount: number; breakdown: Json };
   });
 
 const ValidateInput = z.object({ start: z.string(), end: z.string() });
