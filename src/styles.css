@@ -250,3 +250,16 @@
   100% { transform: translate(0,0); }
 }
 .drift { animation: drift 6s ease-in-out infinite; }
+
+/* Capacitor Google Maps renders the native MapView BEHIND the WebView at
+   the host element's screen rect. While a native map is mounted, the chain
+   from <html> down to the host must be transparent or the map is fully
+   occluded and appears blank. The .capacitor-native-map class is toggled
+   on <html> only while GoogleMapBackground.native is alive, so the web
+   build is unaffected. */
+html.capacitor-native-map,
+html.capacitor-native-map body,
+html.capacitor-native-map #root {
+  background: transparent !important;
+}
+.capacitor-google-map { background: transparent !important; }
