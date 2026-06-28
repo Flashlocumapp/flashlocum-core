@@ -32,7 +32,7 @@ export const quoteShift = createServerFn({ method: "POST" })
       _coverage_kind: data.coverageKind,
     });
     if (error) throw new Error(error.message);
-    return q as { amount: number; breakdown: unknown };
+    return q as { amount: number; breakdown: Record<string, unknown> };
   });
 
 const ValidateInput = z.object({ start: z.string(), end: z.string() });
