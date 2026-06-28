@@ -28,6 +28,7 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
   return <WidgetContext.Provider value={{ refreshWidget }}>{children}</WidgetContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useWidget = () => {
   const context = useContext(WidgetContext);
   if (!context) {

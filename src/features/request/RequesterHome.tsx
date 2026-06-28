@@ -1455,13 +1455,17 @@ function DispatchOverlay({
       });
     }, remaining);
     return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     stage,
     requestId,
     setRequestId,
     setStage,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     net.requests[requestId ?? ""]?.broadcastStartedAt,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     net.requests[requestId ?? ""]?.status,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     net.requests[requestId ?? ""]?.acceptedBy,
   ]);
 

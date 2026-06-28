@@ -31,7 +31,6 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
   if (!isAdmin) throw new Error("Forbidden: admin role required");
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function logAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabaseAdmin: any,

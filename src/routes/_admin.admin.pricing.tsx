@@ -132,7 +132,7 @@ function PricingPage() {
   // Refresh client-side pricing cache whenever this page loads fresh data.
   useEffect(() => {
     if (data?.active) void loadPricingTable();
-  }, [data?.active?.id]);
+  }, [data?.active]);
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-6 p-6">

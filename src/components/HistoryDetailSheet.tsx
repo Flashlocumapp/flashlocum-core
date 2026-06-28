@@ -77,7 +77,7 @@ export function HistoryDetailSheet({
     setFeedback("");
     setLocalSubmitted(null);
     setSubmitting(false);
-  }, [item?.id]);
+  }, [item?.id, item?.rating]);
 
   if (!item) return null;
 

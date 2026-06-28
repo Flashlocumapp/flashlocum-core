@@ -43,7 +43,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["metro.config.js"],
+      files: ["metro.config.cjs"],
       rules: {
         "@typescript-eslint/no-var-requires": "off",
       },

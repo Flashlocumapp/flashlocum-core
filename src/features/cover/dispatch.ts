@@ -255,10 +255,12 @@ export function useDispatch(): View {
     if (r) incoming = toCoverage(r);
   }
 
+  const liveRequestsKey = liveRequests.map((r) => `${r.id}:${r.rev ?? 1}`).join("|");
   useEffect(() => {
     if (!me || upcoming.length < 3 || liveRequests.length === 0) return;
     liveRequests.forEach((r) => markDeclined(r.id, r.rev));
-  }, [me, upcoming.length, liveRequests.map((r) => `${r.id}:${r.rev ?? 1}`).join("|")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me, upcoming.length, liveRequestsKey]);
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {

@@ -37,7 +37,7 @@ function CancellationsPage() {
     staleTime: 30_000,
   });
 
-  const rows = q.data ?? [];
+  const rows = useMemo(() => q.data ?? [], [q.data]);
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return rows.filter((r) => {

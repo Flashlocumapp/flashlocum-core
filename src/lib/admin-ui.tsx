@@ -25,6 +25,7 @@ export function Chip({ children, color }: { children: ReactNode; color?: string 
 export type VerificationStatus =
   "pending" | "approved" | "suspended" | "rejected" | "action_required";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function statusTone(s: VerificationStatus) {
   switch (s) {
     case "approved":
@@ -40,12 +41,14 @@ export function statusTone(s: VerificationStatus) {
   }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function initials(name: string | null | undefined): string {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function fmt(d: string | number | null | undefined): string {
   if (d == null || d === "") return "—";
   try {
@@ -55,6 +58,7 @@ export function fmt(d: string | number | null | undefined): string {
   }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function fmtDate(d: string | number | null | undefined): string {
   if (d == null || d === "") return "—";
   try {
@@ -64,6 +68,7 @@ export function fmtDate(d: string | number | null | undefined): string {
   }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function fmtRelative(d: string | number | null | undefined): string {
   if (d == null || d === "") return "never";
   const t = typeof d === "string" ? new Date(d).getTime() : d;
@@ -79,6 +84,7 @@ export function fmtRelative(d: string | number | null | undefined): string {
   return new Date(t).toLocaleDateString();
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function fmtNaira(amount: number | null | undefined): string {
   if (amount == null) return "—";
   return `₦${Number(amount).toLocaleString()}`;

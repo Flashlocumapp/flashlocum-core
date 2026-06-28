@@ -22,6 +22,7 @@ const DevErrorBoundary = __DEV__
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const unstable_settings = {
   initialRouteName: "(tabs)", // Ensure any route can link back to `/`
 };

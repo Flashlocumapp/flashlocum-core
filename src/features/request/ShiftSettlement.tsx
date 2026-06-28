@@ -510,6 +510,7 @@ export function ShiftSettlement({
     if (settlementReadyRef.current || directEndStartedRef.current) return;
     directEndStartedRef.current = true;
     void handleEndShift();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, requestId, initialPhase, alreadyAwaitingPayment]);
 
   const handleMadePayment = () => {
@@ -593,6 +594,7 @@ export function ShiftSettlement({
     if (payState !== "idle") return;
     autoOpenedRef.current = true;
     void startMonnifyCheckout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, requestId, phase, payState]);
 
   // SURCHARGE RE-MINT. When the server-owned payment_due_at advances (the
@@ -837,6 +839,7 @@ export function ShiftSettlement({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, requestId, phase, fetchBilling]);
 
   const handleCopy = async () => {
