@@ -13,7 +13,6 @@ import { EditShiftSheet, type EditableShift } from "@/components/EditShiftSheet"
 import { DismissSheet } from "@/components/DismissSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-
 import { RatingPill } from "@/components/RatingPill";
 import { ReliabilityPill } from "@/components/ReliabilityPill";
 import {
@@ -28,9 +27,13 @@ import {
 import { userEntityId } from "@/lib/trust";
 import { recordRating } from "@/lib/ratings";
 import { submitShiftRating } from "@/lib/trust";
-import { computeCoveragePricing, coverageKindFromLabel, bookedMinutesFromWindow, effectiveCoverageKind } from "@/lib/pricing";
+import {
+  computeCoveragePricing,
+  coverageKindFromLabel,
+  bookedMinutesFromWindow,
+  effectiveCoverageKind,
+} from "@/lib/pricing";
 import { getDoctorIdentity, useDoctorIdentity } from "@/lib/doctor-identity";
-
 
 import {
   cancelRequest as netCancelRequest,
@@ -40,10 +43,8 @@ import {
   updateRequest as netUpdateRequest,
   useLifecyclePending,
   useNetwork,
-  
   type NetRequest,
 } from "@/lib/network";
-
 
 import { pushToast } from "@/lib/notifications";
 import { shiftCue } from "@/lib/feedback";
@@ -51,9 +52,6 @@ import { useSimClock } from "@/lib/clock";
 import { subscribeRealtimeHealth, isCoverageReconnecting } from "@/lib/realtime-health";
 import { isRated, markRated, useRatedShiftsVersion } from "@/lib/rated-shifts";
 import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
-
-
-
 
 // ----- Requester-side dispatch entries (derived from shared network) -----
 type Coverage = "Standard" | "24-Hour" | "Weekend Call" | "Home Care";
@@ -90,16 +88,17 @@ type RequestItem = {
 /** Straight 24h / Weekend 48h are continuous single shifts — no pause, no day boundary.
  *  Mirrors the server's _effective_product upgrade so a Standard label whose
  *  window is exactly 24h × 1–2 days is also treated as straight. */
-function isStraightItem(item: { coverage: string; start: string; end: string; days: number }): boolean {
+function isStraightItem(item: {
+  coverage: string;
+  start: string;
+  end: string;
+  days: number;
+}): boolean {
   const labelKind = coverageKindFromLabel(String(item.coverage));
   const perDayMin = bookedMinutesFromWindow(ampmTo24h(item.start), ampmTo24h(item.end));
   const kind = effectiveCoverageKind(labelKind, perDayMin, item.days);
   return kind === "straight24" || kind === "straight48";
 }
-
-
-
-
 
 /** Parse "8:00AM" / "10:30PM" → "HH:MM" 24h. */
 function ampmTo24h(s: string): string {
@@ -142,23 +141,21 @@ function toRequestItem(r: NetRequest): RequestItem {
             ? "payment_pending"
             : "completed";
   const outcome =
-    r.status === "completed"
-      ? "completed"
-      : r.status === "cancelled"
-        ? "cancelled"
-        : undefined;
+    r.status === "completed" ? "completed" : r.status === "cancelled" ? "cancelled" : undefined;
   // History reflects FINAL settled operational reality, not booking estimate.
   const isCompleted = outcome === "completed";
   const isAwaitingPayment = r.status === "awaiting_payment";
   const settledHrs = isCompleted
     ? Math.max(0.25, Math.round((r.accumulatedMs ?? 0) / 900_000) / 4)
     : r.durationHrs;
-  const settledDays = isCompleted ? Math.max(1, r.dayIndex ?? r.days ?? 1) : Math.max(1, r.days ?? 1);
+  const settledDays = isCompleted
+    ? Math.max(1, r.dayIndex ?? r.days ?? 1)
+    : Math.max(1, r.days ?? 1);
   // Prefer server-frozen totals (settled_amount → total_billed_amount) over
   // the original booked estimate for any row past End Shift. This keeps the
   // coverage card in lockstep with what Monnify is actually charging.
   const settledAmount =
-    (isCompleted || isAwaitingPayment)
+    isCompleted || isAwaitingPayment
       ? (r.settledAmount ?? r.totalBilledAmount ?? r.amount)
       : r.amount;
   return {
@@ -194,16 +191,12 @@ function toRequestItem(r: NetRequest): RequestItem {
   };
 }
 
-
-
-
-
 const TABS = [
   { id: "active", label: "Active" },
   { id: "upcoming", label: "Upcoming" },
   { id: "completed", label: "History" },
 ] as const;
-type TabId = typeof TABS[number]["id"];
+type TabId = (typeof TABS)[number]["id"];
 
 /** Cold-start skeleton is no longer needed: `src/lib/network.ts` rehydrates
  *  the requests snapshot from localStorage before first render, and the
@@ -213,7 +206,6 @@ type TabId = typeof TABS[number]["id"];
 function useFirstPaintSettled(_hasData: boolean): boolean {
   return true;
 }
-
 
 function ListSkeleton() {
   return (
@@ -237,7 +229,6 @@ function ListSkeleton() {
     </ul>
   );
 }
-
 
 export function CoverageScreen() {
   const [tab, setTab] = useState<TabId>("active");
@@ -320,7 +311,6 @@ function ReconnectingPill() {
   );
 }
 
-
 // ============ REQUESTER ============
 
 function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
@@ -365,9 +355,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   // feedback engine (offer.accepted / shift.cancelled). No local listener
   // here — see src/lib/feedback.ts.
 
-
-
-
   const [ratings, setRatings] = useState<Record<string, number>>({});
   // Subscribe to the shared "shifts I've already rated" store so a rating
   // submitted via the post-End-Shift overlay (or in a previous session)
@@ -400,7 +387,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [editInitial, setEditInitial] = useState<EditableShift>({
-    startTime: "08:00", endTime: "18:00", durationHrs: 10, note: "",
+    startTime: "08:00",
+    endTime: "18:00",
+    durationHrs: 10,
+    note: "",
   });
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -450,9 +440,7 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         startedAtMs: historyRow?.firstStartedAt ?? historyRow?.startedAt ?? null,
         endedAtMs:
           historyRow?.paidAt ??
-          (historyRow?.paymentDueAt
-            ? Date.parse(historyRow.paymentDueAt) - 15 * 60 * 1000
-            : null),
+          (historyRow?.paymentDueAt ? Date.parse(historyRow.paymentDueAt) - 15 * 60 * 1000 : null),
         actualMinutes:
           typeof historyRow?.accumulatedMs === "number"
             ? Math.round(historyRow.accumulatedMs / 60000)
@@ -549,12 +537,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     shiftCue("end");
   };
 
-
-
-
-
-
-
   const openEdit = (id: string) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
@@ -611,8 +593,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
     setNotice(`${label[changed]} · Doctor notified`);
     window.setTimeout(() => setNotice(null), 2600);
   };
-
-
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
@@ -704,14 +684,10 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         // RPC. This is what makes refresh / kill-tab / reconnect resume the
         // exact same payment session.
         serverPaymentDueAt={
-          settlingSnapshot
-            ? net.requests[settlingSnapshot.id]?.paymentDueAt ?? null
-            : null
+          settlingSnapshot ? (net.requests[settlingSnapshot.id]?.paymentDueAt ?? null) : null
         }
         serverTotalBilledAmount={
-          settlingSnapshot
-            ? net.requests[settlingSnapshot.id]?.totalBilledAmount ?? null
-            : null
+          settlingSnapshot ? (net.requests[settlingSnapshot.id]?.totalBilledAmount ?? null) : null
         }
         alreadyAwaitingPayment={
           settlingSnapshot
@@ -736,7 +712,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         }
       />
 
-
       <ConfirmDialog
         open={!!pauseConfirmId}
         title="Pause this shift?"
@@ -745,7 +720,9 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         }
         confirmLabel="Pause Shift"
         cancelLabel="Keep Working"
-        onOpenChange={(next) => { if (!next) setPauseConfirmId(null); }}
+        onOpenChange={(next) => {
+          if (!next) setPauseConfirmId(null);
+        }}
         onConfirm={() => {
           const id = pauseConfirmId;
           setPauseConfirmId(null);
@@ -762,14 +739,15 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         confirmLabel="End & Pay"
         cancelLabel="Keep Working"
         destructive
-        onOpenChange={(next) => { if (!next) setEndConfirmId(null); }}
+        onOpenChange={(next) => {
+          if (!next) setEndConfirmId(null);
+        }}
         onConfirm={() => {
           const id = endConfirmId;
           setEndConfirmId(null);
           if (id) beginEndShift(id);
         }}
       />
-
 
       <CancelFlow
         open={!!cancelTargetId}
@@ -786,7 +764,6 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
           if (id && result) netCancelRequest(id, { code: result.code, text: result.text });
         }}
       />
-
 
       <EditShiftSheet
         open={!!editTargetId}
@@ -815,16 +792,30 @@ function RequesterCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => 
         }}
       />
 
-
       <RequesterDetailSheet
         item={items.find((i) => i.id === detailId && i.status !== "completed") ?? null}
         onDismiss={() => setDetailId(null)}
-        onStart={(id) => { setDetailId(null); moveToActive(id); }}
-        onPause={(id) => { setDetailId(null); requestPause(id); }}
-        onEnd={(id) => { setDetailId(null); requestEnd(id); }}
+        onStart={(id) => {
+          setDetailId(null);
+          moveToActive(id);
+        }}
+        onPause={(id) => {
+          setDetailId(null);
+          requestPause(id);
+        }}
+        onEnd={(id) => {
+          setDetailId(null);
+          requestEnd(id);
+        }}
 
-        onEdit={(id) => { setDetailId(null); openEdit(id); }}
-        onCancel={(id) => { setDetailId(null); setCancelTargetId(id); }}
+        onEdit={(id) => {
+          setDetailId(null);
+          openEdit(id);
+        }}
+        onCancel={(id) => {
+          setDetailId(null);
+          setCancelTargetId(id);
+        }}
       />
     </section>
   );
@@ -849,7 +840,8 @@ function RequesterDetailSheet({
 }) {
   const identity = useDoctorIdentity(item?.doctorSid ?? null);
   const pending = useLifecyclePending(item?.id ?? null);
-  const startLabel = pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
+  const startLabel =
+    pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
   const pauseLabel = pending === "pausing" ? "Pausing…" : null;
   const endLabel = pending === "ending" ? "Ending…" : null;
   return (
@@ -862,7 +854,13 @@ function RequesterDetailSheet({
               style={{ background: "var(--color-secondary)" }}
             >
               {identity.selfieUrl ? (
-                <StableImage src={identity.selfieUrl} alt="" width={56} height={56} className="h-full w-full object-cover" />
+                <StableImage
+                  src={identity.selfieUrl}
+                  alt=""
+                  width={56}
+                  height={56}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 identity.initials
               )}
@@ -888,9 +886,15 @@ function RequesterDetailSheet({
             </div>
           </div>
 
-
           <div className="mt-4 rounded-2xl bg-secondary/60 px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
-            {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
+            {fmtOpMeta(
+              item.coverage,
+              item.day,
+              item.start,
+              item.end,
+              item.durationHrs,
+              item.amount,
+            )}
             {item.days > 1 && !isStraightItem(item) && (
               <span className="ml-2 inline-flex h-4 items-center rounded-full bg-secondary/80 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
                 Day {Math.min(item.dayIndex, item.days)} of {item.days}
@@ -900,7 +904,9 @@ function RequesterDetailSheet({
 
           {item.note && (
             <div className="mt-2 rounded-2xl bg-secondary/40 px-4 py-3">
-              <div className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Note</div>
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                Note
+              </div>
               <div className="mt-1 text-[12.5px] text-foreground/80">{item.note}</div>
             </div>
           )}
@@ -925,29 +931,37 @@ function RequesterDetailSheet({
             </a>
             {item.status === "upcoming" && (
               <button
-                onClick={() => { if (!pending) onStart(item.id); }}
+                onClick={() => {
+                  if (!pending) onStart(item.id);
+                }}
                 disabled={!!pending}
                 className="h-11 rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
                 {startLabel ?? (item.everStarted ? "Resume Shift" : "Start Shift")}
               </button>
             )}
-            {item.status === "active" && item.days > 1 && item.dayIndex < item.days && !isStraightItem(item) && (
-              <button
-                onClick={() => { if (!pending) onPause(item.id); }}
-                disabled={!!pending}
-                className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90 disabled:opacity-60"
-              >
-                {pauseLabel ?? "Pause Shift"}
-              </button>
-            )}
+            {item.status === "active" &&
+              item.days > 1 &&
+              item.dayIndex < item.days &&
+              !isStraightItem(item) && (
+                <button
+                  onClick={() => {
+                    if (!pending) onPause(item.id);
+                  }}
+                  disabled={!!pending}
+                  className="h-11 rounded-full bg-secondary/70 text-[13px] font-semibold text-foreground/85 active:opacity-90 disabled:opacity-60"
+                >
+                  {pauseLabel ?? "Pause Shift"}
+                </button>
+              )}
           </div>
 
-          {(item.status === "active" ||
-            (item.status === "upcoming" && item.everStarted)) && (
+          {(item.status === "active" || (item.status === "upcoming" && item.everStarted)) && (
             <div className="mt-2">
               <button
-                onClick={() => { if (!pending) onEnd(item.id); }}
+                onClick={() => {
+                  if (!pending) onEnd(item.id);
+                }}
                 disabled={!!pending}
                 className="h-11 w-full rounded-full bg-primary text-[13px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
               >
@@ -978,7 +992,6 @@ function RequesterDetailSheet({
   );
 }
 
-
 function RequestCard({
   item,
   onStart,
@@ -1004,22 +1017,32 @@ function RequestCard({
   const isHistory = item.status === "completed";
   const identity = useDoctorIdentity(item.doctorSid ?? null);
   const pending = useLifecyclePending(item.id);
-  const startLabel = pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
+  const startLabel =
+    pending === "starting" ? "Starting…" : pending === "resuming" ? "Resuming…" : null;
   const pauseLabel = pending === "pausing" ? "Pausing…" : null;
   const endLabel = pending === "ending" ? "Ending…" : null;
 
-  const baseMeta = fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount);
+  const baseMeta = fmtOpMeta(
+    item.coverage,
+    item.day,
+    item.start,
+    item.end,
+    item.durationHrs,
+    item.amount,
+  );
   const meta = isHistory
-    ? fmtHistoryMeta(item.coverage, item.completedOn ?? "", item.start, item.durationHrs, item.amount)
+    ? fmtHistoryMeta(
+        item.coverage,
+        item.completedOn ?? "",
+        item.start,
+        item.durationHrs,
+        item.amount,
+      )
     : baseMeta;
 
   // payment_pending: tapping anywhere on the card resumes the payment
   // session — never the active-shift detail sheet.
-  const onCardClick = isHistory
-    ? onOpenHistory
-    : isPaymentPending
-      ? onEnd
-      : onOpenDetail;
+  const onCardClick = isHistory ? onOpenHistory : isPaymentPending ? onEnd : onOpenDetail;
   const wrapperProps = {
     onClick: onCardClick,
     role: "button" as const,
@@ -1040,7 +1063,12 @@ function RequestCard({
       }}
     >
       <div className="flex items-start gap-3">
-        <Avatar initials={identity.initials} selfieUrl={identity.selfieUrl} dim={isHistory} live={isActive} />
+        <Avatar
+          initials={identity.initials}
+          selfieUrl={identity.selfieUrl}
+          dim={isHistory}
+          live={isActive}
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -1119,7 +1147,10 @@ function RequestCard({
                 Payment pending
               </span>
               <button
-                onClick={(e) => { e.stopPropagation(); onEnd(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEnd();
+                }}
                 className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97]"
                 style={{
                   background: "var(--color-foreground)",
@@ -1132,7 +1163,10 @@ function RequestCard({
           )}
           {isUpcoming && (
             <button
-              onClick={(e) => { e.stopPropagation(); if (!pending) onStart(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!pending) onStart();
+              }}
               disabled={!!pending}
               className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
               style={{
@@ -1140,12 +1174,16 @@ function RequestCard({
                 color: "var(--color-background)",
               }}
             >
-              {startLabel ?? ((item.everStarted || item.dayIndex > 1) ? "Resume Shift" : "Start Shift")}
+              {startLabel ??
+                (item.everStarted || item.dayIndex > 1 ? "Resume Shift" : "Start Shift")}
             </button>
           )}
           {isActive && item.days > 1 && item.dayIndex < item.days && !isStraightItem(item) && (
             <button
-              onClick={(e) => { e.stopPropagation(); if (!pending) onPause(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!pending) onPause();
+              }}
               disabled={!!pending}
               className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
               style={{
@@ -1158,7 +1196,10 @@ function RequestCard({
           )}
           {isActive && (
             <button
-              onClick={(e) => { e.stopPropagation(); if (!pending) onEnd(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!pending) onEnd();
+              }}
               disabled={!!pending}
               className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
               style={{
@@ -1171,8 +1212,20 @@ function RequestCard({
           )}
           {isUpcoming && !item.everStarted && item.dayIndex <= 1 && (
             <>
-              <SecondaryAction onClick={(e) => { e.stopPropagation(); onEdit(); }} label="Edit" />
-              <SecondaryAction onClick={(e) => { e.stopPropagation(); onCancel(); }} label="Cancel" />
+              <SecondaryAction
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                label="Edit"
+              />
+              <SecondaryAction
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancel();
+                }}
+                label="Cancel"
+              />
               <a
                 href={`tel:${item.phone}`}
                 onClick={(e) => e.stopPropagation()}
@@ -1196,7 +1249,13 @@ function RequestCard({
             </>
           )}
           {isUpcoming && (item.everStarted || item.dayIndex > 1) && !isActive && (
-            <SecondaryAction onClick={(e) => { e.stopPropagation(); onEnd(); }} label="End Shift" />
+            <SecondaryAction
+              onClick={(e) => {
+                e.stopPropagation();
+                onEnd();
+              }}
+              label="End Shift"
+            />
           )}
         </div>
       )}
@@ -1224,7 +1283,9 @@ function LiveTimer({
   const segment = from ? Math.max(0, now - from) : 0;
   const total = baseMs + segment;
   const anchor = now - total;
-  const tone = live ? "var(--color-presence)" : "color-mix(in oklab, var(--color-foreground) 55%, transparent)";
+  const tone = live
+    ? "var(--color-presence)"
+    : "color-mix(in oklab, var(--color-foreground) 55%, transparent)";
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
@@ -1241,8 +1302,13 @@ function LiveTimer({
   );
 }
 
-
-function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) => void; label: string }) {
+function SecondaryAction({
+  onClick,
+  label,
+}: {
+  onClick: (e: React.MouseEvent) => void;
+  label: string;
+}) {
   return (
     <button
       onClick={onClick}
@@ -1256,9 +1322,6 @@ function SecondaryAction({ onClick, label }: { onClick: (e: React.MouseEvent) =>
     </button>
   );
 }
-
-
-
 
 const Avatar = memo(function Avatar({
   initials,
@@ -1283,7 +1346,13 @@ const Avatar = memo(function Avatar({
         }}
       >
         {selfieUrl ? (
-          <StableImage src={selfieUrl} alt="" width={44} height={44} className="h-full w-full object-cover" />
+          <StableImage
+            src={selfieUrl}
+            alt=""
+            width={44}
+            height={44}
+            className="h-full w-full object-cover"
+          />
         ) : (
           initials
         )}
@@ -1314,7 +1383,6 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
   // so doctor History reflects ratings persisted in previous sessions.
   useRatedShiftsVersion();
 
-
   const active = upcoming.find((c) => c.active) ?? null;
   const upcomingOnly = upcoming.filter((c) => !c.active);
   const firstPaintSettled = useFirstPaintSettled(upcoming.length + history.length > 0);
@@ -1324,12 +1392,16 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
 
   // Detail can be either a live coverage (active/upcoming) or a history entry.
   const detail: CoverItem | HistoryItem | null =
-    upcoming.find((c) => c.id === detailId) ??
-    history.find((h) => h.id === detailId) ??
-    null;
+    upcoming.find((c) => c.id === detailId) ?? history.find((h) => h.id === detailId) ?? null;
 
   const isEmpty =
-    (tab === "active" ? (active ? 1 : 0) : tab === "upcoming" ? upcomingOnly.length : history.length) === 0;
+    (tab === "active"
+      ? active
+        ? 1
+        : 0
+      : tab === "upcoming"
+        ? upcomingOnly.length
+        : history.length) === 0;
 
   return (
     <section className="relative h-full w-full overflow-hidden bg-background">
@@ -1420,7 +1492,6 @@ function DoctorCoverage({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => voi
         }}
       />
 
-
       <DoctorCoverageDetail
         item={detail}
         netRows={net.requests}
@@ -1504,7 +1575,6 @@ function CoverCard({
             <span>·</span>
             <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
           </div>
-
         </div>
         {isActive && (
           <span
@@ -1532,7 +1602,8 @@ function CoverCard({
       {!isHistory && (item as CoverItem).days > 1 && !isStraightItem(item as CoverItem) && (
         <div className="mt-1.5">
           <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary/70 px-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-foreground/75">
-            Day {Math.min((item as CoverItem).dayIndex ?? 1, (item as CoverItem).days)} of {(item as CoverItem).days}
+            Day {Math.min((item as CoverItem).dayIndex ?? 1, (item as CoverItem).days)} of{" "}
+            {(item as CoverItem).days}
           </span>
         </div>
       )}
@@ -1548,9 +1619,7 @@ function CoverCard({
       </div>
 
       {item.note && (
-        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">
-          {item.note}
-        </div>
+        <div className="mt-1 text-[11.5px] leading-snug text-foreground/65">{item.note}</div>
       )}
 
       {isActive && (item as CoverItem & { startedAt?: number }).startedAt && (
@@ -1567,7 +1636,6 @@ function CoverCard({
           <LiveTimer baseMs={(item as CoverItem).accumulatedMs ?? 0} live={false} />
         </div>
       )}
-
 
       {(isActive || isUpcoming) && (
         <div className="mt-3 flex items-center gap-2">
@@ -1591,8 +1659,12 @@ function CoverCard({
             onClick={(e) => e.stopPropagation()}
             className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors active:opacity-80"
             style={{
-              background: isActive ? "var(--color-foreground)" : "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
-              color: isActive ? "var(--color-background)" : "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
+              background: isActive
+                ? "var(--color-foreground)"
+                : "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+              color: isActive
+                ? "var(--color-background)"
+                : "color-mix(in oklab, var(--color-foreground) 85%, transparent)",
             }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
@@ -1621,8 +1693,7 @@ function DoctorCoverageDetail({
   netRows: Record<string, NetRequest>;
   onDismiss: () => void;
 }) {
-  const isHist = (i: CoverItem | HistoryItem): i is HistoryItem =>
-    "outcome" in i;
+  const isHist = (i: CoverItem | HistoryItem): i is HistoryItem => "outcome" in i;
 
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState("");
@@ -1645,7 +1716,6 @@ function DoctorCoverageDetail({
     item.rating === undefined &&
     isRated(item.id);
 
-
   return (
     <AnimatePresence>
       {item && (
@@ -1664,14 +1734,25 @@ function DoctorCoverageDetail({
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="text-[20px] font-semibold tracking-tight">{item.hospital}</div>
             <div className="inline-flex items-center gap-2">
-              <RatingPill entityId={userEntityId(item.requesterSessionId)} role="requester" inline />
+              <RatingPill
+                entityId={userEntityId(item.requesterSessionId)}
+                role="requester"
+                inline
+              />
               <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
             </div>
           </div>
           <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
           <div className="mt-4 text-[13px] leading-relaxed text-foreground/80">
-            {fmtOpMeta(item.coverage, item.day, item.start, item.end, item.durationHrs, item.amount)}
+            {fmtOpMeta(
+              item.coverage,
+              item.day,
+              item.start,
+              item.end,
+              item.durationHrs,
+              item.amount,
+            )}
           </div>
 
           <div className="mt-4 space-y-2 rounded-2xl bg-secondary/60 px-4 py-3">
@@ -1680,38 +1761,47 @@ function DoctorCoverageDetail({
               label="Settlement"
               value={isHist(item) ? item.settlementStatus : "Pending"}
             />
-            {isHist(item) && (() => {
-              const row = netRows[item.id];
-              const startedMs = row?.firstStartedAt ?? row?.startedAt ?? null;
-              const endedMs = row?.paidAt ?? row?.updatedAt ?? null;
-              const mins = typeof row?.accumulatedMs === "number" ? Math.round(row.accumulatedMs / 60000) : 0;
-              const fmt = (ms: number) => {
-                const d = new Date(ms);
-                return Number.isNaN(d.getTime()) ? null : d.toLocaleString("en-NG", {
-                  weekday: "short", day: "2-digit", month: "short",
-                  hour: "2-digit", minute: "2-digit", hour12: true,
-                });
-              };
-              const hrMin = (m: number) => {
-                const h = Math.floor(m / 60); const r = m % 60;
-                if (h === 0) return `${r}min`;
-                if (r === 0) return `${h}hr`;
-                return `${h}hr ${r}min`;
-              };
-              const startedLabel = startedMs ? fmt(startedMs) : null;
-              const endedLabel = endedMs ? fmt(endedMs) : null;
-              return (
-                <>
-                  {startedLabel && <DetailRow label="Started" value={startedLabel} />}
-                  {endedLabel && <DetailRow label="Ended" value={endedLabel} />}
-                  {mins > 0 && <DetailRow label="Hours worked" value={hrMin(mins)} />}
-                  {mins > 0 && <DetailRow label="Hours billed" value={hrMin(mins)} />}
-                </>
-              );
-            })()}
-            {isHist(item) && (
-              <DetailRow label="Completed" value={item.completedOn} />
-            )}
+            {isHist(item) &&
+              (() => {
+                const row = netRows[item.id];
+                const startedMs = row?.firstStartedAt ?? row?.startedAt ?? null;
+                const endedMs = row?.paidAt ?? row?.updatedAt ?? null;
+                const mins =
+                  typeof row?.accumulatedMs === "number"
+                    ? Math.round(row.accumulatedMs / 60000)
+                    : 0;
+                const fmt = (ms: number) => {
+                  const d = new Date(ms);
+                  return Number.isNaN(d.getTime())
+                    ? null
+                    : d.toLocaleString("en-NG", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      });
+                };
+                const hrMin = (m: number) => {
+                  const h = Math.floor(m / 60);
+                  const r = m % 60;
+                  if (h === 0) return `${r}min`;
+                  if (r === 0) return `${h}hr`;
+                  return `${h}hr ${r}min`;
+                };
+                const startedLabel = startedMs ? fmt(startedMs) : null;
+                const endedLabel = endedMs ? fmt(endedMs) : null;
+                return (
+                  <>
+                    {startedLabel && <DetailRow label="Started" value={startedLabel} />}
+                    {endedLabel && <DetailRow label="Ended" value={endedLabel} />}
+                    {mins > 0 && <DetailRow label="Hours worked" value={hrMin(mins)} />}
+                    {mins > 0 && <DetailRow label="Hours billed" value={hrMin(mins)} />}
+                  </>
+                );
+              })()}
+            {isHist(item) && <DetailRow label="Completed" value={item.completedOn} />}
             {isHist(item) && item.rating !== undefined && (
               <DetailRow
                 label="Rating"
@@ -1751,7 +1841,11 @@ function DoctorCoverageDetail({
                         <path
                           d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z"
                           fill={active ? "var(--color-presence)" : "transparent"}
-                          stroke={active ? "var(--color-presence)" : "color-mix(in oklab, var(--color-foreground) 35%, transparent)"}
+                          stroke={
+                            active
+                              ? "var(--color-presence)"
+                              : "color-mix(in oklab, var(--color-foreground) 35%, transparent)"
+                          }
                           strokeWidth="1.6"
                           strokeLinejoin="round"
                         />
@@ -1786,7 +1880,6 @@ function DoctorCoverageDetail({
               You've already rated this coverage.
             </div>
           )}
-
         </DismissSheet>
       )}
     </AnimatePresence>
@@ -1800,7 +1893,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 
 // ============ Shared shell ============
 
@@ -1868,7 +1960,13 @@ function EmptyState({ tab, role }: { tab: TabId; role: Role }) {
         className="flex h-12 w-12 items-center justify-center rounded-full"
         style={{ background: "var(--color-secondary)" }}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          className="text-muted-foreground"
+        >
           <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
           <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>

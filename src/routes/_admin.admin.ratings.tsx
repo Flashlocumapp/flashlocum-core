@@ -71,9 +71,7 @@ function RatingsPage() {
           <select
             className="rounded border px-2 py-1 bg-background"
             value={minScore === "" ? "" : String(minScore)}
-            onChange={(e) =>
-              setMinScore(e.target.value === "" ? "" : Number(e.target.value))
-            }
+            onChange={(e) => setMinScore(e.target.value === "" ? "" : Number(e.target.value))}
           >
             <option value="">Any</option>
             {[1, 2, 3, 4, 5].map((n) => (

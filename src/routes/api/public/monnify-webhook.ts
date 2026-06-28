@@ -55,10 +55,11 @@ async function verifyMonnifySignature(signature: string | null, rawBody: string)
     false,
     ["sign"],
   );
-  const expected = new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)));
+  const expected = new Uint8Array(
+    await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)),
+  );
   return constantTimeEqual(hexToBytes(sig), expected);
 }
-
 
 export const Route = createFileRoute("/api/public/monnify-webhook")({
   server: {
@@ -176,7 +177,6 @@ export const Route = createFileRoute("/api/public/monnify-webhook")({
             // an in-app toast (delivered via the realtime paid_at flip →
             // engine `payment.settled`). Push is doctor-only here.
             void doctorName;
-
 
             await Promise.allSettled(tasks);
           }

@@ -125,9 +125,12 @@ function TrustPage() {
             checked={onlyFlagged}
             onChange={(e) => setOnlyFlagged(e.target.checked)}
           />
-          Only show flagged (doctor rating &lt; 4.0 / requester &lt; 3.5, or reliability below role threshold)
+          Only show flagged (doctor rating &lt; 4.0 / requester &lt; 3.5, or reliability below role
+          threshold)
         </label>
-        <span className="text-muted-foreground">— {rows.length} user{rows.length === 1 ? "" : "s"}</span>
+        <span className="text-muted-foreground">
+          — {rows.length} user{rows.length === 1 ? "" : "s"}
+        </span>
       </div>
 
       {q.isLoading ? (
@@ -157,14 +160,14 @@ function TrustPage() {
                   <tr key={row.user_id} className="border-t align-top">
                     <td className="px-3 py-2">
                       <div className="font-medium">{row.full_name || "—"}</div>
-                      <div className="text-[11px] text-muted-foreground font-mono">{row.user_id.slice(0, 8)}…</div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        {row.user_id.slice(0, 8)}…
+                      </div>
                       <Link
                         to="/admin/ratings"
                         search={{
                           ratee:
-                            row.role === "doctor"
-                              ? `doc:${row.user_id}`
-                              : `req:${row.user_id}`,
+                            row.role === "doctor" ? `doc:${row.user_id}` : `req:${row.user_id}`,
                         }}
                         className="text-[11px] underline text-muted-foreground hover:text-foreground"
                       >
@@ -173,19 +176,36 @@ function TrustPage() {
                     </td>
                     <td className="px-3 py-2 capitalize">{row.role || "—"}</td>
                     <td className="px-3 py-2">
-                      <div className={s?.eligibility?.rating_below_threshold ? "text-destructive font-semibold" : ""}>
+                      <div
+                        className={
+                          s?.eligibility?.rating_below_threshold
+                            ? "text-destructive font-semibold"
+                            : ""
+                        }
+                      >
                         {Number(s?.rating?.score ?? 5).toFixed(2)}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        {s?.rating?.block_index ?? 0} block{(s?.rating?.block_index ?? 0) === 1 ? "" : "s"} · {s?.rating?.in_progress_count ?? 0}/{s?.rating?.block_size ?? 20} pending
+                        {s?.rating?.block_index ?? 0} block
+                        {(s?.rating?.block_index ?? 0) === 1 ? "" : "s"} ·{" "}
+                        {s?.rating?.in_progress_count ?? 0}/{s?.rating?.block_size ?? 20} pending
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <div className={s?.eligibility?.reliability_below_threshold ? "text-destructive font-semibold" : ""}>
+                      <div
+                        className={
+                          s?.eligibility?.reliability_below_threshold
+                            ? "text-destructive font-semibold"
+                            : ""
+                        }
+                      >
                         {Math.round(Number(s?.reliability?.score ?? 100))}%
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        {s?.reliability?.block_index ?? 0} block{(s?.reliability?.block_index ?? 0) === 1 ? "" : "s"} · {s?.reliability?.in_progress_count ?? 0}/{s?.reliability?.block_size ?? 20} pending
+                        {s?.reliability?.block_index ?? 0} block
+                        {(s?.reliability?.block_index ?? 0) === 1 ? "" : "s"} ·{" "}
+                        {s?.reliability?.in_progress_count ?? 0}/{s?.reliability?.block_size ?? 20}{" "}
+                        pending
                       </div>
                     </td>
                     <td className="px-3 py-2">
@@ -195,7 +215,9 @@ function TrustPage() {
                             FLAGGED
                           </span>
                           {(s?.eligibility?.reasons ?? []).map((r, i) => (
-                            <div key={i} className="text-[11px] text-muted-foreground">{r}</div>
+                            <div key={i} className="text-[11px] text-muted-foreground">
+                              {r}
+                            </div>
                           ))}
                         </div>
                       ) : (
@@ -222,7 +244,9 @@ function TrustPage() {
                           <button
                             className="text-xs rounded border px-2 py-1 hover:bg-muted"
                             onClick={() => {
-                              if (confirm(`Clear restriction for ${row.full_name || row.user_id}?`)) {
+                              if (
+                                confirm(`Clear restriction for ${row.full_name || row.user_id}?`)
+                              ) {
                                 clear.mutate(row.user_id);
                               }
                             }}
@@ -237,13 +261,18 @@ function TrustPage() {
                               placeholder="Reason (optional)"
                               value={reasonDraft[row.user_id] ?? ""}
                               onChange={(e) =>
-                                setReasonDraft((prev) => ({ ...prev, [row.user_id]: e.target.value }))
+                                setReasonDraft((prev) => ({
+                                  ...prev,
+                                  [row.user_id]: e.target.value,
+                                }))
                               }
                             />
                             <button
                               className="text-xs rounded bg-destructive text-destructive-foreground px-2 py-1"
                               onClick={() => {
-                                if (confirm(`Restrict account for ${row.full_name || row.user_id}?`)) {
+                                if (
+                                  confirm(`Restrict account for ${row.full_name || row.user_id}?`)
+                                ) {
                                   restrict.mutate({
                                     userId: row.user_id,
                                     reason: reasonDraft[row.user_id] ?? "",
@@ -301,23 +330,12 @@ function TrustPage() {
         </div>
       )}
 
-      {historyFor && (
-        <TrustHistoryOverlay
-          row={historyFor}
-          onClose={() => setHistoryFor(null)}
-        />
-      )}
+      {historyFor && <TrustHistoryOverlay row={historyFor} onClose={() => setHistoryFor(null)} />}
     </div>
   );
 }
 
-function TrustHistoryOverlay({
-  row,
-  onClose,
-}: {
-  row: TrustRow;
-  onClose: () => void;
-}) {
+function TrustHistoryOverlay({ row, onClose }: { row: TrustRow; onClose: () => void }) {
   const fetchHistory = useServerFn(adminListTrustHistory);
   const q = useQuery({
     queryKey: ["admin", "trust-history", row.user_id],
@@ -340,10 +358,7 @@ function TrustHistoryOverlay({
             </div>
             <div className="text-[15px] font-semibold">{row.full_name || row.user_id}</div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full bg-secondary px-3 py-1 text-[12px]"
-          >
+          <button onClick={onClose} className="rounded-full bg-secondary px-3 py-1 text-[12px]">
             Close
           </button>
         </div>

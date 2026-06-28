@@ -38,32 +38,19 @@ export function MapBackground({
         : []);
 
   return (
-    <div
-      className="absolute inset-0 overflow-hidden"
-      style={{ background: "var(--color-map)" }}
-    >
+    <div className="absolute inset-0 overflow-hidden" style={{ background: "var(--color-map)" }}>
       <svg
         className="absolute inset-0 h-full w-full"
         preserveAspectRatio="none"
         viewBox="0 0 400 800"
       >
-        <g
-          stroke="var(--color-map-ink)"
-          strokeWidth="1.2"
-          fill="none"
-          opacity="0.9"
-        >
+        <g stroke="var(--color-map-ink)" strokeWidth="1.2" fill="none" opacity="0.9">
           <path d="M-20 220 C 80 200, 160 260, 260 220 S 420 240, 460 210" />
           <path d="M-20 420 C 100 400, 180 460, 280 430 S 420 440, 460 420" />
           <path d="M60 -20 C 80 120, 40 260, 90 400 S 120 660, 100 820" />
           <path d="M280 -20 C 260 140, 320 260, 290 420 S 320 660, 300 820" />
         </g>
-        <g
-          stroke="var(--color-map-ink)"
-          strokeWidth="0.6"
-          fill="none"
-          opacity="0.55"
-        >
+        <g stroke="var(--color-map-ink)" strokeWidth="0.6" fill="none" opacity="0.55">
           <path d="M-20 120 L 460 140" />
           <path d="M-20 320 L 460 340" />
           <path d="M-20 540 L 460 560" />
@@ -92,12 +79,7 @@ export function MapBackground({
       </svg>
 
       {resolved.map((m, i) => (
-        <Stethoscope
-          key={m.key}
-          top={m.top}
-          left={m.left}
-          delay={(i % 6) * 0.25}
-        />
+        <Stethoscope key={m.key} top={m.top} left={m.left} delay={(i % 6) * 0.25} />
       ))}
 
       <div
@@ -111,15 +93,7 @@ export function MapBackground({
   );
 }
 
-function Stethoscope({
-  top,
-  left,
-  delay,
-}: {
-  top: number;
-  left: number;
-  delay: number;
-}) {
+function Stethoscope({ top, left, delay }: { top: number; left: number; delay: number }) {
   return (
     <div
       className="absolute"

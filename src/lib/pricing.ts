@@ -92,34 +92,76 @@ export async function loadPricingTable(): Promise<PricingTable> {
     const versionId = (ver as { id: string } | null)?.id ?? null;
     if (!versionId) return CURRENT;
     const [ratesRes, flatsRes, modsRes] = await Promise.all([
-      supabase.from("pricing_rates" as never).select("tier, rate_day, rate_night").eq("version_id", versionId),
-      supabase.from("pricing_flats" as never).select("product, amount").eq("version_id", versionId),
-      supabase.from("pricing_modifiers" as never).select("key, value").eq("version_id", versionId),
+      supabase
+        .from("pricing_rates" as never)
+        .select("tier, rate_day, rate_night")
+        .eq("version_id", versionId),
+      supabase
+        .from("pricing_flats" as never)
+        .select("product, amount")
+        .eq("version_id", versionId),
+      supabase
+        .from("pricing_modifiers" as never)
+        .select("key, value")
+        .eq("version_id", versionId),
     ]);
     const next: PricingTable = JSON.parse(JSON.stringify(SEED_TABLE));
     next.versionId = versionId;
-    for (const r of (ratesRes.data ?? []) as Array<{ tier: keyof PricingTable["rates"]; rate_day: number; rate_night: number }>) {
+    for (const r of (ratesRes.data ?? []) as Array<{
+      tier: keyof PricingTable["rates"];
+      rate_day: number;
+      rate_night: number;
+    }>) {
       if (next.rates[r.tier]) next.rates[r.tier] = { day: r.rate_day, night: r.rate_night };
     }
-    for (const f of (flatsRes.data ?? []) as Array<{ product: keyof PricingTable["flats"]; amount: number }>) {
+    for (const f of (flatsRes.data ?? []) as Array<{
+      product: keyof PricingTable["flats"];
+      amount: number;
+    }>) {
       if (f.product in next.flats) next.flats[f.product] = f.amount;
     }
     for (const m of (modsRes.data ?? []) as Array<{ key: string; value: number }>) {
       const v = Number(m.value);
       switch (m.key) {
-        case "busy_mult": next.modifiers.busy_mult = v; break;
-        case "tolerance_min": next.modifiers.tolerance_min = v; break;
-        case "block_min": next.modifiers.block_min = v; break;
-        case "first_hour_min": next.modifiers.first_hour_min = v; break;
-        case "home_busy_applies": next.modifiers.home_busy_applies = v === 1; break;
-        case "home_tolerance_min": next.modifiers.home_tolerance_min = v; break;
-        case "home_block_min": next.modifiers.home_block_min = v; break;
-        case "straight24_lo_min": next.modifiers.straight24_lo_min = v; break;
-        case "straight24_hi_min": next.modifiers.straight24_hi_min = v; break;
-        case "straight48_lo_min": next.modifiers.straight48_lo_min = v; break;
-        case "straight48_hi_min": next.modifiers.straight48_hi_min = v; break;
-        case "straight_per_hour": next.modifiers.straight_per_hour = v; break;
-        case "surcharge_cap_blocks": next.modifiers.surcharge_cap_blocks = v; break;
+        case "busy_mult":
+          next.modifiers.busy_mult = v;
+          break;
+        case "tolerance_min":
+          next.modifiers.tolerance_min = v;
+          break;
+        case "block_min":
+          next.modifiers.block_min = v;
+          break;
+        case "first_hour_min":
+          next.modifiers.first_hour_min = v;
+          break;
+        case "home_busy_applies":
+          next.modifiers.home_busy_applies = v === 1;
+          break;
+        case "home_tolerance_min":
+          next.modifiers.home_tolerance_min = v;
+          break;
+        case "home_block_min":
+          next.modifiers.home_block_min = v;
+          break;
+        case "straight24_lo_min":
+          next.modifiers.straight24_lo_min = v;
+          break;
+        case "straight24_hi_min":
+          next.modifiers.straight24_hi_min = v;
+          break;
+        case "straight48_lo_min":
+          next.modifiers.straight48_lo_min = v;
+          break;
+        case "straight48_hi_min":
+          next.modifiers.straight48_hi_min = v;
+          break;
+        case "straight_per_hour":
+          next.modifiers.straight_per_hour = v;
+          break;
+        case "surcharge_cap_blocks":
+          next.modifiers.surcharge_cap_blocks = v;
+          break;
       }
     }
     CURRENT = next;
@@ -189,8 +231,7 @@ function friendlyCoverageLabel(
   environment: Environment,
 ): string {
   const hrs = Math.max(1, Math.round(totalMin / 60));
-  const busy =
-    environment === "busy" && coverage !== "home" ? " (Busy Environment)" : "";
+  const busy = environment === "busy" && coverage !== "home" ? " (Busy Environment)" : "";
   if (coverage === "home") return `${hrs}-hour Home Care Coverage`;
   if (coverage === "straight24") return `24-hour Straight Coverage${busy}`;
   if (coverage === "straight48") return `48-hour Straight Coverage${busy}`;
@@ -198,7 +239,10 @@ function friendlyCoverageLabel(
   return `${hrs}-hour ${span} Coverage${busy}`;
 }
 
-function tierFor(perDayHr: number, table: PricingTable): { day: number; night: number; label: "<4h" | "4-6h" | ">6h" } {
+function tierFor(
+  perDayHr: number,
+  table: PricingTable,
+): { day: number; night: number; label: "<4h" | "4-6h" | ">6h" } {
   if (perDayHr > 6) return { ...table.rates[">6h"], label: ">6h" };
   if (perDayHr >= 4) return { ...table.rates["4-6h"], label: "4-6h" };
   return { ...table.rates["<4h"], label: "<4h" };
@@ -317,17 +361,23 @@ export function computeCoveragePricing(
   const tier = tierFor(perDayMin / 60, t);
   const dayMin = perDay.dayMinutes;
   const nightMin = perDay.nightMinutes;
-  const perDayAmount = Math.round(((dayMin / 60) * tier.day + (nightMin / 60) * tier.night) * busyMult);
+  const perDayAmount = Math.round(
+    ((dayMin / 60) * tier.day + (nightMin / 60) * tier.night) * busyMult,
+  );
   const amount = perDayAmount * d;
 
   const parts: string[] = [];
   if (dayMin > 0) parts.push(`${trim(dayMin / 60)}h day · ₦${tier.day.toLocaleString("en-NG")}/hr`);
-  if (nightMin > 0) parts.push(`${trim(nightMin / 60)}h night · ₦${tier.night.toLocaleString("en-NG")}/hr`);
+  if (nightMin > 0)
+    parts.push(`${trim(nightMin / 60)}h night · ₦${tier.night.toLocaleString("en-NG")}/hr`);
   const perDayLabel = d > 1 ? ` × ${d} days` : "";
   return {
     amount,
     billableMinutes: totalMin,
-    explanation: (parts.join(" + ") || "Standard coverage rate.") + perDayLabel + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+    explanation:
+      (parts.join(" + ") || "Standard coverage rate.") +
+      perDayLabel +
+      busySuffix(environment, busyApplies, t.modifiers.busy_mult),
     displayLabel: label,
   };
 }
@@ -403,7 +453,9 @@ export function computeWorkedPricing(
     return {
       amount,
       billableMinutes: worked,
-      explanation: `24-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      explanation:
+        `24-hour straight · ${trim(worked / 60)}h actual.` +
+        busySuffix(environment, busyApplies, t.modifiers.busy_mult),
       displayLabel: friendlyCoverageLabel("straight24", 1440, 1, environment),
     };
   }
@@ -427,7 +479,9 @@ export function computeWorkedPricing(
     return {
       amount,
       billableMinutes: worked,
-      explanation: `48-hour straight · ${trim(worked / 60)}h actual.` + busySuffix(environment, busyApplies, t.modifiers.busy_mult),
+      explanation:
+        `48-hour straight · ${trim(worked / 60)}h actual.` +
+        busySuffix(environment, busyApplies, t.modifiers.busy_mult),
       displayLabel: friendlyCoverageLabel("straight48", 2880, 1, environment),
     };
   }
@@ -440,7 +494,7 @@ export function computeWorkedPricing(
     const homeTol = t.modifiers.home_tolerance_min;
     const homeBlock = t.modifiers.home_block_min;
     const priceHomeDay = (workedMin: number): number => {
-      let w = Math.max(workedMin, t.modifiers.first_hour_min);
+      const w = Math.max(workedMin, t.modifiers.first_hour_min);
       let bill: number;
       if (bookedPerDay > 0 && Math.abs(w - bookedPerDay) <= homeTol) {
         bill = bookedPerDay;
@@ -492,20 +546,21 @@ export function computeWorkedPricing(
     t.modifiers.block_min,
     t.modifiers.first_hour_min,
   );
-  const priorDay = d > 1
-    ? priceStandardDay(
-        bookedPerDay,
-        bookedPerDay,
-        dWin,
-        nWin,
-        tier.day,
-        tier.night,
-        busyMult,
-        t.modifiers.tolerance_min,
-        t.modifiers.block_min,
-        t.modifiers.first_hour_min,
-      )
-    : { billable: 0, amount: 0, toleranceFired: false };
+  const priorDay =
+    d > 1
+      ? priceStandardDay(
+          bookedPerDay,
+          bookedPerDay,
+          dWin,
+          nWin,
+          tier.day,
+          tier.night,
+          busyMult,
+          t.modifiers.tolerance_min,
+          t.modifiers.block_min,
+          t.modifiers.first_hour_min,
+        )
+      : { billable: 0, amount: 0, toleranceFired: false };
 
   const priorAmount =
     typeof priorBilledAmount === "number" && priorBilledAmount >= 0

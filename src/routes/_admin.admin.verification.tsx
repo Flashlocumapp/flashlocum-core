@@ -1,10 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  listDoctors,
-  updateDoctorVerification,
-  type ProfileRow,
-} from "@/lib/profile-remote";
+import { listDoctors, updateDoctorVerification, type ProfileRow } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -24,13 +20,7 @@ export const Route = createFileRoute("/_admin/admin/verification")({
   component: AdminVerificationPage,
 });
 
-type Filter =
-  | "pending"
-  | "action_required"
-  | "approved"
-  | "suspended"
-  | "rejected"
-  | "all";
+type Filter = "pending" | "action_required" | "approved" | "suspended" | "rejected" | "all";
 
 // Profile rows extended with the new action-required metadata. types.ts
 // will catch up after the next regeneration; until then we widen locally.
@@ -94,9 +84,7 @@ function AdminVerificationPage() {
       pushToast({
         tone: "presence",
         title:
-          status === "action_required"
-            ? "Doctor marked Action Required."
-            : `Doctor ${status}.`,
+          status === "action_required" ? "Doctor marked Action Required." : `Doctor ${status}.`,
       });
       await refresh();
     } catch (e) {
@@ -192,10 +180,7 @@ function AdminVerificationPage() {
         />
       )}
 
-      <UserDetailDrawer
-        userId={openUserId}
-        onClose={() => setOpenUserId(null)}
-      />
+      <UserDetailDrawer userId={openUserId} onClose={() => setOpenUserId(null)} />
     </div>
   );
 }
@@ -234,20 +219,16 @@ function VerificationCard({
             </div>
             <Chip color={tone.color}>{tone.label}</Chip>
           </div>
-          <div className="text-[12.5px] text-muted-foreground">
-            {doctor.phone || "no phone"}
-          </div>
+          <div className="text-[12.5px] text-muted-foreground">{doctor.phone || "no phone"}</div>
           <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11.5px] text-muted-foreground">
             <div>
               MDCN: <span className="text-foreground">{doctor.mdcn || "—"}</span>
             </div>
             <div>
-              Location:{" "}
-              <span className="text-foreground">{doctor.location || "—"}</span>
+              Location: <span className="text-foreground">{doctor.location || "—"}</span>
             </div>
             <div className="col-span-2">
-              Submitted:{" "}
-              <span className="text-foreground">{fmt(doctor.onboarded_cover_at)}</span>
+              Submitted: <span className="text-foreground">{fmt(doctor.onboarded_cover_at)}</span>
             </div>
             <div className="col-span-2">
               Bank:{" "}
@@ -258,8 +239,7 @@ function VerificationCard({
             </div>
             {doctor.bank_account_name && (
               <div className="col-span-2">
-                Account name:{" "}
-                <span className="text-foreground">{doctor.bank_account_name}</span>
+                Account name: <span className="text-foreground">{doctor.bank_account_name}</span>
               </div>
             )}
           </div>
@@ -291,13 +271,9 @@ function VerificationCard({
         <DocRow label="Medical license" path={doctor.license_name} />
         <DocRow label="NYSC certificate" path={doctor.nysc_name} />
         {doctor.verification_receipt_url && (
-          <ExternalDocRow
-            label="Payment receipt"
-            url={doctor.verification_receipt_url}
-          />
+          <ExternalDocRow label="Payment receipt" url={doctor.verification_receipt_url} />
         )}
       </div>
-
 
       <div className="mt-3 flex flex-wrap gap-2">
         {status !== "approved" && (
@@ -429,13 +405,7 @@ function isImagePath(path: string | null | undefined): boolean {
   return /\.(png|jpe?g|webp|gif|heic|heif|avif)(\?.*)?$/i.test(path);
 }
 
-function DocRow({
-  label,
-  path,
-}: {
-  label: string;
-  path: string | null | undefined;
-}) {
+function DocRow({ label, path }: { label: string; path: string | null | undefined }) {
   const { url, loading, error } = useSignedDoctorUrl(path);
   const disabled = !url;
   const showThumb = isImagePath(path) && url;
@@ -449,12 +419,7 @@ function DocRow({
           className="shrink-0 overflow-hidden rounded-md"
           style={{ width: 44, height: 44, background: "var(--color-secondary)" }}
         >
-          <img
-            src={url ?? ""}
-            alt={label}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
+          <img src={url ?? ""} alt={label} className="h-full w-full object-cover" loading="lazy" />
         </a>
       ) : (
         <div
@@ -538,9 +503,7 @@ function ActionRequiredSheet({
   const [reason, setReason] = useState<string>(
     doctor.verification_action_reason || ACTION_REASONS[0],
   );
-  const [target, setTarget] = useState<string>(
-    doctor.verification_action_target || "",
-  );
+  const [target, setTarget] = useState<string>(doctor.verification_action_target || "");
   const [note, setNote] = useState<string>(doctor.verification_action_note || "");
 
   return (
@@ -552,12 +515,10 @@ function ActionRequiredSheet({
         className="w-full max-w-md rounded-2xl bg-background p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-[15px] font-semibold tracking-tight">
-          Mark as Action Required
-        </div>
+        <div className="text-[15px] font-semibold tracking-tight">Mark as Action Required</div>
         <div className="mt-0.5 text-[12px] text-muted-foreground">
-          {doctor.full_name || "This doctor"} will be unable to accept shifts until the
-          issue is resolved. A push notification will be sent.
+          {doctor.full_name || "This doctor"} will be unable to accept shifts until the issue is
+          resolved. A push notification will be sent.
         </div>
 
         <label className="mt-4 block text-[11.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">

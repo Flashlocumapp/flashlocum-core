@@ -47,7 +47,6 @@ function fmtHrMin(min: number) {
   return `${h}hr ${r}min`;
 }
 
-
 export function HistoryDetailSheet({
   open,
   item,
@@ -63,7 +62,6 @@ export function HistoryDetailSheet({
    *  even if the numeric score isn't loaded locally. Collapses the form. */
   alreadyRated?: boolean;
 }) {
-
   const [rating, setRating] = useState(item?.rating ?? 0);
   const [feedback, setFeedback] = useState("");
   // Locally remember that the user just submitted, so the rating form
@@ -98,7 +96,13 @@ export function HistoryDetailSheet({
           style={{ background: "var(--color-secondary)" }}
         >
           {identity.selfieUrl ? (
-            <StableImage src={identity.selfieUrl} alt="" width={48} height={48} className="h-full w-full object-cover" />
+            <StableImage
+              src={identity.selfieUrl}
+              alt=""
+              width={48}
+              height={48}
+              className="h-full w-full object-cover"
+            />
           ) : (
             identity.initials
           )}
@@ -120,7 +124,6 @@ export function HistoryDetailSheet({
           </span>
         </div>
       </div>
-
 
       <div className="mt-4 rounded-2xl bg-secondary/50 px-3.5 py-3">
         <Row label="Coverage" value={item.coverage} />
@@ -163,7 +166,11 @@ export function HistoryDetailSheet({
                     <path
                       d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z"
                       fill={active ? "var(--color-presence)" : "transparent"}
-                      stroke={active ? "var(--color-presence)" : "color-mix(in oklab, var(--color-foreground) 35%, transparent)"}
+                      stroke={
+                        active
+                          ? "var(--color-presence)"
+                          : "color-mix(in oklab, var(--color-foreground) 35%, transparent)"
+                      }
                       strokeWidth="1.6"
                       strokeLinejoin="round"
                     />
@@ -212,7 +219,6 @@ export function HistoryDetailSheet({
           You've already rated this coverage.
         </div>
       )}
-
     </DismissSheet>
   );
 }
@@ -221,7 +227,9 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-[12px] text-muted-foreground">{label}</span>
-      <span className={strong ? "text-[14px] font-semibold tabular-nums" : "text-[13px] font-medium"}>
+      <span
+        className={strong ? "text-[14px] font-semibold tabular-nums" : "text-[13px] font-medium"}
+      >
         {value}
       </span>
     </div>

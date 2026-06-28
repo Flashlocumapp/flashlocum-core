@@ -213,9 +213,8 @@ export function PaymentDetailDrawer({
                   color: "#b91c1c",
                 }}
               >
-                Underpayment — expected {fmtNaira(d.underpayment.expected_amount)},
-                received {fmtNaira(d.underpayment.received_amount)} on{" "}
-                {fmt(d.underpayment.received_at)}.
+                Underpayment — expected {fmtNaira(d.underpayment.expected_amount)}, received{" "}
+                {fmtNaira(d.underpayment.received_amount)} on {fmt(d.underpayment.received_at)}.
               </div>
             )}
           </Section>
@@ -230,12 +229,7 @@ export function PaymentDetailDrawer({
               label="Hosted URL"
               value={
                 d.payment_url ? (
-                  <a
-                    href={d.payment_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline"
-                  >
+                  <a href={d.payment_url} target="_blank" rel="noreferrer" className="underline">
                     open
                   </a>
                 ) : (
@@ -245,16 +239,18 @@ export function PaymentDetailDrawer({
             />
             <Field
               label="Due at"
-              value={d.payment_due_at ? `${fmt(d.payment_due_at)} (${fmtRelative(d.payment_due_at)})` : "—"}
+              value={
+                d.payment_due_at
+                  ? `${fmt(d.payment_due_at)} (${fmtRelative(d.payment_due_at)})`
+                  : "—"
+              }
             />
             <Field label="Extensions" value={d.payment_extension_count} />
             <Field
               label="Surcharge cap"
               value={
                 d.surcharge_capped_at ? (
-                  <span style={{ color: "#b91c1c" }}>
-                    capped {fmt(d.surcharge_capped_at)}
-                  </span>
+                  <span style={{ color: "#b91c1c" }}>capped {fmt(d.surcharge_capped_at)}</span>
                 ) : (
                   "—"
                 )
@@ -289,12 +285,8 @@ export function PaymentDetailDrawer({
                         <td className="px-2.5 py-1.5">{r.block_index}</td>
                         <td className="px-2.5 py-1.5">{fmtNaira(r.block_amount)}</td>
                         <td className="px-2.5 py-1.5">{fmtNaira(r.running_total)}</td>
-                        <td className="px-2.5 py-1.5 text-muted-foreground">
-                          {fmt(r.applied_at)}
-                        </td>
-                        <td className="px-2.5 py-1.5 text-muted-foreground">
-                          {r.source || "—"}
-                        </td>
+                        <td className="px-2.5 py-1.5 text-muted-foreground">{fmt(r.applied_at)}</td>
+                        <td className="px-2.5 py-1.5 text-muted-foreground">{r.source || "—"}</td>
                       </tr>
                     ))}
                   </tbody>

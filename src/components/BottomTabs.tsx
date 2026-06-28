@@ -62,7 +62,11 @@ const HOME: Tab = {
       active={a}
       paths={[
         { d: "M3.5 11.5L12 4l8.5 7.5", cap: "round", join: "round" },
-        { d: "M5.5 10.5V19a1 1 0 001 1h3.5v-5h4v5H17a1 1 0 001-1v-8.5", cap: "round", join: "round" },
+        {
+          d: "M5.5 10.5V19a1 1 0 001 1h3.5v-5h4v5H17a1 1 0 001-1v-8.5",
+          cap: "round",
+          join: "round",
+        },
       ]}
     />
   ),
@@ -72,13 +76,47 @@ const COVERAGE: Tab = {
   label: "Coverage",
   icon: (a) => (
     <span style={{ position: "relative", width: 22, height: 22, display: "inline-block" }}>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ position: "absolute", inset: 0, transition: "opacity 180ms ease", opacity: a ? 0 : 1 }}>
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{
+          position: "absolute",
+          inset: 0,
+          transition: "opacity 180ms ease",
+          opacity: a ? 0 : 1,
+        }}
+      >
         <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth={1.6} />
-        <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M12 7.5V12l3 2"
+          stroke="currentColor"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ position: "absolute", inset: 0, transition: "opacity 180ms ease", opacity: a ? 1 : 0 }}>
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{
+          position: "absolute",
+          inset: 0,
+          transition: "opacity 180ms ease",
+          opacity: a ? 1 : 0,
+        }}
+      >
         <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth={2} />
-        <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M12 7.5V12l3 2"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </span>
   ),
@@ -101,13 +139,45 @@ const ACCOUNT: Tab = {
   label: "Account",
   icon: (a) => (
     <span style={{ position: "relative", width: 22, height: 22, display: "inline-block" }}>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ position: "absolute", inset: 0, transition: "opacity 180ms ease", opacity: a ? 0 : 1 }}>
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{
+          position: "absolute",
+          inset: 0,
+          transition: "opacity 180ms ease",
+          opacity: a ? 0 : 1,
+        }}
+      >
         <circle cx="12" cy="9" r="3.5" stroke="currentColor" strokeWidth={1.6} />
-        <path d="M5 19.5c1.5-3.2 4-4.8 7-4.8s5.5 1.6 7 4.8" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+        <path
+          d="M5 19.5c1.5-3.2 4-4.8 7-4.8s5.5 1.6 7 4.8"
+          stroke="currentColor"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
       </svg>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ position: "absolute", inset: 0, transition: "opacity 180ms ease", opacity: a ? 1 : 0 }}>
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{
+          position: "absolute",
+          inset: 0,
+          transition: "opacity 180ms ease",
+          opacity: a ? 1 : 0,
+        }}
+      >
         <circle cx="12" cy="9" r="3.5" stroke="currentColor" strokeWidth={2} />
-        <path d="M5 19.5c1.5-3.2 4-4.8 7-4.8s5.5 1.6 7 4.8" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+        <path
+          d="M5 19.5c1.5-3.2 4-4.8 7-4.8s5.5 1.6 7 4.8"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
       </svg>
     </span>
   ),

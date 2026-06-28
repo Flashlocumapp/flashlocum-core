@@ -1,9 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  fetchAdminUsers,
-  type AdminUserRow,
-} from "@/lib/profile-remote";
+import { fetchAdminUsers, type AdminUserRow } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
 import {
   AdminPageHeader,
@@ -149,9 +146,7 @@ function AdminUsersPage() {
                       onClick={() => setOpenUserId(u.id)}
                     >
                       <td className="px-4 py-2.5">
-                        <div className="font-medium tracking-tight">
-                          {u.full_name || "Unnamed"}
-                        </div>
+                        <div className="font-medium tracking-tight">{u.full_name || "Unnamed"}</div>
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         <div className="truncate max-w-[220px]">{u.email || "—"}</div>
@@ -161,12 +156,8 @@ function AdminUsersPage() {
                       <td className="px-4 py-2.5">
                         {showStatus ? <Chip color={tone.color}>{tone.label}</Chip> : "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-muted-foreground">
-                        {u.location || "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-muted-foreground">
-                        {fmt(u.created_at)}
-                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{u.location || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{fmt(u.created_at)}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         {fmtRelative(u.last_seen_at)}
                       </td>

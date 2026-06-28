@@ -1,13 +1,14 @@
-import * as React from 'react'
-import { render } from 'react-email'
-import { createFileRoute } from '@tanstack/react-router'
-import { SignupEmail } from '@/lib/email-templates/signup'
-import { InviteEmail } from '@/lib/email-templates/invite'
-import { MagicLinkEmail } from '@/lib/email-templates/magic-link'
-import { RecoveryEmail } from '@/lib/email-templates/recovery'
-import { EmailChangeEmail } from '@/lib/email-templates/email-change'
-import { ReauthenticationEmail } from '@/lib/email-templates/reauthentication'
+import * as React from "react";
+import { render } from "react-email";
+import { createFileRoute } from "@tanstack/react-router";
+import { SignupEmail } from "@/lib/email-templates/signup";
+import { InviteEmail } from "@/lib/email-templates/invite";
+import { MagicLinkEmail } from "@/lib/email-templates/magic-link";
+import { RecoveryEmail } from "@/lib/email-templates/recovery";
+import { EmailChangeEmail } from "@/lib/email-templates/email-change";
+import { ReauthenticationEmail } from "@/lib/email-templates/reauthentication";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
   signup: SignupEmail,
   invite: InviteEmail,
@@ -15,15 +16,15 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
   recovery: RecoveryEmail,
   email_change: EmailChangeEmail,
   reauthentication: ReauthenticationEmail,
-}
+};
 
 // Configuration
-const SITE_NAME = "FlashLocum"
-const ROOT_DOMAIN = "app.flashlocum.com"
+const SITE_NAME = "FlashLocum";
+const ROOT_DOMAIN = "app.flashlocum.com";
 
 // Sample data for preview mode ONLY (not used in actual email sending).
-const SAMPLE_PROJECT_URL = "https://app.flashlocum.com"
-const SAMPLE_EMAIL = "user@example.test"
+const SAMPLE_PROJECT_URL = "https://app.flashlocum.com";
+const SAMPLE_EMAIL = "user@example.test";
 const SAMPLE_DATA: Record<string, object> = {
   signup: {
     siteName: SITE_NAME,
@@ -53,57 +54,48 @@ const SAMPLE_DATA: Record<string, object> = {
     confirmationUrl: SAMPLE_PROJECT_URL,
   },
   reauthentication: {
-    token: '123456',
+    token: "123456",
   },
-}
+};
 
 export const Route = createFileRoute("/lovable/email/auth/preview")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = process.env.LOVABLE_API_KEY
+        const apiKey = process.env.LOVABLE_API_KEY;
 
         if (!apiKey) {
-          return Response.json(
-            { error: 'Server configuration error' },
-            { status: 500 }
-          )
+          return Response.json({ error: "Server configuration error" }, { status: 500 });
         }
 
         // Verify the caller is authorized with LOVABLE_API_KEY
-        const authHeader = request.headers.get('Authorization')
+        const authHeader = request.headers.get("Authorization");
         if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-          return Response.json({ error: 'Unauthorized' }, { status: 401 })
+          return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        let type: string
+        let type: string;
         try {
-          const body = await request.json()
-          type = body.type
+          const body = await request.json();
+          type = body.type;
         } catch {
-          return Response.json(
-            { error: 'Invalid JSON in request body' },
-            { status: 400 }
-          )
+          return Response.json({ error: "Invalid JSON in request body" }, { status: 400 });
         }
 
-        const EmailTemplate = EMAIL_TEMPLATES[type]
+        const EmailTemplate = EMAIL_TEMPLATES[type];
 
         if (!EmailTemplate) {
-          return Response.json(
-            { error: `Unknown email type: ${type}` },
-            { status: 400 }
-          )
+          return Response.json({ error: `Unknown email type: ${type}` }, { status: 400 });
         }
 
-        const sampleData = SAMPLE_DATA[type] || {}
-        const html = await render(React.createElement(EmailTemplate, sampleData))
+        const sampleData = SAMPLE_DATA[type] || {};
+        const html = await render(React.createElement(EmailTemplate, sampleData));
 
         return new Response(html, {
           status: 200,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        })
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
       },
     },
   },
-})
+});

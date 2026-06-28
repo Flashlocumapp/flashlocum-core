@@ -11,11 +11,7 @@ import { useEffect, useState } from "react";
 import { getRole } from "./role";
 import { simNow } from "./clock";
 import { fromRealtime, ingest } from "@/lib/feedback";
-import {
-  bookedMinutesFromWindow,
-  computeWorkedPricing,
-  coverageKindFromLabel,
-} from "./pricing";
+import { bookedMinutesFromWindow, computeWorkedPricing, coverageKindFromLabel } from "./pricing";
 import {
   getCurrentUserIdSync,
   notifyCoverageChanged,
@@ -46,7 +42,14 @@ import { supabase } from "@/integrations/supabase/client";
  * lifecycle state until this promise resolves successfully.
  */
 type LifecycleResult =
-  | { ok: true; startedAtMs?: number | null; totalBilledAmount?: number; paymentDueAt?: string; already?: boolean; dayIndex?: number }
+  | {
+      ok: true;
+      startedAtMs?: number | null;
+      totalBilledAmount?: number;
+      paymentDueAt?: string;
+      already?: boolean;
+      dayIndex?: number;
+    }
   | { ok: false; error: string; finalDay?: boolean };
 
 async function callServerLifecycle(
@@ -63,29 +66,37 @@ async function callServerLifecycle(
     }
     const m = await import("./shift.functions");
     if (kind === "pause") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res: any = await m.pauseShift({ data: { requestId } });
       if (res && res.ok === false && res.finalDay) {
-        return { ok: false, error: "Final day - use End Shift to complete this booking", finalDay: true };
+        return {
+          ok: false,
+          error: "Final day - use End Shift to complete this booking",
+          finalDay: true,
+        };
       }
       notifyCoverageChanged(requestId);
       return { ok: true, dayIndex: typeof res?.day_index === "number" ? res.day_index : undefined };
     }
     if (kind === "resume") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res: any = await m.resumeShift({ data: { requestId } });
       notifyCoverageChanged(requestId);
       return { ok: true, startedAtMs: res?.startedAtMs ?? null, already: !!res?.alreadyActive };
     }
     // end
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res: any = await m.endShift({ data: { requestId } });
     notifyCoverageChanged(requestId);
     return {
       ok: true,
-      totalBilledAmount: typeof res?.total_billed_amount === "number" ? res.total_billed_amount : undefined,
+      totalBilledAmount:
+        typeof res?.total_billed_amount === "number" ? res.total_billed_amount : undefined,
       paymentDueAt: res?.payment_due_at,
       already: !!res?.already,
     };
-  } catch (err: any) {
-    const msg = err?.message ?? String(err);
+  } catch (err: unknown) {
+    const msg = (err as Error)?.message ?? String(err);
     console.warn(`[network] ${kind}Shift RPC failed:`, msg);
     return { ok: false, error: msg };
   }
@@ -104,10 +115,6 @@ function setLifecyclePending(id: string, kind: LifecyclePendingKind | null) {
 export function getLifecyclePending(id: string): LifecyclePendingKind | null {
   return lifecycleInFlight.get(id) ?? null;
 }
-
-
-
-
 
 function actorOf(): Actor {
   if (typeof window === "undefined") return "system";
@@ -161,7 +168,6 @@ export type NetRequestStatus =
   | "completed"
   | "cancelled"
   | "expired";
-
 
 export type NetRequest = {
   id: string;
@@ -240,8 +246,6 @@ export type NetRequest = {
   firstStartedAt?: number;
 };
 
-
-
 export type Actor = "requester" | "doctor" | "system";
 export type NetActionType =
   | "publish"
@@ -312,7 +316,6 @@ const listeners = new Set<(s: NetState) => void>();
 let remoteUnsubscribe: (() => void) | null = null;
 let presenceUnsubscribe: (() => void) | null = null;
 
-
 const REQUESTS_LS_KEY = "fl:requests-snapshot:v1";
 const REQUESTS_LS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const REQUESTS_LS_MAX = 80;
@@ -374,9 +377,7 @@ function load(): NetState {
   return {
     schemaVersion: SCHEMA_VERSION,
     doctors: state.doctors ?? {},
-    requests: Object.keys(state.requests ?? {}).length > 0
-      ? state.requests
-      : persistedRequests,
+    requests: Object.keys(state.requests ?? {}).length > 0 ? state.requests : persistedRequests,
     lastEvent: state.lastEvent,
   };
 }
@@ -398,10 +399,6 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
   scheduleRequestsPersist();
 }
 
-
-
-
-
 /**
  * Requester-side acceptance cue: emit canonical `offer.accepted` when the
  * owned coverage_requests row transitions from no-doctor to accepted. This
@@ -409,10 +406,7 @@ function save(next: NetState, event?: Omit<NetEvent, "at">) {
  * the browser (the native shell already gets it from the foreground push).
  * The feedback engine's 6 s dedup window collapses it with the push echo.
  */
-function maybeEmitRequesterAccepted(
-  prev: NetRequest | undefined,
-  next: NetRequest,
-) {
+function maybeEmitRequesterAccepted(prev: NetRequest | undefined, next: NetRequest) {
   if (next.acceptedBy == null) return;
   if (prev?.acceptedBy != null) return; // already accepted earlier
   const uid = getCurrentUserIdSync();
@@ -532,7 +526,6 @@ function init() {
   } catch {
     /* noop */
   }
-
 
   // Subscribe to Supabase coverage_requests realtime.
   //
@@ -669,7 +662,6 @@ function mergePresenceRows(rows: PresenceRow[]): Record<string, DoctorPresence> 
   return out;
 }
 
-
 export function useNetwork() {
   const [s, setS] = useState<NetState>(state);
   useEffect(() => {
@@ -685,13 +677,20 @@ export function useNetwork() {
 
 /** Subscribe to per-id lifecycle pending state (Start/Pause/End RPC in flight). */
 export function useLifecyclePending(id: string | null | undefined): LifecyclePendingKind | null {
-  const [v, setV] = useState<LifecyclePendingKind | null>(() => (id ? lifecycleInFlight.get(id) ?? null : null));
+  const [v, setV] = useState<LifecyclePendingKind | null>(() =>
+    id ? (lifecycleInFlight.get(id) ?? null) : null,
+  );
   useEffect(() => {
-    if (!id) { setV(null); return; }
+    if (!id) {
+      setV(null);
+      return;
+    }
     const fn = () => setV(lifecycleInFlight.get(id) ?? null);
     lifecycleListeners.add(fn);
     fn();
-    return () => { lifecycleListeners.delete(fn); };
+    return () => {
+      lifecycleListeners.delete(fn);
+    };
   }, [id]);
   return v;
 }
@@ -791,7 +790,6 @@ export function setDoctorOnline(online: boolean) {
   void upsertMyPresence({ online, top: d.top, left: d.left });
 }
 
-
 export function setDoctorAcceptedCount(n: number) {
   refreshState();
   const sid = getSessionId();
@@ -833,7 +831,11 @@ export function markDeclined(requestId: string, rev?: number) {
 
 /** Returns true if this session has declined the given (id, rev) pair.
  *  Legacy decline entries stored as the bare id are treated as rev=1. */
-export function isDeclined(d: { declined?: string[] } | undefined, id: string, rev?: number): boolean {
+export function isDeclined(
+  d: { declined?: string[] } | undefined,
+  id: string,
+  rev?: number,
+): boolean {
   if (!d) return false;
   const list = d.declined ?? [];
   const r = rev ?? 1;
@@ -843,8 +845,6 @@ export function isDeclined(d: { declined?: string[] } | undefined, id: string, r
   return false;
 }
 
-
-
 /** Best-effort offline write on tab close. Uses fetch keepalive + the
  *  current Supabase session bearer so the row flips to online=false even
  *  when the page is being unloaded (a normal async call wouldn't complete
@@ -853,7 +853,9 @@ async function beaconOffline() {
   try {
     const url = import.meta.env.VITE_SUPABASE_URL;
     const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const uid = session?.user?.id;
     if (!url || !apikey || !uid || !session?.access_token) return;
     await fetch(`${url}/rest/v1/doctor_presence?user_id=eq.${uid}`, {
@@ -908,7 +910,6 @@ export function startHeartbeat() {
   };
 }
 
-
 /* ---------------- requests (backend-backed) ----------------
  *
  * All request lifecycle is persisted in Supabase (coverage_requests).
@@ -921,7 +922,9 @@ function newRequestId(): string {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
       return crypto.randomUUID();
     }
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
   // RFC4122-ish fallback
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -964,10 +967,7 @@ function applyPatch(
   const cur = state.requests[id];
   if (!cur) return;
   const next = { ...cur, ...patch, updatedAt: simNow() };
-  save(
-    { ...state, requests: { ...state.requests, [id]: next } },
-    { ...event, shiftId: id },
-  );
+  save({ ...state, requests: { ...state.requests, [id]: next } }, { ...event, shiftId: id });
   void remoteUpdateRequest(id, patch);
 }
 
@@ -980,10 +980,7 @@ function applyLocalPatch(
   const cur = state.requests[id];
   if (!cur) return;
   const next = { ...cur, ...patch, updatedAt: simNow() };
-  save(
-    { ...state, requests: { ...state.requests, [id]: next } },
-    { ...event, shiftId: id },
-  );
+  save({ ...state, requests: { ...state.requests, [id]: next } }, { ...event, shiftId: id });
 }
 
 /** Generic patch — actor inferred from current session role. */
@@ -1006,7 +1003,8 @@ function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "
   for (const m of mine) {
     if (!m.startTs || !m.endTs) continue;
     if (incoming.startTs < m.endTs && m.startTs < incoming.endTs) return "overlap";
-    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) return "buffer";
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS)
+      return "buffer";
   }
   return null;
 }
@@ -1053,10 +1051,7 @@ export async function acceptRequest(id: string): Promise<AcceptRequestResult> {
   }
 }
 
-export function cancelRequest(
-  id: string,
-  reason?: { code: string; text?: string },
-) {
+export function cancelRequest(id: string, reason?: { code: string; text?: string }) {
   // Server-authoritative cancel. coverage-remote.ts routes the cancel
   // through `cancelAndNotifyFn`, which authorizes the actor, validates the
   // reason, and updates the row server-side. The realtime ingester then
@@ -1083,8 +1078,7 @@ export async function startRequest(id: string): Promise<{ ok: boolean; error?: s
   // everStarted is the authoritative "has this shift ever been activated?" flag.
   // Fall back to legacy signals (accumulatedMs / dayIndex) only when the server
   // snapshot has not yet been seen by this client.
-  const isResume =
-    !!cur.everStarted || (cur.accumulatedMs ?? 0) > 0 || (cur.dayIndex ?? 1) > 1;
+  const isResume = !!cur.everStarted || (cur.accumulatedMs ?? 0) > 0 || (cur.dayIndex ?? 1) > 1;
   setLifecyclePending(id, isResume ? "resuming" : "starting");
   try {
     const res = await callServerLifecycle(isResume ? "resume" : "start", id);
@@ -1141,7 +1135,13 @@ export async function pauseShift(id: string): Promise<{ ok: boolean; error?: str
     const nextDayIndex = res.dayIndex ?? (cur.dayIndex ?? 1) + 1;
     applyLocalPatch(
       id,
-      { status: "paused", startedAt: undefined, accumulatedMs, everStarted: true, dayIndex: nextDayIndex },
+      {
+        status: "paused",
+        startedAt: undefined,
+        accumulatedMs,
+        everStarted: true,
+        dayIndex: nextDayIndex,
+      },
       { actor: "requester", actorId: getSessionId(), action: "pause" },
     );
     return { ok: true };
@@ -1165,9 +1165,7 @@ export async function completeRequest(id: string): Promise<{ ok: boolean; error?
       return { ok: false, error: res.error };
     }
     const segment =
-      cur.status === "active" && cur.startedAt
-        ? Math.max(0, simNow() - cur.startedAt)
-        : 0;
+      cur.status === "active" && cur.startedAt ? Math.max(0, simNow() - cur.startedAt) : 0;
     const accumulatedMs = (cur.accumulatedMs ?? 0) + segment;
     const toHHMM = (raw: string | undefined, fallback: string): string => {
       const m = (raw ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
@@ -1206,7 +1204,6 @@ export async function completeRequest(id: string): Promise<{ ok: boolean; error?
     setLifecyclePending(id, null);
   }
 }
-
 
 /** Pause broadcasting (hides from doctors) without losing request.
  *  Pre-acceptance only — refuses to act on shifts already accepted by a
@@ -1278,7 +1275,6 @@ export function resumeRequest(id: string) {
   );
 }
 
-
 /** Hard-remove a request (use for pre-acceptance cancellation). */
 export function removeRequest(id: string) {
   refreshState();
@@ -1333,8 +1329,6 @@ export function broadcastingRequests(s: NetState): NetRequest[] {
     )
     .sort((a, b) => (a.broadcastStartedAt ?? a.createdAt) - (b.broadcastStartedAt ?? b.createdAt));
 }
-
-
 
 export function getNetworkSnapshot(): NetState {
   return refreshState();

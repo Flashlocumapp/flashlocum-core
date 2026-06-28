@@ -8,12 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Marker } from "@/components/MapBackground";
 import { hasMapsKey, loadMapsApi } from "@/lib/google-maps";
 import { getLastKnown, requestOnce, subscribe } from "@/lib/location";
-import {
-  FALLBACK_CENTER,
-  LAGOS_BOUNDS_LITERAL,
-  inLagos,
-  type Coords,
-} from "./lagos-bounds";
+import { FALLBACK_CENTER, LAGOS_BOUNDS_LITERAL, inLagos, type Coords } from "./lagos-bounds";
 import { LIGHT_STYLE } from "./map-style";
 import { doctorMarkerArt, requesterDotMarkerArt } from "./marker-icons";
 
@@ -180,11 +175,7 @@ export function GoogleMapBackground({
 
   if (failed || !BROWSER_KEY_PRESENT) {
     return (
-      <div
-        className="absolute inset-0"
-        style={{ background: "var(--color-map)" }}
-        aria-hidden
-      />
+      <div className="absolute inset-0" style={{ background: "var(--color-map)" }} aria-hidden />
     );
   }
 

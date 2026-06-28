@@ -2,10 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  adminListCancellations,
-  type AdminCancellationRow,
-} from "@/lib/admin.functions";
+import { adminListCancellations, type AdminCancellationRow } from "@/lib/admin.functions";
 import { AdminPageHeader, RefreshButton, Empty } from "@/lib/admin-ui";
 import { labelForCode } from "@/lib/cancellation-reasons";
 
@@ -31,15 +28,12 @@ function roleLabel(by: string | null) {
 
 function CancellationsPage() {
   const fetchRows = useServerFn(adminListCancellations);
-  const [roleFilter, setRoleFilter] = useState<"all" | "doctor" | "requester">(
-    "all",
-  );
+  const [roleFilter, setRoleFilter] = useState<"all" | "doctor" | "requester">("all");
   const [search, setSearch] = useState("");
 
   const q = useQuery({
     queryKey: ["admin", "cancellations"],
-    queryFn: () =>
-      fetchRows({ data: { limit: 500 } }) as Promise<AdminCancellationRow[]>,
+    queryFn: () => fetchRows({ data: { limit: 500 } }) as Promise<AdminCancellationRow[]>,
     staleTime: 30_000,
   });
 
@@ -115,22 +109,15 @@ function CancellationsPage() {
             </thead>
             <tbody>
               {filtered.map((r) => (
-                <tr
-                  key={r.shift_id}
-                  className="border-t border-border/40 align-top"
-                >
+                <tr key={r.shift_id} className="border-t border-border/40 align-top">
                   <td className="px-3 py-2 whitespace-nowrap tabular-nums">
                     {fmtDate(r.cancelled_at)}
                   </td>
-                  <td className="px-3 py-2 font-mono text-[11.5px]">
-                    {r.shift_id.slice(0, 8)}…
-                  </td>
+                  <td className="px-3 py-2 font-mono text-[11.5px]">{r.shift_id.slice(0, 8)}…</td>
                   <td className="px-3 py-2">{r.actor_name ?? "—"}</td>
                   <td className="px-3 py-2">{roleLabel(r.cancelled_by)}</td>
                   <td className="px-3 py-2">{r.hospital ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    {r.reason_code ? labelForCode(r.reason_code) : "—"}
-                  </td>
+                  <td className="px-3 py-2">{r.reason_code ? labelForCode(r.reason_code) : "—"}</td>
                   <td className="px-3 py-2 max-w-[320px] whitespace-pre-wrap text-muted-foreground">
                     {r.reason_text ?? "—"}
                   </td>

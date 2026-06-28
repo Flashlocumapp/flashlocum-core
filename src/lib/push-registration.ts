@@ -55,8 +55,7 @@ async function setupListeners(
       const raw = (n.data ?? {}) as Record<string, unknown>;
       const kind = typeof raw.kind === "string" ? (raw.kind as EventKind) : null;
       const entityId = typeof raw.entityId === "string" ? raw.entityId : null;
-      const audience: EventAudience =
-        raw.audience === "requester" ? "requester" : "doctor";
+      const audience: EventAudience = raw.audience === "requester" ? "requester" : "doctor";
       const version = Number(raw.version);
       const occurredAt = Number(raw.occurredAt);
       if (!kind || !entityId || !Number.isFinite(version)) return;

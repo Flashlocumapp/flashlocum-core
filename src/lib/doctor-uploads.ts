@@ -57,11 +57,7 @@ async function getProfileField(
   uid: string,
   field: "selfie_url" | "license_name" | "nysc_name",
 ): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(field)
-    .eq("id", uid)
-    .maybeSingle();
+  const { data, error } = await supabase.from("profiles").select(field).eq("id", uid).maybeSingle();
   if (error) return null;
   return (data as Record<string, string | null> | null)?.[field] ?? null;
 }
@@ -117,10 +113,7 @@ export async function uploadDoctorSelfie(dataUrl: string): Promise<string> {
 export type DoctorDocKind = "license" | "nysc";
 
 /** Upload a verification document. Returns the storage path. */
-export async function uploadDoctorDocument(
-  kind: DoctorDocKind,
-  file: File,
-): Promise<string> {
+export async function uploadDoctorDocument(kind: DoctorDocKind, file: File): Promise<string> {
   const uid = await currentUserId();
   const path = `${uid}/verification/${kind}.${extFor(file)}`;
   const field = kind === "license" ? "license_name" : "nysc_name";

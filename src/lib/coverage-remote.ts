@@ -14,7 +14,6 @@ import { getCachedProfileUserId } from "@/lib/profile-remote";
 import type { NetRequest, NetRequestStatus } from "./network";
 import { setChannelHealth } from "./realtime-health";
 
-
 type Row = {
   id: string;
   requester_id: string;
@@ -32,7 +31,15 @@ type Row = {
   phone: string;
   note: string | null;
   accommodation: string | null;
-  status: "searching" | "accepted" | "active" | "paused" | "awaiting_payment" | "completed" | "cancelled" | "expired";
+  status:
+    | "searching"
+    | "accepted"
+    | "active"
+    | "paused"
+    | "awaiting_payment"
+    | "completed"
+    | "cancelled"
+    | "expired";
   accepted_by: string | null;
   started_at: number | null;
   accumulated_ms: number;
@@ -54,9 +61,6 @@ type Row = {
   expired_at: string | null;
   first_started_at: string | null;
 };
-
-
-
 
 const TABLE = "coverage_requests";
 // v2: cache is scoped to the doctor's OWN rows only. The open SEARCHING
@@ -164,7 +168,6 @@ const dbStatusToNet: Record<Row["status"], NetRequestStatus> = {
   completed: "completed",
   cancelled: "cancelled",
   expired: "expired",
-
 };
 const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   broadcasting: "searching",
@@ -176,7 +179,6 @@ const netStatusToDb: Record<NetRequestStatus, Row["status"]> = {
   cancelled: "cancelled",
   expired: "expired",
 };
-
 
 export function rowToNet(r: Row): NetRequest {
   return {
@@ -220,7 +222,6 @@ export function rowToNet(r: Row): NetRequest {
     firstStartedAt: r.first_started_at ? Date.parse(r.first_started_at) : undefined,
   };
 }
-
 
 function netPatchToRow(p: Partial<NetRequest>): Partial<Row> {
   const out: Partial<Row> = {};
@@ -348,7 +349,6 @@ function hashCoverageSnapshot(rows: NetRequest[]): string {
   return h;
 }
 
-
 // --- Stage 0 safety net: reconciliation timer + channel watchdog ---------
 //
 // `lastRealtimeEventAt` tracks the last time we received ANY realtime signal
@@ -359,7 +359,6 @@ function hashCoverageSnapshot(rows: NetRequest[]): string {
 // quietly dies without firing CHANNEL_ERROR.
 
 let lastRealtimeEventAt = Date.now();
-
 
 function markRealtimeActivity() {
   lastRealtimeEventAt = Date.now();
@@ -440,7 +439,6 @@ export function subscribeInvalidationPing(cb: InvalidationPingListener): () => v
   };
 }
 
-
 // Hard cap on the snapshot. Coverage UI only renders the user's own requests,
 // shifts they have accepted, and the currently-searching pool — at realistic
 // scale this is well under 500. The LIMIT bounds worst-case payload + parse
@@ -500,8 +498,6 @@ function fetchOpenListCoalesced(): Promise<PoolFetchResult> {
   return openListInFlight;
 }
 
-
-
 async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   // Doctors can only directly read coverage_requests rows they accepted
   // (`accepted_by = auth.uid()`); the SELECT policy intentionally hides
@@ -553,7 +549,6 @@ async function fetchAll(userId: string): Promise<NetRequest[] | null> {
   );
 }
 
-
 // In-flight dedup for refreshSnapshot. Realtime bursts + manual refresh
 // calls can overlap; we coalesce concurrent callers onto a single fetch
 // and queue at most one follow-up so the latest state always wins.
@@ -586,7 +581,6 @@ async function refreshSnapshot(): Promise<void> {
       lastCoverageSnapshotHash = nextHash;
       snapshotListeners.forEach((fn) => fn(cachedSnapshot));
     }
-
   })().finally(() => {
     refreshInFlight = null;
     if (refreshPending) {
@@ -684,7 +678,6 @@ async function fetchAndIngestRow(id: string): Promise<NetRequest | null> {
   }
 }
 
-
 /**
  * Broadcast a coverage_requests change to every subscribed client.
  *
@@ -732,7 +725,6 @@ export function reconcileRequest(id: string): Promise<NetRequest | null> {
   if (!id) return Promise.resolve(null);
   return fetchAndIngestRow(id);
 }
-
 
 /**
  * Handle a single postgres_changes payload. Shared between the per-user
@@ -855,11 +847,7 @@ function ensureChannelForUser(userId: string) {
         setChannelHealth("coverage", "ok");
         markRealtimeActivity();
         void refreshSnapshot();
-      } else if (
-        status === "CHANNEL_ERROR" ||
-        status === "TIMED_OUT" ||
-        status === "CLOSED"
-      ) {
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
         scheduleChannelDownBlank();
         // Stage 0 watchdog: tear down and re-subscribe with exp. backoff.
         scheduleReconnect("coverage", () => {
@@ -874,7 +862,6 @@ function ensureChannelForUser(userId: string) {
         });
       }
     });
-
 }
 
 // 10s grace before a dropped realtime channel invalidates the live snapshot.
@@ -895,7 +882,6 @@ function clearChannelDownGrace() {
     channelDownTimer = null;
   }
 }
-
 
 export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
   eventListeners.add(opts.onEvent);
@@ -982,11 +968,7 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
             // Recover any broadcast missed while the channel was down —
             // realtime is primary, snapshot reconcile is the safety net.
             void refreshSnapshot();
-          } else if (
-            status === "CHANNEL_ERROR" ||
-            status === "TIMED_OUT" ||
-            status === "CLOSED"
-          ) {
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             scheduleReconnect("invalidations", openInvalidationChannel);
           }
         });
@@ -994,18 +976,15 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     openInvalidationChannel();
   }
 
-
   // Stage 0 safety net: low-frequency reconciliation timer. Fires only when
   // tab is visible AND no realtime activity for `RECONCILE_AFTER_SILENCE_MS`.
   startReconcileTimer();
-
 
   // Audit 11: no client-side polling. The two sources of truth are the
   // server snapshot issued on subscription activation / identity rehydration
   // (refreshSnapshot below) and realtime events. If a new searching-pool row
   // is missed, the next `coverage_invalidations` broadcast or the
   // SUBSCRIBED-triggered refresh reconciles it — never a periodic poll.
-
 
   // Tab/app reopen: refresh in the background so Incoming Coverage stays
   // visible across the visibility flip. We intentionally do NOT blank the
@@ -1064,7 +1043,6 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
     }
   });
 
-
   return () => {
     eventListeners.delete(opts.onEvent);
     snapshotListeners.delete(opts.onSnapshot);
@@ -1089,11 +1067,9 @@ export function subscribeCoverageRemote(opts: SubscribeOpts): () => void {
       }
       setLiveSnapshotSeen(false);
       stopReconcileTimer();
-
     }
   };
 }
-
 
 /* ---------------- Writes ---------------- */
 
@@ -1242,4 +1218,3 @@ export async function remoteExpireRequest(id: string): Promise<void> {
   }
   emitInvalidate(id);
 }
-

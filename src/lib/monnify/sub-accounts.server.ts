@@ -23,7 +23,10 @@ async function listBanks(): Promise<Bank[]> {
 }
 
 function normalize(s: string): string {
-  return s.toLowerCase().replace(/\b(bank|plc|limited|ltd|nigeria)\b/g, "").replace(/[^a-z0-9]/g, "");
+  return s
+    .toLowerCase()
+    .replace(/\b(bank|plc|limited|ltd|nigeria)\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export async function resolveBankCode(bankName: string): Promise<string> {

@@ -2,7 +2,4 @@
 // On Capacitor (Android/iOS) the WebView renders the same JS map; there is
 // no native Google Maps SDK path.
 
-export {
-  GoogleMapBackground,
-  type PlaceMapMarker,
-} from "./map/GoogleMapBackground.web";
+export { GoogleMapBackground, type PlaceMapMarker } from "./map/GoogleMapBackground.web";

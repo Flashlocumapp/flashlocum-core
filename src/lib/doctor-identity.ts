@@ -7,14 +7,13 @@ import { useEffect, useState } from "react";
 import { getSelfieUrl } from "@/lib/selfie-url";
 import { fetchDoctorProfile, type ProfileRow } from "@/lib/profile-remote";
 
-
 export type DoctorIdentity = {
   id: string | null;
-  fullName: string;       // e.g. "Dr. Emmanuel Adeleke"
-  shortName: string;      // e.g. "Dr. Emmanuel A."
-  initials: string;       // e.g. "EA"
-  mdcn: string;           // exactly as stored, e.g. "MDCN/R/34729" — no prefix
-  selfieUrl: string | null;  // resolved (signed) URL ready for <img src>
+  fullName: string; // e.g. "Dr. Emmanuel Adeleke"
+  shortName: string; // e.g. "Dr. Emmanuel A."
+  initials: string; // e.g. "EA"
+  mdcn: string; // exactly as stored, e.g. "MDCN/R/34729" — no prefix
+  selfieUrl: string | null; // resolved (signed) URL ready for <img src>
   selfiePath: string | null; // raw storage path persisted across reloads
   ratingId: string | null; // matches doctorEntityId(id)
   loaded: boolean;
@@ -52,7 +51,6 @@ function readIdentityCache(): Map<string, DoctorIdentity> {
   }
   return out;
 }
-
 
 function writeIdentityCache() {
   if (typeof window === "undefined") return;
@@ -100,7 +98,10 @@ function makeInitials(name: string, sessionId: string | null): string {
     if (ini) return ini;
   }
   if (sessionId) {
-    const tail = sessionId.replace(/[^a-z0-9]/gi, "").slice(-2).toUpperCase();
+    const tail = sessionId
+      .replace(/[^a-z0-9]/gi, "")
+      .slice(-2)
+      .toUpperCase();
     if (tail.length === 2) return tail;
   }
   return "DR";
@@ -196,7 +197,6 @@ function maybeResolveSelfie(sessionId: string) {
   if (cur.selfieUrl) return;
   void resolveSelfie(sessionId, cur.selfiePath);
 }
-
 
 function loadInto(sessionId: string) {
   // If a stale cache entry exists with a path but no signed URL, kick off

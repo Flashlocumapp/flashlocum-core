@@ -23,11 +23,7 @@ export function Chip({ children, color }: { children: ReactNode; color?: string 
 }
 
 export type VerificationStatus =
-  | "pending"
-  | "approved"
-  | "suspended"
-  | "rejected"
-  | "action_required";
+  "pending" | "approved" | "suspended" | "rejected" | "action_required";
 
 export function statusTone(s: VerificationStatus) {
   switch (s) {
@@ -101,9 +97,7 @@ export function AdminPageHeader({
     <div className="flex items-start justify-between gap-4 border-b pb-4">
       <div>
         <h1 className="text-[22px] font-semibold tracking-tight">{title}</h1>
-        {subtitle && (
-          <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitle}</p>
-        )}
+        {subtitle && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitle}</p>}
       </div>
       {right && <div className="flex items-center gap-2">{right}</div>}
     </div>
@@ -146,8 +140,7 @@ export function StatCard({
             className="inline-block h-1.5 w-1.5 rounded-full"
             style={{
               background: "var(--color-presence)",
-              boxShadow:
-                "0 0 0 3px color-mix(in oklab, var(--color-presence) 22%, transparent)",
+              boxShadow: "0 0 0 3px color-mix(in oklab, var(--color-presence) 22%, transparent)",
             }}
           />
         )}
@@ -160,13 +153,7 @@ export function StatCard({
   );
 }
 
-export function RefreshButton({
-  onClick,
-  busy,
-}: {
-  onClick: () => void;
-  busy?: boolean;
-}) {
+export function RefreshButton({ onClick, busy }: { onClick: () => void; busy?: boolean }) {
   return (
     <button
       onClick={onClick}

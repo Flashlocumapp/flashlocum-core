@@ -103,12 +103,10 @@ const DOCTOR_CODES = new Set([
 
 export const cancelAndNotifyFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (input: { requestId: string; reasonCode?: string; reasonText?: string }) => {
-      if (!isUuid(input?.requestId)) throw new Error("Invalid request id");
-      return input;
-    },
-  )
+  .inputValidator((input: { requestId: string; reasonCode?: string; reasonText?: string }) => {
+    if (!isUuid(input?.requestId)) throw new Error("Invalid request id");
+    return input;
+  })
   .handler(async ({ data, context }) => {
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

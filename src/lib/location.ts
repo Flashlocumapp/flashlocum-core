@@ -36,9 +36,7 @@ function distanceMeters(a: Coords, b: Coords): number {
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
@@ -107,9 +105,11 @@ export function getPermissionState(): PermissionState {
 export async function ensurePermission(): Promise<PermissionState> {
   if (permissionState !== "unknown") return permissionState;
   try {
-    const perms = (navigator as Navigator & {
-      permissions?: { query: (d: { name: PermissionName }) => Promise<PermissionStatus> };
-    }).permissions;
+    const perms = (
+      navigator as Navigator & {
+        permissions?: { query: (d: { name: PermissionName }) => Promise<PermissionStatus> };
+      }
+    ).permissions;
     if (perms?.query) {
       const status = await perms.query({ name: "geolocation" as PermissionName });
       if (status.state === "granted") permissionState = "granted";

@@ -15,7 +15,6 @@ import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtOpMeta } from "@/lib/format";
 import { useNetwork } from "@/lib/network";
 
-
 import {
   acceptIncoming,
   cancelUpcoming,
@@ -45,13 +44,9 @@ function CoverDispatchOverlays() {
   // Payment received card reflects the exact start / end / billed values
   // backed by shift_segments → coverage_requests.
   const netState = useNetwork();
-  const reqRow = pendingRating
-    ? netState.requests[pendingRating.requestId]
-    : undefined;
+  const reqRow = pendingRating ? netState.requests[pendingRating.requestId] : undefined;
   const billedMinutes =
-    typeof reqRow?.accumulatedMs === "number"
-      ? Math.round(reqRow.accumulatedMs / 60000)
-      : null;
+    typeof reqRow?.accumulatedMs === "number" ? Math.round(reqRow.accumulatedMs / 60000) : null;
   const actualMinutes = billedMinutes;
   const endedAtMs =
     reqRow?.paidAt ??
@@ -153,10 +148,17 @@ function IncomingBody({ item }: { item: Coverage }) {
     <div>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="relative h-2 w-2 rounded-full" style={{ background: "var(--color-presence)" }}>
+          <span
+            className="relative h-2 w-2 rounded-full"
+            style={{ background: "var(--color-presence)" }}
+          >
             <span
               className="absolute inset-0 rounded-full"
-              style={{ background: "var(--color-presence)", opacity: 0.5, animation: "presence-pulse 1.6s ease-out infinite" }}
+              style={{
+                background: "var(--color-presence)",
+                opacity: 0.5,
+                animation: "presence-pulse 1.6s ease-out infinite",
+              }}
             />
           </span>
           <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -168,10 +170,11 @@ function IncomingBody({ item }: { item: Coverage }) {
           <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
           <EnvironmentBadge environment={item.environment ?? "normal"} size="sm" />
         </div>
-
       </div>
 
-      <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">{item.hospital}</div>
+      <div className="mt-3 text-[20px] font-semibold leading-tight tracking-tight">
+        {item.hospital}
+      </div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
 
       <div className="mt-4 text-[13.5px] leading-relaxed text-foreground/80">
@@ -211,7 +214,17 @@ function IncomingBody({ item }: { item: Coverage }) {
   );
 }
 
-function Row({ label, value, strong, muted }: { label: string; value: string; strong?: boolean; muted?: boolean }) {
+function Row({
+  label,
+  value,
+  strong,
+  muted,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  muted?: boolean;
+}) {
   return (
     <div className="flex items-baseline justify-between">
       <span
@@ -242,14 +255,16 @@ function AcceptedBody({ item }: { item: Coverage }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-medium uppercase tracking-[0.16em]" style={{ color: "var(--color-presence)" }}>
+        <div
+          className="text-[11px] font-medium uppercase tracking-[0.16em]"
+          style={{ color: "var(--color-presence)" }}
+        >
           Coverage confirmed
         </div>
         <div className="inline-flex items-center gap-2">
           <RatingPill entityId={userEntityId(item.requesterSessionId)} role="requester" inline />
           <ReliabilityPill entityId={userEntityId(item.requesterSessionId)} inline />
         </div>
-
       </div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight">{item.hospital}</div>
       <div className="text-[13px] text-muted-foreground">{item.area}</div>
@@ -296,4 +311,3 @@ function AcceptedBody({ item }: { item: Coverage }) {
     </div>
   );
 }
-

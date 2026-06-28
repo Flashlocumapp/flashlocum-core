@@ -19,12 +19,7 @@ function isUuid(v: unknown): v is string {
 
 /** JSON-safe value, used for any wire-serialized payload field. */
 export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function assertAdmin(context: { supabase: any; userId: string }) {
@@ -89,14 +84,18 @@ export type AdminActionRow = {
 export const adminListActions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: {
-      actorUserId?: string;
-      targetUserId?: string;
-      targetShiftId?: string;
-      action?: string;
-      actionPrefix?: string;
-      limit?: number;
-    } | undefined) => ({
+    (
+      input:
+        | {
+            actorUserId?: string;
+            targetUserId?: string;
+            targetShiftId?: string;
+            action?: string;
+            actionPrefix?: string;
+            limit?: number;
+          }
+        | undefined,
+    ) => ({
       actorUserId: input?.actorUserId,
       targetUserId: input?.targetUserId,
       targetShiftId: input?.targetShiftId,
@@ -140,22 +139,20 @@ export const adminListActions = createServerFn({ method: "POST" })
       for (const p of profs ?? []) nameMap.set(p.id, p.full_name);
     }
 
-    return list.map(
-      (r): AdminActionRow => ({
-        id: r.id,
-        actor_user_id: r.actor_user_id,
-        actor_name: nameMap.get(r.actor_user_id) ?? null,
-        action: r.action,
-        target_user_id: r.target_user_id,
-        target_user_name: r.target_user_id ? nameMap.get(r.target_user_id) ?? null : null,
-        target_shift_id: r.target_shift_id,
-        target_payment_ref: r.target_payment_ref,
-        reason: r.reason,
-        note: r.note,
-        payload: r.payload as JsonValue | null,
-        created_at: r.created_at,
-      }),
-    );
+    return list.map((r): AdminActionRow => ({
+      id: r.id,
+      actor_user_id: r.actor_user_id,
+      actor_name: nameMap.get(r.actor_user_id) ?? null,
+      action: r.action,
+      target_user_id: r.target_user_id,
+      target_user_name: r.target_user_id ? (nameMap.get(r.target_user_id) ?? null) : null,
+      target_shift_id: r.target_shift_id,
+      target_payment_ref: r.target_payment_ref,
+      reason: r.reason,
+      note: r.note,
+      payload: r.payload as JsonValue | null,
+      created_at: r.created_at,
+    }));
   });
 
 // =====================================================================
@@ -303,22 +300,22 @@ export const adminGetUserDetail = createServerFn({ method: "POST" })
           (profile as { bank_account_name?: string | null }).bank_account_name ?? null,
         verification_status: profile.verification_status ?? null,
         verification_action_reason:
-          (profile as { verification_action_reason?: string | null })
-            .verification_action_reason ?? null,
+          (profile as { verification_action_reason?: string | null }).verification_action_reason ??
+          null,
         verification_action_target:
-          (profile as { verification_action_target?: string | null })
-            .verification_action_target ?? null,
+          (profile as { verification_action_target?: string | null }).verification_action_target ??
+          null,
         verification_action_note:
-          (profile as { verification_action_note?: string | null })
-            .verification_action_note ?? null,
+          (profile as { verification_action_note?: string | null }).verification_action_note ??
+          null,
         verification_action_at:
           (profile as { verification_action_at?: string | null }).verification_action_at ?? null,
         selfie_url: profile.selfie_url ?? null,
         license_name: profile.license_name ?? null,
         nysc_name: (profile as { nysc_name?: string | null }).nysc_name ?? null,
         verification_receipt_url:
-          (profile as { verification_receipt_url?: string | null })
-            .verification_receipt_url ?? null,
+          (profile as { verification_receipt_url?: string | null }).verification_receipt_url ??
+          null,
         onboarded_at: profile.onboarded_at ?? null,
         onboarded_cover_at:
           (profile as { onboarded_cover_at?: string | null }).onboarded_cover_at ?? null,
@@ -326,8 +323,7 @@ export const adminGetUserDetail = createServerFn({ method: "POST" })
           (profile as { onboarded_request_at?: string | null }).onboarded_request_at ?? null,
         last_seen_at: (profile as { last_seen_at?: string | null }).last_seen_at ?? null,
         created_at: profile.created_at,
-        trust_frozen_at:
-          (profile as { trust_frozen_at?: string | null }).trust_frozen_at ?? null,
+        trust_frozen_at: (profile as { trust_frozen_at?: string | null }).trust_frozen_at ?? null,
         trust_frozen_reason:
           (profile as { trust_frozen_reason?: string | null }).trust_frozen_reason ?? null,
         trust_escalated_at:
@@ -345,8 +341,8 @@ export const adminGetUserDetail = createServerFn({ method: "POST" })
         shifts_total: total,
         shifts_completed: completed,
         shifts_cancelled: cancelled,
-        ratings_received: ratingsRecCount ?? (ratingsRec?.length ?? 0),
-        ratings_given: ratingsGivCount ?? (ratingsGiv?.length ?? 0),
+        ratings_received: ratingsRecCount ?? ratingsRec?.length ?? 0,
+        ratings_given: ratingsGivCount ?? ratingsGiv?.length ?? 0,
         outstanding_amount: outstanding,
       },
       devices: (devices ?? []).map((d) => ({
@@ -491,17 +487,13 @@ export const adminGetShiftDetail = createServerFn({ method: "POST" })
     const ids = new Set<string>();
     ids.add(shift.requester_id);
     if (shift.accepted_by) ids.add(shift.accepted_by);
-    const profMap = new Map<
-      string,
-      { full_name: string | null; phone: string | null }
-    >();
+    const profMap = new Map<string, { full_name: string | null; phone: string | null }>();
     if (ids.size) {
       const { data: profs } = await supabaseAdmin
         .from("profiles")
         .select("id, full_name, phone")
         .in("id", Array.from(ids));
-      for (const p of profs ?? [])
-        profMap.set(p.id, { full_name: p.full_name, phone: p.phone });
+      for (const p of profs ?? []) profMap.set(p.id, { full_name: p.full_name, phone: p.phone });
     }
 
     let r2d: AdminShiftDetail["ratings"]["r2d"] = null;
@@ -532,8 +524,7 @@ export const adminGetShiftDetail = createServerFn({ method: "POST" })
         note: shift.note ?? null,
         accommodation: shift.accommodation ?? null,
         base_amount: shift.base_amount == null ? null : Number(shift.base_amount),
-        surcharge_amount:
-          shift.surcharge_amount == null ? null : Number(shift.surcharge_amount),
+        surcharge_amount: shift.surcharge_amount == null ? null : Number(shift.surcharge_amount),
         total_billed_amount:
           shift.total_billed_amount == null ? null : Number(shift.total_billed_amount),
         settled_amount: shift.settled_amount ?? null,
@@ -559,12 +550,8 @@ export const adminGetShiftDetail = createServerFn({ method: "POST" })
         requester_name: profMap.get(shift.requester_id)?.full_name ?? null,
         requester_phone: profMap.get(shift.requester_id)?.phone ?? null,
         accepted_by: shift.accepted_by ?? null,
-        doctor_name: shift.accepted_by
-          ? profMap.get(shift.accepted_by)?.full_name ?? null
-          : null,
-        doctor_phone: shift.accepted_by
-          ? profMap.get(shift.accepted_by)?.phone ?? null
-          : null,
+        doctor_name: shift.accepted_by ? (profMap.get(shift.accepted_by)?.full_name ?? null) : null,
+        doctor_phone: shift.accepted_by ? (profMap.get(shift.accepted_by)?.phone ?? null) : null,
       },
       segments: (segments ?? []).map((s, i) => ({
         id: s.id,
@@ -677,9 +664,7 @@ export const adminShiftExtendPaymentWindow = createServerFn({ method: "POST" })
     if (gErr) throw new Error(gErr.message);
 
     const base = row?.payment_due_at ? Date.parse(row.payment_due_at) : Date.now();
-    const next = new Date(
-      Math.max(base, Date.now()) + data.minutes * 60_000,
-    ).toISOString();
+    const next = new Date(Math.max(base, Date.now()) + data.minutes * 60_000).toISOString();
 
     const { error } = await supabaseAdmin
       .from("coverage_requests")
@@ -874,14 +859,13 @@ export const adminGetPaymentDetail = createServerFn({ method: "POST" })
       total_billed_amount:
         shift.total_billed_amount == null ? null : Number(shift.total_billed_amount),
       base_amount: shift.base_amount == null ? null : Number(shift.base_amount),
-      surcharge_amount:
-        shift.surcharge_amount == null ? null : Number(shift.surcharge_amount),
+      surcharge_amount: shift.surcharge_amount == null ? null : Number(shift.surcharge_amount),
       settled_amount: shift.settled_amount ?? null,
       payment_account: (shift.payment_account as JsonValue | null) ?? null,
       requester_id: shift.requester_id,
       requester_name: nameMap.get(shift.requester_id) ?? null,
       doctor_id: shift.accepted_by ?? null,
-      doctor_name: shift.accepted_by ? nameMap.get(shift.accepted_by) ?? null : null,
+      doctor_name: shift.accepted_by ? (nameMap.get(shift.accepted_by) ?? null) : null,
       surcharge_log: (surcharge ?? []).map((r) => ({
         block_index: r.block_index,
         block_amount: Number(r.block_amount ?? 0),
@@ -897,22 +881,20 @@ export const adminGetPaymentDetail = createServerFn({ method: "POST" })
             payment_reference: under.payment_reference ?? null,
           }
         : null,
-      actions: (actions ?? []).map(
-        (r): AdminActionRow => ({
-          id: r.id,
-          actor_user_id: r.actor_user_id,
-          actor_name: nameMap.get(r.actor_user_id) ?? null,
-          action: r.action,
-          target_user_id: r.target_user_id,
-          target_user_name: r.target_user_id ? nameMap.get(r.target_user_id) ?? null : null,
-          target_shift_id: r.target_shift_id,
-          target_payment_ref: r.target_payment_ref,
-          reason: r.reason,
-          note: r.note,
-          payload: r.payload as JsonValue | null,
-          created_at: r.created_at,
-        }),
-      ),
+      actions: (actions ?? []).map((r): AdminActionRow => ({
+        id: r.id,
+        actor_user_id: r.actor_user_id,
+        actor_name: nameMap.get(r.actor_user_id) ?? null,
+        action: r.action,
+        target_user_id: r.target_user_id,
+        target_user_name: r.target_user_id ? (nameMap.get(r.target_user_id) ?? null) : null,
+        target_shift_id: r.target_shift_id,
+        target_payment_ref: r.target_payment_ref,
+        reason: r.reason,
+        note: r.note,
+        payload: r.payload as JsonValue | null,
+        created_at: r.created_at,
+      })),
     };
   });
 
@@ -989,12 +971,7 @@ export const adminPaymentWriteOff = createServerFn({ method: "POST" })
 export const adminPaymentRecordOffline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: {
-      shiftId: string;
-      amount: number;
-      reference?: string;
-      note?: string;
-    }) => {
+    (input: { shiftId: string; amount: number; reference?: string; note?: string }) => {
       if (!isUuid(input?.shiftId)) throw new Error("Invalid shift id");
       if (!(input?.amount > 0)) throw new Error("Amount must be positive");
       return input;
@@ -1098,8 +1075,8 @@ export const adminGetVerificationDetail = createServerFn({ method: "POST" })
       sign(profile.license_name),
       sign((profile as { nysc_name?: string | null }).nysc_name),
     ]);
-    const receiptExternal = (profile as { verification_receipt_url?: string | null })
-      .verification_receipt_url ?? null;
+    const receiptExternal =
+      (profile as { verification_receipt_url?: string | null }).verification_receipt_url ?? null;
 
     const actorIds = new Set<string>();
     for (const a of actions ?? []) actorIds.add(a.actor_user_id);
@@ -1117,17 +1094,15 @@ export const adminGetVerificationDetail = createServerFn({ method: "POST" })
       full_name: profile.full_name,
       verification_status: profile.verification_status,
       action_reason:
-        (profile as { verification_action_reason?: string | null })
-          .verification_action_reason ?? null,
-      action_target:
-        (profile as { verification_action_target?: string | null })
-          .verification_action_target ?? null,
-      action_note:
-        (profile as { verification_action_note?: string | null })
-          .verification_action_note ?? null,
-      action_at:
-        (profile as { verification_action_at?: string | null }).verification_action_at ??
+        (profile as { verification_action_reason?: string | null }).verification_action_reason ??
         null,
+      action_target:
+        (profile as { verification_action_target?: string | null }).verification_action_target ??
+        null,
+      action_note:
+        (profile as { verification_action_note?: string | null }).verification_action_note ?? null,
+      action_at:
+        (profile as { verification_action_at?: string | null }).verification_action_at ?? null,
       files: [
         {
           label: "Selfie / profile photo",
@@ -1141,8 +1116,7 @@ export const adminGetVerificationDetail = createServerFn({ method: "POST" })
           field: "license",
           path: profile.license_name,
           signed_url: license,
-          is_external:
-            !!profile.license_name && /^https?:\/\//i.test(profile.license_name),
+          is_external: !!profile.license_name && /^https?:\/\//i.test(profile.license_name),
         },
         {
           label: "NYSC certificate",
@@ -1151,9 +1125,7 @@ export const adminGetVerificationDetail = createServerFn({ method: "POST" })
           signed_url: nysc,
           is_external:
             !!(profile as { nysc_name?: string | null }).nysc_name &&
-            /^https?:\/\//i.test(
-              (profile as { nysc_name?: string | null }).nysc_name ?? "",
-            ),
+            /^https?:\/\//i.test((profile as { nysc_name?: string | null }).nysc_name ?? ""),
         },
         {
           label: "Payment receipt",
@@ -1176,7 +1148,7 @@ export const adminGetVerificationDetail = createServerFn({ method: "POST" })
         actor_name: nameMap.get(r.actor_user_id) ?? null,
         action: r.action,
         target_user_id: r.target_user_id,
-        target_user_name: r.target_user_id ? nameMap.get(r.target_user_id) ?? null : null,
+        target_user_name: r.target_user_id ? (nameMap.get(r.target_user_id) ?? null) : null,
         target_shift_id: r.target_shift_id,
         target_payment_ref: r.target_payment_ref,
         reason: r.reason,

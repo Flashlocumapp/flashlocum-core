@@ -66,7 +66,8 @@ export function AccountScreen() {
     const baseName = profile?.full_name || authIdentity.name;
     const fallback = profileLoading ? "Loading…" : isDoctor ? "Doctor" : "Requester";
     const rawName = baseName || fallback;
-    const name = isDoctor && rawName !== "Loading…" && !/^dr\.?\s/i.test(rawName) ? `Dr. ${rawName}` : rawName;
+    const name =
+      isDoctor && rawName !== "Loading…" && !/^dr\.?\s/i.test(rawName) ? `Dr. ${rawName}` : rawName;
     const email = authIdentity.email || "—";
     return { name, email, initials: deriveInitials(name, email) };
   }, [authIdentity, isDoctor, profile?.full_name, profileLoading]);
@@ -135,7 +136,14 @@ export function AccountScreen() {
             }}
           >
             {isDoctor && selfieSrc ? (
-              <img src={selfieSrc} alt="" decoding="async" loading="eager" draggable={false} className="h-full w-full object-cover" />
+              <img
+                src={selfieSrc}
+                alt=""
+                decoding="async"
+                loading="eager"
+                draggable={false}
+                className="h-full w-full object-cover"
+              />
             ) : (
               identity.initials
             )}
@@ -195,19 +203,15 @@ export function AccountScreen() {
             <ListGroup>
               <DetailRow label="Bank Name" value={profile?.bank_name || "—"} />
               <DetailRow label="Account Number" value={profile?.bank_account || "—"} />
-              <DetailRow
-                label="Account Name"
-                value={profile?.bank_account_name || "—"}
-                last
-              />
+              <DetailRow label="Account Name" value={profile?.bank_account_name || "—"} last />
             </ListGroup>
           </Section>
         )}
 
         <Section title="Support">
           <ListGroup>
-            <NavRow title="Help Center" onClick={() => navigate({ to: '/help' })} />
-            <NavRow title="Contact Support" onClick={() => navigate({ to: '/support' })} last />
+            <NavRow title="Help Center" onClick={() => navigate({ to: "/help" })} />
+            <NavRow title="Contact Support" onClick={() => navigate({ to: "/support" })} last />
           </ListGroup>
         </Section>
 
@@ -231,12 +235,7 @@ export function AccountScreen() {
               }}
               tone="muted"
             />
-            <NavRow
-              title="Delete Account"
-              onClick={() => setDeleteOpen(true)}
-              tone="danger"
-              last
-            />
+            <NavRow title="Delete Account" onClick={() => setDeleteOpen(true)} tone="danger" last />
           </ListGroup>
         </Section>
       </div>
@@ -404,13 +403,27 @@ function NavRow({
         {title}
       </span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M9 6l6 6-6 6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </button>
   );
 }
 
-function DetailRow({ label, value, last: _last }: { label: string; value: string; last?: boolean }) {
+function DetailRow({
+  label,
+  value,
+  last: _last,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between px-4 py-3.5">
       <span className="text-[14.5px]">{label}</span>
@@ -472,7 +485,10 @@ function ProfileSheet({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div
+      className="absolute inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92%] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card p-5 pb-8"
@@ -520,14 +536,12 @@ function ProfileSheet({
                   if (patch.bankName !== undefined) setBankName(patch.bankName);
                   if (patch.bankCode !== undefined) setBankCode(patch.bankCode);
                   if (patch.bankAccount !== undefined) setBankAccount(patch.bankAccount);
-                  if (patch.bankAccountName !== undefined) setBankAccountName(patch.bankAccountName);
+                  if (patch.bankAccountName !== undefined)
+                    setBankAccountName(patch.bankAccountName);
                 }}
               />
               {verification && (
-                <ReadField
-                  label="Verification Status"
-                  value={verificationLabel(verification)}
-                />
+                <ReadField label="Verification Status" value={verificationLabel(verification)} />
               )}
             </>
           )}
@@ -642,9 +656,7 @@ function DeleteAccountSheet({
     let cancelled = false;
     (async () => {
       try {
-        const { checkAccountDeleteEligibility } = await import(
-          "@/lib/account-delete.functions"
-        );
+        const { checkAccountDeleteEligibility } = await import("@/lib/account-delete.functions");
         const res = await checkAccountDeleteEligibility();
         if (cancelled) return;
         setEligible(res.ok);
@@ -669,9 +681,7 @@ function DeleteAccountSheet({
     if (deleting) return;
     setDeleting(true);
     try {
-      const { deleteMyAccount } = await import(
-        "@/lib/account-delete.functions"
-      );
+      const { deleteMyAccount } = await import("@/lib/account-delete.functions");
       await deleteMyAccount();
       pushToast({ tone: "info", title: "Account deleted" });
       await onDeleted();
@@ -696,20 +706,15 @@ function DeleteAccountSheet({
         className="max-h-[92%] w-full max-w-md overflow-y-auto rounded-3xl bg-card p-5"
         style={{ boxShadow: "0 24px 60px -20px rgba(0,0,0,0.45)" }}
       >
-        <div className="text-[18px] font-semibold tracking-tight">
-          Delete Account
-        </div>
+        <div className="text-[18px] font-semibold tracking-tight">Delete Account</div>
 
         {loading ? (
-          <p className="mt-4 text-[14px] text-muted-foreground">
-            Checking your account…
-          </p>
+          <p className="mt-4 text-[14px] text-muted-foreground">Checking your account…</p>
         ) : !eligible ? (
           <div className="mt-4 space-y-3">
             <p className="text-[14px] leading-relaxed">{reason}</p>
             <p className="text-[13px] text-muted-foreground">
-              Once these are resolved, you'll be able to delete your account
-              from this screen.
+              Once these are resolved, you'll be able to delete your account from this screen.
             </p>
             <div className="mt-5 flex gap-2.5">
               <button
@@ -723,8 +728,8 @@ function DeleteAccountSheet({
         ) : !confirming ? (
           <div className="mt-4 space-y-3">
             <p className="text-[14px] leading-relaxed">
-              Are you sure you want to permanently delete your account? This
-              action cannot be undone.
+              Are you sure you want to permanently delete your account? This action cannot be
+              undone.
             </p>
             <div className="mt-5 flex gap-2.5">
               <button
@@ -744,8 +749,8 @@ function DeleteAccountSheet({
         ) : (
           <div className="mt-4 space-y-3">
             <p className="text-[14px] leading-relaxed">
-              Final confirmation: this will permanently remove your FlashLocum
-              account and sign you out.
+              Final confirmation: this will permanently remove your FlashLocum account and sign you
+              out.
             </p>
             <div className="mt-5 flex gap-2.5">
               <button

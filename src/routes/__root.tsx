@@ -41,7 +41,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="text-base font-medium">Something went off-network.</p>
         <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
         <button
-          onClick={() => { router.invalidate(); reset(); }}
+          onClick={() => {
+            router.invalidate();
+            reset();
+          }}
           className="mt-5 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground"
         >
           Try again
@@ -55,7 +58,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1",
+      },
       { name: "theme-color", content: "#2a2a30" },
       { title: "FlashLocum" },
       { name: "description", content: "Realtime temporary medical coverage." },
@@ -63,8 +69,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:title", content: "FlashLocum" },
       { property: "og:description", content: "Realtime temporary medical coverage." },
       { name: "twitter:description", content: "Realtime temporary medical coverage." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e925354b-ba7f-47f6-9bcb-6d72e6f012c1/id-preview-71ac613b--d85fc095-debe-4af5-b970-91da6499be75.lovable.app-1780918872301.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e925354b-ba7f-47f6-9bcb-6d72e6f012c1/id-preview-71ac613b--d85fc095-debe-4af5-b970-91da6499be75.lovable.app-1780918872301.png" },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e925354b-ba7f-47f6-9bcb-6d72e6f012c1/id-preview-71ac613b--d85fc095-debe-4af5-b970-91da6499be75.lovable.app-1780918872301.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e925354b-ba7f-47f6-9bcb-6d72e6f012c1/id-preview-71ac613b--d85fc095-debe-4af5-b970-91da6499be75.lovable.app-1780918872301.png",
+      },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
@@ -79,7 +93,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+      </head>
       <body>
         {children}
         <Scripts />
@@ -91,11 +107,17 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
-  useEffect(() => { initLightMode(); }, []);
   useEffect(() => {
-    void initNativeBridge((path) => { void router.navigate({ to: path }); });
+    initLightMode();
+  }, []);
+  useEffect(() => {
+    void initNativeBridge((path) => {
+      void router.navigate({ to: path });
+    });
   }, [router]);
-  useEffect(() => { void loadPricingTable(); }, []);
+  useEffect(() => {
+    void loadPricingTable();
+  }, []);
   usePushRegistration();
   useEffect(() => {
     let sawSignOut = false;

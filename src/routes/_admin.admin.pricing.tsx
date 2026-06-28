@@ -24,7 +24,13 @@ type ModRow = { key: string; value: number };
 
 const TIERS = ["<4h", "4-6h", ">6h", "home_flat"] as const;
 const FLATS = ["straight_24h", "straight_48h", "home_hour"] as const;
-const MODS = ["busy_mult", "tolerance_min", "block_min", "first_hour_min", "home_busy_applies"] as const;
+const MODS = [
+  "busy_mult",
+  "tolerance_min",
+  "block_min",
+  "first_hour_min",
+  "home_busy_applies",
+] as const;
 
 async function fetchPricingState() {
   const versionsRes = await supabase
@@ -35,9 +41,18 @@ async function fetchPricingState() {
   const active = versions.find((v) => v.is_active);
   if (!active) return { versions, active: null, rates: [], flats: [], mods: [] };
   const [rates, flats, mods] = await Promise.all([
-    supabase.from("pricing_rates" as never).select("tier, rate_day, rate_night").eq("version_id", active.id),
-    supabase.from("pricing_flats" as never).select("product, amount").eq("version_id", active.id),
-    supabase.from("pricing_modifiers" as never).select("key, value").eq("version_id", active.id),
+    supabase
+      .from("pricing_rates" as never)
+      .select("tier, rate_day, rate_night")
+      .eq("version_id", active.id),
+    supabase
+      .from("pricing_flats" as never)
+      .select("product, amount")
+      .eq("version_id", active.id),
+    supabase
+      .from("pricing_modifiers" as never)
+      .select("key, value")
+      .eq("version_id", active.id),
   ]);
   return {
     versions,
@@ -50,7 +65,11 @@ async function fetchPricingState() {
 
 function PricingPage() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["admin", "pricing"], queryFn: fetchPricingState, staleTime: 30_000 });
+  const q = useQuery({
+    queryKey: ["admin", "pricing"],
+    queryFn: fetchPricingState,
+    staleTime: 30_000,
+  });
   const data = q.data;
 
   const [draft, setDraft] = useState<null | {
@@ -72,8 +91,12 @@ function PricingPage() {
           return [t, { day: r?.rate_day ?? 0, night: r?.rate_night ?? 0 }];
         }),
       ),
-      flats: Object.fromEntries(FLATS.map((f) => [f, data.flats.find((x) => x.product === f)?.amount ?? 0])),
-      mods: Object.fromEntries(MODS.map((m) => [m, Number(data.mods.find((x) => x.key === m)?.value ?? 0)])),
+      flats: Object.fromEntries(
+        FLATS.map((f) => [f, data.flats.find((x) => x.product === f)?.amount ?? 0]),
+      ),
+      mods: Object.fromEntries(
+        MODS.map((m) => [m, Number(data.mods.find((x) => x.key === m)?.value ?? 0)]),
+      ),
     });
   }
 
@@ -87,13 +110,16 @@ function PricingPage() {
       }));
       const flatsPayload = FLATS.map((p) => ({ product: p, amount: draft.flats[p] }));
       const modsPayload = MODS.map((k) => ({ key: k, value: draft.mods[k] }));
-      const { error } = await supabase.rpc("admin_publish_pricing_version" as never, {
-        _label: draft.label,
-        _rates: ratesPayload,
-        _flats: flatsPayload,
-        _modifiers: modsPayload,
-        _notes: draft.notes || null,
-      } as never);
+      const { error } = await supabase.rpc(
+        "admin_publish_pricing_version" as never,
+        {
+          _label: draft.label,
+          _rates: ratesPayload,
+          _flats: flatsPayload,
+          _modifiers: modsPayload,
+          _notes: draft.notes || null,
+        } as never,
+      );
       if (error) throw error;
     },
     onSuccess: () => {
@@ -146,8 +172,12 @@ function PricingPage() {
                   return (
                     <tr key={t} className="border-t">
                       <td className="py-1.5 font-mono text-[12px]">{t}</td>
-                      <td className="py-1.5 text-right tabular-nums">₦{r?.rate_day.toLocaleString() ?? "—"}</td>
-                      <td className="py-1.5 text-right tabular-nums">₦{r?.rate_night.toLocaleString() ?? "—"}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        ₦{r?.rate_day.toLocaleString() ?? "—"}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        ₦{r?.rate_night.toLocaleString() ?? "—"}
+                      </td>
                     </tr>
                   );
                 })}
@@ -160,7 +190,9 @@ function PricingPage() {
                   return (
                     <tr key={p} className="border-t">
                       <td className="py-1.5 font-mono text-[12px]">{p}</td>
-                      <td className="py-1.5 text-right tabular-nums">₦{f?.amount.toLocaleString() ?? "—"}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        ₦{f?.amount.toLocaleString() ?? "—"}
+                      </td>
                     </tr>
                   );
                 })}
@@ -249,13 +281,23 @@ function PricingPage() {
                     <td className="py-1.5 text-right">
                       <NumInput
                         value={draft.rates[t].day}
-                        onChange={(v) => setDraft({ ...draft, rates: { ...draft.rates, [t]: { ...draft.rates[t], day: v } } })}
+                        onChange={(v) =>
+                          setDraft({
+                            ...draft,
+                            rates: { ...draft.rates, [t]: { ...draft.rates[t], day: v } },
+                          })
+                        }
                       />
                     </td>
                     <td className="py-1.5 text-right">
                       <NumInput
                         value={draft.rates[t].night}
-                        onChange={(v) => setDraft({ ...draft, rates: { ...draft.rates, [t]: { ...draft.rates[t], night: v } } })}
+                        onChange={(v) =>
+                          setDraft({
+                            ...draft,
+                            rates: { ...draft.rates, [t]: { ...draft.rates[t], night: v } },
+                          })
+                        }
                       />
                     </td>
                   </tr>
@@ -305,7 +347,9 @@ function PricingPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </h3>
       {children}
     </div>
   );
@@ -331,13 +375,23 @@ function Table({ headers, children }: { headers: string[]; children: React.React
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
       {children}
     </label>
   );
 }
 
-function NumInput({ value, onChange, step = 1 }: { value: number; onChange: (v: number) => void; step?: number }) {
+function NumInput({
+  value,
+  onChange,
+  step = 1,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+}) {
   return (
     <input
       type="number"

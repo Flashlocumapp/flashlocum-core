@@ -33,9 +33,7 @@ const OPEN_STATUSES = ["accepted", "active", "paused"] as const satisfies readon
 export const checkAccountDeleteEligibility = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<DeleteEligibility> => {
-    const { supabaseAdmin } = await import(
-      "@/integrations/supabase/client.server"
-    );
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const uid = context.userId;
 
     // Active / upcoming shifts: on either side.
@@ -54,10 +52,7 @@ export const checkAccountDeleteEligibility = createServerFn({ method: "GET" })
 
     const nowMs = Date.now();
     type Row = { status: string | null; start_ts: string | null };
-    const all: Row[] = [
-      ...((reqActive.data ?? []) as Row[]),
-      ...((docActive.data ?? []) as Row[]),
-    ];
+    const all: Row[] = [...((reqActive.data ?? []) as Row[]), ...((docActive.data ?? []) as Row[])];
     let activeCount = 0;
     let upcomingCount = 0;
     for (const r of all) {
@@ -85,16 +80,14 @@ export const checkAccountDeleteEligibility = createServerFn({ method: "GET" })
         .eq("status", "completed")
         .neq("payment_status", "paid"),
     ]);
-    const outstanding =
-      (reqUnpaid.data?.length ?? 0) + (docUnpaid.data?.length ?? 0);
+    const outstanding = (reqUnpaid.data?.length ?? 0) + (docUnpaid.data?.length ?? 0);
 
     // Disputes: no table yet — placeholder.
     const disputes = 0;
 
     let reason: string | null = null;
     if (activeCount > 0) {
-      reason =
-        "You have a shift in progress. Please complete it before deleting your account.";
+      reason = "You have a shift in progress. Please complete it before deleting your account.";
     } else if (upcomingCount > 0) {
       reason =
         "You have an upcoming accepted shift. Please cancel or complete it before deleting your account.";
@@ -119,9 +112,7 @@ export const checkAccountDeleteEligibility = createServerFn({ method: "GET" })
 export const deleteMyAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import(
-      "@/integrations/supabase/client.server"
-    );
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const uid = context.userId;
 
     // Re-check eligibility on the server — never trust the client.
@@ -151,12 +142,8 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         .neq("payment_status", "paid"),
     ]);
 
-    const blockingShifts = [
-      ...(reqOpen.data ?? []),
-      ...(docOpen.data ?? []),
-    ];
-    const unpaid =
-      (reqUnpaid.data?.length ?? 0) + (docUnpaid.data?.length ?? 0);
+    const blockingShifts = [...(reqOpen.data ?? []), ...(docOpen.data ?? [])];
+    const unpaid = (reqUnpaid.data?.length ?? 0) + (docUnpaid.data?.length ?? 0);
     if (blockingShifts.length > 0 || unpaid > 0) {
       throw new Error(
         "Account deletion is unavailable: you have active shifts or outstanding payments.",
@@ -178,24 +165,19 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         /* best-effort */
       }
       // Use admin_audit_log if it exists; otherwise console.warn.
-      const audit = await supabaseAdmin
-        .from("admin_audit_log" as never)
-        .insert({
-          actor_id: uid,
-          action: "account.delete",
-          target_id: uid,
-          payload: {
-            full_name: prof?.full_name ?? null,
-            role: prof?.role ?? null,
-            email,
-            at: new Date(nowMs).toISOString(),
-          },
-        } as never);
+      const audit = await supabaseAdmin.from("admin_audit_log" as never).insert({
+        actor_id: uid,
+        action: "account.delete",
+        target_id: uid,
+        payload: {
+          full_name: prof?.full_name ?? null,
+          role: prof?.role ?? null,
+          email,
+          at: new Date(nowMs).toISOString(),
+        },
+      } as never);
       if (audit.error) {
-        console.warn(
-          "[account-delete] audit insert failed:",
-          audit.error.message,
-        );
+        console.warn("[account-delete] audit insert failed:", audit.error.message);
       }
     } catch (e) {
       console.warn("[account-delete] audit logging failed:", e);

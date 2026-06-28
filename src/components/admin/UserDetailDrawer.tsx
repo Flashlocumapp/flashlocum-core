@@ -128,9 +128,7 @@ export function UserDetailDrawer({
           </Section>
 
           <Section title="Verification">
-            <div className="mb-2">
-              {tone && <Chip color={tone.color}>{tone.label}</Chip>}
-            </div>
+            <div className="mb-2">{tone && <Chip color={tone.color}>{tone.label}</Chip>}</div>
             {p.verification_action_reason && (
               <div
                 className="mb-2 rounded-xl px-3 py-2 text-[12px]"
@@ -145,7 +143,10 @@ export function UserDetailDrawer({
                 )}
               </div>
             )}
-            <Field label="Bank" value={`${p.bank_name || "—"}${p.bank_account ? ` · ${p.bank_account}` : ""}`} />
+            <Field
+              label="Bank"
+              value={`${p.bank_name || "—"}${p.bank_account ? ` · ${p.bank_account}` : ""}`}
+            />
             <Field label="Account name" value={p.bank_account_name || "—"} />
           </Section>
 

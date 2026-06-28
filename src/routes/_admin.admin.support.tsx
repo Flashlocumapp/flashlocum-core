@@ -2,11 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  adminSupportSearch,
-  adminSendPushFn,
-  type SupportSearchHit,
-} from "@/lib/admin.functions";
+import { adminSupportSearch, adminSendPushFn, type SupportSearchHit } from "@/lib/admin.functions";
 import { AdminPageHeader, Chip, Empty } from "@/lib/admin-ui";
 import { pushToast } from "@/lib/notifications";
 
@@ -54,10 +50,7 @@ function SupportPage() {
         subtitle="Resolve user issues from a single pane of glass."
       />
 
-      <section
-        className="rounded-2xl p-4"
-        style={{ background: "var(--color-surface-elevated)" }}
-      >
+      <section className="rounded-2xl p-4" style={{ background: "var(--color-surface-elevated)" }}>
         <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
           Universal search
         </h2>
@@ -103,7 +96,13 @@ function SupportPage() {
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Chip color={h.kind === "user" ? "var(--color-primary)" : "var(--color-muted-foreground)"}>
+                      <Chip
+                        color={
+                          h.kind === "user"
+                            ? "var(--color-primary)"
+                            : "var(--color-muted-foreground)"
+                        }
+                      >
                         {h.kind}
                       </Chip>
                       <span className="truncate text-[13px] font-medium">{h.title}</span>
@@ -122,10 +121,7 @@ function SupportPage() {
         </div>
       </section>
 
-      <section
-        className="rounded-2xl p-4"
-        style={{ background: "var(--color-surface-elevated)" }}
-      >
+      <section className="rounded-2xl p-4" style={{ background: "var(--color-surface-elevated)" }}>
         <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
           Send push notification
         </h2>
@@ -168,7 +164,11 @@ function SupportPage() {
               </span>
               <button
                 onClick={() =>
-                  pushMut.mutate({ userId: selectedUser.id, title: title.trim(), body: body.trim() })
+                  pushMut.mutate({
+                    userId: selectedUser.id,
+                    title: title.trim(),
+                    body: body.trim(),
+                  })
                 }
                 disabled={pushMut.isPending || !title.trim() || !body.trim()}
                 className="h-10 rounded-full bg-primary px-5 text-[12.5px] font-medium text-primary-foreground disabled:opacity-60"

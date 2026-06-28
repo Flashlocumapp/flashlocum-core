@@ -80,9 +80,26 @@ const DEFAULT_SNAPSHOT = (userId: string): TrustSnapshot => ({
   user_id: userId,
   role: "doctor",
   rating: { score: 5.0, block_index: 0, block_size: 20, in_progress_count: 0, last_block: null },
-  reliability: { score: 100, block_index: 0, block_size: 20, in_progress_count: 0, last_block: null },
-  eligibility: { rating_below_threshold: false, reliability_below_threshold: false, any: false, reasons: [] },
-  restriction: { restricted: false, restricted_at: null, restricted_by: null, reason: null, source: null },
+  reliability: {
+    score: 100,
+    block_index: 0,
+    block_size: 20,
+    in_progress_count: 0,
+    last_block: null,
+  },
+  eligibility: {
+    rating_below_threshold: false,
+    reliability_below_threshold: false,
+    any: false,
+    reasons: [],
+  },
+  restriction: {
+    restricted: false,
+    restricted_at: null,
+    restricted_by: null,
+    reason: null,
+    source: null,
+  },
 });
 
 // Shape the lightweight get_trust_summary payload into a full TrustSnapshot
@@ -167,7 +184,9 @@ export async function loadShiftRatingState(requestId: string): Promise<ShiftRati
   const existing = shiftInflight.get(requestId);
   if (existing) return existing;
   const p = (async () => {
-    const { data, error } = await supabase.rpc("get_shift_rating_state", { _request_id: requestId });
+    const { data, error } = await supabase.rpc("get_shift_rating_state", {
+      _request_id: requestId,
+    });
     if (error || !data) return null;
     return data as ShiftRatingState;
   })().then((state) => {
@@ -205,7 +224,11 @@ export function useShiftRatingState(requestId: string | null | undefined): Shift
 
 export type SubmitResult =
   | { ok: true; state: ShiftRatingState }
-  | { ok: false; error: "already_rated" | "not_authorized" | "not_terminal" | "unknown"; message: string };
+  | {
+      ok: false;
+      error: "already_rated" | "not_authorized" | "not_terminal" | "unknown";
+      message: string;
+    };
 
 export async function submitShiftRating(
   requestId: string,
@@ -221,10 +244,18 @@ export async function submitShiftRating(
     _score: Math.round(score),
     _feedback: feedback ?? null,
   };
-  console.info("[submitShiftRating] calling RPC", { requestId, score: args._score, hasFeedback: !!feedback });
+  console.info("[submitShiftRating] calling RPC", {
+    requestId,
+    score: args._score,
+    hasFeedback: !!feedback,
+  });
   const { data, error } = await supabase.rpc("submit_shift_rating", args as never);
   if (error) {
-    console.error("[submitShiftRating] RPC error", { code: error.code, message: error.message, details: error.details });
+    console.error("[submitShiftRating] RPC error", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    });
     const msg = error.message || "";
     let code: "already_rated" | "not_authorized" | "not_terminal" | "unknown" = "unknown";
     if (/already rated|unique/i.test(msg)) code = "already_rated";

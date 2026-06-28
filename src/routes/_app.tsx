@@ -12,8 +12,6 @@ import { CoverageScreen } from "@/features/app/CoverageScreen";
 import { AccountScreen } from "@/features/app/AccountScreen";
 import { EarningsScreen } from "@/features/app/EarningsScreen";
 
-
-
 import { RestrictionBanner } from "@/components/RestrictionBanner";
 import { clearRole, getRole, hasRole, setRole, type Role } from "@/lib/role";
 import {
@@ -166,7 +164,6 @@ function AppShell() {
   // here) display the Outlet on top of all hidden persistent layers.
   const showOutlet = activeTab === null;
 
-
   return (
     <div
       className="fixed inset-0 overflow-y-auto overflow-x-hidden"
@@ -190,43 +187,26 @@ function AppShell() {
         style={{ bottom: `var(--tab-bar-h)`, paddingTop: "env(safe-area-inset-top)" }}
       >
         {/* Persistent Home layer. The map lives here and is never torn down. */}
-        <PersistentLayer
-          mounted
-          visible={activeTab === "/home"}
-          scroll={false}
-        >
+        <PersistentLayer mounted visible={activeTab === "/home"} scroll={false}>
           <HomeRouter active={activeTab === "/home"} />
         </PersistentLayer>
 
         {/* Persistent Coverage layer. */}
-        <PersistentLayer
-          mounted
-          visible={activeTab === "/coverage"}
-          scroll
-        >
+        <PersistentLayer mounted visible={activeTab === "/coverage"} scroll>
           <CoverageScreen />
         </PersistentLayer>
 
         {/* Persistent Earnings layer (cover role only — the screen
             self-guards via role checks; mounting it for requesters is
             harmless because the route is gated above). */}
-        <PersistentLayer
-          mounted
-          visible={activeTab === "/earnings"}
-          scroll
-        >
+        <PersistentLayer mounted visible={activeTab === "/earnings"} scroll>
           <EarningsScreen active={activeTab === "/earnings"} />
         </PersistentLayer>
 
         {/* Persistent Account layer. */}
-        <PersistentLayer
-          mounted
-          visible={activeTab === "/account"}
-          scroll
-        >
+        <PersistentLayer mounted visible={activeTab === "/account"} scroll>
           <AccountScreen />
         </PersistentLayer>
-
 
         {/* Non-persistent routes render here on top. They remount as normal
             and the persistent layers below are hidden via display:none. */}
@@ -297,4 +277,3 @@ function PersistentLayer({
     </div>
   );
 }
-

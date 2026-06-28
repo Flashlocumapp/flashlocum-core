@@ -8,9 +8,9 @@ export type Coords = { lat: number; lng: number };
 
 export const LAGOS_BOUNDS_LITERAL = {
   south: 6.35,
-  west: 2.70,
-  north: 6.80,
-  east: 4.40,
+  west: 2.7,
+  north: 6.8,
+  east: 4.4,
 } as const;
 
 export const FALLBACK_CENTER: Coords = { lat: 6.5244, lng: 3.3792 };

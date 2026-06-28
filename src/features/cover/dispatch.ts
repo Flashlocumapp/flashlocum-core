@@ -2,7 +2,12 @@
 // Public API kept stable for CoverHome, CoverDispatchPortal, and coverage tab.
 
 import { useEffect, useState } from "react";
-import { bustOpenListCache, hasLiveSnapshot, onLiveSnapshotChange, reconcileNow } from "@/lib/coverage-remote";
+import {
+  bustOpenListCache,
+  hasLiveSnapshot,
+  onLiveSnapshotChange,
+  reconcileNow,
+} from "@/lib/coverage-remote";
 import {
   acceptRequest,
   type AcceptBlockReason,
@@ -55,7 +60,6 @@ export type Coverage = {
   requesterSessionId?: string;
 };
 
-
 // Full monetary formatting everywhere (₦36,500). No K abbreviation.
 export const nairaK = (n: number) => "₦" + n.toLocaleString("en-NG");
 
@@ -95,10 +99,10 @@ function toCoverage(r: NetRequest): Coverage {
   };
 }
 
-
 function conflictMessage(reason: AcceptBlockReason): string {
   if (reason === "max") return "You already have the maximum number of confirmed shifts.";
-  if (reason === "buffer") return "This request does not provide enough transition time before your next confirmed shift.";
+  if (reason === "buffer")
+    return "This request does not provide enough transition time before your next confirmed shift.";
   if (reason === "overlap") return "This request conflicts with an existing confirmed shift.";
   if (reason === "claimed") return "This request has already been accepted by another doctor.";
   return "This request is no longer available.";
@@ -131,8 +135,6 @@ export type PendingRating = {
   total: number;
   feePct: number;
 };
-
-
 
 // Per-event timestamp map. We dedup by (actor, shift, action) with a short
 // TTL so the postgres_changes path and the snapshot-diff fallback can't
@@ -171,8 +173,6 @@ type View = {
   pendingRating: PendingRating | null;
 };
 
-
-
 export function useDispatch(): View {
   const net = useNetwork();
   const [, force] = useState(0);
@@ -191,7 +191,14 @@ export function useDispatch(): View {
   const online = !!me?.online;
 
   const upcoming: Coverage[] = Object.values(net.requests)
-    .filter((r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "paused" || r.status === "awaiting_payment"))
+    .filter(
+      (r) =>
+        r.acceptedBy === sid &&
+        (r.status === "accepted" ||
+          r.status === "active" ||
+          r.status === "paused" ||
+          r.status === "awaiting_payment"),
+    )
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(toCoverage);
   const liveRequests = broadcastingRequests(net);
@@ -221,16 +228,13 @@ export function useDispatch(): View {
         }),
         updatedAt: r.updatedAt,
         rating: historyRatings[r.id],
-        settlementStatus: isCompleted
-          ? (r.remittedAt ? "Remitted" : "Pending")
-          : "Voided",
+        settlementStatus: isCompleted ? (r.remittedAt ? "Remitted" : "Pending") : "Voided",
         paymentStatus: r.paymentStatus,
         paymentReference: r.paymentReference,
         paidAt: r.paidAt,
         remittedAt: r.remittedAt,
       } as HistoryItem;
     });
-
 
   let incoming: Coverage | null = null;
   // HARD GATE: never render Incoming Coverage from cache. Only render once
@@ -246,9 +250,7 @@ export function useDispatch(): View {
   if (online && upcoming.length < 3 && hasLiveSnapshot()) {
     const r = liveRequests.find(
       (x) =>
-        x.status === "broadcasting" &&
-        x.requesterSessionId !== sid &&
-        !isDeclined(me, x.id, x.rev),
+        x.status === "broadcasting" && x.requesterSessionId !== sid && !isDeclined(me, x.id, x.rev),
     );
     if (r) incoming = toCoverage(r);
   }
@@ -257,7 +259,6 @@ export function useDispatch(): View {
     if (!me || upcoming.length < 3 || liveRequests.length === 0) return;
     liveRequests.forEach((r) => markDeclined(r.id, r.rev));
   }, [me, upcoming.length, liveRequests.map((r) => `${r.id}:${r.rev ?? 1}`).join("|")]);
-
 
   useEffect(() => {
     if (me && me.acceptedCount !== upcoming.length) {
@@ -322,7 +323,9 @@ export function ensureDoctorSession(initialOnline = true) {
       const me = s.doctors[sid];
       if (!me?.online) return;
       const mine = Object.values(s.requests).filter(
-        (x) => x.acceptedBy === sid && (x.status === "accepted" || x.status === "active" || x.status === "paused"),
+        (x) =>
+          x.acceptedBy === sid &&
+          (x.status === "accepted" || x.status === "active" || x.status === "paused"),
       );
       if (mine.length >= 3) return;
       if (isDeclined(me, r.id, r.rev)) return;
@@ -462,7 +465,9 @@ function currentUpcomingForMe(): NetRequest[] {
   const s = readState();
   const sid = getSessionId();
   return Object.values(s.requests ?? {}).filter(
-    (r) => r.acceptedBy === sid && (r.status === "accepted" || r.status === "active" || r.status === "paused"),
+    (r) =>
+      r.acceptedBy === sid &&
+      (r.status === "accepted" || r.status === "active" || r.status === "paused"),
   );
 }
 
@@ -505,15 +510,15 @@ export async function acceptIncoming() {
     markDeclined(idToAccept, incomingReq.rev);
     pushToast({
       tone: "warn",
-      title: result.reason === "claimed" || result.reason === "unavailable"
-        ? "This request is no longer available"
-        : conflictMessage(result.reason),
+      title:
+        result.reason === "claimed" || result.reason === "unavailable"
+          ? "This request is no longer available"
+          : conflictMessage(result.reason),
     });
     return;
   }
   // Success path is finalized by the realtime "accept" event handler.
 }
-
 
 /**
  * Time-based conflict — coverage TYPE is ignored. Two shifts conflict if
@@ -527,7 +532,8 @@ function conflictReason(mine: NetRequest[], incoming: NetRequest): "overlap" | "
   for (const m of mine) {
     if (!m.startTs || !m.endTs) continue;
     if (incoming.startTs < m.endTs && m.startTs < incoming.endTs) return "overlap";
-    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS) return "buffer";
+    if (incoming.startTs < m.endTs + BUFFER_MS && m.startTs < incoming.endTs + BUFFER_MS)
+      return "buffer";
   }
   return null;
 }
@@ -546,8 +552,6 @@ export function declineIncoming() {
   void reconcileNow();
 }
 
-
-
 export function dismissAccepted() {
   acceptedSheet = null;
   bump();
@@ -558,10 +562,7 @@ export function dismissPendingRating() {
   bump();
 }
 
-export function cancelUpcoming(
-  id: string,
-  reason?: { code: string; text?: string },
-) {
+export function cancelUpcoming(id: string, reason?: { code: string; text?: string }) {
   const r = currentRequest(id);
   if (!r) return;
   cancelRequest(id, reason);
@@ -587,7 +588,6 @@ export function hasHistoryRating(historyId: string): boolean {
   return historyRatings[historyId] !== undefined;
 }
 
-
 /* ---------- helpers reading network module ---------- */
 
 type RawState = {
@@ -609,16 +609,13 @@ function pendingIncomingId(): string | null {
   const first = Object.values(s.requests ?? {})
     .filter(
       (r) =>
-        r.status === "broadcasting" &&
-        r.requesterSessionId !== sid &&
-        !isDeclined(me, r.id, r.rev),
+        r.status === "broadcasting" && r.requesterSessionId !== sid && !isDeclined(me, r.id, r.rev),
     )
-    .sort((a, b) => (a.broadcastStartedAt ?? a.createdAt) - (b.broadcastStartedAt ?? b.createdAt))[0];
+    .sort(
+      (a, b) => (a.broadcastStartedAt ?? a.createdAt) - (b.broadcastStartedAt ?? b.createdAt),
+    )[0];
   return first?.id ?? null;
 }
-
-
-
 
 function currentRequest(id: string): NetRequest | null {
   return readState().requests?.[id] ?? null;

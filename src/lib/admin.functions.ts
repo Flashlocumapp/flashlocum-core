@@ -1,12 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type VerificationStatus =
-  | "pending"
-  | "approved"
-  | "suspended"
-  | "rejected"
-  | "action_required";
+type VerificationStatus = "pending" | "approved" | "suspended" | "rejected" | "action_required";
 const ALLOWED: VerificationStatus[] = [
   "pending",
   "approved",
@@ -123,7 +118,6 @@ export const updateDoctorVerificationFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-
 export type AdminShiftRow = {
   id: string;
   status: string;
@@ -189,12 +183,12 @@ export const adminListShifts = createServerFn({ method: "POST" })
       .limit(data.limit);
     if (data.status === "awaiting_payment") {
       // Completed but not yet settled (and there is something to pay).
-      query = query
-        .eq("status", "completed")
-        .is("paid_at", null)
-        .gt("total_billed_amount", 0);
+      query = query.eq("status", "completed").is("paid_at", null).gt("total_billed_amount", 0);
     } else if (data.status && data.status !== "all") {
-      query = query.eq("status", data.status as "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled");
+      query = query.eq(
+        "status",
+        data.status as "searching" | "accepted" | "active" | "paused" | "completed" | "cancelled",
+      );
     }
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
@@ -207,10 +201,7 @@ export const adminListShifts = createServerFn({ method: "POST" })
       if (r.accepted_by) ids.add(r.accepted_by);
     }
     const idList = Array.from(ids);
-    const profileMap = new Map<
-      string,
-      { full_name: string | null; phone: string | null }
-    >();
+    const profileMap = new Map<string, { full_name: string | null; phone: string | null }>();
     let emailMap = new Map<string, string | null>();
     if (idList.length) {
       const { data: profs } = await supabaseAdmin
@@ -225,9 +216,7 @@ export const adminListShifts = createServerFn({ method: "POST" })
           page: 1,
           perPage: 1000,
         });
-        emailMap = new Map(
-          (usersData?.users ?? []).map((u) => [u.id, u.email ?? null]),
-        );
+        emailMap = new Map((usersData?.users ?? []).map((u) => [u.id, u.email ?? null]));
       } catch {
         /* email enrichment is best-effort */
       }
@@ -236,8 +225,10 @@ export const adminListShifts = createServerFn({ method: "POST" })
     const shiftIds = shifts.map((s) => s.id);
     const ratingsByShift = new Map<
       string,
-      { r2d: { score: number; feedback: string | null; created_at: string } | null;
-        d2r: { score: number; feedback: string | null; created_at: string } | null }
+      {
+        r2d: { score: number; feedback: string | null; created_at: string } | null;
+        d2r: { score: number; feedback: string | null; created_at: string } | null;
+      }
     >();
     if (shiftIds.length) {
       const { data: ratingRows } = await supabaseAdmin
@@ -384,8 +375,6 @@ export const adminListUnpaidShifts = createServerFn({ method: "POST" })
     return out;
   });
 
-
-
 // ---------- Analytics shared helpers ----------
 
 async function assertAdmin(context: { supabase: ReturnType<typeof Object>; userId: string }) {
@@ -515,9 +504,7 @@ export const adminFinanceAnalytics = createServerFn({ method: "POST" })
       .sort((a, b) => b.gross - a.gross)
       .slice(0, 8);
 
-    const topDoctorIds = [...doctorMap.entries()]
-      .sort((a, b) => b[1].net - a[1].net)
-      .slice(0, 8);
+    const topDoctorIds = [...doctorMap.entries()].sort((a, b) => b[1].net - a[1].net).slice(0, 8);
     let nameMap = new Map<string, string | null>();
     if (topDoctorIds.length) {
       const { data: profs } = await supabaseAdmin
@@ -605,18 +592,28 @@ export const adminDoctorFlashboard = createServerFn({ method: "POST" })
         supabaseAdmin.from("ratings").select("ratee_entity_id, score").limit(20000),
       ]);
 
-    const presenceMap = new Map(
-      (presence ?? []).map((p) => [p.user_id, p]),
-    );
+    const presenceMap = new Map((presence ?? []).map((p) => [p.user_id, p]));
     const stats = new Map<
       string,
-      { accepted: number; completed: number; cancelled: number; active: number; total_amount: number; net: number }
+      {
+        accepted: number;
+        completed: number;
+        cancelled: number;
+        active: number;
+        total_amount: number;
+        net: number;
+      }
     >();
     for (const s of shifts ?? []) {
       if (!s.accepted_by) continue;
-      const cur =
-        stats.get(s.accepted_by) ??
-        { accepted: 0, completed: 0, cancelled: 0, active: 0, total_amount: 0, net: 0 };
+      const cur = stats.get(s.accepted_by) ?? {
+        accepted: 0,
+        completed: 0,
+        cancelled: 0,
+        active: 0,
+        total_amount: 0,
+        net: 0,
+      };
       cur.accepted += 1;
       if (s.status === "completed") cur.completed += 1;
       if (s.status === "cancelled") cur.cancelled += 1;
@@ -649,18 +646,21 @@ export const adminDoctorFlashboard = createServerFn({ method: "POST" })
 
     const rows: DoctorFlashboardRow[] = (doctors ?? []).map((d) => {
       const p = presenceMap.get(d.id);
-      const s =
-        stats.get(d.id) ??
-        { accepted: 0, completed: 0, cancelled: 0, active: 0, total_amount: 0, net: 0 };
+      const s = stats.get(d.id) ?? {
+        accepted: 0,
+        completed: 0,
+        cancelled: 0,
+        active: 0,
+        total_amount: 0,
+        net: 0,
+      };
       const ra = ratingAgg.get(d.id);
       const finished = s.completed + s.cancelled;
       return {
         doctor_id: d.id,
         name: d.full_name,
         online:
-          !!p?.online &&
-          !!p?.last_seen &&
-          Date.now() - new Date(p.last_seen).getTime() < 60_000,
+          !!p?.online && !!p?.last_seen && Date.now() - new Date(p.last_seen).getTime() < 60_000,
         last_seen: p?.last_seen ?? null,
         accepted: s.accepted,
         completed: s.completed,
@@ -769,17 +769,15 @@ export const adminRequesterAnalytics = createServerFn({ method: "POST" })
     const fillTimes: number[] = [];
 
     for (const r of list) {
-      const cur =
-        perReq.get(r.requester_id) ??
-        {
-          total: 0,
-          completed: 0,
-          cancelled: 0,
-          in_progress: 0,
-          unfilled: 0,
-          amount: 0,
-          fillTimes: [],
-        };
+      const cur = perReq.get(r.requester_id) ?? {
+        total: 0,
+        completed: 0,
+        cancelled: 0,
+        in_progress: 0,
+        unfilled: 0,
+        amount: 0,
+        fillTimes: [],
+      };
       cur.total += 1;
       cur.amount += Number(r.amount ?? 0);
       if (r.status === "completed") {
@@ -799,8 +797,7 @@ export const adminRequesterAnalytics = createServerFn({ method: "POST" })
 
       // Time-to-fill: created_at → updated_at when accepted_by is set.
       if (r.accepted_by && r.created_at && r.updated_at) {
-        const mins =
-          (new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / 60_000;
+        const mins = (new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / 60_000;
         if (mins > 0 && mins < 14 * 24 * 60) {
           cur.fillTimes.push(mins);
           fillTimes.push(mins);
@@ -888,7 +885,12 @@ export type RiskActor = {
 export type DuplicateMdcn = {
   mdcn: string;
   count: number;
-  users: { id: string; name: string | null; verification_status: string | null; created_at: string }[];
+  users: {
+    id: string;
+    name: string | null;
+    verification_status: string | null;
+    created_at: string;
+  }[];
 };
 
 export type SignupSpike = { day: string; signups: number };
@@ -910,7 +912,14 @@ export type RiskOverview = {
   topRequesterCancellers: RiskActor[];
   duplicateMdcn: DuplicateMdcn[];
   signupTrend: SignupSpike[];
-  stuckSearching: { id: string; hospital: string; area: string; created_at: string; requester_id: string; requester_name: string | null }[];
+  stuckSearching: {
+    id: string;
+    hospital: string;
+    area: string;
+    created_at: string;
+    requester_id: string;
+    requester_name: string | null;
+  }[];
 };
 
 export const adminRiskOverview = createServerFn({ method: "POST" })
@@ -930,7 +939,6 @@ export const adminRiskOverview = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return payload as RiskOverview;
   });
-
 
 // ---------- Support Tools ----------
 
@@ -1089,11 +1097,17 @@ export const adminSystemHealth = createServerFn({ method: "POST" })
 
     return {
       email: {
-        queues: (queues ?? []).map((q: { queue_name: string; depth: number | string; oldest_enqueued_at: string | null }) => ({
-          queue_name: q.queue_name,
-          depth: Number(q.depth ?? 0),
-          oldest_enqueued_at: q.oldest_enqueued_at,
-        })),
+        queues: (queues ?? []).map(
+          (q: {
+            queue_name: string;
+            depth: number | string;
+            oldest_enqueued_at: string | null;
+          }) => ({
+            queue_name: q.queue_name,
+            depth: Number(q.depth ?? 0),
+            oldest_enqueued_at: q.oldest_enqueued_at,
+          }),
+        ),
         last24h: {
           sent: h.email_sent_24h ?? 0,
           failed: h.email_failed_24h ?? 0,
@@ -1141,13 +1155,17 @@ export type AdminRatingRow = {
 export const adminListRatings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: {
-      ratee_entity_id?: string;
-      min_score?: number;
-      max_score?: number;
-      only_with_feedback?: boolean;
-      limit?: number;
-    } | undefined) => ({
+    (
+      input:
+        | {
+            ratee_entity_id?: string;
+            min_score?: number;
+            max_score?: number;
+            only_with_feedback?: boolean;
+            limit?: number;
+          }
+        | undefined,
+    ) => ({
       ratee_entity_id: input?.ratee_entity_id,
       min_score: input?.min_score,
       max_score: input?.max_score,
@@ -1224,7 +1242,6 @@ export const adminListRatings = createServerFn({ method: "POST" })
       };
     });
   });
-
 
 // ---------- Cancellations ----------
 

@@ -1,18 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  adminRequesterAnalytics,
-  type RequesterAnalytics,
-} from "@/lib/admin.functions";
+import { adminRequesterAnalytics, type RequesterAnalytics } from "@/lib/admin.functions";
 import { pushToast } from "@/lib/notifications";
-import {
-  AdminPageHeader,
-  Empty,
-  RefreshButton,
-  StatCard,
-  fmtNaira,
-} from "@/lib/admin-ui";
+import { AdminPageHeader, Empty, RefreshButton, StatCard, fmtNaira } from "@/lib/admin-ui";
 
 export const Route = createFileRoute("/_admin/admin/requesters")({
   ssr: false,

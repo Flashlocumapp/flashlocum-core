@@ -1,16 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  fetchAdminOverview,
-  type AdminOverviewStats,
-} from "@/lib/profile-remote";
+import { fetchAdminOverview, type AdminOverviewStats } from "@/lib/profile-remote";
 import { pushToast } from "@/lib/notifications";
-import {
-  AdminPageHeader,
-  RefreshButton,
-  StatCard,
-} from "@/lib/admin-ui";
+import { AdminPageHeader, RefreshButton, StatCard } from "@/lib/admin-ui";
 
 export const Route = createFileRoute("/_admin/admin/")({
   ssr: false,
@@ -76,18 +69,27 @@ function AdminOverview() {
           { label: "Pending", value: stats?.pending_doctors, tone: "warn" as const },
           { label: "Rejected", value: stats?.rejected_doctors, tone: "danger" as const },
           { label: "Suspended", value: stats?.suspended_doctors, tone: "warn" as const },
-          { label: "Online Now", value: stats?.online_doctors, tone: "presence" as const, live: true },
+          {
+            label: "Online Now",
+            value: stats?.online_doctors,
+            tone: "presence" as const,
+            live: true,
+          },
         ],
       },
       {
         title: "Coverage",
         cards: [
-          { label: "In Progress", value: stats?.coverage_in_progress, tone: "presence" as const, live: true },
+          {
+            label: "In Progress",
+            value: stats?.coverage_in_progress,
+            tone: "presence" as const,
+            live: true,
+          },
           { label: "Upcoming", value: stats?.coverage_upcoming },
           { label: "Completed", value: stats?.coverage_completed },
           { label: "Cancelled", value: stats?.coverage_cancelled, tone: "danger" as const },
           { label: "Expired", value: stats?.coverage_expired, tone: "warn" as const },
-
         ],
       },
       {

@@ -85,7 +85,10 @@ function base64ToArrayBuffer(input: string): ArrayBuffer {
 async function getSigningKey(privateKey: string): Promise<CryptoKey> {
   if (cachedSigningKey?.privateKey === privateKey) return cachedSigningKey.key;
   const pkcs8 = base64ToArrayBuffer(
-    privateKey.replace(/-----BEGIN PRIVATE KEY-----/g, "").replace(/-----END PRIVATE KEY-----/g, "").replace(/\s+/g, ""),
+    privateKey
+      .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+      .replace(/-----END PRIVATE KEY-----/g, "")
+      .replace(/\s+/g, ""),
   );
   const key = await globalThis.crypto.subtle.importKey(
     "pkcs8",
@@ -260,11 +263,7 @@ export async function sendPushToUser(
  * (user_id, kind, entity_id, version): if a row already exists undelivered
  * we leave it alone so attempts/backoff are owned by the drain.
  */
-async function enqueueOutbox(
-  userId: string,
-  payload: PushPayload,
-  reason: string,
-): Promise<void> {
+async function enqueueOutbox(userId: string, payload: PushPayload, reason: string): Promise<void> {
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: existing } = await supabaseAdmin

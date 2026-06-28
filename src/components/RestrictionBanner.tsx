@@ -82,39 +82,40 @@ function RestrictionBannerInner() {
           }}
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold uppercase tracking-[0.14em] text-[10px]">
-              {label}
-            </span>
+            <span className="font-semibold uppercase tracking-[0.14em] text-[10px]">{label}</span>
             {total > 0 && (
-              <span className="tabular-nums text-[11px]">
-                ₦{total.toLocaleString("en-NG")} due
-              </span>
+              <span className="tabular-nums text-[11px]">₦{total.toLocaleString("en-NG")} due</span>
             )}
           </div>
           {accountRestricted ? (
             <p className="mt-1 leading-snug">
               Your account has been restricted by an administrator.
-              {accountReason ? ` Reason: ${accountReason}.` : ""}{" "}
-              You can still log in, view your dashboard, pay outstanding
-              balances, and contact support.
+              {accountReason ? ` Reason: ${accountReason}.` : ""} You can still log in, view your
+              dashboard, pay outstanding balances, and contact support.
             </p>
           ) : paymentRestricted ? (
             <p className="mt-1 leading-snug">
-              An administrator has restricted booking until your{" "}
-              {overdueCount} outstanding shift
-              {overdueCount === 1 ? "" : "s"} {overdueCount === 1 ? "is" : "are"}{" "}
-              paid.
+              An administrator has restricted booking until your {overdueCount} outstanding shift
+              {overdueCount === 1 ? "" : "s"} {overdueCount === 1 ? "is" : "are"} paid.
             </p>
           ) : (
             <p className="mt-1 leading-snug">
-              A shift exceeded the 24-hour payment window and is awaiting admin
-              review. Pay outstanding balances to clear the flag.
+              A shift exceeded the 24-hour payment window and is awaiting admin review. Pay
+              outstanding balances to clear the flag.
             </p>
           )}
         </div>
       </div>
     );
-  }, [restricted, flagged, accountRestricted, paymentRestricted, overdueCount, total, accountReason]);
+  }, [
+    restricted,
+    flagged,
+    accountRestricted,
+    paymentRestricted,
+    overdueCount,
+    total,
+    accountReason,
+  ]);
 
   return body;
 }

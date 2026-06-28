@@ -149,8 +149,6 @@ function OnboardingScreen() {
     await finish();
   };
 
-
-
   const title = isDoctor
     ? step === 1
       ? "Personal details"
@@ -193,7 +191,13 @@ function OnboardingScreen() {
             aria-label="Back"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M15 18l-6-6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </button>
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -262,9 +266,7 @@ function OnboardingScreen() {
                     const path = await uploadDoctorSelfie(dataUrl);
                     setDoctor((p) => ({ ...p, selfie: path }));
                   } catch (e) {
-                    setUploadError(
-                      e instanceof Error ? e.message : "Selfie upload failed",
-                    );
+                    setUploadError(e instanceof Error ? e.message : "Selfie upload failed");
                   } finally {
                     setUploadingSelfie(false);
                   }
@@ -313,9 +315,7 @@ function OnboardingScreen() {
                     const path = await uploadDoctorDocument("license", f);
                     setDoctor((p) => ({ ...p, license: path }));
                   } catch (err) {
-                    setUploadError(
-                      err instanceof Error ? err.message : "License upload failed",
-                    );
+                    setUploadError(err instanceof Error ? err.message : "License upload failed");
                   } finally {
                     setUploadingLicense(false);
                   }
@@ -348,18 +348,14 @@ function OnboardingScreen() {
                     const path = await uploadDoctorDocument("nysc", f);
                     setDoctor((p) => ({ ...p, nysc: path }));
                   } catch (err) {
-                    setUploadError(
-                      err instanceof Error ? err.message : "NYSC upload failed",
-                    );
+                    setUploadError(err instanceof Error ? err.message : "NYSC upload failed");
                   } finally {
                     setUploadingNysc(false);
                   }
                 }}
               />
 
-              {uploadError && (
-                <p className="text-[12.5px] text-destructive">{uploadError}</p>
-              )}
+              {uploadError && <p className="text-[12.5px] text-destructive">{uploadError}</p>}
 
               <BankPayoutFields
                 bankName={doctor.bankName}
@@ -369,9 +365,7 @@ function OnboardingScreen() {
                 expectedName={expectedName}
                 onChange={(patch) => setDoctor((p) => ({ ...p, ...patch }))}
               />
-
             </>
-
           )}
         </div>
 
@@ -442,15 +436,7 @@ function SelectField({
   );
 }
 
-function UploadField({
-  label,
-  hint,
-  onPick,
-}: {
-  label: string;
-  hint: string;
-  onPick: () => void;
-}) {
+function UploadField({ label, hint, onPick }: { label: string; hint: string; onPick: () => void }) {
   return (
     <div>
       <label className="text-[12px] font-medium text-muted-foreground">{label}</label>
@@ -460,8 +446,20 @@ function UploadField({
         className="mt-1.5 flex h-12 w-full items-center justify-between rounded-2xl bg-secondary px-4 text-left text-[14.5px] active:bg-accent"
       >
         <span className="text-muted-foreground">{hint}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-          <path d="M12 16V4M6 10l6-6 6 6M4 20h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          className="text-muted-foreground"
+        >
+          <path
+            d="M12 16V4M6 10l6-6 6 6M4 20h16"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
     </div>
@@ -551,15 +549,30 @@ function SelfieCapture({
           {preview ? (
             <img src={preview} alt="Selfie" className="h-full w-full object-cover" />
           ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-muted-foreground"
+            >
               <circle cx="12" cy="9" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-              <path d="M5 20c1.6-3.2 4.2-4.8 7-4.8s5.4 1.6 7 4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              <path
+                d="M5 20c1.6-3.2 4.2-4.8 7-4.8s5.4 1.6 7 4.8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
             </svg>
           )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[14px] font-medium">
-            {uploading ? "Uploading selfie…" : hasSelfie ? "Selfie captured" : "Live selfie required"}
+            {uploading
+              ? "Uploading selfie…"
+              : hasSelfie
+                ? "Selfie captured"
+                : "Live selfie required"}
           </div>
           <div className="text-[12px] text-muted-foreground">
             {hasSelfie ? "Retake to update" : "Front camera only"}

@@ -15,10 +15,7 @@ function split24(value: string): { h12: number; m: string; p: "AM" | "PM" } {
   // Snap minutes to the nearest 15 for the selector display.
   const mNum = parseInt(m, 10);
   const snapped = MINUTES.reduce((acc, opt) => {
-    return Math.abs(parseInt(opt, 10) - mNum) <
-      Math.abs(parseInt(acc, 10) - mNum)
-      ? opt
-      : acc;
+    return Math.abs(parseInt(opt, 10) - mNum) < Math.abs(parseInt(acc, 10) - mNum) ? opt : acc;
   }, "00");
   return { h12, m: snapped, p: period };
 }
@@ -40,8 +37,7 @@ export function TimeField12h({
 }) {
   const { h12, m, p } = split24(value);
 
-  const selCls =
-    "appearance-none bg-transparent text-[14px] font-medium tabular-nums outline-none";
+  const selCls = "appearance-none bg-transparent text-[14px] font-medium tabular-nums outline-none";
 
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
@@ -61,9 +57,7 @@ export function TimeField12h({
             </option>
           ))}
         </select>
-        <span className="text-[14px] font-medium leading-none text-foreground/60">
-          :
-        </span>
+        <span className="text-[14px] font-medium leading-none text-foreground/60">:</span>
         <select
           aria-label={`${label} minute`}
           value={m}
@@ -79,9 +73,7 @@ export function TimeField12h({
         <select
           aria-label={`${label} period`}
           value={p}
-          onChange={(e) =>
-            onChange(combine(h12, m, e.target.value as "AM" | "PM"))
-          }
+          onChange={(e) => onChange(combine(h12, m, e.target.value as "AM" | "PM"))}
           className={`${selCls} ml-1`}
         >
           <option value="AM">AM</option>

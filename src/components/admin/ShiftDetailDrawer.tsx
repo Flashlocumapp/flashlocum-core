@@ -127,12 +127,7 @@ export function ShiftDetailDrawer({
   });
 
   const [openAction, setOpenAction] = useState<
-    | null
-    | "cancel"
-    | "complete"
-    | "extend"
-    | "liftCap"
-    | "markPaid"
+    null | "cancel" | "complete" | "extend" | "liftCap" | "markPaid"
   >(null);
 
   const d = q.data;
@@ -161,10 +156,7 @@ export function ShiftDetailDrawer({
       )}
       {s && d && (
         <>
-          <Section
-            title="Actions"
-            right={null}
-          >
+          <Section title="Actions" right={null}>
             <div className="flex flex-wrap gap-2">
               {s.status !== "cancelled" && s.status !== "completed" && (
                 <button
@@ -254,10 +246,7 @@ export function ShiftDetailDrawer({
               label="First started"
               value={s.first_started_at ? fmt(s.first_started_at) : "—"}
             />
-            <Field
-              label="Started at"
-              value={s.started_at ? fmt(s.started_at) : "—"}
-            />
+            <Field label="Started at" value={s.started_at ? fmt(s.started_at) : "—"} />
             <Field label="End ts" value={s.end_ts ? fmt(s.end_ts) : "—"} />
             <Field
               label="Broadcast"
@@ -308,12 +297,8 @@ export function ShiftDetailDrawer({
                         <td className="px-2.5 py-1.5">{r.block_index}</td>
                         <td className="px-2.5 py-1.5">{fmtNaira(r.block_amount)}</td>
                         <td className="px-2.5 py-1.5">{fmtNaira(r.running_total)}</td>
-                        <td className="px-2.5 py-1.5 text-muted-foreground">
-                          {fmt(r.applied_at)}
-                        </td>
-                        <td className="px-2.5 py-1.5 text-muted-foreground">
-                          {r.source || "—"}
-                        </td>
+                        <td className="px-2.5 py-1.5 text-muted-foreground">{fmt(r.applied_at)}</td>
+                        <td className="px-2.5 py-1.5 text-muted-foreground">{r.source || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -330,7 +315,11 @@ export function ShiftDetailDrawer({
             />
             <Field
               label="Due at"
-              value={s.payment_due_at ? `${fmt(s.payment_due_at)} (${fmtRelative(s.payment_due_at)})` : "—"}
+              value={
+                s.payment_due_at
+                  ? `${fmt(s.payment_due_at)} (${fmtRelative(s.payment_due_at)})`
+                  : "—"
+              }
             />
             <Field label="Extensions" value={s.payment_extension_count} />
             <Field label="Paid at" value={s.paid_at ? fmt(s.paid_at) : "—"} />

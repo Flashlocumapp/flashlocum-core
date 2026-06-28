@@ -82,4 +82,3 @@ export function fmtElapsed(fromMs: number, nowMs: number = simNow()): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
-

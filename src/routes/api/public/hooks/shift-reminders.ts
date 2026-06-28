@@ -21,8 +21,7 @@ export const Route = createFileRoute("/api/public/hooks/shift-reminders")({
         // Authn: require the anon key. This route is on /api/public/* so the
         // platform doesn't gate it; we still want to reject random callers.
         const apikey = request.headers.get("apikey");
-        const expected =
-          process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
         if (!apikey || !expected || apikey !== expected) {
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,

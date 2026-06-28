@@ -1,19 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  adminListUnpaidShifts,
-  type AdminUnpaidShiftRow,
-} from "@/lib/admin.functions";
+import { adminListUnpaidShifts, type AdminUnpaidShiftRow } from "@/lib/admin.functions";
 import { pushToast } from "@/lib/notifications";
-import {
-  AdminPageHeader,
-  Chip,
-  Empty,
-  RefreshButton,
-  fmtNaira,
-  fmtRelative,
-} from "@/lib/admin-ui";
+import { AdminPageHeader, Chip, Empty, RefreshButton, fmtNaira, fmtRelative } from "@/lib/admin-ui";
 import { PaymentDetailDrawer } from "@/components/admin/PaymentDetailDrawer";
 import { ShiftDetailDrawer } from "@/components/admin/ShiftDetailDrawer";
 import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
@@ -77,8 +67,7 @@ function AdminUnpaidPage() {
     let cappedCount = 0;
     for (const r of rows) {
       outstanding += r.total_billed_amount ?? 0;
-      const cap = (r as unknown as { surcharge_capped_at?: string | null })
-        .surcharge_capped_at;
+      const cap = (r as unknown as { surcharge_capped_at?: string | null }).surcharge_capped_at;
       if (cap) cappedCount += 1;
     }
     return { outstanding, cappedCount };
@@ -171,9 +160,7 @@ function AdminUnpaidPage() {
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         <div>{fmtRelative(r.payment_due_at)}</div>
-                        <div className="text-[11px]">
-                          updated {fmtRelative(r.updated_at)}
-                        </div>
+                        <div className="text-[11px]">updated {fmtRelative(r.updated_at)}</div>
                       </td>
                     </tr>
                   );

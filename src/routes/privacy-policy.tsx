@@ -5,7 +5,11 @@ export const Route = createFileRoute("/privacy-policy")({
   head: () => ({
     meta: [
       { title: "Privacy Policy — FlashLocum" },
-      { name: "description", content: "Privacy Policy for the FlashLocum platform. Learn how we collect, use, and protect your information." },
+      {
+        name: "description",
+        content:
+          "Privacy Policy for the FlashLocum platform. Learn how we collect, use, and protect your information.",
+      },
       { property: "og:title", content: "Privacy Policy — FlashLocum" },
       { property: "og:description", content: "Privacy Policy for the FlashLocum platform." },
       { property: "og:url", content: "https://app.flashlocum.com/privacy-policy" },
@@ -20,9 +24,18 @@ function PrivacyPolicy() {
     <main className="min-h-screen bg-background safe-top safe-bottom">
       <div className="mx-auto max-w-2xl px-6 py-10">
         <div className="flex items-center gap-1">
-          <Link to="/role" className="inline-flex items-center gap-2 text-[14px] font-medium text-muted-foreground hover:text-foreground">
+          <Link
+            to="/role"
+            className="inline-flex items-center gap-2 text-[14px] font-medium text-muted-foreground hover:text-foreground"
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M15 18l-6-6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             Back
           </Link>
@@ -33,7 +46,9 @@ function PrivacyPolicy() {
 
         <div className="mt-8 space-y-8 text-[14px] leading-relaxed text-foreground">
           <p className="text-muted-foreground">
-            FlashLocum ("we", "our", "us") is a real-time locum coordination platform that connects verified medical doctors with healthcare professionals who require temporary locum cover.
+            FlashLocum ("we", "our", "us") is a real-time locum coordination platform that connects
+            verified medical doctors with healthcare professionals who require temporary locum
+            cover.
           </p>
           <p className="text-muted-foreground">
             This Privacy Policy explains how we collect, use, and protect your information.
@@ -81,7 +96,11 @@ function PrivacyPolicy() {
 
           <section>
             <h2 className="text-[17px] font-semibold tracking-tight">3. Payments</h2>
-            <p className="mt-2 text-muted-foreground">Payment processing is handled through third-party providers. We do not store full payment card details. We may store transaction references for reconciliation and dispute handling.</p>
+            <p className="mt-2 text-muted-foreground">
+              Payment processing is handled through third-party providers. We do not store full
+              payment card details. We may store transaction references for reconciliation and
+              dispute handling.
+            </p>
           </section>
 
           <section>
@@ -97,12 +116,17 @@ function PrivacyPolicy() {
 
           <section>
             <h2 className="text-[17px] font-semibold tracking-tight">5. Data Security</h2>
-            <p className="mt-2 text-muted-foreground">We use reasonable technical and organizational measures to protect your data. However, no system is 100% secure.</p>
+            <p className="mt-2 text-muted-foreground">
+              We use reasonable technical and organizational measures to protect your data. However,
+              no system is 100% secure.
+            </p>
           </section>
 
           <section>
             <h2 className="text-[17px] font-semibold tracking-tight">6. Data Retention</h2>
-            <p className="mt-2 text-muted-foreground">We retain user data as long as necessary to:</p>
+            <p className="mt-2 text-muted-foreground">
+              We retain user data as long as necessary to:
+            </p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
               <li>Provide services</li>
               <li>Meet legal obligations</li>
@@ -122,12 +146,17 @@ function PrivacyPolicy() {
 
           <section>
             <h2 className="text-[17px] font-semibold tracking-tight">8. Cookies and Tracking</h2>
-            <p className="mt-2 text-muted-foreground">We may use cookies or similar technologies to improve user experience.</p>
+            <p className="mt-2 text-muted-foreground">
+              We may use cookies or similar technologies to improve user experience.
+            </p>
           </section>
 
           <section>
             <h2 className="text-[17px] font-semibold tracking-tight">9. Changes to This Policy</h2>
-            <p className="mt-2 text-muted-foreground">We may update this Privacy Policy periodically. Continued use of FlashLocum implies acceptance of changes.</p>
+            <p className="mt-2 text-muted-foreground">
+              We may update this Privacy Policy periodically. Continued use of FlashLocum implies
+              acceptance of changes.
+            </p>
           </section>
 
           <section>

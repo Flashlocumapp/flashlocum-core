@@ -3,11 +3,9 @@
 // Uses the Lovable-provisioned browser key for the Maps JS API.
 
 const BROWSER_KEY = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as
-  | string
-  | undefined;
+  string | undefined;
 const TRACKING_ID = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as
-  | string
-  | undefined;
+  string | undefined;
 
 let loaderPromise: Promise<typeof google> | null = null;
 
@@ -99,7 +97,6 @@ function looksLikeLagosText(secondary: string): boolean {
   return /\blagos\b/i.test(secondary);
 }
 
-
 let sessionToken: google.maps.places.AutocompleteSessionToken | null = null;
 
 async function ensurePlaces() {
@@ -119,8 +116,6 @@ export async function fetchHospitalSuggestions(
   const { g, lib } = await ensurePlaces();
   if (signal?.aborted) return [];
   void origin;
-
-
 
   const byId = new Map<string, PlaceSuggestion>();
 
@@ -175,7 +170,6 @@ export async function fetchHospitalSuggestions(
   // See note above on locationRestriction reliability.
   void g;
   void looksLikeLagosText;
-
 
   if (signal?.aborted) return [];
   return Array.from(byId.values()).slice(0, 8);

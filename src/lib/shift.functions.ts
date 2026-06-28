@@ -32,7 +32,7 @@ export const quoteShift = createServerFn({ method: "POST" })
       _coverage_kind: data.coverageKind,
     });
     if (error) throw new Error(error.message);
-    return q as { amount: number; breakdown: any };
+    return q as { amount: number; breakdown: unknown };
   });
 
 const ValidateInput = z.object({ start: z.string(), end: z.string() });
@@ -59,9 +59,11 @@ export const startShift = createServerFn({ method: "POST" })
     });
     if (error) {
       // Idempotent: another tab/optimistic call may have already started it.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (/already started/i.test(error.message)) return { ok: true, already: true } as any;
       throw new Error(error.message);
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return r as any;
   });
 
@@ -73,10 +75,14 @@ export const pauseShift = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) {
-      if (/not in progress|already paused|not active|no open segment/i.test(error.message)) return { ok: true, already: true } as any;
+      if (/not in progress|already paused|not active|no open segment/i.test(error.message))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return { ok: true, already: true } as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (/final day/i.test(error.message)) return { ok: false, finalDay: true } as any;
       throw new Error(error.message);
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return r as any;
   });
 
@@ -105,6 +111,7 @@ export const resumeShift = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     const startedAtMs = seg?.started_at ? Date.parse(seg.started_at) : null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { ok: true as const, alreadyActive, startedAtMs, raw: r as any };
   });
 
@@ -168,7 +175,6 @@ export const endShift = createServerFn({ method: "POST" })
     return { ok: true as const, already: false as const, ...billing };
   });
 
-
 export const extendPaymentWindow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => RequestIdInput.parse(d))
@@ -177,6 +183,7 @@ export const extendPaymentWindow = createServerFn({ method: "POST" })
       _request_id: data.requestId,
     });
     if (error) throw new Error(error.message);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return r as any;
   });
 

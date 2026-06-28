@@ -5,8 +5,6 @@ import { getRole, subscribeRoleChange, type Role } from "@/lib/role";
 import { fmtNairaK, shortWeekdays } from "@/lib/format";
 import { useDispatch, type HistoryItem } from "@/features/cover/dispatch";
 
-
-
 // Doctor net payout = total paid − FlashLocum service fee (15%).
 const FEE_PCT = 15;
 const netPayout = (gross: number) => Math.max(0, Math.round(gross * (1 - FEE_PCT / 100)));
@@ -55,7 +53,6 @@ function toPayout(h: HistoryItem): Payout {
     environment: h.environment,
   };
 }
-
 
 /* ---------- Range filter ---------- */
 
@@ -229,29 +226,24 @@ function PayoutRow({
 }) {
   const pending = payout.state !== "settled";
   return (
-    <div
-      className="rounded-2xl"
-      style={{ background: "var(--color-surface-elevated)" }}
-    >
+    <div className="rounded-2xl" style={{ background: "var(--color-surface-elevated)" }}>
       <button
         type="button"
         onClick={onToggle}
         className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:opacity-90"
         aria-expanded={open}
       >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-[14.5px] font-medium">{payout.facility}</span>
-            </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[14.5px] font-medium">{payout.facility}</span>
+          </div>
           <div className="truncate text-[12.5px] text-muted-foreground">
             {payout.coverage} · {shortWeekdays(payout.completedOn)}
           </div>
         </div>
 
         <div className="flex flex-col items-end gap-0.5">
-          <div className="text-[14.5px] font-semibold tabular-nums">
-            {fmtNairaK(payout.amount)}
-          </div>
+          <div className="text-[14.5px] font-semibold tabular-nums">{fmtNairaK(payout.amount)}</div>
           <div
             className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.1em]"
             style={{
@@ -318,11 +310,7 @@ function PayoutDetails({ payout }: { payout: Payout }) {
         <Row label="Requester paid" value={fmtDT(payout.paidAt)} />
         <Row label="Remitted to you" value={fmtDT(payout.remittedAt)} />
         <Row label="Status" value={stateLabel(payout.state)} />
-        <Row
-          label="Reference"
-          value={payout.paymentReference ?? "—"}
-          mono
-        />
+        <Row label="Reference" value={payout.paymentReference ?? "—"} mono />
         <Row label="Shift ID" value={payout.id} mono />
       </Section>
 

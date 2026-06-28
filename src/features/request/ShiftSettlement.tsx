@@ -19,7 +19,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { subscribeInvalidationPing } from "@/lib/coverage-remote";
 import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
 
-
 type TransferAccount = {
   amount: number;
   accountNumber: string;
@@ -28,8 +27,6 @@ type TransferAccount = {
   expiresOn: string | null;
   paymentReference: string;
 };
-
-
 
 type Phase = "active" | "settlement" | "grace" | "overtime" | "confirmed";
 
@@ -128,7 +125,6 @@ export function ShiftSettlement({
    *  is to resume checkout. */
   alreadyAwaitingPayment?: boolean;
 }) {
-
   const [phase, setPhase] = useState<Phase>(initialPhase);
 
   // Watchful reconcile while the settlement sheet is open. Payment-completion
@@ -179,7 +175,6 @@ export function ShiftSettlement({
   };
   const [tx, setTx] = useState<TxRecord | null>(null);
 
-
   const tick = useSimClock(1000);
 
   const elapsed =
@@ -201,9 +196,7 @@ export function ShiftSettlement({
         ? endedAtRef.current
         : tick;
   const baseMs = shift.accumulatedMs ?? 0;
-  const liveSegmentMs = shift.startedAt
-    ? Math.max(0, effectiveNow - shift.startedAt)
-    : 0;
+  const liveSegmentMs = shift.startedAt ? Math.max(0, effectiveNow - shift.startedAt) : 0;
   const workedMin = (baseMs + liveSegmentMs) / 60000;
   const billedMin = billableMinutes(workedMin);
   // Authoritative sum of `shift_segments.billed_amount` for already-closed
@@ -238,7 +231,16 @@ export function ShiftSettlement({
       bookedMinutesFromWindow(shift.startHHMM, shift.endHHMM ?? shift.startHHMM),
       priorBilled,
     ).amount;
-  }, [multiDay, shift.coverageKind, shift.startHHMM, shift.endHHMM, shift.days, shift.environment, workedMin, priorBilled]);
+  }, [
+    multiDay,
+    shift.coverageKind,
+    shift.startHHMM,
+    shift.endHHMM,
+    shift.days,
+    shift.environment,
+    workedMin,
+    priorBilled,
+  ]);
   // Snapshot of the bill at the moment End Shift was pressed. SERVER-ONLY
   // sources are allowed to write `frozenAmountRef` (end_shift response,
   // serverTotalBilledAmount prop, getRequestBillingState poll). No client
@@ -302,8 +304,7 @@ export function ShiftSettlement({
     // When the row is already awaiting_payment, the bill is locked — open
     // the gate immediately and skip handleEndShift.
     settlementReadyRef.current =
-      alreadyAwaitingPayment ||
-      !(requestId && initialPhase === "settlement");
+      alreadyAwaitingPayment || !(requestId && initialPhase === "settlement");
     const now = simNow();
     // Idempotent ref writes: only seed when null OR when the server-anchored
     // value differs from the existing anchor by >1s. Prevents identity-only
@@ -315,14 +316,15 @@ export function ShiftSettlement({
         : (anchoredEndedAt ?? now);
     if (
       phaseStartedAtRef.current == null ||
-      (nextPhaseStart != null &&
-        Math.abs((phaseStartedAtRef.current ?? 0) - nextPhaseStart) > 1000)
+      (nextPhaseStart != null && Math.abs((phaseStartedAtRef.current ?? 0) - nextPhaseStart) > 1000)
     ) {
       phaseStartedAtRef.current = nextPhaseStart;
     }
     const nextOvertimeStart =
       effectivePhase === "overtime"
-        ? (anchoredEndedAt != null ? anchoredEndedAt + GRACE_TOTAL * 1000 : now)
+        ? anchoredEndedAt != null
+          ? anchoredEndedAt + GRACE_TOTAL * 1000
+          : now
         : null;
     if (
       overtimeStartedAtRef.current == null ||
@@ -337,8 +339,7 @@ export function ShiftSettlement({
         : null;
     if (
       endedAtRef.current == null ||
-      (nextEndedAt != null &&
-        Math.abs((endedAtRef.current ?? 0) - nextEndedAt) > 1000)
+      (nextEndedAt != null && Math.abs((endedAtRef.current ?? 0) - nextEndedAt) > 1000)
     ) {
       endedAtRef.current = nextEndedAt;
     }
@@ -350,7 +351,11 @@ export function ShiftSettlement({
     // If the server total isn't on hand yet, the panes show
     // "Calculating final amount…" until the billing poll / end_shift /
     // serverTotalBilledAmount prop lands.
-    if (effectivePhase === "settlement" || effectivePhase === "grace" || effectivePhase === "overtime") {
+    if (
+      effectivePhase === "settlement" ||
+      effectivePhase === "grace" ||
+      effectivePhase === "overtime"
+    ) {
       if (typeof serverTotalBilledAmount === "number" && serverTotalBilledAmount > 0) {
         if (frozenAmountRef.current !== serverTotalBilledAmount) {
           frozenAmountRef.current = serverTotalBilledAmount;
@@ -370,8 +375,15 @@ export function ShiftSettlement({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPhase, requestId, intent, serverPaymentDueAt, serverTotalBilledAmount, alreadyAwaitingPayment]);
-
+  }, [
+    open,
+    initialPhase,
+    requestId,
+    intent,
+    serverPaymentDueAt,
+    serverTotalBilledAmount,
+    alreadyAwaitingPayment,
+  ]);
 
   const finalize = () => {
     onClose();
@@ -419,13 +431,11 @@ export function ShiftSettlement({
     if (phase === "settlement" && elapsed >= VISIBLE_COUNTDOWN) setPhase("grace");
     if (phase === "grace" && elapsed >= GRACE_TOTAL) {
       if (overtimeStartedAtRef.current == null) {
-        overtimeStartedAtRef.current =
-          (phaseStartedAtRef.current ?? simNow()) + GRACE_TOTAL * 1000;
+        overtimeStartedAtRef.current = (phaseStartedAtRef.current ?? simNow()) + GRACE_TOTAL * 1000;
       }
       setPhase("overtime");
     }
   }, [elapsed, phase]);
-
 
   const endShiftRpc = useServerFn(endShiftFn);
   const [endingShift, setEndingShift] = useState(false);
@@ -437,7 +447,8 @@ export function ShiftSettlement({
     // AMOUNT must never be pre-seeded from a client estimator — it is
     // written only after `end_shift` returns the server-locked total.
     frozenBilledMinRef.current = billableMinutes(
-      ((shift.accumulatedMs ?? 0) + (shift.startedAt ? Math.max(0, now - shift.startedAt) : 0)) / 60000,
+      ((shift.accumulatedMs ?? 0) + (shift.startedAt ? Math.max(0, now - shift.startedAt) : 0)) /
+        60000,
     );
 
     if (requestId) {
@@ -450,6 +461,7 @@ export function ShiftSettlement({
       setEndShiftError(null);
       setPayError(null);
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const res: any = await endShiftRpc({ data: { requestId } });
         const total = Number(res?.total_billed_amount ?? 0);
         const locked = !!res?.billing_locked_at;
@@ -514,12 +526,13 @@ export function ShiftSettlement({
   // ---------------- Monnify custom transfer ----------------
   const beginCheckout = useServerFn(beginSettlementCheckout);
   const verifyPay = useServerFn(verifySettlementPayment);
-  
 
   const [payState, setPayState] = useState<"idle" | "starting" | "waiting" | "error">("idle");
   const [payError, setPayError] = useState<string | null>(null);
   const [account, setAccount] = useState<TransferAccount | null>(null);
-  const [payCheckState, setPayCheckState] = useState<"idle" | "checking" | "not_found" | "error">("idle");
+  const [payCheckState, setPayCheckState] = useState<"idle" | "checking" | "not_found" | "error">(
+    "idle",
+  );
   const [payCheckError, setPayCheckError] = useState<string | null>(null);
 
   const startMonnifyCheckout = async () => {
@@ -566,7 +579,6 @@ export function ShiftSettlement({
       setPayCheckError(e instanceof Error ? e.message : "Could not confirm payment yet");
     }
   };
-
 
   // Auto-start the moment we land in settlement. For pause-intent the
   // backend pause_shift RPC has already been awaited upstream
@@ -682,10 +694,6 @@ export function ShiftSettlement({
       cancelled = true;
     };
   }, [open, requestId, phase]);
-
-
-
-
 
   // Detect paid status primarily via a per-row Realtime subscription
   // (filter id=eq.${requestId}) — eliminates the per-user firehose poll.
@@ -831,8 +839,6 @@ export function ShiftSettlement({
     };
   }, [open, requestId, phase, fetchBilling]);
 
-
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(ACCOUNT.number);
@@ -916,12 +922,10 @@ export function ShiftSettlement({
             onClose={finalize}
           />
         )}
-
       </AnimatePresence>
     </motion.div>
   );
 }
-
 
 /* ---------------- Active ---------------- */
 
@@ -958,15 +962,28 @@ function ActivePane({
         </p>
 
         <div className="mt-6 flex items-center gap-3 rounded-2xl bg-surface-elevated px-4 py-4">
-          <span className="relative flex h-9 w-9 items-center justify-center rounded-full"
-            style={{ background: "color-mix(in oklab, var(--color-presence) 18%, transparent)" }}>
-            <span className="absolute inset-0 rounded-full"
-              style={{ background: "var(--color-presence)", opacity: 0.3, animation: "presence-pulse 1.8s ease-out infinite" }} />
-            <span className="relative h-2.5 w-2.5 rounded-full" style={{ background: "var(--color-presence)" }} />
+          <span
+            className="relative flex h-9 w-9 items-center justify-center rounded-full"
+            style={{ background: "color-mix(in oklab, var(--color-presence) 18%, transparent)" }}
+          >
+            <span
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: "var(--color-presence)",
+                opacity: 0.3,
+                animation: "presence-pulse 1.8s ease-out infinite",
+              }}
+            />
+            <span
+              className="relative h-2.5 w-2.5 rounded-full"
+              style={{ background: "var(--color-presence)" }}
+            />
           </span>
           <div className="flex-1">
             <div className="text-[13.5px] font-medium">Coverage in progress</div>
-            <div className="text-[12px] text-muted-foreground">Settlement begins after End Shift</div>
+            <div className="text-[12px] text-muted-foreground">
+              Settlement begins after End Shift
+            </div>
           </div>
         </div>
 
@@ -1061,11 +1078,10 @@ function SettlementPane({
     );
   }
 
-
-
-  const remaining = phase === "settlement"
-    ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
-    : Math.max(0, GRACE_TOTAL - elapsed);
+  const remaining =
+    phase === "settlement"
+      ? Math.max(0, VISIBLE_COUNTDOWN - elapsed)
+      : Math.max(0, GRACE_TOTAL - elapsed);
 
   return (
     <motion.section
@@ -1105,8 +1121,21 @@ function SettlementPane({
             className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-[12.5px] font-medium text-foreground/80 active:opacity-80"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
-              <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              <rect
+                x="9"
+                y="9"
+                width="11"
+                height="11"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              />
+              <path
+                d="M5 15V6a2 2 0 012-2h9"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+              />
             </svg>
             Copy account number
           </button>
@@ -1118,7 +1147,10 @@ function SettlementPane({
           </span>
           <span
             className="text-[15px] font-medium tabular-nums"
-            style={{ color: phase === "grace" ? "var(--color-muted-foreground)" : "var(--color-foreground)" }}
+            style={{
+              color:
+                phase === "grace" ? "var(--color-muted-foreground)" : "var(--color-foreground)",
+            }}
           >
             {fmtClock(remaining)}
           </span>
@@ -1128,7 +1160,6 @@ function SettlementPane({
             Coverage remains active until settlement is confirmed.
           </p>
         )}
-
       </div>
     </motion.section>
   );
@@ -1191,7 +1222,6 @@ function OvertimePane({
   const billedMin = extensionMin;
   const extra = extensionAmount;
 
-
   return (
     <motion.section
       initial={{ opacity: 0 }}
@@ -1231,8 +1261,21 @@ function OvertimePane({
             className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-[12.5px] font-medium text-foreground/80"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
-              <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              <rect
+                x="9"
+                y="9"
+                width="11"
+                height="11"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              />
+              <path
+                d="M5 15V6a2 2 0 012-2h9"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+              />
             </svg>
             Copy account number
           </button>
@@ -1273,9 +1316,7 @@ function OvertimePane({
                         ? "Verifying payment…"
                         : `Pay ${fmtNaira(total)} with Monnify`}
               </button>
-              {payError && (
-                <p className="text-center text-[12px] text-destructive">{payError}</p>
-              )}
+              {payError && <p className="text-center text-[12px] text-destructive">{payError}</p>}
             </>
           ) : null}
         </div>
@@ -1417,10 +1458,18 @@ function ConfirmedPane({
     >
       <TopBar onClose={onClose} />
       <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-6 pt-2">
-        <div className="mt-2 flex h-12 w-12 items-center justify-center rounded-full"
-          style={{ background: "color-mix(in oklab, var(--color-presence) 18%, transparent)" }}>
+        <div
+          className="mt-2 flex h-12 w-12 items-center justify-center rounded-full"
+          style={{ background: "color-mix(in oklab, var(--color-presence) 18%, transparent)" }}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12.5l4 4 10-10" stroke="var(--color-presence)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M5 12.5l4 4 10-10"
+              stroke="var(--color-presence)"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </div>
         <h1 className="mt-4 text-[24px] font-semibold tracking-tight">Settlement confirmed</h1>
@@ -1434,7 +1483,10 @@ function ConfirmedPane({
           {scheduleLabel && <Row label="Shift" value={scheduleLabel} />}
           <Row label="Doctor" value={doctor} />
           {shiftSpan.earliestStart != null && (
-            <Row label="Started" value={fmtSegTime(new Date(shiftSpan.earliestStart).toISOString())} />
+            <Row
+              label="Started"
+              value={fmtSegTime(new Date(shiftSpan.earliestStart).toISOString())}
+            />
           )}
           {shiftSpan.latestEnd != null && (
             <Row label="Ended" value={fmtSegTime(new Date(shiftSpan.latestEnd).toISOString())} />
@@ -1456,13 +1508,9 @@ function ConfirmedPane({
             </div>
           )}
           {extensionCount > 0 && (
-            <Row
-              label="Payment extensions"
-              value={`${extensionCount} × 15min`}
-            />
+            <Row label="Payment extensions" value={`${extensionCount} × 15min`} />
           )}
         </div>
-
 
         {dayRows.length > 0 && (
           <div className="mt-4 rounded-2xl bg-surface-elevated p-5">
@@ -1479,7 +1527,9 @@ function ConfirmedPane({
                   </div>
                   <div className="flex items-center justify-between text-[12px] text-muted-foreground">
                     <span>Billable Duration</span>
-                    <span className="tabular-nums text-foreground/80">{fmtHrMin(d.billableMin)}</span>
+                    <span className="tabular-nums text-foreground/80">
+                      {fmtHrMin(d.billableMin)}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-[12.5px]">
                     <span className="text-muted-foreground">Amount</span>
@@ -1501,7 +1551,6 @@ function ConfirmedPane({
           <p className="mt-2 text-[12px] text-muted-foreground">Thanks for the feedback.</p>
         )}
 
-
         <div className="mt-auto space-y-2 pb-8">
           <button
             onClick={onClose}
@@ -1512,18 +1561,24 @@ function ConfirmedPane({
         </div>
       </div>
 
-
       <RatingOverlay
         open={ratingOpen}
         doctor={doctor}
         onDismiss={() => setRatingOpen(false)}
         onSubmit={(rating, feedback) => {
           const shiftId = tx?.id ?? null;
-          console.info("[RatingOverlay] submit fired", { rating, shiftId, hasFeedback: !!feedback });
+          console.info("[RatingOverlay] submit fired", {
+            rating,
+            shiftId,
+            hasFeedback: !!feedback,
+          });
           if (rating > 0) {
             if (!shiftId) {
               console.error("[RatingOverlay] no shiftId — rating dropped");
-              pushToast({ tone: "warn", title: "Couldn't save rating — please try again in a moment." });
+              pushToast({
+                tone: "warn",
+                title: "Couldn't save rating — please try again in a moment.",
+              });
             } else {
               void (async () => {
                 const res = await submitShiftRating(shiftId, rating, feedback || null);
@@ -1554,11 +1609,21 @@ function ConfirmedPane({
   );
 }
 
-const Row = memo(function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+const Row = memo(function Row({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between border-b border-border/50 py-2 last:border-0">
       <span className="text-[12.5px] text-muted-foreground">{label}</span>
-      <span className={strong ? "text-[15px] font-semibold tabular-nums" : "text-[13.5px] font-medium"}>
+      <span
+        className={strong ? "text-[15px] font-semibold tabular-nums" : "text-[13.5px] font-medium"}
+      >
         {value}
       </span>
     </div>
@@ -1577,13 +1642,20 @@ const TopBar = memo(function TopBar({ onClose }: { onClose?: () => void }) {
           className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-elevated"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
           </svg>
         </button>
       ) : (
         <span className="h-9 w-9" />
       )}
-      <span className="text-[12px] uppercase tracking-[0.16em] text-muted-foreground">FlashLocum</span>
+      <span className="text-[12px] uppercase tracking-[0.16em] text-muted-foreground">
+        FlashLocum
+      </span>
       <span className="h-9 w-9" />
     </div>
   );
@@ -1635,11 +1707,9 @@ function CustomTransferPane({
   const tick = useSimClock(1000);
   const dueMs = paymentDueAt ? Date.parse(paymentDueAt) : NaN;
   const expMs = account?.expiresOn ? Date.parse(account.expiresOn) : NaN;
-  const anchorMs = Number.isFinite(dueMs) ? dueMs : (Number.isFinite(expMs) ? expMs : NaN);
+  const anchorMs = Number.isFinite(dueMs) ? dueMs : Number.isFinite(expMs) ? expMs : NaN;
   const hasAnchor = Number.isFinite(anchorMs);
-  const remaining = hasAnchor
-    ? Math.max(0, Math.floor((anchorMs - tick) / 1000))
-    : PRICE_HOLD_SEC;
+  const remaining = hasAnchor ? Math.max(0, Math.floor((anchorMs - tick) / 1000)) : PRICE_HOLD_SEC;
   const expired = hasAnchor && remaining === 0;
 
   // Price-hold expiry is informational only. The amount on screen is whatever
@@ -1680,7 +1750,6 @@ function CustomTransferPane({
           </div>
         )}
 
-
         {payState === "starting" || (!account && !payError) ? (
           <div className="mt-10 flex flex-col items-center gap-3 text-muted-foreground">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -1716,8 +1785,21 @@ function CustomTransferPane({
                   className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-[12px] font-medium text-foreground/80 active:opacity-80"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                    <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
-                    <path d="M5 15V6a2 2 0 012-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                    <rect
+                      x="9"
+                      y="9"
+                      width="11"
+                      height="11"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                    <path
+                      d="M5 15V6a2 2 0 012-2h9"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                    />
                   </svg>
                   {copied ? "Copied" : "Copy"}
                 </button>
@@ -1735,21 +1817,22 @@ function CustomTransferPane({
                   {expired ? "Price hold expired" : "Price held for"}
                 </span>
                 <span className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                  Amount and payment details may change if payment is not
-                  completed in time.
+                  Amount and payment details may change if payment is not completed in time.
                 </span>
               </div>
               <span
                 className="text-[18px] font-semibold tabular-nums"
-                style={{ color: remaining <= 60 ? "var(--color-destructive)" : "var(--color-foreground)" }}
+                style={{
+                  color: remaining <= 60 ? "var(--color-destructive)" : "var(--color-foreground)",
+                }}
               >
                 {hasAnchor ? fmtClock(remaining) : "—:—"}
               </span>
             </div>
 
             <p className="mt-4 text-[12px] text-muted-foreground">
-              Send the exact amount above from any Nigerian bank app. This page
-              updates automatically once payment is received.
+              Send the exact amount above from any Nigerian bank app. This page updates
+              automatically once payment is received.
             </p>
           </>
         ) : null}
@@ -1770,7 +1853,6 @@ function CustomTransferPane({
           </div>
         </div>
       </div>
-
     </motion.section>
   );
 }

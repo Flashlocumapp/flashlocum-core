@@ -97,9 +97,7 @@ function notify(path: string, url: string | null) {
 async function sign(path: string): Promise<string | null> {
   if (inflight.has(path)) return inflight.get(path)!;
   const p = (async () => {
-    const { data, error } = await supabase.storage
-      .from("doctors")
-      .createSignedUrl(path, 60 * 60);
+    const { data, error } = await supabase.storage.from("doctors").createSignedUrl(path, 60 * 60);
     const url = error || !data?.signedUrl ? null : data.signedUrl;
     const expAt = url ? parseExpFromUrl(url) : Date.now() + 60_000;
     cache.set(path, { url, ts: Date.now(), expAt });

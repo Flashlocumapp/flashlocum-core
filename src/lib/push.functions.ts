@@ -17,18 +17,16 @@ export const registerDeviceTokenFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { error } = await supabase
-      .from("device_tokens")
-      .upsert(
-        {
-          user_id: userId,
-          token: data.token,
-          platform: data.platform,
-          app_version: data.appVersion ?? null,
-          last_seen_at: new Date().toISOString(),
-        },
-        { onConflict: "token" },
-      );
+    const { error } = await supabase.from("device_tokens").upsert(
+      {
+        user_id: userId,
+        token: data.token,
+        platform: data.platform,
+        app_version: data.appVersion ?? null,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "token" },
+    );
     if (error) throw new Error(error.message);
     return { ok: true };
   });

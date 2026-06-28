@@ -59,7 +59,9 @@ async function verifyMonnifySignature(signature: string | null, rawBody: string)
     false,
     ["sign"],
   );
-  const expected = new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)));
+  const expected = new Uint8Array(
+    await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)),
+  );
   return constantTimeEqual(hexToBytes(sig), expected);
 }
 

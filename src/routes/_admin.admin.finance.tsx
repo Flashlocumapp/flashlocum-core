@@ -1,18 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  adminFinanceAnalytics,
-  type FinanceAnalytics,
-} from "@/lib/admin.functions";
+import { adminFinanceAnalytics, type FinanceAnalytics } from "@/lib/admin.functions";
 import { pushToast } from "@/lib/notifications";
-import {
-  AdminPageHeader,
-  Empty,
-  RefreshButton,
-  StatCard,
-  fmtNaira,
-} from "@/lib/admin-ui";
+import { AdminPageHeader, Empty, RefreshButton, StatCard, fmtNaira } from "@/lib/admin-ui";
 
 export const Route = createFileRoute("/_admin/admin/finance")({
   ssr: false,
@@ -46,10 +37,7 @@ function FinancePage() {
     void refresh();
   }, [refresh]);
 
-  const maxBar = useMemo(
-    () => Math.max(1, ...(data?.series.map((s) => s.gross) ?? [0])),
-    [data],
-  );
+  const maxBar = useMemo(() => Math.max(1, ...(data?.series.map((s) => s.gross) ?? [0])), [data]);
   const maxHospital = useMemo(
     () => Math.max(1, ...(data?.topHospitals.map((h) => h.gross) ?? [0])),
     [data],

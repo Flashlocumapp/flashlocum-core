@@ -25,7 +25,16 @@ function HelpScreen() {
             onClick={() => navigate({ to: "/account" })}
             className="mb-3 flex items-center gap-1 text-[14px] text-muted-foreground active:opacity-70"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M15 18l-6-6 6-6" />
             </svg>
             Back
@@ -108,7 +117,11 @@ function RequesterContent() {
               <li>Doctor is paid by FlashLocum</li>
               <li>Ratings are triggered for both sides</li>
             </ul>
-            <p>If payment is not completed within 15 minutes of clicking End Shift, the shift remains open and billing continues in additional 15-minute blocks until payment is successfully completed.</p>
+            <p>
+              If payment is not completed within 15 minutes of clicking End Shift, the shift remains
+              open and billing continues in additional 15-minute blocks until payment is
+              successfully completed.
+            </p>
 
             <p className="font-medium text-foreground">Multi-day shifts</p>
             <ul className="ml-4 list-disc space-y-1">
@@ -128,7 +141,11 @@ function RequesterContent() {
               <li>Doctor is paid by FlashLocum</li>
               <li>Ratings are triggered for both sides</li>
             </ul>
-            <p>If payment is not completed within 15 minutes of clicking End Shift, the shift remains open and billing continues in additional 15-minute blocks until payment is successfully completed.</p>
+            <p>
+              If payment is not completed within 15 minutes of clicking End Shift, the shift remains
+              open and billing continues in additional 15-minute blocks until payment is
+              successfully completed.
+            </p>
           </div>
         </AccordionContent>
       </AccordionItem>
@@ -146,7 +163,10 @@ function RequesterContent() {
           <div className="space-y-3 text-[13.5px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground">How your Rating Score is calculated</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>After every completed shift, doctors and requesters can rate each other from 1–5 stars.</li>
+              <li>
+                After every completed shift, doctors and requesters can rate each other from 1–5
+                stars.
+              </li>
               <li>Your Rating Score shows the average of your most recent ratings.</li>
               <li>All users start with a 5.0 rating when they join FlashLocum.</li>
             </ul>
@@ -155,22 +175,42 @@ function RequesterContent() {
             <ul className="ml-4 list-disc space-y-1">
               <li>Your Rating Score helps build trust on the platform.</li>
               <li>Doctors may be more likely to accept requests from highly rated hospitals.</li>
-              <li>A strong rating reflects professionalism, reliability, communication, and overall shift experience.</li>
+              <li>
+                A strong rating reflects professionalism, reliability, communication, and overall
+                shift experience.
+              </li>
             </ul>
 
             <p className="font-medium text-foreground">Tips for maintaining a high Rating Score</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li><span className="font-medium text-foreground">Be professional</span> — communicate clearly and respectfully before, during, and after shifts.</li>
-              <li><span className="font-medium text-foreground">Provide accurate information</span> — ensure shift details, expectations, and requirements are clear.</li>
-              <li><span className="font-medium text-foreground">Honour commitments</span> — avoid cancelling accepted bookings unless absolutely necessary.</li>
-              <li><span className="font-medium text-foreground">Maintain good communication</span> — keep doctors informed of important updates or unexpected issues.</li>
-              <li><span className="font-medium text-foreground">Create a positive experience</span> — treat doctors professionally and respectfully throughout the coverage period.</li>
+              <li>
+                <span className="font-medium text-foreground">Be professional</span> — communicate
+                clearly and respectfully before, during, and after shifts.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Provide accurate information</span> —
+                ensure shift details, expectations, and requirements are clear.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Honour commitments</span> — avoid
+                cancelling accepted bookings unless absolutely necessary.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Maintain good communication</span> —
+                keep doctors informed of important updates or unexpected issues.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Create a positive experience</span> —
+                treat doctors professionally and respectfully throughout the coverage period.
+              </li>
             </ul>
 
             <p className="font-medium text-foreground">Minimum Rating Requirement</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Requesters should maintain a Rating Score of at least 3.5.</li>
-              <li>Consistently low ratings may result in account review or platform restrictions.</li>
+              <li>
+                Consistently low ratings may result in account review or platform restrictions.
+              </li>
             </ul>
           </div>
         </AccordionContent>
@@ -189,9 +229,16 @@ function RequesterContent() {
           <div className="space-y-3 text-[13.5px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground">How your Reliability Score is calculated</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>Your Reliability Score measures how consistently you honour accepted shift commitments.</li>
-              <li>Only cancellations made AFTER a doctor has accepted a shift affect Reliability.</li>
-              <li>Cancelling a request before acceptance does not affect your Reliability Score.</li>
+              <li>
+                Your Reliability Score measures how consistently you honour accepted shift
+                commitments.
+              </li>
+              <li>
+                Only cancellations made AFTER a doctor has accepted a shift affect Reliability.
+              </li>
+              <li>
+                Cancelling a request before acceptance does not affect your Reliability Score.
+              </li>
               <li>All users start with 100% Reliability when they join FlashLocum.</li>
             </ul>
 
@@ -202,18 +249,36 @@ function RequesterContent() {
               <li>Higher reliability improves trust and platform experience.</li>
             </ul>
 
-            <p className="font-medium text-foreground">Tips for maintaining a high Reliability Score</p>
+            <p className="font-medium text-foreground">
+              Tips for maintaining a high Reliability Score
+            </p>
             <ul className="ml-4 list-disc space-y-1">
-              <li><span className="font-medium text-foreground">Only create shifts you intend to fill</span> — avoid creating requests that may later be cancelled.</li>
-              <li><span className="font-medium text-foreground">Avoid last-minute cancellations</span> — late cancellations disrupt doctors who have already committed their time.</li>
-              <li><span className="font-medium text-foreground">Plan ahead</span> — confirm staffing requirements before creating requests.</li>
-              <li><span className="font-medium text-foreground">Communicate early</span> — if circumstances change, notify the doctor as soon as possible.</li>
+              <li>
+                <span className="font-medium text-foreground">
+                  Only create shifts you intend to fill
+                </span>{" "}
+                — avoid creating requests that may later be cancelled.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Avoid last-minute cancellations</span>{" "}
+                — late cancellations disrupt doctors who have already committed their time.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Plan ahead</span> — confirm staffing
+                requirements before creating requests.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Communicate early</span> — if
+                circumstances change, notify the doctor as soon as possible.
+              </li>
             </ul>
 
             <p className="font-medium text-foreground">Minimum Reliability Requirement</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Minimum Reliability Score: 75%.</li>
-              <li>Accounts that repeatedly cancel accepted shifts may be reviewed or restricted.</li>
+              <li>
+                Accounts that repeatedly cancel accepted shifts may be reviewed or restricted.
+              </li>
             </ul>
           </div>
         </AccordionContent>
@@ -349,7 +414,10 @@ function DoctorContent() {
           <div className="space-y-3 text-[13.5px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground">How your Rating Score is calculated</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>After every completed shift, doctors and requesters can rate each other from 1–5 stars.</li>
+              <li>
+                After every completed shift, doctors and requesters can rate each other from 1–5
+                stars.
+              </li>
               <li>Your Rating Score shows the average of your most recent ratings.</li>
               <li>All users start with a 5.0 rating when they join FlashLocum.</li>
             </ul>
@@ -357,23 +425,45 @@ function DoctorContent() {
             <p className="font-medium text-foreground">Why is my Rating Score important?</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Your Rating Score helps build trust on the platform.</li>
-              <li>Hospitals may be more likely to choose highly rated doctors for future shifts.</li>
-              <li>A strong rating reflects professionalism, reliability, communication, and overall shift experience.</li>
+              <li>
+                Hospitals may be more likely to choose highly rated doctors for future shifts.
+              </li>
+              <li>
+                A strong rating reflects professionalism, reliability, communication, and overall
+                shift experience.
+              </li>
             </ul>
 
             <p className="font-medium text-foreground">Tips for maintaining a high Rating Score</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li><span className="font-medium text-foreground">Be professional</span> — communicate clearly and respectfully before, during, and after shifts.</li>
-              <li><span className="font-medium text-foreground">Be punctual</span> — arrive on time and be prepared for your scheduled shift.</li>
-              <li><span className="font-medium text-foreground">Honour commitments</span> — avoid cancelling shifts after acceptance unless absolutely necessary.</li>
-              <li><span className="font-medium text-foreground">Maintain good communication</span> — keep the hospital informed of important updates or unexpected issues.</li>
-              <li><span className="font-medium text-foreground">Create a positive experience</span> — respect hospital staff, patients, and workplace policies.</li>
+              <li>
+                <span className="font-medium text-foreground">Be professional</span> — communicate
+                clearly and respectfully before, during, and after shifts.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Be punctual</span> — arrive on time
+                and be prepared for your scheduled shift.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Honour commitments</span> — avoid
+                cancelling shifts after acceptance unless absolutely necessary.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Maintain good communication</span> —
+                keep the hospital informed of important updates or unexpected issues.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Create a positive experience</span> —
+                respect hospital staff, patients, and workplace policies.
+              </li>
             </ul>
 
             <p className="font-medium text-foreground">Minimum Rating Requirement</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Doctors should maintain a Rating Score of at least 4.0.</li>
-              <li>Consistently low ratings may result in account review or platform restrictions.</li>
+              <li>
+                Consistently low ratings may result in account review or platform restrictions.
+              </li>
             </ul>
           </div>
         </AccordionContent>
@@ -392,9 +482,14 @@ function DoctorContent() {
           <div className="space-y-3 text-[13.5px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground">How your Reliability Score is calculated</p>
             <ul className="ml-4 list-disc space-y-1">
-              <li>Your Reliability Score measures how consistently you honour accepted shift commitments.</li>
+              <li>
+                Your Reliability Score measures how consistently you honour accepted shift
+                commitments.
+              </li>
               <li>Only cancellations made AFTER a shift has been accepted affect Reliability.</li>
-              <li>Cancelling a request before it is accepted does not affect your Reliability Score.</li>
+              <li>
+                Cancelling a request before it is accepted does not affect your Reliability Score.
+              </li>
               <li>All users start with 100% Reliability when they join FlashLocum.</li>
             </ul>
 
@@ -405,23 +500,40 @@ function DoctorContent() {
               <li>Higher reliability improves trust and platform experience.</li>
             </ul>
 
-            <p className="font-medium text-foreground">Tips for maintaining a high Reliability Score</p>
+            <p className="font-medium text-foreground">
+              Tips for maintaining a high Reliability Score
+            </p>
             <ul className="ml-4 list-disc space-y-1">
-              <li><span className="font-medium text-foreground">Only accept shifts you can honour</span> — avoid accepting shifts unless you are confident you can complete them.</li>
-              <li><span className="font-medium text-foreground">Avoid last-minute cancellations</span> — late cancellations can disrupt patient care and hospital operations.</li>
-              <li><span className="font-medium text-foreground">Plan ahead</span> — review schedules carefully before committing to a shift.</li>
-              <li><span className="font-medium text-foreground">Communicate early</span> — if an emergency occurs, notify the hospital as soon as possible.</li>
+              <li>
+                <span className="font-medium text-foreground">
+                  Only accept shifts you can honour
+                </span>{" "}
+                — avoid accepting shifts unless you are confident you can complete them.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Avoid last-minute cancellations</span>{" "}
+                — late cancellations can disrupt patient care and hospital operations.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Plan ahead</span> — review schedules
+                carefully before committing to a shift.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Communicate early</span> — if an
+                emergency occurs, notify the hospital as soon as possible.
+              </li>
             </ul>
 
             <p className="font-medium text-foreground">Minimum Reliability Requirement</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Minimum Reliability Score: 85%.</li>
-              <li>Accounts that repeatedly cancel accepted shifts may be reviewed or restricted.</li>
+              <li>
+                Accounts that repeatedly cancel accepted shifts may be reviewed or restricted.
+              </li>
             </ul>
           </div>
         </AccordionContent>
       </AccordionItem>
-
 
       {/* 5. Single-day coverage */}
       <AccordionItem
@@ -453,10 +565,16 @@ function DoctorContent() {
         </AccordionTrigger>
         <AccordionContent className="pb-4">
           <div className="space-y-2 text-[13.5px] leading-relaxed text-muted-foreground">
-            <p>One assignment can last multiple days (max 14 days). Same doctor stays for the entire assignment.</p>
+            <p>
+              One assignment can last multiple days (max 14 days). Same doctor stays for the entire
+              assignment.
+            </p>
             <p className="font-medium text-foreground">Flow</p>
             <p>Start Shift → Resume/Pause → End Shift</p>
-            <p>Only the final End Shift closes the entire assignment. Ratings happen only once at the end.</p>
+            <p>
+              Only the final End Shift closes the entire assignment. Ratings happen only once at the
+              end.
+            </p>
             <p className="mt-2 font-medium text-foreground">Important</p>
             <ul className="ml-4 list-disc space-y-1">
               <li>Doctors cannot modify payment rules</li>
@@ -471,4 +589,3 @@ function DoctorContent() {
     </Accordion>
   );
 }
-

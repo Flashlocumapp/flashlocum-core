@@ -81,17 +81,13 @@ function AdminShiftsPage() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const ch = supabase
       .channel("admin-shifts-stream")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "coverage_requests" },
-        () => {
-          if (timer) return;
-          timer = setTimeout(() => {
-            timer = null;
-            void refresh();
-          }, 5000);
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "coverage_requests" }, () => {
+        if (timer) return;
+        timer = setTimeout(() => {
+          timer = null;
+          void refresh();
+        }, 5000);
+      })
       .subscribe();
     return () => {
       if (timer) clearTimeout(timer);
@@ -276,7 +272,10 @@ function AdminShiftsPage() {
                       <div>{r.payment_status || "—"}</div>
                       {isAwaiting && (
                         <>
-                          <div className="text-[11px] truncate max-w-[160px]" title={r.payment_reference ?? ""}>
+                          <div
+                            className="text-[11px] truncate max-w-[160px]"
+                            title={r.payment_reference ?? ""}
+                          >
                             {r.payment_reference || "no ref"}
                           </div>
                           {r.ended_at && (

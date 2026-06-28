@@ -1,10 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  adminDoctorFlashboard,
-  type DoctorFlashboard,
-} from "@/lib/admin.functions";
+import { adminDoctorFlashboard, type DoctorFlashboard } from "@/lib/admin.functions";
 import { pushToast } from "@/lib/notifications";
 import {
   AdminPageHeader,
@@ -95,9 +92,7 @@ function FlashboardPage() {
                       }}
                     />
                   </div>
-                  <div className="w-10 text-right text-[12px] text-muted-foreground">
-                    {r.count}
-                  </div>
+                  <div className="w-10 text-right text-[12px] text-muted-foreground">{r.count}</div>
                 </div>
               ))}
             {(!data || data.rating_distribution.every((r) => r.count === 0)) && (
@@ -153,7 +148,9 @@ function FlashboardPage() {
                         <span
                           className="inline-flex h-5 items-center rounded-full px-2 text-[10.5px] font-semibold uppercase tracking-wider"
                           style={{
-                            color: r.online ? "var(--color-presence)" : "var(--color-muted-foreground)",
+                            color: r.online
+                              ? "var(--color-presence)"
+                              : "var(--color-muted-foreground)",
                             background: r.online
                               ? "color-mix(in oklab, var(--color-presence) 14%, transparent)"
                               : "color-mix(in oklab, currentColor 10%, transparent)",
@@ -170,9 +167,7 @@ function FlashboardPage() {
                           : "—"}
                       </td>
                       <td className="px-2 py-2">
-                        {r.rating_count
-                          ? `${r.rating.toFixed(2)} (${r.rating_count})`
-                          : "—"}
+                        {r.rating_count ? `${r.rating.toFixed(2)} (${r.rating_count})` : "—"}
                       </td>
                       <td className="px-2 py-2">{fmtNaira(r.net_earnings)}</td>
                     </tr>

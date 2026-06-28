@@ -27,7 +27,9 @@ function RoleScreen() {
 
         <div className={resetSuccess ? "mt-8" : "mt-16"}>
           <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-            How will you use<br />FlashLocum?
+            How will you use
+            <br />
+            FlashLocum?
           </h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
             You can switch anytime from your profile.
@@ -54,9 +56,19 @@ function RoleScreen() {
             FLASHLOCUM · REALTIME COVERAGE NETWORK
           </div>
           <div className="mt-3 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
-            <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms</Link>
+            <Link
+              to="/terms-of-service"
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              Terms
+            </Link>
             <span className="text-hairline">·</span>
-            <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy</Link>
+            <Link
+              to="/privacy-policy"
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              Privacy
+            </Link>
           </div>
         </div>
       </div>
@@ -65,8 +77,16 @@ function RoleScreen() {
 }
 
 function RoleCard({
-  to, title, desc, delay,
-}: { to: string; title: string; desc: string; delay: number }) {
+  to,
+  title,
+  desc,
+  delay,
+}: {
+  to: string;
+  title: string;
+  desc: string;
+  delay: number;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -86,7 +106,13 @@ function RoleCard({
           </div>
           <span className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M5 12h14M13 5l7 7-7 7"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </span>
         </div>

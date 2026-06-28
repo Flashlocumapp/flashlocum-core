@@ -23,8 +23,7 @@ const ResolveSchema = z.object({
 });
 
 export type ResolveBankAccountResult =
-  | { ok: true; accountName: string }
-  | { ok: false; error: string };
+  { ok: true; accountName: string } | { ok: false; error: string };
 
 export const resolveBankAccountName = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -36,9 +35,11 @@ export const resolveBankAccountName = createServerFn({ method: "POST" })
       bankCode: data.bankCode,
     });
     try {
-      const res = await monnifyFetch<{ accountName: string; accountNumber: string; bankCode: string }>(
-        `/api/v1/disbursements/account/validate?${params.toString()}`,
-      );
+      const res = await monnifyFetch<{
+        accountName: string;
+        accountNumber: string;
+        bankCode: string;
+      }>(`/api/v1/disbursements/account/validate?${params.toString()}`);
       return { ok: true, accountName: res.accountName };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";

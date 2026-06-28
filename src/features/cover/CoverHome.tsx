@@ -7,11 +7,7 @@ import { TrustInfoPopover } from "@/components/TrustInfoPopover";
 
 import { fmtOpMeta } from "@/lib/format";
 
-import {
-  setOnline,
-  useDispatch,
-  type Coverage,
-} from "@/features/cover/dispatch";
+import { setOnline, useDispatch, type Coverage } from "@/features/cover/dispatch";
 import { getSessionId } from "@/lib/network";
 import { userEntityId } from "@/lib/trust";
 import { useLifecycleReconcile } from "@/lib/use-lifecycle-reconcile";
@@ -27,7 +23,6 @@ import {
   stopDoctorLocationRefresh,
 } from "@/lib/doctor-gps";
 
-
 /**
  * CoverHome — doctor home tab.
  * Fullscreen map · top Online/Offline pill · lower floating tiles.
@@ -38,10 +33,7 @@ export function CoverHome({ active = true }: { active?: boolean }) {
   const approved = verification === "approved";
 
   // Pick the focus coverage: any active one, else the next upcoming.
-  const focus =
-    upcoming.find((c) => c.active) ??
-    upcoming[0] ??
-    null;
+  const focus = upcoming.find((c) => c.active) ?? upcoming[0] ?? null;
   const isActive = !!focus?.active;
 
   // Watchful reconcile on the focused engagement (active or next upcoming).
@@ -100,7 +92,6 @@ export function CoverHome({ active = true }: { active?: boolean }) {
   // Audit 11: no manual "Refresh Location" control. GPS is acquired on
   // going online and re-acquired automatically by the 20-minute foreground
   // tick — users never tap to refresh anything.
-
 
   return (
     <section className="relative h-full w-full overflow-hidden">
@@ -261,9 +252,7 @@ function ActionRequiredCard() {
       >
         {targetLabel(target)}
       </div>
-      {reason && (
-        <div className="mt-1 text-[12.5px] font-semibold leading-snug">{reason}</div>
-      )}
+      {reason && <div className="mt-1 text-[12.5px] font-semibold leading-snug">{reason}</div>}
       {note && (
         <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">{note}</div>
       )}
@@ -310,7 +299,6 @@ function ActionRequiredCard() {
   );
 }
 
-
 /* ------------------ Online toggle ------------------ */
 
 function OnlinePill({
@@ -327,9 +315,7 @@ function OnlinePill({
       onClick={onToggle}
       className="flex items-center gap-2.5 rounded-full px-5 py-2.5 shadow-[0_4px_18px_-4px_rgba(0,0,0,0.18)] active:scale-[0.98] transition-transform"
       style={{
-        background: online
-          ? "var(--color-presence)"
-          : "var(--color-surface-elevated)",
+        background: online ? "var(--color-presence)" : "var(--color-surface-elevated)",
         color: online ? "white" : "var(--color-foreground)",
         border: online
           ? "none"
@@ -366,13 +352,7 @@ function OnlinePill({
 
 /* ------------------ Coverage tile ------------------ */
 
-function CoverageTile({
-  coverage,
-  active,
-}: {
-  coverage: Coverage | null;
-  active: boolean;
-}) {
+function CoverageTile({ coverage, active }: { coverage: Coverage | null; active: boolean }) {
   if (!coverage) {
     return (
       <div
@@ -385,9 +365,7 @@ function CoverageTile({
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           Coverage
         </div>
-        <div className="mt-2 text-[14px] font-medium tracking-tight">
-          No coverage yet
-        </div>
+        <div className="mt-2 text-[14px] font-medium tracking-tight">No coverage yet</div>
         <p className="mt-1 text-[12.5px] leading-snug text-muted-foreground">
           Stay online to start receiving dispatch requests.
         </p>
@@ -434,11 +412,14 @@ function CoverageTile({
         ) : (
           <span className="inline-flex items-center gap-2">
             <EnvironmentBadge environment={coverage.environment ?? null} size="xs" />
-            <RatingPill entityId={userEntityId(coverage.requesterSessionId)} role="requester" inline />
+            <RatingPill
+              entityId={userEntityId(coverage.requesterSessionId)}
+              role="requester"
+              inline
+            />
             <ReliabilityPill entityId={userEntityId(coverage.requesterSessionId)} inline />
           </span>
         )}
-
       </div>
 
       <div className="mt-1.5 text-[15.5px] font-semibold leading-tight tracking-tight">
@@ -454,17 +435,20 @@ function CoverageTile({
         </div>
       )}
       <div className="mt-1 text-[12.5px] leading-snug text-foreground/80">
-        {fmtOpMeta(coverage.coverage, coverage.day, coverage.start, coverage.end, coverage.durationHrs, coverage.amount)}
+        {fmtOpMeta(
+          coverage.coverage,
+          coverage.day,
+          coverage.start,
+          coverage.end,
+          coverage.durationHrs,
+          coverage.amount,
+        )}
       </div>
 
-      <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
-        {op}
-      </p>
+      <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">{op}</p>
 
       {coverage.note && (
-        <p className="mt-1 text-[11.5px] leading-snug text-foreground/70">
-          {coverage.note}
-        </p>
+        <p className="mt-1 text-[11.5px] leading-snug text-foreground/70">{coverage.note}</p>
       )}
     </div>
   );
@@ -485,13 +469,25 @@ function ScoreTile({ score }: { score: number }) {
         <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Ratings
         </div>
-        <TrustInfoPopover align="start" direction="up" showRatings showReliability={false} ratingsText="Reflects how satisfied requesters are with your service. Minimum: 4.0 stars." />
+        <TrustInfoPopover
+          align="start"
+          direction="up"
+          showRatings
+          showReliability={false}
+          ratingsText="Reflects how satisfied requesters are with your service. Minimum: 4.0 stars."
+        />
       </div>
       <div className="mt-0.5 flex items-baseline gap-1">
         <span className="text-[18px] font-semibold tabular-nums tracking-tight">
           {score.toFixed(1)}
         </span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-foreground/55">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className="text-foreground/55"
+        >
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
         </svg>
       </div>
@@ -512,11 +508,15 @@ function ReliabilityTile({ display }: { display: string }) {
         <div className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Reliability
         </div>
-        <TrustInfoPopover align="end" direction="up" showRatings={false} showReliability reliabilityText="Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 85%." />
+        <TrustInfoPopover
+          align="end"
+          direction="up"
+          showRatings={false}
+          showReliability
+          reliabilityText="Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 85%."
+        />
       </div>
-      <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">
-        {display}
-      </div>
+      <div className="mt-0.5 text-[18px] font-semibold tabular-nums tracking-tight">{display}</div>
     </div>
   );
 }

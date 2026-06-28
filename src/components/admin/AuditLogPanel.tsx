@@ -37,9 +37,7 @@ export function AuditLogPanel({
   }
   if (q.isError) {
     return (
-      <div className="px-2 py-3 text-[12.5px] text-destructive">
-        {(q.error as Error).message}
-      </div>
+      <div className="px-2 py-3 text-[12.5px] text-destructive">{(q.error as Error).message}</div>
     );
   }
   if (rows.length === 0) {
@@ -75,9 +73,7 @@ export function AuditLogPanel({
               </td>
               <td className="px-3 py-2">
                 {r.reason && <div>{r.reason}</div>}
-                {r.note && (
-                  <div className="text-[11.5px] text-muted-foreground">{r.note}</div>
-                )}
+                {r.note && <div className="text-[11.5px] text-muted-foreground">{r.note}</div>}
                 {r.payload && (
                   <div className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
                     {JSON.stringify(r.payload)}

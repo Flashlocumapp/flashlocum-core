@@ -35,7 +35,9 @@ export const Route = createFileRoute("/api/public/hooks/reconcile-settlements")(
 
         const { data: rows, error } = await supabaseAdmin
           .from("coverage_requests")
-          .select("id, payment_reference, paid_at, remitted_at, payment_status, accepted_by, hospital, updated_at")
+          .select(
+            "id, payment_reference, paid_at, remitted_at, payment_status, accepted_by, hospital, updated_at",
+          )
           .eq("payment_status", "paid")
           .is("remitted_at", null)
           .lt("paid_at", cutoff)
@@ -121,7 +123,11 @@ export const Route = createFileRoute("/api/public/hooks/reconcile-settlements")(
               }
             }
           } catch (e) {
-            console.warn("[reconcile-settlements] monnify lookup failed for", ref, (e as Error).message);
+            console.warn(
+              "[reconcile-settlements] monnify lookup failed for",
+              ref,
+              (e as Error).message,
+            );
           }
         }
 

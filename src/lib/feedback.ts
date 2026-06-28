@@ -290,8 +290,7 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
       return {
         toast: toast(
           "presence",
-          tOverride ??
-            `Your shift with ${hospital} has ended. Payment processing has started.`,
+          tOverride ?? `Your shift with ${hospital} has ended. Payment processing has started.`,
           undefined,
           5200,
         ),
@@ -308,7 +307,8 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
       return {
         toast: toast(
           "warn",
-          tOverride ?? (isDoctor ? `${hospital} cancelled the shift.` : `${doctor} cancelled the shift.`),
+          tOverride ??
+            (isDoctor ? `${hospital} cancelled the shift.` : `${doctor} cancelled the shift.`),
         ),
       };
     case "payment.settled":
@@ -332,7 +332,7 @@ function plan(ev: CanonicalEvent): RenderPlan | null {
           ? "Your account has been verified successfully."
           : status === "rejected" || status === "action_required" || status === "action required"
             ? "Your verification requires attention. Please review and resubmit."
-            : tOverride ?? "Verification update";
+            : (tOverride ?? "Verification update");
       return { toast: toast("presence", copy) };
     }
 
@@ -376,7 +376,12 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
 
   // Terminal kinds raise the ceiling for sibling lifecycle kinds.
   if (TERMINAL_KINDS.has(ev.kind)) {
-    for (const sib of ["shift.paused", "shift.resumed", "shift.updated", "shift.started"] as EventKind[]) {
+    for (const sib of [
+      "shift.paused",
+      "shift.resumed",
+      "shift.updated",
+      "shift.started",
+    ] as EventKind[]) {
       const sk = `${sib}:${ev.entityId}`;
       const cur = versionCeiling.get(sk) ?? 0;
       if (ev.version > cur) versionCeiling.set(sk, ev.version);
@@ -423,7 +428,13 @@ export function ingest(ev: CanonicalEvent): "emitted" | "suppressed" | "stale" {
   // Resolve plan and render.
   const p = plan(ev);
   if (p?.toast) {
-    pushToast({ tone: p.toast.tone, title: p.toast.title, body: p.toast.body, ttl: p.toast.ttl, key: lkey });
+    pushToast({
+      tone: p.toast.tone,
+      title: p.toast.title,
+      body: p.toast.body,
+      ttl: p.toast.ttl,
+      key: lkey,
+    });
   }
   if (p?.haptic) emitHaptic(p.haptic);
   if (p?.sound === "alert") playAlert();

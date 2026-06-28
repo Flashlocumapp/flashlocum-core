@@ -3,14 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { adminRiskOverview } from "@/lib/admin.functions";
-import {
-  AdminPageHeader,
-  RefreshButton,
-  StatCard,
-  Chip,
-  Empty,
-  fmtRelative,
-} from "@/lib/admin-ui";
+import { AdminPageHeader, RefreshButton, StatCard, Chip, Empty, fmtRelative } from "@/lib/admin-ui";
 
 export const Route = createFileRoute("/_admin/admin/risk")({
   ssr: false,
@@ -190,10 +183,7 @@ function RiskPage() {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section
-      className="rounded-2xl p-4"
-      style={{ background: "var(--color-surface-elevated)" }}
-    >
+    <section className="rounded-2xl p-4" style={{ background: "var(--color-surface-elevated)" }}>
       <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
       </h2>
@@ -205,7 +195,14 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 function ActorTable({
   rows,
 }: {
-  rows: { user_id: string; name: string | null; total: number; cancelled: number; completed: number; cancellation_rate: number }[];
+  rows: {
+    user_id: string;
+    name: string | null;
+    total: number;
+    cancelled: number;
+    completed: number;
+    cancellation_rate: number;
+  }[];
 }) {
   return (
     <table className="w-full text-[12.5px]">
@@ -231,7 +228,12 @@ function ActorTable({
             <td className="py-1.5 text-right tabular-nums">
               <span
                 style={{
-                  color: r.cancellation_rate > 0.3 ? "#b91c1c" : r.cancellation_rate > 0.15 ? "#c2410c" : undefined,
+                  color:
+                    r.cancellation_rate > 0.3
+                      ? "#b91c1c"
+                      : r.cancellation_rate > 0.15
+                        ? "#c2410c"
+                        : undefined,
                 }}
               >
                 {pct(r.cancellation_rate)}

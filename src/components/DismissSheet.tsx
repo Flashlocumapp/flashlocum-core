@@ -39,11 +39,7 @@ export function DismissSheet({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <div
-        className="absolute inset-0 bg-foreground/30"
-        onClick={onDismiss}
-        aria-hidden
-      />
+      <div className="absolute inset-0 bg-foreground/30" onClick={onDismiss} aria-hidden />
       <motion.div
         initial={{ y: 28, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

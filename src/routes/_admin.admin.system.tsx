@@ -36,11 +36,7 @@ function SystemPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard label="Signups" value={data?.activity.signups_24h ?? "—"} />
           <StatCard label="Requests created" value={data?.activity.requests_24h ?? "—"} />
-          <StatCard
-            label="Completed"
-            value={data?.activity.completed_24h ?? "—"}
-            tone="presence"
-          />
+          <StatCard label="Completed" value={data?.activity.completed_24h ?? "—"} tone="presence" />
           <StatCard
             label="Cancelled"
             value={data?.activity.cancelled_24h ?? "—"}
@@ -52,7 +48,11 @@ function SystemPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel
           title="Email queues"
-          right={queueAlert ? <span className="text-[11px] font-medium text-[#c2410c]">Backlog</span> : null}
+          right={
+            queueAlert ? (
+              <span className="text-[11px] font-medium text-[#c2410c]">Backlog</span>
+            ) : null
+          }
         >
           {!data?.email.queues.length ? (
             <Empty>No queues reporting.</Empty>
@@ -69,11 +69,7 @@ function SystemPage() {
                 {data.email.queues.map((qd) => {
                   const isDlq = qd.queue_name.endsWith("_dlq");
                   const tone =
-                    qd.depth > 0 && isDlq
-                      ? "#b91c1c"
-                      : qd.depth > 25
-                        ? "#c2410c"
-                        : undefined;
+                    qd.depth > 0 && isDlq ? "#b91c1c" : qd.depth > 25 ? "#c2410c" : undefined;
                   return (
                     <tr key={qd.queue_name} className="border-t">
                       <td className="py-1.5 font-mono text-[12px]">{qd.queue_name}</td>
@@ -147,8 +143,8 @@ function SystemPage() {
 
       <Panel title="Admin action log">
         <p className="mb-3 text-[12px] text-muted-foreground">
-          Every privileged admin action — verification decisions, trust changes,
-          shift overrides, payment write-offs — is recorded here.
+          Every privileged admin action — verification decisions, trust changes, shift overrides,
+          payment write-offs — is recorded here.
         </p>
         <AuditLogPanel filter={{}} limit={200} />
       </Panel>
@@ -166,10 +162,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      className="rounded-2xl p-4"
-      style={{ background: "var(--color-surface-elevated)" }}
-    >
+    <section className="rounded-2xl p-4" style={{ background: "var(--color-surface-elevated)" }}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
@@ -181,15 +174,7 @@ function Panel({
   );
 }
 
-function Mini({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone?: string;
-}) {
+function Mini({ label, value, tone }: { label: string; value: number | string; tone?: string }) {
   return (
     <div className="rounded-lg bg-secondary px-3 py-2">
       <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">

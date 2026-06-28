@@ -34,8 +34,8 @@ function AdminUnauthorized() {
       <div className="mx-auto max-w-md px-6 pt-16 text-center">
         <h1 className="text-[22px] font-semibold tracking-tight">Admin access required</h1>
         <p className="mt-2 text-[14px] text-muted-foreground">
-          Your account does not have admin privileges. If no admin exists yet,
-          you can claim the first-admin role below.
+          Your account does not have admin privileges. If no admin exists yet, you can claim the
+          first-admin role below.
         </p>
         <button
           onClick={handleClaim}

@@ -11,8 +11,6 @@ import { onUserIdChange, getCurrentUserIdSync } from "./coverage-remote";
 import { ensureAuthReady } from "@/lib/auth-ready";
 import { setChannelHealth } from "./realtime-health";
 
-
-
 export type PresenceRow = {
   user_id: string;
   online: boolean;
@@ -69,7 +67,6 @@ function buildSnapshot(): PresenceRow[] {
   }
   return out;
 }
-
 
 // Hash of the last emitted snapshot. When the periodic reconcile or a
 // realtime echo produces an identical roster, we skip the fanout — emitting
@@ -151,7 +148,10 @@ const INITIAL_FETCH_RETRY_MAX_MS = 15_000;
 function scheduleInitialFetchRetry() {
   if (initialFetchRetryTimer) return;
   const delay = initialFetchRetryDelayMs;
-  initialFetchRetryDelayMs = Math.min(INITIAL_FETCH_RETRY_MAX_MS, Math.round(initialFetchRetryDelayMs * 2));
+  initialFetchRetryDelayMs = Math.min(
+    INITIAL_FETCH_RETRY_MAX_MS,
+    Math.round(initialFetchRetryDelayMs * 2),
+  );
   initialFetchRetryTimer = setTimeout(() => {
     initialFetchRetryTimer = null;
     void initialFetch(true).then(() => {
@@ -284,17 +284,11 @@ function openPresenceChannel() {
         markPresenceActivity();
         // Reconcile on (re)connect so any updates missed while down are picked up.
         void initialFetch(true);
-      } else if (
-        status === "CHANNEL_ERROR" ||
-        status === "TIMED_OUT" ||
-        status === "CLOSED"
-      ) {
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
         schedulePresenceReconnect();
       }
     });
 }
-
-
 
 /** Upsert my presence row. No-op if not signed in. */
 export async function upsertMyPresence(fields: {
@@ -331,8 +325,8 @@ export async function upsertMyPresence(fields: {
     online: fields.online,
     top: fields.top ?? existing?.top ?? 0.5,
     left: fields.left ?? existing?.left ?? 0.5,
-    lat: fields.lat !== undefined ? fields.lat : existing?.lat ?? null,
-    lng: fields.lng !== undefined ? fields.lng : existing?.lng ?? null,
+    lat: fields.lat !== undefined ? fields.lat : (existing?.lat ?? null),
+    lng: fields.lng !== undefined ? fields.lng : (existing?.lng ?? null),
     last_seen: row.last_seen,
   });
   emit();
@@ -376,12 +370,10 @@ export async function heartbeatPresence(online: boolean): Promise<void> {
       emit();
       // Presence reconciliation is intentionally silent — no toast.
     }
-
   } catch {
     /* non-fatal */
   }
 }
-
 
 /** Mark me offline (e.g. on sign-out / explicit toggle / unload). */
 export async function clearMyPresence(): Promise<void> {

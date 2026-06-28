@@ -64,8 +64,7 @@ export function EditShiftSheet({
     }
     const next: EditableShift = { ...draft, durationHrs: liveDuration };
     // Prefer the most user-meaningful single change for the toast label.
-    const primary =
-      changed.find((c) => c === "startTime" || c === "endTime") ?? changed[0];
+    const primary = changed.find((c) => c === "startTime" || c === "endTime") ?? changed[0];
     onSave(next, changed.length === 1 ? primary : "multiple");
   };
 
@@ -94,9 +93,7 @@ export function EditShiftSheet({
           <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Coverage Length
           </span>
-          <span className="text-[14px] font-medium tabular-nums">
-            {liveDuration} hr
-          </span>
+          <span className="text-[14px] font-medium tabular-nums">{liveDuration} hr</span>
         </div>
 
         <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">

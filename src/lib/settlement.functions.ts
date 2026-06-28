@@ -26,11 +26,14 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: reqRow, error: reqErr } = await supabaseAdmin
       .from("coverage_requests")
-      .select("id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url, payment_account, total_billed_amount, billing_locked_at")
+      .select(
+        "id, requester_id, accepted_by, hospital, status, payment_reference, payment_status, payment_url, payment_account, total_billed_amount, billing_locked_at",
+      )
       .eq("id", data.requestId)
       .maybeSingle();
     if (reqErr || !reqRow) throw new Error("Coverage request not found");
-    if (reqRow.requester_id !== userId) throw new Error("Only the requester can pay this settlement");
+    if (reqRow.requester_id !== userId)
+      throw new Error("Only the requester can pay this settlement");
     if (!reqRow.accepted_by) throw new Error("No assigned doctor yet");
     if (reqRow.payment_status === "paid") {
       return {
@@ -56,7 +59,11 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
           status: "completed",
         })
         .eq("id", reqRow.id);
-      return { alreadyPaid: true as const, paymentReference: reqRow.payment_reference ?? null, checkoutUrl: null };
+      return {
+        alreadyPaid: true as const,
+        paymentReference: reqRow.payment_reference ?? null,
+        checkoutUrl: null,
+      };
     }
 
     // 1b. RESUME-IF-PENDING. If a pending reference + cached virtual-account
@@ -100,9 +107,6 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
         });
       }
     }
-
-
-
 
     // 2. Load the doctor's profile (admin client; we already authorised via explicit requester check above).
     const { data: doctor, error: docErr } = await supabaseAdmin
@@ -173,10 +177,8 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     const rand = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
     const paymentReference = `flsh_${reqRow.id.replace(/-/g, "").slice(0, 16)}_${Date.now()}_${rand}`;
 
-
-    const { initiateSplitTransaction, initBankTransferAccount } = await import(
-      "./monnify/checkout.server"
-    );
+    const { initiateSplitTransaction, initBankTransferAccount } =
+      await import("./monnify/checkout.server");
 
     let txRef: string;
     try {
@@ -259,11 +261,8 @@ export const beginSettlementCheckout = createServerFn({ method: "POST" })
     };
   });
 
-
-
 // --- Dev-only: simulate Monnify webhook for sandbox testing ---
 const SimInput = z.object({ requestId: z.string().uuid() });
-
 
 // --- Reconcile: poll Monnify directly when the webhook hasn't landed yet ---
 // Useful in sandbox (webhook can't reach localhost) and as a production
@@ -302,7 +301,8 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
       return { paid: false, reason: "query_failed" as const };
     }
     const s = (status.paymentStatus ?? "").toUpperCase();
-    const isPaid = s === "PAID" || s === "OVERPAID" || s === "SUCCESS" || s === "SUCCESSFUL_TRANSACTION";
+    const isPaid =
+      s === "PAID" || s === "OVERPAID" || s === "SUCCESS" || s === "SUCCESSFUL_TRANSACTION";
     if (!isPaid) return { paid: false, status: s };
 
     const amount = Math.max(
@@ -318,7 +318,8 @@ export const verifySettlementPayment = createServerFn({ method: "POST" })
     const base = (process.env.MONNIFY_BASE_URL ?? "").toLowerCase();
     const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
     const verifyEnabled = (process.env.ALLOW_PAYMENT_SIMULATION ?? "").toLowerCase() === "true";
-    const isSandboxHost = /(^|[./-])sandbox\.monnify\.com/i.test(base) || /sandbox-api\.monnify/i.test(base);
+    const isSandboxHost =
+      /(^|[./-])sandbox\.monnify\.com/i.test(base) || /sandbox-api\.monnify/i.test(base);
     const isProdEnv = nodeEnv === "production";
     if (isProdEnv || !isSandboxHost || !verifyEnabled) {
       return { paid: false, reason: "webhook_only" as const, status: s };
@@ -348,7 +349,8 @@ export const simulateSettlementPayment = createServerFn({ method: "POST" })
     const base = (process.env.MONNIFY_BASE_URL ?? "").toLowerCase();
     const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
     const simEnabled = (process.env.ALLOW_PAYMENT_SIMULATION ?? "").toLowerCase() === "true";
-    const isSandboxHost = /(^|[./-])sandbox\.monnify\.com/i.test(base) || /sandbox-api\.monnify/i.test(base);
+    const isSandboxHost =
+      /(^|[./-])sandbox\.monnify\.com/i.test(base) || /sandbox-api\.monnify/i.test(base);
     const isProdEnv = nodeEnv === "production";
     if (isProdEnv || !isSandboxHost || !simEnabled) {
       throw new Error("Payment simulation is disabled in production");
@@ -363,7 +365,8 @@ export const simulateSettlementPayment = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Not authorized");
     if (row.requester_id !== userId) throw new Error("Not authorized");
-    if (!row.payment_reference) throw new Error("No active payment to simulate. Start checkout first.");
+    if (!row.payment_reference)
+      throw new Error("No active payment to simulate. Start checkout first.");
     if (row.payment_status === "paid") return { ok: true, alreadyPaid: true };
     // Admin client only for the privileged RPC.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -374,6 +377,3 @@ export const simulateSettlementPayment = createServerFn({ method: "POST" })
     if (rpcErr) throw new Error(rpcErr.message);
     return { ok: true, alreadyPaid: false };
   });
-
-
-

@@ -39,9 +39,7 @@ export function BankPayoutFields({
   onChange: (patch: BankPayoutPatch) => void;
 }) {
   const mismatched =
-    !!expectedName &&
-    !!bankAccountName &&
-    !isReasonableNameMatch(expectedName, bankAccountName);
+    !!expectedName && !!bankAccountName && !isReasonableNameMatch(expectedName, bankAccountName);
   const [banks, setBanks] = useState<MonnifyBank[]>([]);
   const [banksLoading, setBanksLoading] = useState(true);
   const [resolving, setResolving] = useState(false);

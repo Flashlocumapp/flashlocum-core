@@ -45,9 +45,7 @@ export function AdminDrawer({
         <div className="flex shrink-0 items-start justify-between gap-3 border-b px-5 py-4">
           <div className="min-w-0">
             <div className="text-[15px] font-semibold tracking-tight">{title}</div>
-            {subtitle && (
-              <div className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</div>
-            )}
+            {subtitle && <div className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</div>}
           </div>
           <button
             onClick={onClose}
@@ -116,21 +114,11 @@ export function Section({
   );
 }
 
-export function Field({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: ReactNode;
-  mono?: boolean;
-}) {
+export function Field({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 text-[13px]">
       <span className="text-muted-foreground">{label}</span>
-      <span className={mono ? "font-mono text-[12px]" : "text-foreground"}>
-        {value ?? "—"}
-      </span>
+      <span className={mono ? "font-mono text-[12px]" : "text-foreground"}>{value ?? "—"}</span>
     </div>
   );
 }

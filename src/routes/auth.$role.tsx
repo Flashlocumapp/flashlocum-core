@@ -9,13 +9,7 @@ export const Route = createFileRoute("/auth/$role")({
   component: AuthScreen,
 });
 
-type View =
-  | "form"
-  | "verify"
-  | "forgot"
-  | "forgot-code"
-  | "forgot-new-password"
-  | "forgot-done";
+type View = "form" | "verify" | "forgot" | "forgot-code" | "forgot-new-password" | "forgot-done";
 
 const AUTH_DEBUG_PREFIX = "[FlashLocum auth debug]";
 
@@ -735,13 +729,23 @@ function AuthScreen() {
           {mode === "signup" && (
             <p className="text-center text-[11px] text-muted-foreground">
               By creating an account, you agree to our{" "}
-              <Link to="/terms-of-service" className="underline underline-offset-4 hover:text-foreground">Terms of Service</Link>{" "}
+              <Link
+                to="/terms-of-service"
+                className="underline underline-offset-4 hover:text-foreground"
+              >
+                Terms of Service
+              </Link>{" "}
               and{" "}
-              <Link to="/privacy-policy" className="underline underline-offset-4 hover:text-foreground">Privacy Policy</Link>.
+              <Link
+                to="/privacy-policy"
+                className="underline underline-offset-4 hover:text-foreground"
+              >
+                Privacy Policy
+              </Link>
+              .
             </p>
           )}
         </form>
-
 
         <div className="mt-auto pt-8 text-center text-[13px] text-muted-foreground">
           {mode === "signup" ? "Already have an account?" : "New to FlashLocum?"}{" "}
@@ -755,7 +759,6 @@ function AuthScreen() {
             {mode === "signup" ? "Sign in" : "Create one"}
           </button>
         </div>
-
       </div>
     </main>
   );
@@ -854,4 +857,3 @@ const EyeOff = () => (
     />
   </svg>
 );
-

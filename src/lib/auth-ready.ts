@@ -30,7 +30,12 @@ function notify() {
   listeners.forEach((listener) => listener(snapshot));
 }
 
-function applySession(session: Session | null, event: string, ready = true, verifiedUser?: User | null) {
+function applySession(
+  session: Session | null,
+  event: string,
+  ready = true,
+  verifiedUser?: User | null,
+) {
   const user = verifiedUser ?? session?.user ?? null;
   snapshot = {
     ready,
@@ -69,7 +74,8 @@ function ensureSubscribed() {
       };
       return;
     }
-    const trusted = event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED";
+    const trusted =
+      event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED";
     applySession(session, event, true, trusted ? (session?.user ?? null) : undefined);
   });
 }
@@ -106,7 +112,11 @@ export function ensureAuthReady(): Promise<AuthReadySnapshot> {
       }
       const tokenAtRead = session.access_token;
       const { data: userData, error } = await supabase.auth.getUser();
-      if (snapshot.session && snapshot.session.access_token !== tokenAtRead && snapshot.verifiedAt) {
+      if (
+        snapshot.session &&
+        snapshot.session.access_token !== tokenAtRead &&
+        snapshot.verifiedAt
+      ) {
         return snapshot;
       }
       if (error || !userData.user) {

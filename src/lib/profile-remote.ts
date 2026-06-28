@@ -4,11 +4,7 @@ import type { Role } from "@/lib/role";
 import { ensureAuthReady, subscribeAuthState } from "@/lib/auth-ready";
 
 export type VerificationStatus =
-  | "pending"
-  | "approved"
-  | "suspended"
-  | "rejected"
-  | "action_required";
+  "pending" | "approved" | "suspended" | "rejected" | "action_required";
 
 export type ProfileRow = {
   id: string;
@@ -53,7 +49,6 @@ export type AdminOverviewStats = {
   active_today: number;
   active_week: number;
 };
-
 
 export type AdminUserRow = {
   id: string;
@@ -481,11 +476,7 @@ export async function fetchDoctorProfile(id: string): Promise<ProfileRow | null>
   const inflight = doctorProfileInFlight.get(id);
   if (inflight) return inflight;
   const p = (async () => {
-    const { data: direct } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+    const { data: direct } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
     if (direct) {
       const value = direct as ProfileRow;
       doctorProfileCache.set(id, { value, at: Date.now() });

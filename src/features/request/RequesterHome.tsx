@@ -38,7 +38,6 @@ import {
 } from "@/lib/google-maps";
 import { rememberRecentLocation, useRecentLocations } from "@/lib/recent-locations";
 
-
 export function RequesterHome({ active = true }: { active?: boolean }) {
   return <HomeScreen active={active} />;
 }
@@ -47,7 +46,6 @@ type CoverageId = "standard" | "24h" | "weekend" | "home";
 type Stage = "collapsed" | "search" | "configure" | "match" | "dispatch" | "accepted";
 
 type Recent = { placeId?: string; name: string; area: string; lat?: number; lng?: number };
-
 
 const COVERAGE: { id: CoverageId; label: string }[] = [
   { id: "standard", label: "Standard" },
@@ -99,7 +97,13 @@ function nextDateForWindow(startTime: string, endTime: string, days = 1, now = n
   }
 }
 
-function windowHasEnded(startDate: string, startTime: string, endTime: string, days = 1, now = new Date()): boolean {
+function windowHasEnded(
+  startDate: string,
+  startTime: string,
+  endTime: string,
+  days = 1,
+  now = new Date(),
+): boolean {
   const startMs = new Date(`${startDate}T${startTime}:00`).getTime();
   if (!Number.isFinite(startMs)) return false;
   const startMin = minutesOf(startTime);
@@ -122,12 +126,27 @@ function makeInitialDraft(coverage: CoverageId): Draft {
     };
   }
   if (coverage === "home") {
-    return { startDate: nextDateForWindow("22:00", "06:00"), startTime: "22:00", endTime: "06:00", note: "" };
+    return {
+      startDate: nextDateForWindow("22:00", "06:00"),
+      startTime: "22:00",
+      endTime: "06:00",
+      note: "",
+    };
   }
   if (coverage === "24h") {
-    return { startDate: nextDateForWindow("08:00", "08:00"), startTime: "08:00", endTime: "08:00", note: "" };
+    return {
+      startDate: nextDateForWindow("08:00", "08:00"),
+      startTime: "08:00",
+      endTime: "08:00",
+      note: "",
+    };
   }
-  return { startDate: nextDateForWindow("08:00", "18:00"), startTime: "08:00", endTime: "18:00", note: "" };
+  return {
+    startDate: nextDateForWindow("08:00", "18:00"),
+    startTime: "08:00",
+    endTime: "18:00",
+    note: "",
+  };
 }
 
 /* ---------------------- Pricing ---------------------- */
@@ -152,8 +171,6 @@ function computePricing({ coverage, draft, days, environment }: PricingContext) 
 function formatNaira(n: number) {
   return "₦" + n.toLocaleString("en-NG");
 }
-
-
 
 const COVERAGE_SHORT: Record<CoverageId, string> = {
   standard: "Standard",
@@ -256,7 +273,8 @@ function HomeScreen({ active }: { active: boolean }) {
     setDraft((d) => ({ ...makeInitialDraft(c), note: d.note }));
     // Straight products (24h / Weekend 48h) are continuous single shifts.
     if (c === "24h" || c === "weekend") setDays(1);
-    else if (c === "standard" || c === "home") setDays((d) => (d < 1 || d > MAX_BOOKING_DAYS ? 1 : d));
+    else if (c === "standard" || c === "home")
+      setDays((d) => (d < 1 || d > MAX_BOOKING_DAYS ? 1 : d));
   };
 
   const patchDraft = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -301,7 +319,6 @@ function HomeScreen({ active }: { active: boolean }) {
       setSuggestions([]);
     }
   }, [stage]);
-
 
   const recents: Recent[] = useRecentLocations();
 
@@ -355,7 +372,6 @@ function HomeScreen({ active }: { active: boolean }) {
     }
   };
 
-
   const net = useNetwork();
   const markers: Marker[] = useMemo(
     () =>
@@ -373,11 +389,19 @@ function HomeScreen({ active }: { active: boolean }) {
     location?.lat != null && location?.lng != null
       ? { lat: location.lat, lng: location.lng }
       : null;
-  const placeMarkers: PlaceMapMarker[] = location?.lat != null && location?.lng != null
-    ? [{ key: location.placeId ?? location.name, title: location.name, lat: location.lat, lng: location.lng }]
-    : suggestions
-        .filter((s) => s.lat != null && s.lng != null)
-        .map((s) => ({ key: s.placeId, title: s.primary, lat: s.lat!, lng: s.lng! }));
+  const placeMarkers: PlaceMapMarker[] =
+    location?.lat != null && location?.lng != null
+      ? [
+          {
+            key: location.placeId ?? location.name,
+            title: location.name,
+            lat: location.lat,
+            lng: location.lng,
+          },
+        ]
+      : suggestions
+          .filter((s) => s.lat != null && s.lng != null)
+          .map((s) => ({ key: s.placeId, title: s.primary, lat: s.lat!, lng: s.lng! }));
 
   // Requester's own trust scope — anchored to the requester's user id so
   // pills reflect their rolling-20 rating/reliability across every facility.
@@ -385,7 +409,13 @@ function HomeScreen({ active }: { active: boolean }) {
 
   return (
     <section className="relative h-full w-full overflow-hidden">
-      <GoogleMapBackground active={active} markers={markers} markerScale={0.6} center={mapCenter} placeMarkers={placeMarkers} />
+      <GoogleMapBackground
+        active={active}
+        markers={markers}
+        markerScale={0.6}
+        center={mapCenter}
+        placeMarkers={placeMarkers}
+      />
 
       {/* Top floating trust card — calm rating + reliability for the requester */}
       {stage === "collapsed" && (
@@ -402,17 +432,21 @@ function HomeScreen({ active }: { active: boolean }) {
               <span
                 aria-hidden
                 className="h-3 w-px"
-                style={{ background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)" }}
+                style={{
+                  background: "color-mix(in oklab, var(--color-foreground) 14%, transparent)",
+                }}
               />
               <ReliabilityPill entityId={selfEntityId} inline />
-              <TrustInfoPopover align="end" className="ml-0.5" ratingsText="Reflects how satisfied doctors are with their experience working with your facility. Minimum: 3.5 stars." reliabilityText="Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 75%." />
+              <TrustInfoPopover
+                align="end"
+                className="ml-0.5"
+                ratingsText="Reflects how satisfied doctors are with their experience working with your facility. Minimum: 3.5 stars."
+                reliabilityText="Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 75%."
+              />
             </div>
           </div>
         </header>
       )}
-
-
-
 
       {/* Match-stage: compressed shift summary with subtle reopen affordance */}
       <AnimatePresence>
@@ -646,14 +680,26 @@ function DispatchSheet({
                       className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-                          <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="text-muted-foreground"
+                        >
+                          <path
+                            d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          />
                           <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
                         </svg>
                       </span>
                       <span className="flex-1 min-w-0">
                         <div className="truncate text-[15px] font-medium">{s.primary}</div>
-                        <div className="truncate text-[12.5px] text-muted-foreground">{s.secondary}</div>
+                        <div className="truncate text-[12.5px] text-muted-foreground">
+                          {s.secondary}
+                        </div>
                       </span>
                     </button>
                   </li>
@@ -661,8 +707,10 @@ function DispatchSheet({
               </ul>
             )}
 
-            {isSearch && suggestions.length === 0 && query.trim().length >= 2 && (
-              suggestLoading ? (
+            {isSearch &&
+              suggestions.length === 0 &&
+              query.trim().length >= 2 &&
+              (suggestLoading ? (
                 <ul className="space-y-0.5 pb-1" aria-busy="true">
                   {[0, 1, 2].map((i) => (
                     <li key={i} className="flex items-center gap-3 rounded-xl px-2 py-2.5">
@@ -678,32 +726,50 @@ function DispatchSheet({
                 <div className="px-2 py-3 text-[12.5px] text-muted-foreground">
                   No matching hospitals.
                 </div>
-              )
-            )}
+              ))}
 
-            {isSearch && suggestions.length === 0 && query.trim().length < 2 && recents.length > 0 && (
-              <ul className="space-y-0.5 pb-1">
-                {recents.slice(0, 3).map((r) => (
-                  <li key={r.name}>
-                    <button
-                      onClick={() => onPickRecent(r)}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
-                    >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="text-muted-foreground">
-                          <path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke="currentColor" strokeWidth="1.6" />
-                          <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.6" />
-                        </svg>
-                      </span>
-                      <span className="flex-1">
-                        <div className="text-[15px] font-medium">{r.name}</div>
-                        <div className="text-[12.5px] text-muted-foreground">{r.area}</div>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {isSearch &&
+              suggestions.length === 0 &&
+              query.trim().length < 2 &&
+              recents.length > 0 && (
+                <ul className="space-y-0.5 pb-1">
+                  {recents.slice(0, 3).map((r) => (
+                    <li key={r.name}>
+                      <button
+                        onClick={() => onPickRecent(r)}
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left active:bg-accent"
+                      >
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary">
+                          <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            className="text-muted-foreground"
+                          >
+                            <path
+                              d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                            />
+                            <circle
+                              cx="12"
+                              cy="10"
+                              r="2.4"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                            />
+                          </svg>
+                        </span>
+                        <span className="flex-1">
+                          <div className="text-[15px] font-medium">{r.name}</div>
+                          <div className="text-[12.5px] text-muted-foreground">{r.area}</div>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
             {isConfigure && location && (
               <ConfigureBody
@@ -810,16 +876,12 @@ function ConfigureBody({
             patchDraft={patchDraft}
             beforeNoteSlot={
               coverage === "home" ? null : (
-                <EnvironmentSelector
-                  value={environment}
-                  onChange={setEnvironment}
-                />
+                <EnvironmentSelector value={environment} onChange={setEnvironment} />
               )
             }
           />
         </motion.div>
       </AnimatePresence>
-
 
       {/* Arrow progression */}
       <div className="flex justify-end pt-1">
@@ -847,8 +909,7 @@ function ConfigureBody({
 
 function dateBounds(): { min: string; max: string } {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const today = new Date();
   const max = new Date(today);
   max.setDate(max.getDate() + (MAX_BOOKING_DAYS - 1));
@@ -941,12 +1002,9 @@ function EnvironmentSelector({
               onClick={() => onChange(opt)}
               className="rounded-full px-3 py-1 capitalize transition-colors"
               style={{
-                background:
-                  value === opt ? "var(--color-primary)" : "transparent",
+                background: value === opt ? "var(--color-primary)" : "transparent",
                 color:
-                  value === opt
-                    ? "var(--color-primary-foreground)"
-                    : "var(--color-foreground)",
+                  value === opt ? "var(--color-primary-foreground)" : "var(--color-foreground)",
               }}
             >
               {opt}
@@ -960,7 +1018,6 @@ function EnvironmentSelector({
     </div>
   );
 }
-
 
 const Fields = memo(function Fields({ children }: { children: React.ReactNode }) {
   return <div className="space-y-2.5">{children}</div>;
@@ -1075,7 +1132,13 @@ const Stepper = memo(function Stepper({
   );
 });
 
-const DaysStepper = memo(function DaysStepper({ value, setValue }: { value: number; setValue: (n: number) => void }) {
+const DaysStepper = memo(function DaysStepper({
+  value,
+  setValue,
+}: {
+  value: number;
+  setValue: (n: number) => void;
+}) {
   return (
     <Stepper
       label="Coverage Length"
@@ -1094,7 +1157,13 @@ const DaysStepper = memo(function DaysStepper({ value, setValue }: { value: numb
   );
 });
 
-const NoteField = memo(function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+const NoteField = memo(function NoteField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <label className="flex flex-col gap-1 rounded-xl bg-secondary/60 px-3 py-2">
       <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
@@ -1198,7 +1267,9 @@ function DispatchOverlay({
   // signal that searching is over — once present on the request this
   // session owns, we move the overlay forward regardless of which
   // post-accept status the payload carries.
-  const advanceFromRow = (row: { id: string; acceptedBy?: string | null; status?: string } | null | undefined) => {
+  const advanceFromRow = (
+    row: { id: string; acceptedBy?: string | null; status?: string } | null | undefined,
+  ) => {
     if (!row) return;
     if (row.id !== ownedIdRef.current) return;
     if (row.status === "cancelled" || row.status === "expired") return;
@@ -1245,8 +1316,10 @@ function DispatchOverlay({
     // accepted / started shares the `paused` enum value but is owned by the
     // shift_segments lifecycle — never auto-resume it here, or the paused
     // shift would flip back to broadcasting → accepted → active on its own.
-    const isPreAcceptance = !!cur && !cur.acceptedBy && cur.startedAt == null && (cur.accumulatedMs ?? 0) === 0;
-    const canReuseRequest = isPreAcceptance && (cur?.status === "broadcasting" || cur?.status === "paused");
+    const isPreAcceptance =
+      !!cur && !cur.acceptedBy && cur.startedAt == null && (cur.accumulatedMs ?? 0) === 0;
+    const canReuseRequest =
+      isPreAcceptance && (cur?.status === "broadcasting" || cur?.status === "paused");
     if (cur && canReuseRequest) {
       // Coming back from configure: ensure a deterministic
       // searching → paused → searching cycle so the server trigger
@@ -1344,7 +1417,6 @@ function DispatchOverlay({
     }
   }, [editOpen, stage, _curStatus, _curAcceptedBy, setStage]);
 
-
   // Silent 180s pre-acceptance expiry. Keyed off broadcastStartedAt so edit
   // re-publish and dismiss-resume (paused → searching) automatically restart
   // the window. Timer is invisible — no countdown shown to the requester.
@@ -1393,7 +1465,6 @@ function DispatchOverlay({
     net.requests[requestId ?? ""]?.acceptedBy,
   ]);
 
-
   // React to acceptance OR doctor-side cancellation. Only ever act on the
   // request this dispatch session actually owns — never on a leftover id.
   useEffect(() => {
@@ -1411,7 +1482,12 @@ function DispatchOverlay({
     // exact post-accept status the payload carries (accepted / active /
     // paused / awaiting_payment / completed). Only cancelled/expired keep
     // the overlay out of the accepted view (handled below).
-    if (stage === "dispatch" && !!r.acceptedBy && r.status !== "cancelled" && r.status !== "expired") {
+    if (
+      stage === "dispatch" &&
+      !!r.acceptedBy &&
+      r.status !== "cancelled" &&
+      r.status !== "expired"
+    ) {
       setStage("accepted");
     }
 
@@ -1484,7 +1560,7 @@ function DispatchOverlay({
       const newEndTs = newStartTs + totalDur * 3_600_000;
       // Re-price across ALL booked days so multi-day totals stay correct.
       const kind = coverageKindFromLabel(cur?.coverage ?? COVERAGE_SHORT[coverage]);
-      const env: Environment = (cur?.environment ?? environment) ?? "normal";
+      const env: Environment = cur?.environment ?? environment ?? "normal";
       const repriced = computeCoveragePricing(kind, next.startTime, next.endTime, bookedDays, env);
       // Order matters: send field updates FIRST (while server status is still
       // 'paused' so the bump_request_rev_on_change trigger bumps rev), then
@@ -1507,7 +1583,6 @@ function DispatchOverlay({
     }
     setEditOpen(false);
   };
-
 
   // Pre-acceptance cancel: remove silently (no notification, no history, no reason captured).
   const handleCancelPreAccept = () => {
@@ -1637,7 +1712,13 @@ function DispatchOverlay({
               <div className="mt-3 flex items-center gap-3 rounded-2xl bg-secondary/50 px-3.5 py-3">
                 <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-[13px] font-semibold">
                   {acceptedSelfie ? (
-                    <StableImage src={acceptedSelfie} alt="" width={48} height={48} className="h-full w-full object-cover" />
+                    <StableImage
+                      src={acceptedSelfie}
+                      alt=""
+                      width={48}
+                      height={48}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     acceptedInitials
                   )}
@@ -1730,7 +1811,6 @@ function DispatchOverlay({
               onCancelled={handleCancelPostAccept}
             />
 
-
             <EditShiftSheet
               open={editOpen}
               initial={editInitial}
@@ -1744,7 +1824,13 @@ function DispatchOverlay({
   );
 }
 
-const ConnectionPulse = memo(function ConnectionPulse({ className, paused }: { className?: string; paused?: boolean }) {
+const ConnectionPulse = memo(function ConnectionPulse({
+  className,
+  paused,
+}: {
+  className?: string;
+  paused?: boolean;
+}) {
   // Keeps fmtElapsed bundled even when nothing renders it directly.
   void fmtElapsed;
   return (

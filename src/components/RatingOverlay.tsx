@@ -54,7 +54,12 @@ export function RatingOverlay({
               className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-foreground/55 active:bg-secondary"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
 
@@ -65,7 +70,6 @@ export function RatingOverlay({
               <p className="mt-1 text-[12.5px] text-muted-foreground">
                 Share your feedback and help us improve.
               </p>
-
 
               <div className="mt-5 flex items-center justify-between px-2">
                 {[1, 2, 3, 4, 5].map((n) => {
@@ -111,7 +115,11 @@ function Star({ filled }: { filled: boolean }) {
       <path
         d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z"
         fill={filled ? "var(--color-presence)" : "transparent"}
-        stroke={filled ? "var(--color-presence)" : "color-mix(in oklab, var(--color-foreground) 35%, transparent)"}
+        stroke={
+          filled
+            ? "var(--color-presence)"
+            : "color-mix(in oklab, var(--color-foreground) 35%, transparent)"
+        }
         strokeWidth="1.6"
         strokeLinejoin="round"
       />

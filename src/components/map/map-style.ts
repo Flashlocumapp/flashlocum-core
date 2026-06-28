@@ -9,8 +9,16 @@ export const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
   { elementType: "labels.text.fill", stylers: [{ color: "#11161d" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#e8ecf2" }, { weight: 2.5 }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#0b1117" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.stroke", stylers: [{ color: "#e8ecf2" }, { weight: 3 }] },
+  {
+    featureType: "administrative.locality",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#0b1117" }],
+  },
+  {
+    featureType: "administrative.locality",
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#e8ecf2" }, { weight: 3 }],
+  },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#7fa07c" }] },
   { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#1f3a1f" }] },
@@ -23,5 +31,9 @@ export const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
   { featureType: "transit", stylers: [{ visibility: "off" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#4f8aa8" }] },
   { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#0b2a38" }] },
-  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#bcd6e4" }, { weight: 2 }] },
+  {
+    featureType: "water",
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#bcd6e4" }, { weight: 2 }],
+  },
 ];
