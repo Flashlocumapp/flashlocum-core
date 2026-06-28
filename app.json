@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "FlashLocum",
+    "slug": "flashlocum",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/newly.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/newly.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.placeholder.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/newly.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.placeholder.app"
+    },
+    "web": {
+      "favicon": "./assets/images/newly.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-web-browser",
+      "expo-secure-store"
+    ],
+    "scheme": "flashlocum",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "backendUrl": "https://6d6d5peg4mndtw9pjb3kmhfpuvarjqgk.app.specular.dev"
+    }
+  }
+}
