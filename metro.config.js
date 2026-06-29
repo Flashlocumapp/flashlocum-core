@@ -1,4 +1,4 @@
-import { getDefaultConfig } from "expo/metro-config";
+import { getDefaultConfig } from "expo/metro-config.js";
 import { FileStore } from "metro-cache";
 import path from "path";
 import fs from "fs";
