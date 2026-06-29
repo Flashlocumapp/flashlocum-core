@@ -32,7 +32,6 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser",
       "expo-secure-store"
     ],
     "scheme": "flashlocum",
