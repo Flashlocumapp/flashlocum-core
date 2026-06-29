@@ -139,8 +139,8 @@ export class ErrorBoundary extends Component<Props, State> {
           },
           "*",
         );
-      } catch (_e) {
-        // Silently ignore postMessage errors
+      } catch (_) {
+        // silently ignore postMessage errors
       }
     }
   }
