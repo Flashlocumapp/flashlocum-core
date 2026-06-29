@@ -93,7 +93,7 @@ const getLogServerUrl = (): string | null => {
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Silently fail
   }
 
@@ -136,7 +136,7 @@ const flushLogs = async () => {
           }
         }
       });
-    } catch (e) {
+    } catch {
       // Silently ignore sync errors
     }
   }
@@ -194,7 +194,7 @@ const sendErrorToParent = (level: string, message: string, data: unknown) => {
         "*",
       );
     }
-  } catch (error) {
+  } catch {
     // Silently fail
   }
 };
@@ -395,8 +395,8 @@ export const setupErrorLogging = () => {
     // Capture unhandled promise rejections (web only)
     if (Platform.OS === "web") {
       window.addEventListener("unhandledrejection", (event) => {
-        const message = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
-        queueLog("error", message, "");
+        const msg = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
+        queueLog("error", msg, "");
         sendErrorToParent("error", "Unhandled Promise Rejection", { reason: event.reason });
       });
     }
