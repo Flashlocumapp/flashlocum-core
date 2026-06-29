@@ -64,8 +64,7 @@ const getLogServerUrl = (): string | null => {
     } else {
       // For native, try to get the Expo dev server URL
       // experienceUrl format: exp://xxx.ngrok.io/... or exp://192.168.1.1:8081/...
-      const experienceUrl = (Constants as Record<string, unknown>).experienceUrl as
-        string | undefined;
+      const experienceUrl = (Constants as unknown as Record<string, string>).experienceUrl;
       if (experienceUrl) {
         // Convert exp:// to https:// (for tunnels) or http:// (for local)
         let baseUrl =
@@ -86,13 +85,12 @@ const getLogServerUrl = (): string | null => {
       } else {
         // Fallback: try to use manifest hostUri
         const hostUri =
-          Constants.expoConfig?.hostUri || (Constants as Record<string, unknown>).manifest?.hostUri;
+          Constants.expoConfig?.hostUri ||
+          (Constants as unknown as Record<string, Record<string, string>>).manifest?.hostUri;
+
         if (hostUri) {
-          const protocol =
-            (hostUri as string).includes("ngrok") || (hostUri as string).includes(".io")
-              ? "https"
-              : "http";
-          cachedLogServerUrl = `${protocol}://${(hostUri as string).split("/")[0]}/natively-logs`;
+          const protocol = hostUri.includes("ngrok") || hostUri.includes(".io") ? "https" : "http";
+          cachedLogServerUrl = `${protocol}://${hostUri.split("/")[0]}/natively-logs`;
         }
       }
     }
@@ -134,7 +132,7 @@ const flushLogs = async () => {
           // Use a different method to avoid recursion - write directly without going through our intercept
           if (typeof window !== "undefined" && window.console) {
             (
-              window.console as Console & { __proto__: { log: (...a: unknown[]) => void } }
+              window.console as unknown as { __proto__: { log: (...a: unknown[]) => void } }
             ).__proto__.log.call(console, "[Newly] Fetch error (will not repeat):", e.message || e);
           }
         }
