@@ -64,7 +64,8 @@ const getLogServerUrl = (): string | null => {
     } else {
       // For native, try to get the Expo dev server URL
       // experienceUrl format: exp://xxx.ngrok.io/... or exp://192.168.1.1:8081/...
-      const experienceUrl = (Constants as unknown as Record<string, string>).experienceUrl;
+      const experienceUrl = (Constants as Record<string, unknown>).experienceUrl as
+        string | undefined;
       if (experienceUrl) {
         // Convert exp:// to https:// (for tunnels) or http:// (for local)
         let baseUrl =
@@ -86,14 +87,15 @@ const getLogServerUrl = (): string | null => {
         // Fallback: try to use manifest hostUri
         const hostUri =
           Constants.expoConfig?.hostUri ||
-          (Constants as unknown as Record<string, Record<string, string>>).manifest?.hostUri;
+          (Constants as Record<string, unknown> & { manifest?: { hostUri?: string } }).manifest
+            ?.hostUri;
         if (hostUri) {
           const protocol = hostUri.includes("ngrok") || hostUri.includes(".io") ? "https" : "http";
           cachedLogServerUrl = `${protocol}://${hostUri.split("/")[0]}/natively-logs`;
         }
       }
     }
-  } catch {
+  } catch (e) {
     // Silently fail
   }
 
@@ -124,19 +126,21 @@ const flushLogs = async () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(log),
-      }).catch((e: Error) => {
+      }).catch((e) => {
         // Log fetch errors only once to avoid spam
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
           if (typeof window !== "undefined" && window.console) {
-            (
-              window.console as unknown as Record<string, (...a: unknown[]) => void>
-            ).__proto__.log.call(console, "[Newly] Fetch error (will not repeat):", e.message || e);
+            (Object.getPrototypeOf(window.console) as Console).log.call(
+              console,
+              "[Newly] Fetch error (will not repeat):",
+              e.message || e,
+            );
           }
         }
       });
-    } catch {
+    } catch (e) {
       // Silently ignore sync errors
     }
   }
@@ -194,7 +198,7 @@ const sendErrorToParent = (level: string, message: string, data: unknown) => {
         "*",
       );
     }
-  } catch {
+  } catch (error) {
     // Silently fail
   }
 };
@@ -395,8 +399,8 @@ export const setupErrorLogging = () => {
     // Capture unhandled promise rejections (web only)
     if (Platform.OS === "web") {
       window.addEventListener("unhandledrejection", (event) => {
-        const msg = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
-        queueLog("error", msg, "");
+        const message = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
+        queueLog("error", message, "");
         sendErrorToParent("error", "Unhandled Promise Rejection", { reason: event.reason });
       });
     }
