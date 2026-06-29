@@ -6,15 +6,7 @@
  */
 
 import React, { Component, ReactNode } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  ScrollView,
-  Platform,
-  SafeAreaView,
-} from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, SafeAreaView } from "react-native";
 
 interface Props {
   children: ReactNode;
@@ -29,21 +21,6 @@ interface State {
   showTrace: boolean;
 }
 
-/** Extract a readable source location from a stack trace */
-function extractSource(stack: string): string | null {
-  if (!stack) return null;
-  for (const line of stack.split("\n")) {
-    const cleanMatch = line.match(/at .+\/((app|components|screens|hooks)\/[^:?)]+):(\d+)/);
-    if (cleanMatch) return `${cleanMatch[1]}:${cleanMatch[3]}`;
-
-    const fileMatch = line.match(/at .+\/([^/\s:?)]+\.[jt]sx?):(\d+)/);
-    if (fileMatch && !fileMatch[1].includes(".bundle")) return `${fileMatch[1]}:${fileMatch[2]}`;
-
-    const bundleMatch = line.match(/\/([^/]+)\.bundle[^:]*:(\d+):(\d+)/);
-    if (bundleMatch) return `${bundleMatch[1]}:${bundleMatch[2]}`;
-  }
-  return null;
-}
 
 interface ComponentFrame {
   name: string;
@@ -64,7 +41,7 @@ function extractComponentPath(componentStack: string | undefined): ComponentFram
       let source: string | null = null;
       if (match[2]) {
         const raw = match[2];
-        if (!raw.includes("http") && !raw.includes(".bundle")) {
+        if (!raw.includes('http') && !raw.includes('.bundle')) {
           source = raw;
         } else {
           const pathMatch = raw.match(/\/([^/]+\.[jt]sx?:\d+:\d+)/);
@@ -116,37 +93,27 @@ export class ErrorBoundary extends Component<Props, State> {
     this.props.onError?.(error, errorInfo);
 
     // Notify parent window that ErrorBoundary is now visible (web iframe mode)
-    if (
-      Platform.OS === "web" &&
-      typeof window !== "undefined" &&
-      window.parent &&
-      window.parent !== window
-    ) {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.parent && window.parent !== window) {
       try {
-        window.parent.postMessage(
-          {
-            type: "ERROR_BOUNDARY_SHOWN",
-            level: "error",
-            message: error?.message || "Unknown error",
-            data: {
-              errorName: error?.name || "Error",
-              errorMessage: error?.message || "Unknown error",
-              componentStack: errorInfo?.componentStack || "",
-              errorStack: error?.stack || "",
-            },
-            timestamp: new Date().toISOString(),
-            source: "error-boundary",
+        window.parent.postMessage({
+          type: "ERROR_BOUNDARY_SHOWN",
+          level: "error",
+          message: error?.message || "Unknown error",
+          data: {
+            errorName: error?.name || "Error",
+            errorMessage: error?.message || "Unknown error",
+            componentStack: errorInfo?.componentStack || "",
+            errorStack: error?.stack || "",
           },
-          "*",
-        );
-      } catch (_) {
-        // silently ignore postMessage errors
-      }
+          timestamp: new Date().toISOString(),
+          source: "error-boundary",
+        }, "*");
+      } catch {}
     }
   }
 
   handleReset = () => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== 'undefined') {
       window.location.reload();
     } else {
       this.setState({ hasError: false, error: null, errorInfo: null, showTrace: false });
@@ -172,8 +139,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
       const firstSource = componentPath.length > 0 ? componentPath[0].source : null;
       const bundleInfo = extractBundleInfo(errorStack || componentStack);
-      const showTrace = this.state.showTrace;
-      const chevronText = showTrace ? "−" : "+";
 
       return (
         <View style={styles.root}>
@@ -225,9 +190,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         <Text style={styles.componentBracket}>{" />"}</Text>
                       </Text>
                       {frame.source && (
-                        <Text selectable style={styles.componentSource}>
-                          {frame.source}
-                        </Text>
+                        <Text selectable style={styles.componentSource}>{frame.source}</Text>
                       )}
                     </View>
                   ))}
@@ -240,13 +203,13 @@ export class ErrorBoundary extends Component<Props, State> {
               <View style={styles.section}>
                 <Pressable onPress={this.toggleTrace} style={styles.traceToggle}>
                   <Text style={styles.sectionTitle}>Call Stack</Text>
-                  <Text style={styles.chevron}>{chevronText}</Text>
+                  <Text style={styles.chevron}>
+                    {this.state.showTrace ? "−" : "+"}
+                  </Text>
                 </Pressable>
                 {this.state.showTrace && (
                   <ScrollView style={styles.traceScroll} nestedScrollEnabled>
-                    <Text selectable style={styles.traceText}>
-                      {errorStack}
-                    </Text>
+                    <Text selectable style={styles.traceText}>{errorStack}</Text>
                   </ScrollView>
                 )}
               </View>

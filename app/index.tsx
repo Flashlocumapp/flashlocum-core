@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
-  Text,
   Image,
   Animated,
   StyleSheet,
@@ -12,8 +11,7 @@ import { router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { ensureAuthReady } from "../utils/authReady";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const LOGO_SOURCE = require("../assets/images/375e6cd3-6f61-434d-aff1-25898cb950c5.jpeg");
+const LOGO_SOURCE = require("../assets/images/375e6cd3-6f61-434d-aff1-25898cb950c5.jpeg") as number;
 
 const PHRASES = ["Let's request coverage.", "Let's respond to shifts.", "Let's cover & earn."];
 

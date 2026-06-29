@@ -8,9 +8,7 @@ import Animated, {
   SharedValue,
   useAnimatedStyle,
 } from "react-native-reanimated";
-import Reanimated from "react-native-reanimated";
 import { appleRed, borderColor } from "@/constants/Colors";
-import { IconCircle } from "./IconCircle";
 import { IconSymbol } from "./IconSymbol";
 
 configureReanimatedLogger({ strict: false });
@@ -33,9 +31,9 @@ export default function ListItem({ listId }: { listId: string }) {
           console.log("delete");
         }}
       >
-        <Reanimated.View style={[styleAnimation, styles.rightAction]}>
+        <Animated.View style={[styleAnimation, styles.rightAction]}>
           <IconSymbol name="trash.fill" size={24} color="white" />
-        </Reanimated.View>
+        </Animated.View>
       </Pressable>
     );
   };

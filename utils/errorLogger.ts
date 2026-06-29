@@ -21,29 +21,23 @@ const MUTED_MESSAGES = [
 
 // Check if a message should be muted
 const shouldMuteMessage = (message: string): boolean => {
-  return MUTED_MESSAGES.some((muted) => message.includes(muted));
+  return MUTED_MESSAGES.some(muted => message.includes(muted));
 };
 
 // Queue for batching logs
-let logQueue: {
-  level: string;
-  message: string;
-  source: string;
-  timestamp: string;
-  platform: string;
-}[] = [];
+let logQueue: { level: string; message: string; source: string; timestamp: string; platform: string }[] = [];
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL = 500; // Flush every 500ms
 
 // Get a friendly platform name
 const getPlatformName = (): string => {
   switch (Platform.OS) {
-    case "ios":
-      return "iOS";
-    case "android":
-      return "Android";
-    case "web":
-      return "Web";
+    case 'ios':
+      return 'iOS';
+    case 'android':
+      return 'Android';
+    case 'web':
+      return 'Web';
     default:
       return Platform.OS;
   }
@@ -58,43 +52,35 @@ const getLogServerUrl = (): string | null => {
   if (urlChecked) return cachedLogServerUrl;
 
   try {
-    if (Platform.OS === "web" && typeof window !== "undefined") {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       // For web, use the current origin
       cachedLogServerUrl = `${window.location.origin}/natively-logs`;
     } else {
       // For native, try to get the Expo dev server URL
       // experienceUrl format: exp://xxx.ngrok.io/... or exp://192.168.1.1:8081/...
-      const experienceUrl = (Constants as unknown as Record<string, string>).experienceUrl;
+      const experienceUrl = (Constants as any).experienceUrl;
       if (experienceUrl) {
         // Convert exp:// to https:// (for tunnels) or http:// (for local)
-        let baseUrl =
-          experienceUrl.replace("exp://", "https://").split("/")[0] +
-          "//" +
-          experienceUrl.replace("exp://", "").split("/")[0];
+        let baseUrl = experienceUrl
+          .replace('exp://', 'https://')
+          .split('/')[0] + '//' + experienceUrl.replace('exp://', '').split('/')[0];
 
         // If it looks like a local IP, use http
-        if (
-          baseUrl.includes("192.168.") ||
-          baseUrl.includes("10.") ||
-          baseUrl.includes("localhost")
-        ) {
-          baseUrl = baseUrl.replace("https://", "http://");
+        if (baseUrl.includes('192.168.') || baseUrl.includes('10.') || baseUrl.includes('localhost')) {
+          baseUrl = baseUrl.replace('https://', 'http://');
         }
 
         cachedLogServerUrl = `${baseUrl}/natively-logs`;
       } else {
         // Fallback: try to use manifest hostUri
-        const hostUri =
-          Constants.expoConfig?.hostUri ||
-          (Constants as unknown as Record<string, Record<string, string>>).manifest?.hostUri;
-
+        const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.hostUri;
         if (hostUri) {
-          const protocol = hostUri.includes("ngrok") || hostUri.includes(".io") ? "https" : "http";
-          cachedLogServerUrl = `${protocol}://${hostUri.split("/")[0]}/natively-logs`;
+          const protocol = hostUri.includes('ngrok') || hostUri.includes('.io') ? 'https' : 'http';
+          cachedLogServerUrl = `${protocol}://${hostUri.split('/')[0]}/natively-logs`;
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Silently fail
   }
 
@@ -122,29 +108,27 @@ const flushLogs = async () => {
   for (const log of logsToSend) {
     try {
       fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log),
-      }).catch((e: Error) => {
+      }).catch((fetchErr) => {
         // Log fetch errors only once to avoid spam
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
-          if (typeof window !== "undefined" && window.console) {
-            (
-              window.console as unknown as { __proto__: { log: (...a: unknown[]) => void } }
-            ).__proto__.log.call(console, "[Newly] Fetch error (will not repeat):", e.message || e);
+          if (typeof window !== 'undefined' && window.console) {
+            (window.console as any).__proto__.log.call(console, '[Newly] Fetch error (will not repeat):', (fetchErr as Error).message || fetchErr);
           }
         }
       });
-    } catch (e) {
+    } catch {
       // Silently ignore sync errors
     }
   }
 };
 
 // Queue a log to be sent
-const queueLog = (level: string, message: string, source: string = "") => {
+const queueLog = (level: string, message: string, source: string = '') => {
   const logKey = `${level}:${message}`;
 
   // Skip duplicates
@@ -167,7 +151,7 @@ const queueLog = (level: string, message: string, source: string = "") => {
 };
 
 // Function to send errors to parent window (React frontend) - for web iframe mode
-const sendErrorToParent = (level: string, message: string, data: unknown) => {
+const sendErrorToParent = (level: string, message: string, data: any) => {
   // Create a simple key to identify duplicate errors
   const errorKey = `${level}:${message}:${JSON.stringify(data)}`;
 
@@ -181,36 +165,33 @@ const sendErrorToParent = (level: string, message: string, data: unknown) => {
   clearLogAfterDelay(errorKey);
 
   try {
-    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        {
-          type: "EXPO_ERROR",
-          level: level,
-          message: message,
-          data: data,
-          timestamp: new Date().toISOString(),
-          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
-          source: "expo-template",
-        },
-        "*",
-      );
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'EXPO_ERROR',
+        level: level,
+        message: message,
+        data: data,
+        timestamp: new Date().toISOString(),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        source: 'expo-template'
+      }, '*');
     }
-  } catch (error) {
+  } catch {
     // Silently fail
   }
 };
 
 // Function to get caller information from stack trace
 const getCallerInfo = (): string => {
-  const stack = new Error().stack || "";
-  const lines = stack.split("\n");
+  const stack = new Error().stack || '';
+  const lines = stack.split('\n');
 
   // Skip the first few lines (Error, getCallerInfo, stringifyArgs, console override, setupErrorLogging internals)
   for (let i = 3; i < lines.length; i++) {
     const line = lines[i];
 
     // Skip internal errorLogger calls and node_modules
-    if (line.includes("errorLogger") || line.includes("node_modules")) {
+    if (line.includes('errorLogger') || line.includes('node_modules')) {
       continue;
     }
 
@@ -234,13 +215,7 @@ const getCallerInfo = (): string => {
     }
 
     // Pattern 4: Look for app/ or components/ paths specifically
-    if (
-      line.includes("app/") ||
-      line.includes("components/") ||
-      line.includes("screens/") ||
-      line.includes("hooks/") ||
-      line.includes("utils/")
-    ) {
+    if (line.includes('app/') || line.includes('components/') || line.includes('screens/') || line.includes('hooks/') || line.includes('utils/')) {
       match = line.match(/([^/\s:)]+\.[jt]sx?):(\d+)/);
       if (match) {
         return `${match[1]}:${match[2]}`;
@@ -248,23 +223,21 @@ const getCallerInfo = (): string => {
     }
   }
 
-  return "";
+  return '';
 };
 
 // Helper to safely stringify arguments
-const stringifyArgs = (args: unknown[]): string => {
-  return args
-    .map((arg) => {
-      if (typeof arg === "string") return arg;
-      if (arg === null) return "null";
-      if (arg === undefined) return "undefined";
-      try {
-        return JSON.stringify(arg);
-      } catch {
-        return String(arg);
-      }
-    })
-    .join(" ");
+const stringifyArgs = (args: any[]): string => {
+  return args.map(arg => {
+    if (typeof arg === 'string') return arg;
+    if (arg === null) return 'null';
+    if (arg === undefined) return 'undefined';
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  }).join(' ');
 };
 
 // Auto-reconnect to Metro when it disconnects.
@@ -288,11 +261,11 @@ const attemptMetroReconnect = () => {
     }
 
     try {
-      if (typeof window === "undefined") return;
+      if (typeof window === 'undefined') return;
       const origin = window.location.origin;
 
       const bundleUrl = `${origin}/index.ts.bundle?platform=web&dev=true`;
-      const res = await fetch(bundleUrl, { method: "HEAD" });
+      const res = await fetch(bundleUrl, { method: 'HEAD' });
 
       if (res.ok) {
         // Bundle compiles fine — app is still running, just lost HMR.
@@ -327,23 +300,23 @@ export const setupErrorLogging = () => {
 
   // Log initialization info using original console (not intercepted)
   const logServerUrl = getLogServerUrl();
-  originalConsoleLog("[Newly] Setting up error logging...");
-  originalConsoleLog("[Newly] Log server URL:", logServerUrl || "NOT AVAILABLE");
-  originalConsoleLog("[Newly] Platform:", Platform.OS);
+  originalConsoleLog('[Newly] Setting up error logging...');
+  originalConsoleLog('[Newly] Log server URL:', logServerUrl || 'NOT AVAILABLE');
+  originalConsoleLog('[Newly] Platform:', Platform.OS);
 
   // Override console.log to capture and send to server
-  console.log = (...args: unknown[]) => {
+  console.log = (...args: any[]) => {
     // Always call original first
     originalConsoleLog.apply(console, args);
 
     // Queue log for sending to server
     const message = stringifyArgs(args);
     const source = getCallerInfo();
-    queueLog("log", message, source);
+    queueLog('log', message, source);
   };
 
   // Override console.warn to capture and send to server
-  console.warn = (...args: unknown[]) => {
+  console.warn = (...args: any[]) => {
     // Always call original first
     originalConsoleWarn.apply(console, args);
 
@@ -352,16 +325,16 @@ export const setupErrorLogging = () => {
     if (shouldMuteMessage(message)) return;
 
     const source = getCallerInfo();
-    queueLog("warn", message, source);
+    queueLog('warn', message, source);
 
     // Auto-reconnect when Metro disconnects (only reloads if bundle compiles)
-    if (message.includes("Disconnected from Metro")) {
+    if (message.includes('Disconnected from Metro')) {
       attemptMetroReconnect();
     }
   };
 
   // Override console.error to capture and send to server
-  console.error = (...args: unknown[]) => {
+  console.error = (...args: any[]) => {
     // Queue log for sending to server (skip muted messages)
     const message = stringifyArgs(args);
     if (shouldMuteMessage(message)) return;
@@ -370,21 +343,21 @@ export const setupErrorLogging = () => {
     originalConsoleError.apply(console, args);
 
     const source = getCallerInfo();
-    queueLog("error", message, source);
+    queueLog('error', message, source);
 
     // Also send to parent window for web iframe mode
-    sendErrorToParent("error", "Console Error", message);
+    sendErrorToParent('error', 'Console Error', message);
   };
 
   // Capture unhandled errors in web environment
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     // Override window.onerror to catch JavaScript errors
     window.onerror = (message, source, lineno, colno, error) => {
-      const sourceFile = source ? source.split("/").pop() : "unknown";
+      const sourceFile = source ? source.split('/').pop() : 'unknown';
       const errorMessage = `RUNTIME ERROR: ${message} at ${sourceFile}:${lineno}:${colno}`;
 
-      queueLog("error", errorMessage, `${sourceFile}:${lineno}:${colno}`);
-      sendErrorToParent("error", "JavaScript Runtime Error", {
+      queueLog('error', errorMessage, `${sourceFile}:${lineno}:${colno}`);
+      sendErrorToParent('error', 'JavaScript Runtime Error', {
         message,
         source: `${sourceFile}:${lineno}:${colno}`,
         error: error?.stack || error,
@@ -394,11 +367,11 @@ export const setupErrorLogging = () => {
     };
 
     // Capture unhandled promise rejections (web only)
-    if (Platform.OS === "web") {
-      window.addEventListener("unhandledrejection", (event) => {
+    if (Platform.OS === 'web') {
+      window.addEventListener('unhandledrejection', (event) => {
         const message = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
-        queueLog("error", message, "");
-        sendErrorToParent("error", "Unhandled Promise Rejection", { reason: event.reason });
+        queueLog('error', message, '');
+        sendErrorToParent('error', 'Unhandled Promise Rejection', { reason: event.reason });
       });
     }
   }

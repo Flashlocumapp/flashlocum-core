@@ -12,8 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const LOGO_SOURCE = require("../assets/images/375e6cd3-6f61-434d-aff1-25898cb950c5.jpeg");
+const LOGO_SOURCE = require("../assets/images/375e6cd3-6f61-434d-aff1-25898cb950c5.jpeg") as number;
 
 function resolveImageSource(
   source: string | number | ImageSourcePropType | undefined,

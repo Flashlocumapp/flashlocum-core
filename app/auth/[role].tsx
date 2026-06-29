@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import { fetchMyProfile } from "../../utils/profileRemote";
 import { adoptVerifiedSession, ensureAuthReady, subscribeAuthState } from "../../utils/authReady";
 import { setRole, type Role } from "../../utils/role";
 
-type View = "form" | "verify" | "forgot" | "forgot-code" | "forgot-new-password" | "forgot-done";
+type AuthView = "form" | "verify" | "forgot" | "forgot-code" | "forgot-new-password" | "forgot-done";
 
 const AUTH_DEBUG_PREFIX = "[FlashLocum auth debug]";
 
@@ -119,7 +119,7 @@ const backStyles = StyleSheet.create({
 export default function AuthScreen() {
   const { role } = useLocalSearchParams<{ role: string }>();
   const [mode, setMode] = useState<"signup" | "login">("signup");
-  const [view, setView] = useState<View>("form");
+  const [view, setView] = useState<AuthView>("form");
   const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -527,7 +527,7 @@ export default function AuthScreen() {
             <View style={styles.titleSection}>
               <Text style={styles.title}>Enter verification code</Text>
               <Text style={styles.subtitle}>
-                {`We've sent a 6-digit code to ${email || "your email"}. Enter it below to verify your account.`}
+                {`We sent a 6-digit code to ${email || "your email"}. Enter it below to verify your account.`}
               </Text>
             </View>
             <View style={styles.form}>
@@ -599,7 +599,7 @@ export default function AuthScreen() {
             {renderHeader()}
             <View style={styles.titleSection}>
               <Text style={styles.title}>Reset your password</Text>
-              <Text style={styles.subtitle}>Enter your email and we'll send you a reset code.</Text>
+              <Text style={styles.subtitle}>Enter your email and we will send you a reset code.</Text>
             </View>
             <View style={styles.form}>
               <View style={styles.fieldContainer}>
@@ -663,7 +663,7 @@ export default function AuthScreen() {
             <View style={styles.titleSection}>
               <Text style={styles.title}>Enter reset code</Text>
               <Text style={styles.subtitle}>
-                {`We've sent a 6-digit code to ${email || "your email"}.`}
+                {`We sent a 6-digit code to ${email || "your email"}.`}
               </Text>
             </View>
             <View style={styles.form}>
@@ -725,7 +725,7 @@ export default function AuthScreen() {
             <View style={styles.titleSection}>
               <Text style={styles.title}>Choose a new password</Text>
               <Text style={styles.subtitle}>
-                Pick a password you haven't used before. Minimum 6 characters.
+                Pick a password you have not used before. Minimum 6 characters.
               </Text>
             </View>
             <View style={styles.form}>
