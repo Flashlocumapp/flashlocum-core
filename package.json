@@ -2,7 +2,6 @@
   "name": "flashlocum-mobile-nzfrmj",
   "private": true,
   "sideEffects": false,
-  "type": "module",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
