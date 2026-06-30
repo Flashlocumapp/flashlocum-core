@@ -63,7 +63,7 @@ config.server.enhanceMiddleware = (middleware) => {
               const lines = content.split('\n');
               fs.writeFileSync(LOG_FILE_PATH, lines.slice(lines.length / 2).join('\n'));
             }
-          } catch (e) {
+          } catch (_e) {
             // Ignore rotation errors
           }
 

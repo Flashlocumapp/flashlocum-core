@@ -11,7 +11,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, Platform, SafeAreaView }
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  onError?: (_error: Error, _errorInfo: React.ErrorInfo) => void;
 }
 
 interface State {
@@ -22,7 +22,7 @@ interface State {
 }
 
 /** Extract a readable source location from a stack trace */
-function extractSource(stack: string): string | null {
+function _extractSource(stack: string): string | null {
   if (!stack) return null;
   for (const line of stack.split("\n")) {
     const cleanMatch = line.match(/at .+\/((app|components|screens|hooks)\/[^:?)]+):(\d+)/);
@@ -123,7 +123,7 @@ export class ErrorBoundary extends Component<Props, State> {
           timestamp: new Date().toISOString(),
           source: "error-boundary",
         }, "*");
-      } catch (_) {}
+      } catch (_err) {}
     }
   }
 
