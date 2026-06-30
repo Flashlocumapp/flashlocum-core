@@ -80,7 +80,7 @@ const getLogServerUrl = (): string | null => {
         }
       }
     }
-  } catch {
+  } catch (e) {
     // Silently fail
   }
 
@@ -111,17 +111,17 @@ const flushLogs = async () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log),
-      }).catch((fetchErr) => {
+      }).catch((e) => {
         // Log fetch errors only once to avoid spam
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
           if (typeof window !== 'undefined' && window.console) {
-            (window.console as any).__proto__.log.call(console, '[Newly] Fetch error (will not repeat):', (fetchErr as Error).message || fetchErr);
+            (window.console as any).__proto__.log.call(console, '[Newly] Fetch error (will not repeat):', e.message || e);
           }
         }
       });
-    } catch {
+    } catch (e) {
       // Silently ignore sync errors
     }
   }
@@ -176,7 +176,7 @@ const sendErrorToParent = (level: string, message: string, data: any) => {
         source: 'expo-template'
       }, '*');
     }
-  } catch {
+  } catch (error) {
     // Silently fail
   }
 };
